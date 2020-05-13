@@ -3,7 +3,7 @@
 import torch 
 import torch.nn as nn
 
-# TODO: Add more extensive comments
+# TODO: Add more extensive comments, test cuda functionality
 # For regression, num_classes=1. For classification, num_classes=#classes.
 
 # Device configuration
