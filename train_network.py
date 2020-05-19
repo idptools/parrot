@@ -5,8 +5,9 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import brnn_plot
+import encode_sequence
 
-# TODO: validate that this function works as intended
+# TODO test this on cuda
 def train(network, train_loader, val_loader, datatype, problem_type, weights_file,
 	stop_condition, device='cpu', learn_rate=0.001, batch_size=15, n_epochs=25):
 	'''
@@ -89,8 +90,8 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 			val_loss += loss
 
 		# Avg loss:
-		train_loss /= len(train_loader)		# TODO: double check that len(DataLoader) == num_samples
-		val_loss /= len(val_loader)
+		train_loss /= len(train_loader.dataset)
+		val_loss /= len(val_loader.dataset)
 
 		signif_decrease = True
 		if stop_condition == 'auto' and epoch > min_epochs - 1:
@@ -130,7 +131,8 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 	return avg_train_losses, avg_val_losses
 
 
-def test(network, test_loader, datatype, problem_type, weights_file, num_classes=2, device='cpu'):
+def test_labeled_data(network, test_loader, datatype, problem_type, 
+						weights_file, num_classes=2, device='cpu'):
 	# Set loss criteria
 	if problem_type == 'regression':
 		if datatype == 'residues':
@@ -185,5 +187,22 @@ def test(network, test_loader, datatype, problem_type, weights_file, num_classes
 			print(brnn_plot.confusion_matrix(all_targets, all_outputs, num_classes))
 
 	# TODO: return training samples and predictions as output file?
-	return test_loss
+	return test_loss / len(test_loader)
+
+def test_unlabeled_data(network, sequences, device='cpu'):
+	'''
+	Pass in a list of sequences along with the network with pre-loaded weights.
+	Return a dictionary with values mapped to each sequence
+	'''
+	pred_dict = {}
+	for seq in sequences:
+
+		seq_vector = encode_sequence.one_hot(seq)
+		seq_vector = seq_vector.view(1, len(seq_vector), -1)
+
+		# Forward pass
+		outputs = network(seq_vector.float()).detach().numpy()
+		pred_dict[seq] = outputs
+
+	return pred_dict
 
