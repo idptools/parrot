@@ -85,10 +85,17 @@ if dtype == 'sequence':
 elif dtype == 'residues':
 	brnn_network = brnn_architecture.BRNN_MtM(input_size, hidden_size, 
 									num_layers, num_classes).to(device)
-	collate_function = pid.unequal_len_collate_residues
+	
+	# Set collate function
+	if problem_type == 'classification':
+		collate_function = pid.res_class_collate
+	else:
+		collate_function = pid.res_regress_collate
+
 else:
 	print('Invalid datatype.')
 	sys.exit()
+
 
 # Split data
 train, val, test = pid.split_data(data_file, datatype=dtype, problem_type=problem_type, 

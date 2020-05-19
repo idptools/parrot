@@ -29,10 +29,7 @@ def parse_file(tsvfile, datatype, problem_type, num_classes):
 
 		else:
 			for sample in data:
-				class_array = np.zeros(len(sample[2]), num_classes)
-				for i in range(len(sample[2])):
-					class_array[i, int(sample[2, i])] = 1
-				sample[2] = class_array
+				sample[2] = list(map(int, sample[2]))
 	return data
 
 # Extended PyTorch Dataset class
@@ -57,7 +54,7 @@ class SequenceDataset(Dataset):
 		sample = (sequence_vector, value)
 		return sample
 
-# Collate sequence samples into a batch, zero-padding end of sequences to the same size
+# Collate sequence samples into a batch
 def seq_class_collate(batch):
 	orig_seq_vectors = [item[0] for item in batch]
 	orig_targets = [item[1] for item in batch]
@@ -74,7 +71,7 @@ def seq_class_collate(batch):
 
 	return (padded_seq_vectors, targets)
 
-# Collate sequence samples into a batch, zero-padding end of sequences to the same size
+# Collate sequence samples into a batch
 def seq_regress_collate(batch):
 	orig_seq_vectors = [item[0] for item in batch]
 	orig_targets = [[item[1]]for item in batch]
@@ -91,8 +88,10 @@ def seq_regress_collate(batch):
 
 	return (padded_seq_vectors, targets)
 
-# Collate sequence samples into a batch, zero-padding end of sequences to the same size
-def unequal_len_collate_residues(batch): # TODO: test that this works
+# Collate residue samples into a batch, zero-padding end of sequences to the same size
+# TODO: keep an eye on class-0 overprediction -- in order to zero-pad variable
+# length sequences, empty "pad" residues must be assigned a class (here '0')
+def res_class_collate(batch): # TODO: test that this works
     orig_seq_vectors = [item[0] for item in batch]
     orig_targets = [item[1] for item in batch]
 
@@ -108,7 +107,28 @@ def unequal_len_collate_residues(batch): # TODO: test that this works
         padded_targets[i][0:len(j)] = j
 
     padded_seq_vectors = torch.IntTensor(padded_seq_vectors)
-    padded_targets = torch.FloatTensor(padded_targets)
+    padded_targets = torch.LongTensor(padded_targets)
+    return (padded_seq_vectors, padded_targets)
+
+# Collate residue samples into a batch, zero-padding end of sequences to the same size
+def res_regress_collate(batch):
+    orig_seq_vectors = [item[0] for item in batch]
+    orig_targets = [item[1] for item in batch]
+
+    longest_seq = len(max(orig_seq_vectors, key=lambda x: len(x)))
+
+    padded_seq_vectors = np.zeros([len(orig_seq_vectors), longest_seq, len(orig_seq_vectors[0][0])])
+    padded_targets = np.zeros([len(orig_targets), longest_seq])
+
+    for i,j in enumerate(orig_seq_vectors):
+        padded_seq_vectors[i][0:len(j)] = j
+
+    for i,j in enumerate(orig_targets):
+        padded_targets[i][0:len(j)] = j
+
+    padded_seq_vectors = torch.IntTensor(padded_seq_vectors)
+    padded_targets = torch.FloatTensor(padded_targets).view((len(padded_targets), len(padded_targets[0]), 1))
+
     return (padded_seq_vectors, padded_targets)
 
 

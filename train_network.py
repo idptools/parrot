@@ -25,7 +25,7 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 			criterion = nn.L1Loss()	# TODO: L1 or MSE?
 	elif problem_type == 'classification':
 		if datatype == 'residues':
-			criterion = nn.CrossEntropyLoss(reduction='none') # TODO: double check if this is correct
+			criterion = nn.CrossEntropyLoss(reduction='sum') # TODO: double check if this is correct
 		elif datatype == 'sequence':
 			criterion = nn.CrossEntropyLoss()
 
@@ -58,12 +58,11 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 			# Forward pass
 			outputs = network(vectors.float())
 
-			#print(outputs.shape, targets.shape)
-			# TODO: fix uneven shapes for seq-regression
-
 			if problem_type == 'regression':
 				loss = criterion(outputs, targets.float())
 			else:
+				if datatype == 'residues':
+					outputs = outputs.permute(0, 2, 1)
 				loss = criterion(outputs, targets.long())
 
 			train_loss += loss
@@ -82,6 +81,8 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 			if problem_type == 'regression':
 				loss = criterion(outputs, targets.float())
 			else:
+				if datatype == 'residues':
+					outputs = outputs.permute(0, 2, 1)
 				loss = criterion(outputs, targets.long())
 
 			# Increment test loss
@@ -91,27 +92,31 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 		train_loss /= len(train_loader)		# TODO: double check that len(DataLoader) == num_samples
 		val_loss /= len(val_loader)
 
-		signif_decrease = False
+		signif_decrease = True
 		if stop_condition == 'auto' and epoch > min_epochs - 1:
 			# Check to see if loss has stopped decreasing
 			last_epochs_loss = avg_val_losses[-min_epochs:]
+			#print(last_epochs_loss)
 			for loss in last_epochs_loss:
-				if val_loss < loss*0.995:
-					signif_decrease = True
-					last_decrease = epoch
+				if val_loss >= loss*0.995:
+					signif_decrease = False
 
-			# If network performance has plateaued over the last 8 epochs, end training
+			# If network performance has plateaued over the last range of epochs, end training
 			if not signif_decrease and epoch - last_decrease > min_epochs:
 				end_training = True
 
 		# If test loss is at a minimum
 		if val_loss < min_val_loss:
 			min_val_loss = val_loss 	# Reset min_val_loss
+			last_decrease = epoch
 			torch.save(network.state_dict(), weights_file)	# Save model
 
 		# Append losses to lists
 		avg_train_losses.append(train_loss)
 		avg_val_losses.append(val_loss)
+
+		if epoch % 5 == 0:	# Change to 5
+			print('Epoch %d\tLoss %.4f' % (epoch, val_loss))
 
 		# This is placed here to ensure that the best network, even if the performance
 		# improvement is marginal, is saved.
@@ -134,7 +139,7 @@ def test(network, test_loader, datatype, problem_type, weights_file, num_classes
 			criterion = nn.L1Loss()	# TODO: L1 or MSE?
 	elif problem_type == 'classification':
 		if datatype == 'residues':
-			criterion = nn.CrossEntropyLoss(reduction='none') # TODO: double check if this is correct
+			criterion = nn.CrossEntropyLoss(reduction='sum') # TODO: double check if this is correct
 		elif datatype == 'sequence':
 			criterion = nn.CrossEntropyLoss()
 
@@ -152,6 +157,8 @@ def test(network, test_loader, datatype, problem_type, weights_file, num_classes
 		if problem_type == 'regression':
 			loss = criterion(outputs, targets.float())
 		else:
+			if datatype == 'residues':
+				outputs = outputs.permute(0, 2, 1)
 			loss = criterion(outputs, targets.long())
 	
 		test_loss += loss # Increment test loss
@@ -159,11 +166,11 @@ def test(network, test_loader, datatype, problem_type, weights_file, num_classes
 
 
 	# Calculate 'accuracy' depending on the problem type and datatype
-	# TODO: improve this and write these functions in brnn_plot.py
+	# TODO: add more plots
 	if problem_type == 'regression':
 		if datatype == 'residues':
 			# histogram of MSEs?
-			brnn_plot.residue_regression_histogram(all_targets, all_outputs)
+			brnn_plot.residue_regression_scatterplot(all_targets, all_outputs)
 
 		elif datatype == 'sequence':
 			# scatterplot of true vs predicted values
@@ -172,11 +179,11 @@ def test(network, test_loader, datatype, problem_type, weights_file, num_classes
 	elif problem_type == 'classification':
 		if datatype == 'residues':
 			# confusion matrix of all residues
-			brnn_plot.confusion_matrix(all_targets, all_outputs)
-			# Anything else?
+			print(brnn_plot.res_confusion_matrix(all_targets, all_outputs, num_classes))
 		elif datatype == 'sequence':
 			# confusion matrix
 			print(brnn_plot.confusion_matrix(all_targets, all_outputs, num_classes))
 
+	# TODO: return training samples and predictions as output file?
 	return test_loss
 
