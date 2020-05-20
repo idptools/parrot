@@ -9,19 +9,19 @@ import encode_sequence
 
 # TODO test this on cuda
 def train(network, train_loader, val_loader, datatype, problem_type, weights_file,
-	stop_condition, device='cpu', learn_rate=0.001, batch_size=15, n_epochs=25):
+	stop_condition, device, learn_rate, batch_size, n_epochs):
 	'''
 	problem_type = 'regression' or 'classification'
 	stop_condition = 'auto' or 'iter'
 	datatype = 'sequence' or 'residues'
 	'''
 	# Set optimizer
-	optimizer = torch.optim.Adam(network.parameters(), lr=learn_rate)	# TODO: look into best optimizer
+	optimizer = torch.optim.Adam(network.parameters(), lr=learn_rate)
 
 	# Set loss criteria
 	if problem_type == 'regression':
 		if datatype == 'residues':
-			criterion = nn.MSELoss(reduction='sum') # TODO: Is this the best way? 'none'?
+			criterion = nn.MSELoss(reduction='sum')
 		elif datatype == 'sequence':
 			criterion = nn.L1Loss()	# TODO: L1 or MSE?
 	elif problem_type == 'classification':
@@ -132,7 +132,7 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 
 
 def test_labeled_data(network, test_loader, datatype, problem_type, 
-						weights_file, num_classes=2, device='cpu'):
+						weights_file, num_classes, device):
 	# Set loss criteria
 	if problem_type == 'regression':
 		if datatype == 'residues':
@@ -166,7 +166,6 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 		test_loss += loss # Increment test loss
 		all_outputs.append(outputs.detach())
 
-
 	# Calculate 'accuracy' depending on the problem type and datatype
 	# TODO: add more plots
 	if problem_type == 'regression':
@@ -189,7 +188,7 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 	# TODO: return training samples and predictions as output file?
 	return test_loss / len(test_loader)
 
-def test_unlabeled_data(network, sequences, device='cpu'):
+def test_unlabeled_data(network, sequences, device):
 	'''
 	Pass in a list of sequences along with the network with pre-loaded weights.
 	Return a dictionary with values mapped to each sequence

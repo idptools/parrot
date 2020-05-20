@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 import math
 import encode_sequence
 
-def parse_file(tsvfile, datatype, problem_type, num_classes):
+def parse_file(tsvfile, datatype, problem_type, num_classes, excludeSeqID=False):
 	'''
 	Parse a whitespace-delimited input datafile. "datatype" should equal either
 	'residues' or 'sequence' depending on the format of the input data.
@@ -15,6 +15,12 @@ def parse_file(tsvfile, datatype, problem_type, num_classes):
 	'''
 	with open(tsvfile) as f:
 		lines = [line.rstrip().split() for line in f]
+
+		# Add a dummy seqID if none are provided
+		if excludeSeqID:
+			for line in lines:
+				line.insert(0, '')
+
 		if datatype == 'residues':	# A value for each residue in a sequence
 			data = [[x[0], x[1], np.array( x[2:], dtype=np.float)] for x in lines]
 		elif datatype == 'sequence':	# A single value per sequence
@@ -162,8 +168,9 @@ def read_split_file(split_file):
 		test_samples = np.array([int(i) for i in lines[2]])
 	return training_samples, val_samples, test_samples
 
-def split_data(data_file, datatype, problem_type, num_classes, split_file=None, percent_val=0.15, percent_test=0.15):
-	data = parse_file(data_file, datatype, problem_type, num_classes)
+def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=False, 
+						split_file=None, percent_val=0.15, percent_test=0.15):
+	data = parse_file(data_file, datatype, problem_type, num_classes, excludeSeqID=excludeSeqID)
 	num_samples = len(data)
 
 	if split_file == None:

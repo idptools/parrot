@@ -14,6 +14,8 @@ import brnn_plot
 
 """
 Driver script for the prot-brnn module.
+
+Batch size should be 16-1024, Optimally ~1-5% of dataset
 """
 
 # Parse the command line arguments
@@ -32,10 +34,11 @@ parser.add_argument('-hs', default=5, type=int, metavar='hidden_size',
 						help='hidden vector size (def=5)')
 parser.add_argument('-nl', default=1, type=int, metavar='num_layers', 
 						help='number of layers per direction (def=1)')
-parser.add_argument('-b', default=20, type=int, metavar='batch_size', help='(def=20)')
+parser.add_argument('-b', default=32, type=int, metavar='batch_size', help='(def=32)')
 parser.add_argument('-lr', default=0.001, type=float, metavar='learning_rate', help='(def=0.001)')
 parser.add_argument('-e', default=30, type=int, metavar='num_epochs', 
 						help='number of training epochs (def=30)')
+parser.add_argument('--excludeSeqID', action='store_true')
 
 args = parser.parse_args()
 
@@ -55,6 +58,8 @@ split_file = args.split
 stop_cond = args.stop
 
 input_size = 20		# TODO: set to len(encoding_scheme)
+
+excludeSeqID = args.excludeSeqID
 
 ###############################################################################
 ########################      Validate arguments:      ########################
@@ -144,7 +149,7 @@ if batch_size < 1:
 
 # Split data
 train, val, test = pid.split_data(data_file, datatype=dtype, problem_type=problem_type, 
-							num_classes=num_classes, split_file=split_file)
+						num_classes=num_classes, excludeSeqID=excludeSeqID, split_file=split_file)
 
 # Add data to dataloaders
 train_loader = torch.utils.data.DataLoader(dataset=train,
