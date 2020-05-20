@@ -45,10 +45,10 @@ def residue_regression_scatterplot(true, predicted):
 	marker = itertools.cycle(('>', '+', '.', 'o', '*', 'v', 'D')) 
 
 	for item in true:
-		single_frag = item.numpy()[0].flatten()
+		single_frag = item.cpu().numpy()[0].flatten()
 		true_list.append(list(single_frag))
 	for item in predicted:
-		single_frag = item.numpy()[0].flatten()
+		single_frag = item.cpu().numpy()[0].flatten()
 		pred_list.append(list(single_frag))
 
 	for i in range(len(true_list)):
@@ -71,7 +71,7 @@ def residue_regression_scatterplot(true, predicted):
 def confusion_matrix(true_classes, predicted_classes, num_classes):
 	cm = np.zeros((num_classes, num_classes))
 	for i in range(len(true_classes)):
-		cm[true_classes[i][0], np.argmax(predicted_classes[i][0].numpy())] += 1
+		cm[true_classes[i][0], np.argmax(predicted_classes[i][0].cpu().numpy())] += 1
 
 	return cm
 
@@ -82,11 +82,11 @@ def res_confusion_matrix(true_classes, predicted_classes, num_classes):
 	pred_list = []
 
 	for item in true_classes:
-		single_frag = list(item[0].numpy().flatten())
+		single_frag = list(item[0].cpu().numpy().flatten())
 		true_list = true_list + single_frag
 
 	for item in predicted_classes:
-		single_frag = item[0].permute(1, 0).numpy()
+		single_frag = item[0].permute(1, 0).cpu().numpy()
 
 		for residue in single_frag:
 			pred_list.append(np.argmax(residue))
@@ -104,9 +104,9 @@ def sequence_regression_scatterplot(true, predicted):
 	pred_list = []
 
 	for item in true:
-		true_list.append(item.numpy()[0][0])
+		true_list.append(item.cpu().numpy()[0][0])
 	for item in predicted:
-		pred_list.append(item.numpy()[0][0])
+		pred_list.append(item.cpu().numpy()[0][0])
 
 	plt.scatter(true_list, pred_list)
 	edge_vals = [0.9*min(min(true_list), min(pred_list)), 
