@@ -6,14 +6,13 @@ import torch.nn as nn
 # TODO: Add more extensive comments, test cuda functionality
 # For regression, num_classes=1. For classification, num_classes=#classes.
 
-# Device configuration
-DEVICE = torch.device('cpu')
 #DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Many-to-Many bidirectional recurrent neural network
 class BRNN_MtM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, num_classes):
+    def __init__(self, input_size, hidden_size, num_layers, num_classes, device):
         super(BRNN_MtM, self).__init__()
+        self.device = device
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.num_classes = num_classes
@@ -28,9 +27,9 @@ class BRNN_MtM(nn.Module):
         # Set initial states
         # h0 and c0 dimensions: [num_layers*2 X batch_size X hidden_size]
         h0 = torch.zeros(self.num_layers*2, 	# *2 for bidirection
-        				 x.size(0), self.hidden_size).to(DEVICE)
+        				 x.size(0), self.hidden_size).to(self.device)
         c0 = torch.zeros(self.num_layers*2, 
-        				 x.size(0), self.hidden_size).to(DEVICE)
+        				 x.size(0), self.hidden_size).to(self.device)
         
         # Forward propagate LSTM
         # out: tensor of shape: [batch_size, seq_length, hidden_size*2]
@@ -43,8 +42,9 @@ class BRNN_MtM(nn.Module):
 
 # Many-to-One bidirectional recurrent neural network
 class BRNN_MtO(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, num_classes):
+    def __init__(self, input_size, hidden_size, num_layers, num_classes, device):
         super(BRNN_MtO, self).__init__()
+        self.device = device
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, 
@@ -58,9 +58,9 @@ class BRNN_MtO(nn.Module):
         # Set initial states
         # h0 and c0 dimensions: [num_layers*2 X batch_size X hidden_size]
         h0 = torch.zeros(self.num_layers*2, 	# *2 for bidirection
-        				 x.size(0), self.hidden_size).to(DEVICE)
+        				 x.size(0), self.hidden_size).to(self.device)
         c0 = torch.zeros(self.num_layers*2, 
-        				 x.size(0), self.hidden_size).to(DEVICE)
+        				 x.size(0), self.hidden_size).to(self.device)
         
         # Forward propagate LSTM
         # out: tensor of shape: [batch_size, seq_length, hidden_size*2]

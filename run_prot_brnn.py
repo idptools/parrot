@@ -98,7 +98,7 @@ else:
 if dtype == 'sequence':
 	# Use a many-to-one architecture
 	brnn_network = brnn_architecture.BRNN_MtO(input_size, hidden_size, 
-									num_layers, num_classes).to(device)
+									num_layers, num_classes, device).to(device)
 	# Set collate function
 	if problem_type == 'classification':
 		collate_function = pid.seq_class_collate
@@ -107,7 +107,7 @@ if dtype == 'sequence':
 elif dtype == 'residues':
 	# Use a many-to-many architecture
 	brnn_network = brnn_architecture.BRNN_MtM(input_size, hidden_size, 
-									num_layers, num_classes).to(device)	
+									num_layers, num_classes, device).to(device)	
 	# Set collate function
 	if problem_type == 'classification':
 		collate_function = pid.res_class_collate
