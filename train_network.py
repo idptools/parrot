@@ -167,7 +167,6 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 		all_outputs.append(outputs.detach())
 
 	# Calculate 'accuracy' depending on the problem type and datatype
-	# TODO: add more plots
 	if problem_type == 'regression':
 		if datatype == 'residues':
 			# histogram of MSEs?
@@ -180,12 +179,12 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 	elif problem_type == 'classification':
 		if datatype == 'residues':
 			# confusion matrix of all residues
-			print(brnn_plot.res_confusion_matrix(all_targets, all_outputs, num_classes))
+			brnn_plot.res_confusion_matrix(all_targets, all_outputs, num_classes)
 		elif datatype == 'sequence':
 			# confusion matrix
-			print(brnn_plot.confusion_matrix(all_targets, all_outputs, num_classes))
+			brnn_plot.confusion_matrix(all_targets, all_outputs, num_classes)
 
-	# TODO: return training samples and predictions as output file?
+	# TODO: return training samples and predictions as output file
 	return test_loss / len(test_loader)
 
 def test_unlabeled_data(network, sequences, device):

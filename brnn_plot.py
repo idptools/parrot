@@ -5,6 +5,8 @@ import torch
 import itertools
 from scipy.stats import linregress
 import matplotlib.pyplot as plt
+import seaborn as sn
+import pandas as pd
 
 # Training / validation loss per epoch
 def training_loss(train_loss, val_loss):
@@ -41,7 +43,6 @@ def residue_regression_scatterplot(true, predicted):
 	true_list = []
 	pred_list = []
 
-	# TODO: does this cycle for every point? Or every sequence?
 	marker = itertools.cycle(('>', '+', '.', 'o', '*', 'v', 'D')) 
 
 	for item in true:
@@ -73,11 +74,17 @@ def confusion_matrix(true_classes, predicted_classes, num_classes):
 	for i in range(len(true_classes)):
 		cm[true_classes[i][0], np.argmax(predicted_classes[i][0].numpy())] += 1
 
-	return cm
+	df_cm = pd.DataFrame(cm, range(num_classes), range(num_classes))
+	sn.set(font_scale=1.4) # for label size
+	sn.heatmap(df_cm, cmap='Blues', annot=True, annot_kws={"size": 16}) # font size
+	plt.ylabel('True labels')
+	plt.xlabel('Predicted labels')
+	plt.title('Test set confusion matrix')
+	plt.tight_layout()
+	plt.show()
+
 
 def res_confusion_matrix(true_classes, predicted_classes, num_classes):
-	#print(true_classes)
-	#print()
 	true_list = []
 	pred_list = []
 
@@ -95,7 +102,14 @@ def res_confusion_matrix(true_classes, predicted_classes, num_classes):
 	for i in range(len(true_list)):
 		cm[true_list[i], pred_list[i]] += 1
 
-	return cm
+	df_cm = pd.DataFrame(cm, range(num_classes), range(num_classes))
+	sn.set(font_scale=1.4) # for label size
+	sn.heatmap(df_cm, cmap='Blues', annot=True, annot_kws={"size": 16}) # font size
+	plt.ylabel('True labels')
+	plt.xlabel('Predicted labels')
+	plt.title('Test set confusion matrix')
+	plt.tight_layout()
+	plt.show()
 
 
 # Sequence-wise regression: 2D scatterplot of true vs predicted
@@ -119,8 +133,5 @@ def sequence_regression_scatterplot(true, predicted):
 	slope, intercept, r_value, p_value, std_err = linregress(true_list, pred_list)
 	plt.title('Testing accuracy: R^2=%.3f' % (r_value**2))
 	plt.show()
-
-
-
 
 
