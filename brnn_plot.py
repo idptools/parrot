@@ -34,8 +34,8 @@ def training_loss(train_loss, val_loss):
 	else:
 		ax.set_xticks(np.arange(50, num_epochs+1, 50))
 
-	plt.show()
-
+	plt.savefig('train_test.png')  
+	plt.clf()
 
 # Residue-wise scatterplot: each seq has different patterning 
 # (up to ~70 different marker-color combinations)
@@ -55,6 +55,8 @@ def residue_regression_scatterplot(true, predicted):
 	for i in range(len(true_list)):
 		plt.scatter(true_list[i], pred_list[i], s=6, marker=next(marker))
 
+	plt.figure(1)
+
 	left, right = plt.xlim()
 	bottom, top = plt.ylim()
 	edge_vals = [min(left, bottom), max(right, top)]
@@ -65,6 +67,7 @@ def residue_regression_scatterplot(true, predicted):
 	plt.ylabel('Predicted')
 	slope, intercept, r_value, p_value, std_err = linregress(sum(true_list, []), sum(pred_list, []))
 	plt.title('Testing accuracy: R^2=%.3f' % (r_value**2))
+	plt.savefig('res_scatter.png')
 	plt.show()
 
 
@@ -81,6 +84,7 @@ def confusion_matrix(true_classes, predicted_classes, num_classes):
 	plt.xlabel('Predicted labels')
 	plt.title('Test set confusion matrix')
 	plt.tight_layout()
+	plt.savefig('seq_CM.png')
 	plt.show()
 
 
@@ -109,6 +113,7 @@ def res_confusion_matrix(true_classes, predicted_classes, num_classes):
 	plt.xlabel('Predicted labels')
 	plt.title('Test set confusion matrix')
 	plt.tight_layout()
+	plt.savefig('res_CM.png')
 	plt.show()
 
 
@@ -132,6 +137,7 @@ def sequence_regression_scatterplot(true, predicted):
 	plt.ylabel('Predicted')
 	slope, intercept, r_value, p_value, std_err = linregress(true_list, pred_list)
 	plt.title('Testing accuracy: R^2=%.3f' % (r_value**2))
+	plt.savefig('seq_scatter.png')
 	plt.show()
 
 
