@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+"""
+Driver script for automatic hyperparameter optimization.
+"""
+
 import torch 
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
@@ -11,12 +15,7 @@ import process_input_data as pid
 import brnn_architecture
 import train_network
 import brnn_plot
-
-"""
-Driver script for the prot-brnn module.
-
-Batch size should be 16-1024, Optimally ~1-5% of dataset
-"""
+import bayesian_optimization
 
 # Parse the command line arguments
 parser = argparse.ArgumentParser(description='Train and test a bi-directional RNN using entire sequence.')
@@ -26,18 +25,11 @@ parser.add_argument('--datatype', metavar='dtype', default='sequence', type=str,
 					help="Required. Format of the input data file, must be 'sequence' or 'residues'")
 parser.add_argument('--split', default='', metavar='split_file', 
 			type=str, help="file indicating how to split datafile into training, validation, and testing sets")
-parser.add_argument('--stop', default='iter', metavar='stop_condition', 
-						type=str, help="training stop condition: either 'auto' or 'iter' (default)")
 parser.add_argument('-nc', default=1, type=int, metavar='num_classes', required=True,
 					help='Required. Number of output classes, for regression put 1')
-parser.add_argument('-hs', default=5, type=int, metavar='hidden_size', 
-						help='hidden vector size (def=5)')
-parser.add_argument('-nl', default=1, type=int, metavar='num_layers', 
-						help='number of layers per direction (def=1)')
 parser.add_argument('-b', default=32, type=int, metavar='batch_size', help='(def=32)')
-parser.add_argument('-lr', default=0.001, type=float, metavar='learning_rate', help='(def=0.001)')
-parser.add_argument('-e', default=30, type=int, metavar='num_epochs', 
-						help='number of training epochs (def=30)')
+parser.add_argument('-e', default=200, type=int, metavar='num_epochs', 
+						help='number of training epochs (def=200)')
 parser.add_argument('--excludeSeqID', action='store_true')
 
 args = parser.parse_args()
@@ -46,15 +38,11 @@ args = parser.parse_args()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyper-parameters
-hidden_size = args.hs
-num_layers = args.nl
 batch_size = args.b
-learning_rate = args.lr
 num_epochs = args.e
 dtype = args.datatype
 num_classes = args.nc
 split_file = args.split
-stop_cond = args.stop
 
 input_size = 20		# TODO: set to len(encoding_scheme)
 
@@ -93,20 +81,15 @@ else:
 	print('Error: number of classes must be a positive integer.')
 	sys.exit()
 
+
 # Initialize network architecture depending on data format
 if dtype == 'sequence':
-	# Use a many-to-one architecture
-	brnn_network = brnn_architecture.BRNN_MtO(input_size, hidden_size, 
-									num_layers, num_classes, device).to(device)
 	# Set collate function
 	if problem_type == 'classification':
 		collate_function = pid.seq_class_collate
 	else:
 		collate_function = pid.seq_regress_collate
 elif dtype == 'residues':
-	# Use a many-to-many architecture
-	brnn_network = brnn_architecture.BRNN_MtM(input_size, hidden_size, 
-									num_layers, num_classes, device).to(device)	
 	# Set collate function
 	if problem_type == 'classification':
 		collate_function = pid.res_class_collate
@@ -116,27 +99,8 @@ else:
 	print("Error: Invalid datatype argument -- must be 'residues' or 'sequence'.")
 	sys.exit()
 
-# Ensure that learning rate is between 0 and 1
-if learning_rate >= 1 or learning_rate <= 0:
-	print("Error: Learning rate must be between 0 and 1.")
-	sys.exit()
 
-# Ensure that stop condition is 'iter' or 'auto'
-if stop_cond == 'auto':
-	if num_epochs > 10:
-		print("Warning: stop condition is set to 'auto' and num_epochs > 10." +
-			" Network training may take a long time.")
-elif stop_cond != 'iter':
-	print("Error: Invalid stop condtiion. Must be 'auto' or 'iter'.")
-	sys.exit()
-
-# Ensure that hidden size, num layers, batch size, and num epochs are all positive ints
-if hidden_size < 1:
-	print('Error: hidden vector size must be a positive integer.')
-	sys.exit()
-if num_layers < 1:
-	print('Error: number of layers must be a positive integer.')
-	sys.exit()
+# Ensure that  batch size and num epochs are both positive ints
 if num_epochs < 1:
 	print('Error: number of epochs must be a positive integer.')
 	sys.exit()
@@ -146,10 +110,29 @@ if batch_size < 1:
 
 ###############################################################################
 
-# Split data
-train, val, test = pid.split_data(data_file, datatype=dtype, problem_type=problem_type, 
-						num_classes=num_classes, excludeSeqID=excludeSeqID, split_file=split_file)
 
+# Split data
+cvs, train, val, test = pid.split_data_cv(data_file, datatype=dtype, problem_type=problem_type, 
+						n_classes=num_classes, excludeSeqID=excludeSeqID, split_file=split_file)
+
+# Convert CV datasets to dataloaders
+cv_loaders = []
+for cv_train, cv_val in cvs:
+	cv_train_loader = torch.utils.data.DataLoader(dataset=cv_train, batch_size=batch_size,
+                                           		collate_fn=collate_function, shuffle=True)
+	cv_val_loader = torch.utils.data.DataLoader(dataset=cv_val, batch_size=batch_size,	# TODO: b or 1
+                                           		collate_fn=collate_function, shuffle=False)
+	cv_loaders.append((cv_train_loader, cv_val_loader))
+
+optimizer = bayesian_optimization.BayesianOptimizer(cv_loaders, num_epochs, num_classes, 
+													dtype, saved_weights, device)
+
+best_hyperparams = optimizer.optimize()
+lr = 10**best_hyperparams[0]
+nl = int(best_hyperparams[1])
+hs = int(best_hyperparams[2])
+
+## Use these best hyperparams to train the network from scratch using the entire train/val sets
 # Add data to dataloaders
 train_loader = torch.utils.data.DataLoader(dataset=train,
                                            batch_size=batch_size,
@@ -164,10 +147,20 @@ test_loader = torch.utils.data.DataLoader(dataset=test,
                                           collate_fn=collate_function,
                                           shuffle=False)
 
+# Initialize network:
+if dtype == 'sequence':
+	# Use a many-to-one architecture
+	# TODO: pass input_size depending on encoding scheme
+	brnn_network = brnn_architecture.BRNN_MtO(20, hs, nl, num_classes, device).to(device)
+else:	# dtype == 'residues'
+	# Use a many-to-many architecture
+	brnn_network = brnn_architecture.BRNN_MtM(20, hs, nl, num_classes, device).to(device)
+
 # Train network
+print('Training with optimal hyperparams:')
 train_loss, val_loss = train_network.train(brnn_network, train_loader, val_loader, datatype=dtype, 
-						problem_type=problem_type, weights_file=saved_weights, stop_condition=stop_cond,
-						device=device, learn_rate=learning_rate, n_epochs=num_epochs, verbose=False)
+						problem_type=problem_type, weights_file=saved_weights, stop_condition='iter',
+						device=device, learn_rate=lr, n_epochs=num_epochs*2) 
 brnn_plot.training_loss(train_loss, val_loss)
 
 # Test network
@@ -176,3 +169,4 @@ test_loss = train_network.test_labeled_data(brnn_network, test_loader, datatype=
 						num_classes=num_classes, device=device)
 
 print('\nTest Loss: %.4f' % test_loss)
+

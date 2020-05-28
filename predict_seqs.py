@@ -7,6 +7,7 @@ import brnn_architecture
 import process_input_data as pid
 import train_network
 import os
+import sys
 
 # Parse the command line arguments
 parser = argparse.ArgumentParser(description='Make predictions with a bi-directional RNN.')
@@ -21,6 +22,7 @@ parser.add_argument('-hs', default=5, type=int, metavar='hidden_size',
 						help='hidden vector size (def=5)')
 parser.add_argument('-nl', default=1, type=int, metavar='num_layers', 
 						help='number of layers per direction (def=1)')
+parser.add_argument('--excludeSeqID', action='store_true')
 
 args = parser.parse_args()
 device = 'cpu'
@@ -33,6 +35,8 @@ dtype = args.datatype
 num_classes = args.nc
 
 input_size = 20		# TODO: set to len(encoding_scheme)
+
+excludeSeqID = args.excludeSeqID
 
 ###############################################################################
 ########################      Validate arguments:      ########################
@@ -64,8 +68,6 @@ else:
 	print('Error: number of classes must be a positive integer.')
 	sys.exit()
 
-
-
 # Ensure that hidden size and num layers are both positive ints
 if hidden_size < 1:
 	print('Error: hidden vector size must be a positive integer.')
@@ -82,11 +84,11 @@ if num_layers < 1:
 if dtype == 'sequence':
 	# Use a many-to-one architecture
 	brnn_network = brnn_architecture.BRNN_MtO(input_size, hidden_size, 
-									num_layers, num_classes).to(device)
+									num_layers, num_classes, device).to(device)
 elif dtype == 'residues':
 	# Use a many-to-many architecture
 	brnn_network = brnn_architecture.BRNN_MtM(input_size, hidden_size, 
-									num_layers, num_classes).to(device)
+									num_layers, num_classes, device).to(device)
 else:
 	print("Error: Invalid datatype argument -- must be 'residues' or 'sequence'.")
 	sys.exit()
@@ -95,10 +97,22 @@ brnn_network.load_state_dict(torch.load(saved_weights,
 				map_location=torch.device(device)))
 
 # Convert sequence file to list of sequences:
-with open(seq_file) as f:
-	sequences = [line.strip() for line in f]
+if excludeSeqID:
+	with open(seq_file) as f:
+		sequences = [line.strip() for line in f]
+else:
+	with open(seq_file) as f:
+		lines = [line.strip().split() for line in f]
 
-pred_dict = train_network.test_unlabeled_data(brnn_network, sequences)
+	sequences = []
+	seq_id_dict = {}
+	for line in lines:
+		sequences.append(line[1])
+		seq_id_dict[line[1]] = line[0]
+
+
+
+pred_dict = train_network.test_unlabeled_data(brnn_network, sequences, device)
 
 if problem_type == 'classification':
 	if dtype == 'sequence':
@@ -121,7 +135,10 @@ else:
 
 with open(output_file, 'w') as f:
 	for seq, values in pred_dict.items():
-		out_str = seq + ' ' + ' '.join(map(str, values)) + '\n'
+		if excludeSeqID:
+			out_str = seq + ' ' + ' '.join(map(str, values)) + '\n'
+		else:
+			out_str = seq_id_dict[seq] + ' ' + seq + ' ' + ' '.join(map(str, values)) + '\n'
 		f.write(out_str)
 
 

@@ -2,6 +2,7 @@
 
 import numpy as np
 import torch
+import sys
 
 '''
 File containing function(s) for encoding a string of amino acids into a numeric vector.

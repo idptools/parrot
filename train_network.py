@@ -7,14 +7,23 @@ import numpy as np
 import brnn_plot
 import encode_sequence
 
-# TODO test this on cuda
 def train(network, train_loader, val_loader, datatype, problem_type, weights_file,
-	stop_condition, device, learn_rate, batch_size, n_epochs):
+	stop_condition, device, learn_rate, n_epochs, verbose=False):
 	'''
 	problem_type = 'regression' or 'classification'
 	stop_condition = 'auto' or 'iter'
 	datatype = 'sequence' or 'residues'
+	verbose = True, False, or None
 	'''
+	# Set verbosity level:
+	if verbose:
+		verbosity = 2
+	else:
+		if verbose == None:
+			verbosity = 0
+		else:
+			verbosity = 1
+
 	# Set optimizer
 	optimizer = torch.optim.Adam(network.parameters(), lr=learn_rate)
 
@@ -116,7 +125,9 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 		avg_train_losses.append(train_loss)
 		avg_val_losses.append(val_loss)
 
-		if epoch % 5 == 0:	# Change to 5
+		if verbosity == 2:
+			print('Epoch %d\tLoss %.4f' % (epoch, val_loss))
+		elif epoch % 5 == 0 and verbosity == 1:
 			print('Epoch %d\tLoss %.4f' % (epoch, val_loss))
 
 		# This is placed here to ensure that the best network, even if the performance

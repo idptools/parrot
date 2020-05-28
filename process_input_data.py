@@ -170,7 +170,7 @@ def read_split_file(split_file):
 
 def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=False, 
 						split_file=None, percent_val=0.15, percent_test=0.15):
-	data = parse_file(data_file, datatype, problem_type, num_classes, excludeSeqID=excludeSeqID)
+	data = parse_file(data_file, datatype, problem_type, n_classes, excludeSeqID=excludeSeqID)
 	num_samples = len(data)
 
 	if split_file == None:
@@ -198,13 +198,62 @@ def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=Fals
 
 	return train_set, val_set, test_set
 
-def split_data_cv(data_file, datatype, num_folds=5, split_file=None, 
-								percent_val=0.15, percent_test=0.15):
+def split_data_cv(data_file, datatype, problem_type, n_classes, excludeSeqID=False,
+						split_file=None, percent_val=0.15, percent_test=0.15, n_folds=5):
 	# TODO: write this
 	# split as above function, but also split the combined train-val sets into k-folds
 
-	return cv_sets, train_set, val_set, test_set
+	data = parse_file(data_file, datatype, problem_type, n_classes, excludeSeqID=excludeSeqID)
+	n_samples = len(data)
 
+	# split as above function, but also split the combined train-val sets into k-folds
+	if split_file == None:
+		percent_train = 1 - percent_val - percent_test
+
+		all_samples = np.arange(n_samples)
+		training_samples, val_test_samples = vector_split(all_samples, percent_train)
+
+		# Repeat procedure to split val and test sets
+		val_test_fraction = percent_val / (percent_val + percent_test)
+		val_samples, test_samples = vector_split(val_test_samples, val_test_fraction)
+
+		# Generate datasets using these random partitions
+		train_set = SequenceDataset(data=data, subset=training_samples)
+		val_set = SequenceDataset(data=data, subset=val_samples)
+		test_set = SequenceDataset(data=data, subset=test_samples)
+
+	# If provided, split datasets according to split_file
+	else:
+		training_samples, val_samples, test_samples = read_split_file(split_file)
+
+		# Generate datasets using the provided partitions
+		train_set = SequenceDataset(data=data, subset=training_samples)
+		val_set = SequenceDataset(data=data, subset=val_samples)
+		test_set = SequenceDataset(data=data, subset=test_samples)
+
+	# Combine train and val samples, and split evenly into n_folds
+	# Concatenate np arrays and shuffle
+	cv_samples = np.append(training_samples, val_samples)
+	np.random.shuffle(cv_samples)
+
+	# Split into n_folds
+	cv_samples = np.array_split(cv_samples, n_folds)
+
+	# cv_sets will be a list of tuples: (fold_k_train_dataset, fold_k_test_dataset)
+	cv_sets = []
+	for i in range(len(cv_samples)):
+		cv_test = cv_samples[i]
+		cv_train = np.array([], dtype=int)
+		for j in range(len(cv_samples)):
+			if j != i:
+				cv_train = np.append(cv_train, cv_samples[j])
+		cv_train.sort()
+		cv_test.sort()
+
+		cv_sets.append( (SequenceDataset(data=data, subset=cv_train), 
+						 SequenceDataset(data=data, subset=cv_test)) )
+
+	return cv_sets, train_set, val_set, test_set
 
 ######### ----------------------------------------------------------- ##########
 #------------------------------------------------------------------------------#
