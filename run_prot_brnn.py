@@ -40,6 +40,7 @@ parser.add_argument('-e', default=30, type=int, metavar='num_epochs',
 						help='number of training epochs (def=30)')
 parser.add_argument('--excludeSeqID', action='store_true')
 parser.add_argument('--encodeBiophysics', action='store_true')
+parser.add_argument('--verbose', '-v', action='count', default=0)
 
 args = parser.parse_args()
 
@@ -56,6 +57,7 @@ dtype = args.datatype
 num_classes = args.nc
 split_file = args.split
 stop_cond = args.stop
+verbosity = args.verbose
 
 excludeSeqID = args.excludeSeqID
 encodeBiophysics = args.encodeBiophysics
@@ -177,7 +179,7 @@ test_loader = torch.utils.data.DataLoader(dataset=test,
 # Train network
 train_loss, val_loss = train_network.train(brnn_network, train_loader, val_loader, datatype=dtype, 
 						problem_type=problem_type, weights_file=saved_weights, stop_condition=stop_cond,
-						device=device, learn_rate=learning_rate, n_epochs=num_epochs, verbose=False)
+						device=device, learn_rate=learning_rate, n_epochs=num_epochs, verbosity=verbosity)
 brnn_plot.training_loss(train_loss, val_loss)
 
 # Test network
@@ -185,4 +187,5 @@ test_loss = train_network.test_labeled_data(brnn_network, test_loader, datatype=
 						problem_type=problem_type, weights_file=saved_weights, 
 						num_classes=num_classes, device=device)
 
-print('\nTest Loss: %.4f' % test_loss)
+if verbosity > 0:
+	print('\nTest Loss: %.4f' % test_loss)

@@ -8,7 +8,7 @@ import brnn_plot
 import encode_sequence
 
 def train(network, train_loader, val_loader, datatype, problem_type, weights_file,
-	stop_condition, device, learn_rate, n_epochs, verbose=False):
+	stop_condition, device, learn_rate, n_epochs, verbosity=1):
 	'''
 	problem_type = 'regression' or 'classification'
 	stop_condition = 'auto' or 'iter'
@@ -16,13 +16,8 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 	verbose = True, False, or None
 	'''
 	# Set verbosity level:
-	if verbose:
+	if verbosity > 2:
 		verbosity = 2
-	else:
-		if verbose == None:
-			verbosity = 0
-		else:
-			verbosity = 1
 
 	# Set optimizer
 	optimizer = torch.optim.Adam(network.parameters(), lr=learn_rate)

@@ -14,7 +14,8 @@ class BayesianOptimizer(object):
 	"""
 
 	"""
-	def __init__(self, cv_dataloaders, input_size, n_epochs, n_classes, dtype, weights_file, device):
+	def __init__(self, cv_dataloaders, input_size, n_epochs, 
+				n_classes, dtype, weights_file, device, verbosity):
 		self.cv_loaders = cv_dataloaders
 		self.input_size = input_size
 		self.n_epochs = n_epochs
@@ -28,12 +29,11 @@ class BayesianOptimizer(object):
 		self.dtype = dtype
 		self.weights_file = weights_file
 		self.device = device
+		self.verbosity = verbosity
 
 		# TODO: what does this do? Is this necessary for BayesianOptimization function?
 		# Are variance and lengthscale also hyperparameters that I will need to optimize somehow? 
-		# self.kernel = GPy.kern.Matern52(input_dim=1, variance=1.0, lengthscale=1.0)
 
-		# TODO: only adjusting learning rate right now
 		self.bds = [{'name': 'log_learning_rate', 'type': 'continuous', 'domain': (-5, 0)}, # 0.00001-1
 					{'name': 'n_layers', 'type': 'discrete', 'domain': tuple(range(1, 16))}, # up to 15
 					{'name': 'hidden_size', 'type': 'discrete', 'domain': tuple(range(1, 31))}] # up to 30
@@ -57,7 +57,8 @@ class BayesianOptimizer(object):
 			nl = int(nl)
 			hs = int(hs)
 
-			print('lr=%.6f nl=%d hs=%d' % (lr, nl, hs))
+			if self.verbosity > 0:
+				print('    %.6f    |      %2d      |      %2d' % (lr, nl, hs))
 
 			# Train and validate network with these hyperparams using k-fold CV
 			cv_outputs[i] = self.eval_cv_brnns(lr, nl, hs)
@@ -88,12 +89,13 @@ class BayesianOptimizer(object):
 			train_losses, val_losses = train_network.train(brnn_network, self.cv_loaders[k][0],
 										self.cv_loaders[k][1], self.dtype, self.problem_type,
 										self.weights_file, stop_condition='iter', device=self.device,
-										learn_rate=lr, n_epochs=self.n_epochs, verbose=None)
+										learn_rate=lr, n_epochs=self.n_epochs, verbosity=0)
 			# Take best val loss
 			best_val_loss = np.min(val_losses)
 			cv_losses[k] = best_val_loss
 
-			print('\tCV [%d/%d] -- Loss: %.6f' % (k+1, self.n_folds, best_val_loss))
+			if self.verbosity > 1:
+				print('[%d/%d] Loss: %.6f' % (k+1, self.n_folds, best_val_loss))
 
 		return cv_losses
 
@@ -107,14 +109,15 @@ class BayesianOptimizer(object):
                                 		 noise_var = self.std**2,
                                 		 maximize=False)
 		# TODO: what should max_iter be set at?
-		optimizer.run_optimization(max_iter=70)
+		optimizer.run_optimization(max_iter=80)
 
 		ins = optimizer.get_evaluations()[0]
 		outs = optimizer.get_evaluations()[1].flatten()
 
-		print("The optimal hyperparameters are:\nlr = %.6f\nnl = %d\nhs = %d" % 
-					(10**optimizer.x_opt[0], optimizer.x_opt[1], optimizer.x_opt[2]))
-		print()
+		if self.verbosity > 0:
+			print("\nThe optimal hyperparameters are:\nlr = %.6f\nnl = %d\nhs = %d" % 
+						(10**optimizer.x_opt[0], optimizer.x_opt[1], optimizer.x_opt[2]))
+			print()
 
 		return optimizer.x_opt
 

@@ -32,6 +32,7 @@ parser.add_argument('-e', default=200, type=int, metavar='num_epochs',
 						help='number of training epochs (def=200)')
 parser.add_argument('--excludeSeqID', action='store_true')
 parser.add_argument('--encodeBiophysics', action='store_true')
+parser.add_argument('--verbose', '-v', action='count', default=0)
 
 args = parser.parse_args()
 
@@ -44,6 +45,7 @@ num_epochs = args.e
 dtype = args.datatype
 num_classes = args.nc
 split_file = args.split
+verbosity = args.verbose
 
 excludeSeqID = args.excludeSeqID
 encodeBiophysics = args.encodeBiophysics
@@ -128,13 +130,17 @@ cv_loaders = []
 for cv_train, cv_val in cvs:
 	cv_train_loader = torch.utils.data.DataLoader(dataset=cv_train, batch_size=batch_size,
                                            		collate_fn=collate_function, shuffle=True)
-	cv_val_loader = torch.utils.data.DataLoader(dataset=cv_val, batch_size=batch_size,	# TODO: b or 1
+	cv_val_loader = torch.utils.data.DataLoader(dataset=cv_val, batch_size=batch_size,
                                            		collate_fn=collate_function, shuffle=False)
 	cv_loaders.append((cv_train_loader, cv_val_loader))
 
 optimizer = bayesian_optimization.BayesianOptimizer(cv_loaders, input_size, num_epochs, num_classes, 
-													dtype, saved_weights, device)
-
+													dtype, saved_weights, device, verbosity)
+if verbosity > 0:
+	print('Hyperparameter search space:')
+	print('Learning rate   |   n_layers   |   hidden vector size')
+	print('=====================================================')
+	
 best_hyperparams = optimizer.optimize()
 lr = 10**best_hyperparams[0]
 nl = int(best_hyperparams[1])
@@ -157,24 +163,22 @@ test_loader = torch.utils.data.DataLoader(dataset=test,
 
 # Initialize network:
 if dtype == 'sequence':
-	# Use a many-to-one architecture
-	# TODO: pass input_size depending on encoding scheme
 	brnn_network = brnn_architecture.BRNN_MtO(input_size, hs, nl, num_classes, device).to(device)
 else:	# dtype == 'residues'
-	# Use a many-to-many architecture
 	brnn_network = brnn_architecture.BRNN_MtM(input_size, hs, nl, num_classes, device).to(device)
 
 # Train network
-print('Training with optimal hyperparams:')
+if verbosity > 0:
+	print('Training with optimal hyperparams:')
 train_loss, val_loss = train_network.train(brnn_network, train_loader, val_loader, datatype=dtype, 
 						problem_type=problem_type, weights_file=saved_weights, stop_condition='iter',
-						device=device, learn_rate=lr, n_epochs=num_epochs*2) 
+						device=device, learn_rate=lr, n_epochs=num_epochs*2, verbosity=verbosity) 
 brnn_plot.training_loss(train_loss, val_loss)
 
 # Test network
 test_loss = train_network.test_labeled_data(brnn_network, test_loader, datatype=dtype, 
 						problem_type=problem_type, weights_file=saved_weights, 
 						num_classes=num_classes, device=device)
-
-print('\nTest Loss: %.4f' % test_loss)
+if verbosity > 0:
+	print('\nTest Loss: %.4f' % test_loss)
 
