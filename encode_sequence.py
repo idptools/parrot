@@ -31,44 +31,51 @@ def one_hot(seq):
 	return torch.from_numpy(m)
 
 ############  Biophysical scale encoding  #############
-# TODO
+# TODO: add more
 
-# Map each amino acid to a vector of ## biophysical properties
+# Map each amino acid to a vector of biophysical properties (int)
 ## TODO: list the properties here
-# Mol. weight
-# Hydrophobicity
-# Charge
+# 0: Hydrophobicity (Kyte-Doolitle * 10)
+# 1: Charge
+# 2: pI * 10
+# 3: Molecular weight (Da)
+
+# Others potentially?
 # Solvation surface area
 # Pi-system (AKA aromatic)
 # ...
 
-BIOPHYSICS1 = {	'A':[101.01, .73, 0.0, 40.2, .01], 	# TODO: actually fill these in
-				'C':[], 
-				'D':[], 
-				'E':[], 
-				'F':[], 
-				'G':[], 
-				'H':[], 
-				'I':[], 
-				'K':[], 
-				'L':[],
-		   		'M':[],
-		   		'N':[],
-		   		'P':[],
-		   		'Q':[],
-		   		'R':[],
-		   		'S':[],
-		   		'T':[],
-		   		'V':[],
-		   		'W':[],
-		   		'Y':[]
+BIOPHYSICS = {	'A':[18, 0, 60, 89], 
+				'C':[25, 0, 51, 121], 
+				'D':[-35, -1, 28, 133], 
+				'E':[-35, -1, 32, 147], 
+				'F':[28, 0, 55, 165], 
+				'G':[-4, 0, 60, 75], 
+				'H':[-32, 1, 76, 155], 
+				'I':[45, 0, 60, 131], 
+				'K':[-39, 1, 97, 146], 
+				'L':[38, 0, 60, 131],
+		   		'M':[19, 0, 57, 149],
+		   		'N':[-35, 0, 54, 132],
+		   		'P':[-16, 0, 63, 115],
+		   		'Q':[-35, 0, 57, 146],
+		   		'R':[-45, 1, 108, 174],
+		   		'S':[-8, 0, 57, 105],
+		   		'T':[-7, 0, 56, 119],
+		   		'V':[42, 0, 60, 117],
+		   		'W':[-9, 0, 59, 204],
+		   		'Y':[-13, 0, 57, 181]
 		   		}
 
-def biophysics1(s):
+def biophysics(seq):
 	l = len(seq)
-	m = np.zeros((l, 5))		# Return each amino acid as a length=5 vector
-	for i in range(l):
-		m[i] = BIOPHYSICS1[seq[i]]
+	m = np.zeros((l, 4))		# Return each amino acid as a length=4 vector
+	try:
+		for i in range(l):
+			m[i] = BIOPHYSICS[seq[i]]
+	except:
+		print('Error: invalid amino acid detected:', seq[i])
+		sys.exit()
 	return torch.from_numpy(m)
 
 ##################################################

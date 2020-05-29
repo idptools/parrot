@@ -23,10 +23,10 @@ parser.add_argument('-hs', default=5, type=int, metavar='hidden_size',
 parser.add_argument('-nl', default=1, type=int, metavar='num_layers', 
 						help='number of layers per direction (def=1)')
 parser.add_argument('--excludeSeqID', action='store_true')
+parser.add_argument('--encodeBiophysics', action='store_true')
 
 args = parser.parse_args()
 device = 'cpu'
-
 
 # Hyper-parameters
 hidden_size = args.hs
@@ -34,9 +34,15 @@ num_layers = args.nl
 dtype = args.datatype
 num_classes = args.nc
 
-input_size = 20		# TODO: set to len(encoding_scheme)
-
 excludeSeqID = args.excludeSeqID
+encodeBiophysics = args.encodeBiophysics
+
+if encodeBiophysics:
+	encoding_scheme = 'biophysics'
+	input_size = 4
+else:
+	encoding_scheme = 'onehot'
+	input_size = 20
 
 ###############################################################################
 ########################      Validate arguments:      ########################
@@ -110,9 +116,7 @@ else:
 		sequences.append(line[1])
 		seq_id_dict[line[1]] = line[0]
 
-
-
-pred_dict = train_network.test_unlabeled_data(brnn_network, sequences, device)
+pred_dict = train_network.test_unlabeled_data(brnn_network, sequences, device, encoding_scheme=encoding_scheme)
 
 if problem_type == 'classification':
 	if dtype == 'sequence':

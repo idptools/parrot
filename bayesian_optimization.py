@@ -14,8 +14,9 @@ class BayesianOptimizer(object):
 	"""
 
 	"""
-	def __init__(self, cv_dataloaders, n_epochs, n_classes, dtype, weights_file, device):
+	def __init__(self, cv_dataloaders, input_size, n_epochs, n_classes, dtype, weights_file, device):
 		self.cv_loaders = cv_dataloaders
+		self.input_size = input_size
 		self.n_epochs = n_epochs
 		self.n_folds = len(cv_dataloaders)
 		self.n_classes = n_classes
@@ -76,11 +77,11 @@ class BayesianOptimizer(object):
 			if self.dtype == 'sequence':
 				# Use a many-to-one architecture
 				# TODO: pass input_size depending on encoding scheme
-				brnn_network = brnn_architecture.BRNN_MtO(20, hs, nl,
+				brnn_network = brnn_architecture.BRNN_MtO(self.input_size, hs, nl,
 										self.n_classes, self.device).to(self.device)
 			else:	# dtype == 'residues'
 				# Use a many-to-many architecture
-				brnn_network = brnn_architecture.BRNN_MtM(20, hs, nl,
+				brnn_network = brnn_architecture.BRNN_MtM(self.input_size, hs, nl,
 										self.n_classes, self.device).to(self.device)	
 
 			# Train using these parameters
