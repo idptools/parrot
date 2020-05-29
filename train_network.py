@@ -198,7 +198,7 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 	# TODO: return training samples and predictions as output file
 	return test_loss / len(test_loader)
 
-def test_unlabeled_data(network, sequences, device):
+def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot'):
 	'''
 	Pass in a list of sequences along with the network with pre-loaded weights.
 	Return a dictionary with values mapped to each sequence
@@ -206,7 +206,10 @@ def test_unlabeled_data(network, sequences, device):
 	pred_dict = {}
 	for seq in sequences:
 
-		seq_vector = encode_sequence.one_hot(seq)
+		if encoding_scheme == 'onehot':
+			seq_vector = encode_sequence.one_hot(seq)
+		elif encoding_scheme == 'biophysics':
+			seq_vector = encode_sequence.biophysics(seq)
 		seq_vector = seq_vector.view(1, len(seq_vector), -1)
 
 		# Forward pass

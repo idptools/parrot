@@ -40,7 +40,8 @@ def parse_file(tsvfile, datatype, problem_type, num_classes, excludeSeqID=False)
 
 # Extended PyTorch Dataset class
 class SequenceDataset(Dataset):
-	def __init__(self, data, subset=np.array([])):
+	def __init__(self, data, subset=np.array([]), encoding_scheme='onehot'):
+		self.encoding_scheme = encoding_scheme
 		if len(subset) == 0:
 			self.data = data
 		else:
@@ -54,9 +55,12 @@ class SequenceDataset(Dataset):
 		if torch.is_tensor(idx):
 			idx = idx.tolist()
 
-		sequence_vector = encode_sequence.one_hot(self.data[idx][1])
-		value = self.data[idx][2]
+		if self.encoding_scheme == 'onehot':
+			sequence_vector = encode_sequence.one_hot(self.data[idx][1])
+		elif self.encoding_scheme == 'biophysics':
+			sequence_vector = encode_sequence.biophysics(self.data[idx][1])
 
+		value = self.data[idx][2]
 		sample = (sequence_vector, value)
 		return sample
 
@@ -168,9 +172,9 @@ def read_split_file(split_file):
 		test_samples = np.array([int(i) for i in lines[2]])
 	return training_samples, val_samples, test_samples
 
-def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=False, 
-						split_file=None, percent_val=0.15, percent_test=0.15):
-	data = parse_file(data_file, datatype, problem_type, n_classes, excludeSeqID=excludeSeqID)
+def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=False, split_file=None, 
+					encoding_scheme='onehot', percent_val=0.15, percent_test=0.15):
+	data = parse_file(data_file, datatype, problem_type, num_classes, excludeSeqID=excludeSeqID)
 	num_samples = len(data)
 
 	if split_file == None:
@@ -184,22 +188,22 @@ def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=Fals
 		val_samples, test_samples = vector_split(val_test_samples, val_test_fraction)
 
 		# Generate datasets using these random partitions
-		train_set = SequenceDataset(data=data, subset=training_samples)
-		val_set = SequenceDataset(data=data, subset=val_samples)
-		test_set = SequenceDataset(data=data, subset=test_samples)
+		train_set = SequenceDataset(data=data, subset=training_samples, encoding_scheme=encoding_scheme)
+		val_set = SequenceDataset(data=data, subset=val_samples, encoding_scheme=encoding_scheme)
+		test_set = SequenceDataset(data=data, subset=test_samples, encoding_scheme=encoding_scheme)
 
 	else:
 		training_samples, val_samples, test_samples = read_split_file(split_file)
 
 		# Generate datasets using the provided partitions
-		train_set = SequenceDataset(data=data, subset=training_samples)
-		val_set = SequenceDataset(data=data, subset=val_samples)
-		test_set = SequenceDataset(data=data, subset=test_samples)
+		train_set = SequenceDataset(data=data, subset=training_samples, encoding_scheme=encoding_scheme)
+		val_set = SequenceDataset(data=data, subset=val_samples, encoding_scheme=encoding_scheme)
+		test_set = SequenceDataset(data=data, subset=test_samples, encoding_scheme=encoding_scheme)
 
 	return train_set, val_set, test_set
 
-def split_data_cv(data_file, datatype, problem_type, n_classes, excludeSeqID=False,
-						split_file=None, percent_val=0.15, percent_test=0.15, n_folds=5):
+def split_data_cv(data_file, datatype, problem_type, n_classes, excludeSeqID=False, split_file=None,
+					encoding_scheme='onehot', percent_val=0.15, percent_test=0.15, n_folds=5):
 	# TODO: write this
 	# split as above function, but also split the combined train-val sets into k-folds
 
@@ -218,18 +222,18 @@ def split_data_cv(data_file, datatype, problem_type, n_classes, excludeSeqID=Fal
 		val_samples, test_samples = vector_split(val_test_samples, val_test_fraction)
 
 		# Generate datasets using these random partitions
-		train_set = SequenceDataset(data=data, subset=training_samples)
-		val_set = SequenceDataset(data=data, subset=val_samples)
-		test_set = SequenceDataset(data=data, subset=test_samples)
+		train_set = SequenceDataset(data=data, subset=training_samples, encoding_scheme=encoding_scheme)
+		val_set = SequenceDataset(data=data, subset=val_samples, encoding_scheme=encoding_scheme)
+		test_set = SequenceDataset(data=data, subset=test_samples, encoding_scheme=encoding_scheme)
 
 	# If provided, split datasets according to split_file
 	else:
 		training_samples, val_samples, test_samples = read_split_file(split_file)
 
 		# Generate datasets using the provided partitions
-		train_set = SequenceDataset(data=data, subset=training_samples)
-		val_set = SequenceDataset(data=data, subset=val_samples)
-		test_set = SequenceDataset(data=data, subset=test_samples)
+		train_set = SequenceDataset(data=data, subset=training_samples, encoding_scheme=encoding_scheme)
+		val_set = SequenceDataset(data=data, subset=val_samples, encoding_scheme=encoding_scheme)
+		test_set = SequenceDataset(data=data, subset=test_samples, encoding_scheme=encoding_scheme)
 
 	# Combine train and val samples, and split evenly into n_folds
 	# Concatenate np arrays and shuffle
@@ -250,8 +254,8 @@ def split_data_cv(data_file, datatype, problem_type, n_classes, excludeSeqID=Fal
 		cv_train.sort()
 		cv_test.sort()
 
-		cv_sets.append( (SequenceDataset(data=data, subset=cv_train), 
-						 SequenceDataset(data=data, subset=cv_test)) )
+		cv_sets.append( (SequenceDataset(data=data, subset=cv_train, encoding_scheme=encoding_scheme), 
+						 SequenceDataset(data=data, subset=cv_test, encoding_scheme=encoding_scheme)) )
 
 	return cv_sets, train_set, val_set, test_set
 

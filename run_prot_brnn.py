@@ -39,6 +39,7 @@ parser.add_argument('-lr', default=0.001, type=float, metavar='learning_rate', h
 parser.add_argument('-e', default=30, type=int, metavar='num_epochs', 
 						help='number of training epochs (def=30)')
 parser.add_argument('--excludeSeqID', action='store_true')
+parser.add_argument('--encodeBiophysics', action='store_true')
 
 args = parser.parse_args()
 
@@ -56,9 +57,15 @@ num_classes = args.nc
 split_file = args.split
 stop_cond = args.stop
 
-input_size = 20		# TODO: set to len(encoding_scheme)
-
 excludeSeqID = args.excludeSeqID
+encodeBiophysics = args.encodeBiophysics
+
+if encodeBiophysics:
+	encoding_scheme = 'biophysics'
+	input_size = 4
+else:
+	encoding_scheme = 'onehot'
+	input_size = 20
 
 ###############################################################################
 ########################      Validate arguments:      ########################
@@ -144,11 +151,14 @@ if batch_size < 1:
 	print('Error: batch size must be a positive integer.')
 	sys.exit()
 
+
+
 ###############################################################################
 
 # Split data
 train, val, test = pid.split_data(data_file, datatype=dtype, problem_type=problem_type, 
-						num_classes=num_classes, excludeSeqID=excludeSeqID, split_file=split_file)
+									num_classes=num_classes, excludeSeqID=excludeSeqID, 
+									split_file=split_file, encoding_scheme=encoding_scheme)
 
 # Add data to dataloaders
 train_loader = torch.utils.data.DataLoader(dataset=train,

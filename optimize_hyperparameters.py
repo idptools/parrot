@@ -31,6 +31,7 @@ parser.add_argument('-b', default=32, type=int, metavar='batch_size', help='(def
 parser.add_argument('-e', default=200, type=int, metavar='num_epochs', 
 						help='number of training epochs (def=200)')
 parser.add_argument('--excludeSeqID', action='store_true')
+parser.add_argument('--encodeBiophysics', action='store_true')
 
 args = parser.parse_args()
 
@@ -44,9 +45,15 @@ dtype = args.datatype
 num_classes = args.nc
 split_file = args.split
 
-input_size = 20		# TODO: set to len(encoding_scheme)
-
 excludeSeqID = args.excludeSeqID
+encodeBiophysics = args.encodeBiophysics
+
+if encodeBiophysics:
+	encoding_scheme = 'biophysics'
+	input_size = 4
+else:
+	encoding_scheme = 'onehot'
+	input_size = 20
 
 ###############################################################################
 ########################      Validate arguments:      ########################
@@ -113,7 +120,8 @@ if batch_size < 1:
 
 # Split data
 cvs, train, val, test = pid.split_data_cv(data_file, datatype=dtype, problem_type=problem_type, 
-						n_classes=num_classes, excludeSeqID=excludeSeqID, split_file=split_file)
+										n_classes=num_classes, excludeSeqID=excludeSeqID, 
+										split_file=split_file, encoding_scheme=encoding_scheme)
 
 # Convert CV datasets to dataloaders
 cv_loaders = []
@@ -124,7 +132,7 @@ for cv_train, cv_val in cvs:
                                            		collate_fn=collate_function, shuffle=False)
 	cv_loaders.append((cv_train_loader, cv_val_loader))
 
-optimizer = bayesian_optimization.BayesianOptimizer(cv_loaders, num_epochs, num_classes, 
+optimizer = bayesian_optimization.BayesianOptimizer(cv_loaders, input_size, num_epochs, num_classes, 
 													dtype, saved_weights, device)
 
 best_hyperparams = optimizer.optimize()
@@ -151,10 +159,10 @@ test_loader = torch.utils.data.DataLoader(dataset=test,
 if dtype == 'sequence':
 	# Use a many-to-one architecture
 	# TODO: pass input_size depending on encoding scheme
-	brnn_network = brnn_architecture.BRNN_MtO(20, hs, nl, num_classes, device).to(device)
+	brnn_network = brnn_architecture.BRNN_MtO(input_size, hs, nl, num_classes, device).to(device)
 else:	# dtype == 'residues'
 	# Use a many-to-many architecture
-	brnn_network = brnn_architecture.BRNN_MtM(20, hs, nl, num_classes, device).to(device)
+	brnn_network = brnn_architecture.BRNN_MtM(input_size, hs, nl, num_classes, device).to(device)
 
 # Train network
 print('Training with optimal hyperparams:')
