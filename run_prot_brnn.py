@@ -159,8 +159,8 @@ if batch_size < 1:
 
 # Split data
 train, val, test = pid.split_data(data_file, datatype=dtype, problem_type=problem_type, 
-									num_classes=num_classes, excludeSeqID=excludeSeqID, 
-									split_file=split_file, encoding_scheme=encoding_scheme)
+									excludeSeqID=excludeSeqID, split_file=split_file, 
+									encoding_scheme=encoding_scheme)
 
 # Add data to dataloaders
 train_loader = torch.utils.data.DataLoader(dataset=train,

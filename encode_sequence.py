@@ -14,14 +14,31 @@ they must modify the code where the encoding functions are called in <file_name.
 '''
 
 ############  One-hot encoding  #############
-# Map each amino acid to a length 20 vector: E.g. [0 0 0 1 0 ... 0] is E (Glu)
 ONE_HOT = {'A':0, 'C':1, 'D':2, 'E':3, 'F':4, 'G':5, 'H':6, 'I':7, 'K':8, 'L':9,
 		   'M':10,'N':11,'P':12,'Q':13,'R':14,'S':15,'T':16,'V':17,'W':18,'Y':19}
 
-# Convert an aa sequence to a matrix
 def one_hot(seq):
+	"""Convert an amino acid sequence to a PyTorch tensor of one-hot vectors
+
+	Each amino acid is represented by a length 20 vector with a single `1` and
+	19 `0`s. Inputing a sequence with a nono-canonical amino acid letter will
+	cause the program to exit.
+
+	E.g. Glutamic acid (E) is encoded: [0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+
+	Parameters
+	----------
+	seq : str
+		An uppercase sequence of amino acids (single letter code)
+
+	Returns
+	-------
+	torch.IntTensor
+		a PyTorch tensor representing the encoded sequence
+	"""
+
 	l = len(seq)
-	m = np.zeros((l, 20))		# Return each amino acid as a length=20 vector
+	m = np.zeros((l, 20))
 	try:
 		for i in range(l):
 			m[i, ONE_HOT[seq[i]]] = 1
@@ -44,7 +61,6 @@ def one_hot(seq):
 # Solvation surface area
 # Pi-system (AKA aromatic)
 # ...
-
 BIOPHYSICS = {	'A':[18, 0, 60, 89], 
 				'C':[25, 0, 51, 121], 
 				'D':[-35, -1, 28, 133], 
@@ -68,8 +84,28 @@ BIOPHYSICS = {	'A':[18, 0, 60, 89],
 		   		}
 
 def biophysics(seq):
+	"""Convert an amino acid sequence to a PyTorch tensor with biophysical encoding
+
+	Each amino acid is represented by a length 4 vector with each value representing
+	a biophysical property. The four encoded biophysical scales are Kyte-Doolittle
+	hydrophobicity, charge, isoelectric point, and molecular weight. Each value is 
+	scaled so that all are integers. Inputing a sequence with a nono-canonical amino
+	acid letter will cause the program to exit.
+
+	E.g. Glutamic acid (E) is encoded: [-35, -1, 32, 147]
+
+	Parameters
+	----------
+	seq : str
+		An uppercase sequence of amino acids (single letter code)
+
+	Returns
+	-------
+	torch.IntTensor
+		a PyTorch tensor representing the encoded sequence
+	"""
 	l = len(seq)
-	m = np.zeros((l, 4))		# Return each amino acid as a length=4 vector
+	m = np.zeros((l, len(BIOPHYSICS['A'])))
 	try:
 		for i in range(l):
 			m[i] = BIOPHYSICS[seq[i]]

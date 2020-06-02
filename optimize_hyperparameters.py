@@ -122,8 +122,8 @@ if batch_size < 1:
 
 # Split data
 cvs, train, val, test = pid.split_data_cv(data_file, datatype=dtype, problem_type=problem_type, 
-										n_classes=num_classes, excludeSeqID=excludeSeqID, 
-										split_file=split_file, encoding_scheme=encoding_scheme)
+											excludeSeqID=excludeSeqID, split_file=split_file, 
+											encoding_scheme=encoding_scheme)
 
 # Convert CV datasets to dataloaders
 cv_loaders = []

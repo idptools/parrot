@@ -70,7 +70,7 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 					outputs = outputs.permute(0, 2, 1)
 				loss = criterion(outputs, targets.long())
 
-			train_loss += loss
+			train_loss += loss.data.item()
 			
 			# Backward and optimize
 			optimizer.zero_grad()
@@ -91,7 +91,7 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 				loss = criterion(outputs, targets.long())
 
 			# Increment test loss
-			val_loss += loss
+			val_loss += loss.data.item()
 
 		# Avg loss:
 		train_loss /= len(train_loader.dataset)
@@ -101,7 +101,7 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 		if stop_condition == 'auto' and epoch > min_epochs - 1:
 			# Check to see if loss has stopped decreasing
 			last_epochs_loss = avg_val_losses[-min_epochs:]
-			#print(last_epochs_loss)
+
 			for loss in last_epochs_loss:
 				if val_loss >= loss*0.995:
 					signif_decrease = False
@@ -169,7 +169,7 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 				outputs = outputs.permute(0, 2, 1)
 			loss = criterion(outputs, targets.long())
 	
-		test_loss += loss # Increment test loss
+		test_loss += loss.data.item() # Increment test loss
 		all_outputs.append(outputs.detach())
 
 	# Calculate 'accuracy' depending on the problem type and datatype

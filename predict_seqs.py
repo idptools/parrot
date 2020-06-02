@@ -144,5 +144,3 @@ with open(output_file, 'w') as f:
 		else:
 			out_str = seq_id_dict[seq] + ' ' + seq + ' ' + ' '.join(map(str, values)) + '\n'
 		f.write(out_str)
-
-
