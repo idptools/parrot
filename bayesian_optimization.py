@@ -9,7 +9,6 @@ import brnn_architecture
 import math
 
 # TODO: are variance and lengthscale also hyperparameters that I will need to optimize somehow?
-# TODO: fix self.std
 class BayesianOptimizer(object):
 	"""A class for conducting Bayesian Optimization on a PyTorch RNN
 
@@ -43,9 +42,6 @@ class BayesianOptimizer(object):
 		level of how descriptive the output to console message will be
 	bds : list of dicts
 		GPy-compatible bounds for each of the hyperparameters to be optimized
-	std : float
-		Average standard deviation across cross-validation replicates. Used to
-		estimate noise inherent to the system.
 
 	Methods
 	-------
@@ -53,6 +49,8 @@ class BayesianOptimizer(object):
 		Compute the average cross-val loss for a given set of hyperparameters
 	eval_cv_brnns(lr, nl, hs)
 		Train and test a network with given parameters across all cross-val folds
+	initial_search(x)
+		Calculate loss and estimate noise for an initial set of hyperparameters
 	optimize()
 		Set up and run Bayesian Optimization on the BRNN using GPy
 	"""
@@ -100,8 +98,6 @@ class BayesianOptimizer(object):
 					{'name': 'n_layers', 'type': 'discrete', 'domain': tuple(range(1, 16))}, # up to 15
 					{'name': 'hidden_size', 'type': 'discrete', 'domain': tuple(range(1, 31))}] # up to 30
 
-		self.std = 0.0
-
 	def compute_cv_loss(self, hyperparameters):
 		"""Compute the average cross-val loss for a given set of hyperparameters
 
@@ -124,24 +120,19 @@ class BayesianOptimizer(object):
 		cv_outputs = np.zeros((len(hyperparameters), self.n_folds))
 
 		for i in range(len(hyperparameters)):
-			# lr = hyperparameters[i][0]
-			log_lr, nl, hs = hyperparameters[i]
 
+			log_lr, nl, hs = hyperparameters[i]
 			lr = 10**float(log_lr)
 			nl = int(nl)
 			hs = int(hs)
 
 			if self.verbosity > 0:
-				print('	%.6f	|	  %2d	  |	  %2d' % (lr, nl, hs))
+				print('  %.6f	|     %2d       |         %2d' % (lr, nl, hs))
 
 			# Train and validate network with these hyperparams using k-fold CV
 			cv_outputs[i] = self.eval_cv_brnns(lr, nl, hs)
 
 		outputs = np.average(cv_outputs, axis=1)
-
-		# Calculate the standard deviation of the losses from each set of cross-vals
-		stddevs = np.std(cv_outputs, axis=1)
-		self.std = np.average(stddevs) # FIXME
 		return outputs
 
 
@@ -189,6 +180,43 @@ class BayesianOptimizer(object):
 
 		return cv_losses
 
+	def initial_search(self, x):
+		"""Calculate loss and estimate noise for an initial set of hyperparameters
+
+		Parameters
+		----------
+		x : numpy array
+			Array containing initial hyperparameters to test
+
+		Returns
+		-------
+		numpy array
+			Array containing the average losses of the input hyperparameters
+		float
+			The standard deviation of loss across cross-val folds for the
+			input hyperparameters; an estimation of the training noise
+		"""
+		cv_outputs = np.zeros((len(x), self.n_folds))
+		y = np.zeros((len(x), 1))
+
+		for i in range(len(x)):
+
+			log_lr, nl, hs = x[i]
+			lr = 10**float(log_lr)
+			nl = int(nl)
+			hs = int(hs)
+
+			# Train and validate network with these hyperparams using k-fold CV
+			cv_outputs[i] = self.eval_cv_brnns(lr, nl, hs)
+
+		# Calculate the avg and standard deviation of the losses
+		for i in range(len(cv_outputs)):
+			y[i] = np.average(cv_outputs[i])
+		stddevs = np.std(cv_outputs, axis=1)
+		avg_stddev = np.average(stddevs)
+
+		return y, avg_stddev
+
 
 	def optimize(self):
 		"""Set up and run Bayesian Optimization on the BRNN using GPy
@@ -200,15 +228,33 @@ class BayesianOptimizer(object):
 			in the order: [lr, nl, hs]
 		"""
 
+		x_init = np.array([[-5.0, 5, 10], [-3.0, 5, 5], [0.0, 8, 20], [-3.0, 15, 5], [-3.0, 3, 30]])
+		y_init, noise = self.initial_search(x_init)
+
+		if self.verbosity > 0:
+			print("\nInitial search results:")
+			print("lr\tnl\ths\toutput")
+			for i in range(5):
+				print("%.5f\t%2d\t%2d\t%.4f" % (10**x_init[i][0], x_init[i][1], x_init[i][2], y_init[i][0]))
+			print("Noise estimate:", noise)				
+			print('\n')	
+
+			print('Primary optimization:')
+			print('--------------------\n')
+			print('Learning rate   |   n_layers   |   hidden vector size')
+			print('=====================================================')	
+
 		optimizer = BayesianOptimization(f=self.compute_cv_loss, 
 										 domain=self.bds,
 										 model_type='GP',
 										 acquisition_type ='EI',
 										 acquisition_jitter = 0.05, # TODO: what is this?
-										 noise_var = self.std**2, # FIXME: Run a few tests to calculate noise a priori?
+										 X=x_init,
+										 Y=y_init,
+										 noise_var = noise,
 										 maximize=False)
-		# TODO: what should max_iter be set at?
-		optimizer.run_optimization(max_iter=80)
+		# TODO: what should max_iter be set at - 75?
+		optimizer.run_optimization(max_iter=75)
 
 		ins = optimizer.get_evaluations()[0]
 		outs = optimizer.get_evaluations()[1].flatten()

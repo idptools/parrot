@@ -136,10 +136,6 @@ for cv_train, cv_val in cvs:
 
 optimizer = bayesian_optimization.BayesianOptimizer(cv_loaders, input_size, num_epochs, num_classes, 
 													dtype, saved_weights, device, verbosity)
-if verbosity > 0:
-	print('Hyperparameter search space:')
-	print('Learning rate   |   n_layers   |   hidden vector size')
-	print('=====================================================')
 	
 best_hyperparams = optimizer.optimize()
 lr = 10**best_hyperparams[0]

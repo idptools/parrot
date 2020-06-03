@@ -8,8 +8,20 @@ import matplotlib.pyplot as plt
 import seaborn as sn
 import pandas as pd
 
-# Training / validation loss per epoch
 def training_loss(train_loss, val_loss):
+	"""Plot training and validation loss per epoch
+
+	Figure is not displayed, but saved to file in current directory with the name
+	'train_test.png'.
+
+	Parameters
+	----------
+	train_loss : list
+		training loss across each epoch
+	val_loss : list
+		validation loss across each epoch
+	"""
+
 	fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6,6))
 	props = dict(boxstyle='round', facecolor='gainsboro', alpha=0.5)
 
@@ -34,12 +46,66 @@ def training_loss(train_loss, val_loss):
 	else:
 		ax.set_xticks(np.arange(50, num_epochs+1, 50))
 
-	plt.savefig('train_test.png')  
+	plt.savefig('train_test.png')  # TODO: make a user specified location
 	plt.clf()
 
-# Residue-wise scatterplot: each seq has different patterning 
-# (up to ~70 different marker-color combinations)
+
+def sequence_regression_scatterplot(true, predicted):
+	"""Create a scatterplot for a sequence-mapped values regression problem
+
+	Figure is displayed to console if possible and saved to file in current 
+	directory with the name 'seq_scatter.png'.
+
+	Parameters
+	----------
+	true : list of PyTorch FloatTensors
+		A list where each item is a [1 x 1] tensor with the true regression value
+		of a particular sequence
+	predicted : list of PyTorch FloatTensors
+		A list where each item is a [1 x 1] tensor with the regression prediction
+		for a particular sequence
+	"""
+	true_list = []
+	pred_list = []
+
+	for item in true:
+		true_list.append(item.cpu().numpy()[0][0])
+	for item in predicted:
+		pred_list.append(item.cpu().numpy()[0][0])
+
+	plt.scatter(true_list, pred_list)
+	edge_vals = [0.9*min(min(true_list), min(pred_list)), 
+				 1.1*max(max(true_list), max(pred_list))]
+	plt.xlim(edge_vals)
+	plt.ylim(edge_vals)
+	plt.plot(edge_vals, edge_vals, 'k--')
+	plt.xlabel('True')
+	plt.ylabel('Predicted')
+	slope, intercept, r_value, p_value, std_err = linregress(true_list, pred_list)
+	plt.title('Testing accuracy: R^2=%.3f' % (r_value**2))
+	plt.savefig('seq_scatter.png')
+	plt.show()
+
+
 def residue_regression_scatterplot(true, predicted):
+	"""Create a scatterplot for a residue-mapped values regression problem
+
+	Each sequence is plotted with a unique marker-color combination, up to 70
+	different sequences.
+
+	Figure is displayed to console if possible and saved to file in current 
+	directory with the name 'res_scatter.png'.
+
+	Parameters
+	----------
+	true : list of PyTorch FloatTensors
+		A list where each item is a [1 x len(sequence)] tensor with the true
+		regression values of each residue in a sequence
+	predicted : list of PyTorch FloatTensors
+		A list where each item is a [1 x len(sequence)] tensor with the 
+		regression predictions for each residue in a sequence
+	"""
+
 	true_list = []
 	pred_list = []
 
@@ -71,8 +137,24 @@ def residue_regression_scatterplot(true, predicted):
 	plt.show()
 
 
-# Sequence-wise classification: Confusion matrix
 def confusion_matrix(true_classes, predicted_classes, num_classes):
+	"""Create a confusion matrix for a sequence classification problem
+
+	Figure is displayed to console if possible and saved to file in current 
+	directory with the name 'seq_CM.png'.
+
+	Parameters
+	----------
+	true_classes : list of PyTorch IntTensors
+		A list where each item is a [1 x 1] tensor with the true class label of a
+		particular sequence
+	predicted_classes : list of PyTorch FloatTensors
+		A list where each item is a [1 x num_classes] tensor prediction of the
+		class label for a particular sequence
+	num_classes : int
+		Number of distinct data classes
+	"""
+
 	cm = np.zeros((num_classes, num_classes))
 	for i in range(len(true_classes)):
 		cm[true_classes[i][0], np.argmax(predicted_classes[i][0].cpu().numpy())] += 1
@@ -89,6 +171,24 @@ def confusion_matrix(true_classes, predicted_classes, num_classes):
 
 
 def res_confusion_matrix(true_classes, predicted_classes, num_classes):
+	"""Create a confusion matrix for a residue classification problem
+
+	Figure is displayed to console if possible and saved to file in current 
+	directory with the name 'res_CM.png'.
+
+	Parameters
+	----------
+	true_classes : list of PyTorch IntTensors
+		A list where each item is a [1 x len(sequence)] tensor with the true class
+		label of the residues in a particular sequence
+	predicted_classes : list of PyTorch FloatTensors
+		A list where each item is a [1 x num_classes x len(sequence)] tensor
+		with predictions of the class label for each residue in a particular
+		sequence
+	num_classes : int
+		Number of distinct data classes
+	"""
+
 	true_list = []
 	pred_list = []
 
@@ -115,29 +215,4 @@ def res_confusion_matrix(true_classes, predicted_classes, num_classes):
 	plt.tight_layout()
 	plt.savefig('res_CM.png')
 	plt.show()
-
-
-# Sequence-wise regression: 2D scatterplot of true vs predicted
-def sequence_regression_scatterplot(true, predicted):
-	true_list = []
-	pred_list = []
-
-	for item in true:
-		true_list.append(item.cpu().numpy()[0][0])
-	for item in predicted:
-		pred_list.append(item.cpu().numpy()[0][0])
-
-	plt.scatter(true_list, pred_list)
-	edge_vals = [0.9*min(min(true_list), min(pred_list)), 
-				 1.1*max(max(true_list), max(pred_list))]
-	plt.xlim(edge_vals)
-	plt.ylim(edge_vals)
-	plt.plot(edge_vals, edge_vals, 'k--')
-	plt.xlabel('True')
-	plt.ylabel('Predicted')
-	slope, intercept, r_value, p_value, std_err = linregress(true_list, pred_list)
-	plt.title('Testing accuracy: R^2=%.3f' % (r_value**2))
-	plt.savefig('seq_scatter.png')
-	plt.show()
-
 
