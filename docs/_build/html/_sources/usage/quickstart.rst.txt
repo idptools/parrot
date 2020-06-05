@@ -1,0 +1,7 @@
+Quickstart yo! This is what is up!
+=========================================================
+
+To do a developmental install, type
+
+``pip install -e .``
+

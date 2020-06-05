@@ -1,0 +1,1055 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>prot_brnn API Documentation &mdash; prot_brnn  documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Quickstart yo! This is what is up!" href="usage/quickstart.html" />
+    <link rel="prev" title="Getting Started" href="getting_started.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home"> prot_brnn
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting Started</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">prot_brnn API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#driving-scripts">Driving scripts:</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#brnn-train">brnn_train</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#brnn-predict">brnn_predict</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#brnn-optimize">brnn_optimize</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#modules">Modules:</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-prot_brnn.brnn_architecture">brnn_architecture.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-prot_brnn.encode_sequence">encode_sequence.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-prot_brnn.process_input_data">process_input_data.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-prot_brnn.train_network">train_network.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-prot_brnn.bayesian_optimization">bayesian_optimization.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-prot_brnn.brnn_plot">brnn_plot.py</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage/quickstart.html">Quickstart yo! This is what is up!</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">prot_brnn</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+      <li>prot_brnn API Documentation</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/api.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="prot-brnn-api-documentation">
+<h1>prot_brnn API Documentation<a class="headerlink" href="#prot-brnn-api-documentation" title="Permalink to this headline">¶</a></h1>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+</tbody>
+</table>
+</div>
+<div class="section" id="driving-scripts">
+<h1>Driving scripts:<a class="headerlink" href="#driving-scripts" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="brnn-train">
+<h2>brnn_train<a class="headerlink" href="#brnn-train" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="brnn-predict">
+<h2>brnn_predict<a class="headerlink" href="#brnn-predict" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="brnn-optimize">
+<h2>brnn_optimize<a class="headerlink" href="#brnn-optimize" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+<div class="section" id="modules">
+<h1>Modules:<a class="headerlink" href="#modules" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-prot_brnn.brnn_architecture">
+<span id="brnn-architecture-py"></span><h2>brnn_architecture.py<a class="headerlink" href="#module-prot_brnn.brnn_architecture" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="prot_brnn.brnn_architecture.BRNN_MtM">
+<em class="property">class </em><code class="sig-prename descclassname">prot_brnn.brnn_architecture.</code><code class="sig-name descname">BRNN_MtM</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">hidden_size</span></em>, <em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtM"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_architecture.BRNN_MtM" title="Permalink to this definition">¶</a></dt>
+<dd><p>A PyTorch many-to-many bidirectional recurrent neural network</p>
+<p>A class containing the PyTorch implementation of a BRNN. The network consists
+of repeating LSTM units in the hidden layers that propogate sequence information
+in both the foward and reverse directions. A final fully connected layer
+aggregates the deepest hidden layers of both directions and produces the
+outputs.</p>
+<p>“Many-to-many” refers to the fact that the network will produce outputs
+corresponding to every item of the input sequence. For example, an input
+sequence of length 10 will produce 10 sequential outputs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Variables</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>device</strong> (<em>str</em>) – String describing where the network is physically stored on the computer.
+Should be either ‘cpu’ or ‘cuda’ (GPU).</p></li>
+<li><p><strong>hidden_size</strong> (<em>int</em>) – Size of hidden vectors in the network</p></li>
+<li><p><strong>num_layers</strong> (<em>int</em>) – Number of hidden layers (for each direction) in the network</p></li>
+<li><p><strong>num_classes</strong> (<em>int</em>) – Number of classes for the machine learning task. If it is a regression
+problem, <cite>num_classes</cite> should be 1. If it is a classification problem,
+it should be the number of classes.</p></li>
+<li><p><strong>lstm</strong> (<em>PyTorch LSTM object</em>) – The bidirectional LSTM layer(s) of the recurrent neural network.</p></li>
+<li><p><strong>fc</strong> (<em>PyTorch Linear object</em>) – The fully connected linear layer of the recurrent neural network. Across
+the length of the input sequence, this layer aggregates the output of the
+LSTM nodes from the deepest forward layer and deepest reverse layer and
+returns the output for that residue in the sequence.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="prot_brnn.brnn_architecture.BRNN_MtM.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtM.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_architecture.BRNN_MtM.forward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Propogate input sequences through the network to produce outputs</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="id0">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtM.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#id0" title="Permalink to this definition">¶</a></dt>
+<dd><p>Propogate input sequences through the network to produce outputs</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>x</strong> (<em>3-dimensional PyTorch IntTensor</em>) – Input sequence to the network. Should be in the format:
+[batch_dim X sequence_length X input_size]</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Output after propogating the sequences through the network. Will
+be in the format:
+[batch_dim X sequence_length X num_classes]</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>3-dimensional PyTorch FloatTensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="prot_brnn.brnn_architecture.BRNN_MtO">
+<em class="property">class </em><code class="sig-prename descclassname">prot_brnn.brnn_architecture.</code><code class="sig-name descname">BRNN_MtO</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">hidden_size</span></em>, <em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtO"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_architecture.BRNN_MtO" title="Permalink to this definition">¶</a></dt>
+<dd><p>A PyTorch many-to-one bidirectional recurrent neural network</p>
+<p>A class containing the PyTorch implementation of a BRNN. The network consists
+of repeating LSTM units in the hidden layers that propogate sequence information
+in both the foward and reverse directions. A final fully connected layer
+aggregates the deepest hidden layers of both directions and produces the
+output.</p>
+<p>“Many-to-one” refers to the fact that the network will produce a single output
+for an entire input sequence. For example, an input sequence of length 10 will
+produce only one output.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Variables</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>device</strong> (<em>str</em>) – String describing where the network is physically stored on the computer.
+Should be either ‘cpu’ or ‘cuda’ (GPU).</p></li>
+<li><p><strong>hidden_size</strong> (<em>int</em>) – Size of hidden vectors in the network</p></li>
+<li><p><strong>num_layers</strong> (<em>int</em>) – Number of hidden layers (for each direction) in the network</p></li>
+<li><p><strong>num_classes</strong> (<em>int</em>) – Number of classes for the machine learning task. If it is a regression
+problem, <cite>num_classes</cite> should be 1. If it is a classification problem,
+it should be the number of classes.</p></li>
+<li><p><strong>lstm</strong> (<em>PyTorch LSTM object</em>) – The bidirectional LSTM layer(s) of the recurrent neural network.</p></li>
+<li><p><strong>fc</strong> (<em>PyTorch Linear object</em>) – The fully connected linear layer of the recurrent neural network. Across
+the length of the input sequence, this layer aggregates the output of the
+LSTM nodes from the deepest forward layer and deepest reverse layer and
+returns the output for that residue in the sequence.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="prot_brnn.brnn_architecture.BRNN_MtO.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtO.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_architecture.BRNN_MtO.forward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Propogate input sequences through the network to produce outputs</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="id1">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtO.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#id1" title="Permalink to this definition">¶</a></dt>
+<dd><p>Propogate input sequences through the network to produce outputs</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>x</strong> (<em>3-dimensional PyTorch IntTensor</em>) – Input sequence to the network. Should be in the format:
+[batch_dim X sequence_length X input_size]</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Output after propogating the sequences through the network. Will
+be in the format:
+[batch_dim X 1 X num_classes]</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>3-dimensional PyTorch FloatTensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-prot_brnn.encode_sequence">
+<span id="encode-sequence-py"></span><h2>encode_sequence.py<a class="headerlink" href="#module-prot_brnn.encode_sequence" title="Permalink to this headline">¶</a></h2>
+<dl class="py function">
+<dt id="prot_brnn.encode_sequence.biophysics">
+<code class="sig-prename descclassname">prot_brnn.encode_sequence.</code><code class="sig-name descname">biophysics</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/encode_sequence.html#biophysics"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.encode_sequence.biophysics" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert an amino acid sequence to a PyTorch tensor with biophysical encoding</p>
+<p>Each amino acid is represented by a length 4 vector with each value representing
+a biophysical property. The four encoded biophysical scales are Kyte-Doolittle
+hydrophobicity, charge, isoelectric point, and molecular weight. Each value is
+scaled so that all are integers. Inputing a sequence with a nono-canonical amino
+acid letter will cause the program to exit.</p>
+<p>E.g. Glutamic acid (E) is encoded: [-35, -1, 32, 147]</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>seq</strong> (<em>str</em>) – An uppercase sequence of amino acids (single letter code)</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a PyTorch tensor representing the encoded sequence</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>torch.IntTensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.encode_sequence.one_hot">
+<code class="sig-prename descclassname">prot_brnn.encode_sequence.</code><code class="sig-name descname">one_hot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/encode_sequence.html#one_hot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.encode_sequence.one_hot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert an amino acid sequence to a PyTorch tensor of one-hot vectors</p>
+<p>Each amino acid is represented by a length 20 vector with a single <cite>1</cite> and
+19 <a href="#id2"><span class="problematic" id="id3">`</span></a>0`s. Inputing a sequence with a nono-canonical amino acid letter will
+cause the program to exit.</p>
+<p>E.g. Glutamic acid (E) is encoded: [0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>seq</strong> (<em>str</em>) – An uppercase sequence of amino acids (single letter code)</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a PyTorch tensor representing the encoded sequence</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>torch.IntTensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-prot_brnn.process_input_data">
+<span id="process-input-data-py"></span><h2>process_input_data.py<a class="headerlink" href="#module-prot_brnn.process_input_data" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="prot_brnn.process_input_data.SequenceDataset">
+<em class="property">class </em><code class="sig-prename descclassname">prot_brnn.process_input_data.</code><code class="sig-name descname">SequenceDataset</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">subset</span><span class="o">=</span><span class="default_value">array([], dtype=float64)</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span><span class="o">=</span><span class="default_value">'onehot'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/process_input_data.html#SequenceDataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.process_input_data.SequenceDataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>A PyTorch-compatible dataset containing sequences and values</p>
+<p>Stores a collection of sequences as tensors along with their corresponding
+target values. This class is designed to be provided to PyTorch Dataloaders.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Variables</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>list of lists</em>) – Each inner list represents a single sequence in the dataset and should
+have the format: [seqID, sequence, value(s)]</p></li>
+<li><p><strong>encoding_scheme</strong> (<em>str</em>) – Description of how an amino acid sequence should be encoded as a numeric
+vector. Providing a string other than ‘onehot’ or ‘biophysics’ will
+produce unintended consequences.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.process_input_data.parse_file">
+<code class="sig-prename descclassname">prot_brnn.process_input_data.</code><code class="sig-name descname">parse_file</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tsvfile</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">excludeSeqID</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/process_input_data.html#parse_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.process_input_data.parse_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse a datafile containing sequences and values.</p>
+<p>Each line of of the input tsv file contains a sequence of amino acids, a value
+(or values) corresponding to that sequence, and an optional sequence ID. This
+file will be parsed into a more convenient list of lists.</p>
+<p>If excludeSeqID is False, then the format of each line in the file should be:
+&lt;seqID&gt; &lt;sequence&gt; &lt;value(s)&gt;</p>
+<p>If excludeSeqID is True, then the format of each line in the file should be:
+&lt;sequence&gt; &lt;value(s)&gt;</p>
+<p><cite>value(s)</cite> will either be a single number if <cite>datatype</cite> is ‘sequence’ or a
+len(sequence) series of whitespace-separated numbers if it is ‘residues’.</p>
+<p>If <cite>problem_type</cite> is ‘regression’, then each value can be any real number. But
+if it is ‘classification’ then each value should be an integer in the range
+[0-N] where N is the number of classes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tsvfile</strong> (<em>str</em>) – Path to a whitespace-separated datafile</p></li>
+<li><p><strong>datatype</strong> (<em>str</em>) – Description of the format of the values in <cite>tsvfile</cite>. Providing a string
+other than ‘sequence’ or ‘residues’ will produce unintended behavior.</p></li>
+<li><p><strong>problem_type</strong> (<em>str</em>) – Description of the machine-learning task. Providing a string other than
+‘regression’ or ‘classification’ will produce unintended behavior.</p></li>
+<li><p><strong>excludeSeqID</strong> (<em>bool, optional</em>) – Boolean indicating whether or not each line in <cite>tsvfile</cite> has a sequence ID
+(default is False)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A list representing the entire <cite>tsvfile</cite>. Each inner list corresponds to a
+single line in the file and has the format [seqID, sequence, values].</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list of lists</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.process_input_data.read_split_file">
+<code class="sig-prename descclassname">prot_brnn.process_input_data.</code><code class="sig-name descname">read_split_file</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">split_file</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/process_input_data.html#read_split_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.process_input_data.read_split_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read in a split_file</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>split_file</strong> (<em>str</em>) – Path to a whitespace-separated splitfile</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>numpy int array</em> – an array of the indices for the training set samples</p></li>
+<li><p><em>numpy int array</em> – an array of the indices for the validation set samples</p></li>
+<li><p><em>numpy int array</em> – an array of the indices for the testing set samples</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.process_input_data.res_class_collate">
+<code class="sig-prename descclassname">prot_brnn.process_input_data.</code><code class="sig-name descname">res_class_collate</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">batch</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/process_input_data.html#res_class_collate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.process_input_data.res_class_collate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Collates sequences and their values into a batch</p>
+<p>Transforms a collection of tuples of sequence vectors and values into a single
+tuple by stacking along a newly-created batch dimension. This function is
+specifically designed for classification problems with residue-mapped data. To
+account for sequences with different lengths, all sequence vectors are zero-
+padded to the length of the longest sequence in the batch</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>batch</strong> (<em>list</em>) – A list of tuples of the form (sequence_vector, target_value(s))</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a tuple with concatenated sequence_vectors and target_values(s)</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.process_input_data.res_regress_collate">
+<code class="sig-prename descclassname">prot_brnn.process_input_data.</code><code class="sig-name descname">res_regress_collate</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">batch</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/process_input_data.html#res_regress_collate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.process_input_data.res_regress_collate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Collates sequences and their values into a batch</p>
+<p>Transforms a collection of tuples of sequence vectors and values into a single
+tuple by stacking along a newly-created batch dimension. This function is
+specifically designed for regression problems with residue-mapped data. To
+account for sequences with different lengths, all sequence vectors are zero-
+padded to the length of the longest sequence in the batch</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>batch</strong> (<em>list</em>) – A list of tuples of the form (sequence_vector, target_value(s))</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a tuple with concatenated sequence_vectors and target_values(s)</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.process_input_data.seq_class_collate">
+<code class="sig-prename descclassname">prot_brnn.process_input_data.</code><code class="sig-name descname">seq_class_collate</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">batch</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/process_input_data.html#seq_class_collate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.process_input_data.seq_class_collate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Collates sequences and their values into a batch</p>
+<p>Transforms a collection of tuples of sequence vectors and values into a single
+tuple by stacking along a newly-created batch dimension. This function is
+specifically designed for classification problems with sequence-mapped data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>batch</strong> (<em>list</em>) – A list of tuples of the form (sequence_vector, target_value(s))</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a tuple with concatenated sequence_vectors and target_values(s)</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.process_input_data.seq_regress_collate">
+<code class="sig-prename descclassname">prot_brnn.process_input_data.</code><code class="sig-name descname">seq_regress_collate</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">batch</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/process_input_data.html#seq_regress_collate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.process_input_data.seq_regress_collate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Collates sequences and their values into a batch</p>
+<p>Transforms a collection of tuples of sequence vectors and values into a single
+tuple by stacking along a newly-created batch dimension. This function is
+specifically designed for regression problems with sequence-mapped data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>batch</strong> (<em>list</em>) – A list of tuples of the form (sequence_vector, target_value(s))</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a tuple with concatenated sequence_vectors and target_values(s)</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.process_input_data.split_data">
+<code class="sig-prename descclassname">prot_brnn.process_input_data.</code><code class="sig-name descname">split_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_file</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">excludeSeqID</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">split_file</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span><span class="o">=</span><span class="default_value">'onehot'</span></em>, <em class="sig-param"><span class="n">percent_val</span><span class="o">=</span><span class="default_value">0.15</span></em>, <em class="sig-param"><span class="n">percent_test</span><span class="o">=</span><span class="default_value">0.15</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/process_input_data.html#split_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.process_input_data.split_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Divide a datafile into training, validation, and test datasets</p>
+<p>Takes in a datafile and specification of the data format and the machine
+learning problem, and returns PyTorch-compatible Dataset objects for
+the training, validation and test sets of the data. The user may optionally
+specify how the dataset should be split into these subsets, as well as how
+protein sequences should be encoded as numeric vectors.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_file</strong> (<em>str</em>) – Path to the datafile containing sequences and corresponding values</p></li>
+<li><p><strong>datatype</strong> (<em>str</em>) – Format of the values within <cite>data_file</cite>. Should be ‘sequence’ if the
+<cite>data_file</cite> contains a single value per sequence, or ‘residues’ if
+it contains a value for each residue per sequence.</p></li>
+<li><p><strong>problem_type</strong> (<em>str</em>) – The machine learning task to be addressed. Should be either ‘regression’
+or ‘classification’.</p></li>
+<li><p><strong>excludeSeqID</strong> (<em>bool, optional</em>) – Flag that indicates how <cite>data_file</cite> is formatted. If False (default),
+then each line in the file should begin with a column containing a
+sequence ID. If True, then the datafile will not have this ID column,
+and will begin with the protein sequence.</p></li>
+<li><p><strong>split_file</strong> (<em>str, optional</em>) – Path to a file containing information on how to divide the data into
+training, validation and test datasets. Default is None, which will
+cause the data to be divided randomly, with proportions based on
+<cite>percent_val</cite> and <cite>percent_test</cite>. If <cite>split_file</cite> is provided it must
+contain 3 lines in the file, corresponding to the training, validation
+and test sets. Each line should have whitespace-separated integer indices
+which correspond to lines in <cite>data_file</cite>.</p></li>
+<li><p><strong>encoding_scheme</strong> (<em>str, optional</em>) – The method to be used for encoding protein sequences as numeric vectors.
+Currently ‘onehot’ and ‘biophysics’ are implemented (default is ‘onehot’).</p></li>
+<li><p><strong>percent_val</strong> (<em>float, optional</em>) – If <cite>split_file</cite> is not provided, the fraction of the data that should be
+randomly assigned to the validation set. Should be in the range [0-1]
+(default is 0.15).</p></li>
+<li><p><strong>percent_test</strong> (<em>float, optional</em>) – If <cite>split_file</cite> is not provided, the fraction of the data that should be
+randomly assigned to the test set. Should be in the range [0-1] (default
+is 0.15). The proportion of the training set will be calculated by the
+difference between 1 and the sum of <cite>percent_val</cite> and <cite>percent_train</cite>, so
+these should not sum to be greater than 1.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>SequenceDataset object</em> – a dataset containing the training set sequences and values</p></li>
+<li><p><em>SequenceDataset object</em> – a dataset containing the validation set sequences and values</p></li>
+<li><p><em>SequenceDataset object</em> – a dataset containing the test set sequences and values</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.process_input_data.split_data_cv">
+<code class="sig-prename descclassname">prot_brnn.process_input_data.</code><code class="sig-name descname">split_data_cv</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_file</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">excludeSeqID</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">split_file</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span><span class="o">=</span><span class="default_value">'onehot'</span></em>, <em class="sig-param"><span class="n">percent_val</span><span class="o">=</span><span class="default_value">0.15</span></em>, <em class="sig-param"><span class="n">percent_test</span><span class="o">=</span><span class="default_value">0.15</span></em>, <em class="sig-param"><span class="n">n_folds</span><span class="o">=</span><span class="default_value">5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/process_input_data.html#split_data_cv"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.process_input_data.split_data_cv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Divide a datafile into training, val, test and 5 cross-val datasets.</p>
+<p>Takes in a datafile and specification of the data format and the machine
+learning problem, and returns PyTorch-compatible Dataset objects for
+the training, validation, test and cross-validation sets of the data. The
+user may optionally specify how the dataset should be split into these
+subsets, as well as how protein sequences should be encoded as numeric
+vectors.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_file</strong> (<em>str</em>) – Path to the datafile containing sequences and corresponding values</p></li>
+<li><p><strong>datatype</strong> (<em>str</em>) – Format of the values within <cite>data_file</cite>. Should be ‘sequence’ if the
+<cite>data_file</cite> contains a single value per sequence, or ‘residues’ if
+it contains a value for each residue per sequence.</p></li>
+<li><p><strong>problem_type</strong> (<em>str</em>) – The machine learning task to be addressed. Should be either ‘regression’
+or ‘classification’.</p></li>
+<li><p><strong>excludeSeqID</strong> (<em>bool, optional</em>) – Flag that indicates how <cite>data_file</cite> is formatted. If False (default),
+then each line in the file should begin with a column containing a
+sequence ID. If True, then the datafile will not have this ID column,
+and will begin with the protein sequence.</p></li>
+<li><p><strong>split_file</strong> (<em>str, optional</em>) – Path to a file containing information on how to divide the data into
+training, validation and test datasets. Default is None, which will
+cause the data to be divided randomly, with proportions based on
+<cite>percent_val</cite> and <cite>percent_test</cite>. If <cite>split_file</cite> is provided it must
+contain 3 lines in the file, corresponding to the training, validation
+and test sets. Each line should have whitespace-separated integer indices
+which correspond to lines in <cite>data_file</cite>.</p></li>
+<li><p><strong>encoding_scheme</strong> (<em>str, optional</em>) – The method to be used for encoding protein sequences as numeric vectors.
+Currently ‘onehot’ and ‘biophysics’ are implemented (default is ‘onehot’).</p></li>
+<li><p><strong>percent_val</strong> (<em>float, optional</em>) – If <cite>split_file</cite> is not provided, the fraction of the data that should be
+randomly assigned to the validation set. Should be in the range [0-1]
+(default is 0.15).</p></li>
+<li><p><strong>percent_test</strong> (<em>float, optional</em>) – If <cite>split_file</cite> is not provided, the fraction of the data that should be
+randomly assigned to the test set. Should be in the range [0-1] (default
+is 0.15). The proportion of the training set will be calculated by the
+difference between 1 and the sum of <cite>percent_val</cite> and <cite>percent_train</cite>, so
+these should not sum to be greater than 1.</p></li>
+<li><p><strong>n_folds</strong> (<em>int, optional</em>) – Number of folds for cross-validation (default is 5).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>list of tuples of SequenceDataset objects</em> – a list of tuples of length <cite>n_folds</cite>. Each tuple contains the training
+and validation datasets for one of the cross-val folds.</p></li>
+<li><p><em>SequenceDataset object</em> – a dataset containing the training set sequences and values</p></li>
+<li><p><em>SequenceDataset object</em> – a dataset containing the validation set sequences and values</p></li>
+<li><p><em>SequenceDataset object</em> – a dataset containing the test set sequences and values</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.process_input_data.vector_split">
+<code class="sig-prename descclassname">prot_brnn.process_input_data.</code><code class="sig-name descname">vector_split</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">v</span></em>, <em class="sig-param"><span class="n">fraction</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/process_input_data.html#vector_split"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.process_input_data.vector_split" title="Permalink to this definition">¶</a></dt>
+<dd><p>Split a vector randomly by a specified proportion</p>
+<p>Randomly divide the values of a vector into two, non-overlapping smaller
+vectors. The proportions of the two vectors will be <cite>fraction</cite> and
+(1 - <cite>fraction</cite>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>v</strong> (<em>numpy array</em>) – The vector to divide</p></li>
+<li><p><strong>fraction</strong> (<em>float</em>) – Size proportion for the returned vectors. Should be in the range [0-1].</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>numpy array</em> – a subset of <cite>v</cite> of length <cite>fraction</cite> * len(v) (rounding up)</p></li>
+<li><p><em>numpy array</em> – a subset of <cite>v</cite> of length (1-<cite>fraction</cite>) * len(v).</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-prot_brnn.train_network">
+<span id="train-network-py"></span><h2>train_network.py<a class="headerlink" href="#module-prot_brnn.train_network" title="Permalink to this headline">¶</a></h2>
+<p>The core training module of the project</p>
+<dl class="py function">
+<dt id="prot_brnn.train_network.test_labeled_data">
+<code class="sig-prename descclassname">prot_brnn.train_network.</code><code class="sig-name descname">test_labeled_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">network</span></em>, <em class="sig-param"><span class="n">test_loader</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/train_network.html#test_labeled_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.train_network.test_labeled_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test a trained BRNN on labeled sequences</p>
+<p>Using the saved weights of a trained network, run a set of sequences through
+the network and evaluate the performancd. Return the average loss per
+sequence and plot the results. Testing a network on previously-unseen data
+provides a useful estimate of how generalizeable the network’s performance is.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>network</strong> (<em>PyTorch network object</em>) – A BRNN network with the desired architecture</p></li>
+<li><p><strong>test_loader</strong> (<em>PyTorch DataLoader object</em>) – A DataLoader containing the sequences and targets of the test set</p></li>
+<li><p><strong>datatype</strong> (<em>str</em>) – The format of values in the dataset. Should be ‘sequence’ for datasets
+with a single value (or class label) per sequence, or ‘residues’ for
+datasets with values (or class labels) for every residue in a sequence.</p></li>
+<li><p><strong>problem_type</strong> (<em>str</em>) – The machine learning task–should be either ‘regression’ or
+‘classification’.</p></li>
+<li><p><strong>weights_file</strong> (<em>str</em>) – A path to the location of the best_performing network weights</p></li>
+<li><p><strong>num_classes</strong> (<em>int</em>) – Number of data classes. If regression task, put 1.</p></li>
+<li><p><strong>device</strong> (<em>str</em>) – Location of where testing will take place–should be either ‘cpu’ or
+‘cuda’ (GPU). If available, training on GPU is typically much faster.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The average loss across the entire test set</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.train_network.test_unlabeled_data">
+<code class="sig-prename descclassname">prot_brnn.train_network.</code><code class="sig-name descname">test_unlabeled_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">network</span></em>, <em class="sig-param"><span class="n">sequences</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span><span class="o">=</span><span class="default_value">'onehot'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/train_network.html#test_unlabeled_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.train_network.test_unlabeled_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test a trained BRNN on unlabeled sequences</p>
+<p>Use a trained network to make predictions on previously-unseen data.</p>
+<p>** Note: Unlike the previous functions, <cite>network</cite> here must have pre-loaded
+weights. **</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>network</strong> (<em>PyTorch network object</em>) – A BRNN network with the desired architecture and pre-loaded weights</p></li>
+<li><p><strong>sequences</strong> (<em>list</em>) – A list of amino acid sequences to test using the network</p></li>
+<li><p><strong>device</strong> (<em>str</em>) – Location of where testing will take place–should be either ‘cpu’ or
+‘cuda’ (GPU). If available, training on GPU is typically much faster.</p></li>
+<li><p><strong>encoding_scheme</strong> (<em>str</em>) – How amino acid sequences are to be encoded as numeric vectors. Currently,
+‘onehot’ and ‘biophysics’ are the implemented options.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A dictionary containing predictions mapped to sequences</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.train_network.train">
+<code class="sig-prename descclassname">prot_brnn.train_network.</code><code class="sig-name descname">train</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">network</span></em>, <em class="sig-param"><span class="n">train_loader</span></em>, <em class="sig-param"><span class="n">val_loader</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">stop_condition</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">learn_rate</span></em>, <em class="sig-param"><span class="n">n_epochs</span></em>, <em class="sig-param"><span class="n">verbosity</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/train_network.html#train"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.train_network.train" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train a BRNN and save the best performing network weights</p>
+<p>Train the network on a training set, and every epoch evaluate its performance on
+a validation set. Save the network weights that acheive the best performance on
+the validation set.</p>
+<p>User must specify the machine learning tast (<cite>problem_type</cite>) and the format of
+the data (<cite>datatype</cite>). Additionally, this function requires the learning rate
+hyperparameter and the number of epochs of training. The other hyperparameters,
+number of hidden layers and hidden vector size, are implictly included on the
+the provided network.</p>
+<p>The user may specify if they want to train the network for a set number of
+epochs or until an automatic stopping condition is reached with the argument
+<cite>stop_condition</cite>. Depending on the stopping condition used, the <cite>n_epochs</cite>
+argument will have a different role.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>network</strong> (<em>PyTorch network object</em>) – A BRNN network with the desired architecture</p></li>
+<li><p><strong>train_loader</strong> (<em>PyTorch DataLoader object</em>) – A DataLoader containing the sequences and targets of the training set</p></li>
+<li><p><strong>val_loader</strong> (<em>PyTorch DataLoader object</em>) – A DataLoader containing the sequences and targets of the validation set</p></li>
+<li><p><strong>datatype</strong> (<em>str</em>) – The format of values in the dataset. Should be ‘sequence’ for datasets
+with a single value (or class label) per sequence, or ‘residues’ for
+datasets with values (or class labels) for every residue in a sequence.</p></li>
+<li><p><strong>problem_type</strong> (<em>str</em>) – The machine learning task–should be either ‘regression’ or
+‘classification’.</p></li>
+<li><p><strong>weights_file</strong> (<em>str</em>) – A path to the location where the best_performing network weights will be
+saved</p></li>
+<li><p><strong>stop_condition</strong> (<em>str</em>) – Determines when to conclude network training. If ‘iter’, then the network
+will train for <cite>n_epochs</cite> epochs, then stop. If ‘auto’ then the network
+will train for at least <cite>n_epochs</cite> epochs, then begin assessing whether
+performance has sufficiently stagnated. If the performance plateaus for
+<cite>n_epochs</cite> consecutive epochs, then training will stop.</p></li>
+<li><p><strong>device</strong> (<em>str</em>) – Location of where training will take place–should be either ‘cpu’ or
+‘cuda’ (GPU). If available, training on GPU is typically much faster.</p></li>
+<li><p><strong>learn_rate</strong> (<em>float</em>) – Initial learning rate of network training. The training process is
+controlled by the Adam optimization algorithm, so this learning rate
+will tend to decrease as training progresses.</p></li>
+<li><p><strong>n_epochs</strong> (<em>int</em>) – Number of epochs to train for, or required to have stagnated performance
+for, depending on <cite>stop_condition</cite>.</p></li>
+<li><p><strong>verbosity</strong> (<em>int, optional</em>) – The degree to which training updates are written to standard out (default
+is 1).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>list</em> – A list of the average training set losses achieved at each epoch</p></li>
+<li><p><em>list</em> – A list of the average validation set losses achieved at each epoch</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-prot_brnn.bayesian_optimization">
+<span id="bayesian-optimization-py"></span><h2>bayesian_optimization.py<a class="headerlink" href="#module-prot_brnn.bayesian_optimization" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="prot_brnn.bayesian_optimization.BayesianOptimizer">
+<em class="property">class </em><code class="sig-prename descclassname">prot_brnn.bayesian_optimization.</code><code class="sig-name descname">BayesianOptimizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">cv_dataloaders</span></em>, <em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">n_epochs</span></em>, <em class="sig-param"><span class="n">n_classes</span></em>, <em class="sig-param"><span class="n">dtype</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">verbosity</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.bayesian_optimization.BayesianOptimizer" title="Permalink to this definition">¶</a></dt>
+<dd><p>A class for conducting Bayesian Optimization on a PyTorch RNN</p>
+<p>Sets up and runs GPy Bayesian Optimization in order to choose the best-
+performing hyperparameters for a RNN for a given machine learning task.
+Iteratively change learning rate, hidden vector size, and the number of layers
+in the network, then train and validating using 5-fold cross validation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Variables</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cv_dataloaders</strong> (<em>list of tuples of PyTorch DataLoader objects</em>) – For each of the cross-val folds, a tuple containing a training set
+DataLoader and a validation set DataLoader.</p></li>
+<li><p><strong>input_size</strong> (<em>int</em>) – Length of the amino acid encoding vectors</p></li>
+<li><p><strong>n_epochs</strong> (<em>int</em>) – Number of epochs to train for each iteration of the algorithm</p></li>
+<li><p><strong>n_classes</strong> (<em>int</em>) – Number of classes</p></li>
+<li><p><strong>n_folds</strong> (<em>int</em>) – Number of cross-validation folds</p></li>
+<li><p><strong>problem_type</strong> (<em>str</em>) – ‘classification’ or ‘regression’</p></li>
+<li><p><strong>dtype</strong> (<em>str</em>) – ‘sequence’ or ‘residues’</p></li>
+<li><p><strong>weights_file</strong> (<em>str</em>) – Path to which the network weights will be saved during training</p></li>
+<li><p><strong>device</strong> (<em>str</em>) – ‘cpu’ or ‘cuda’ depending on system hardware</p></li>
+<li><p><strong>verbosity</strong> (<em>int</em>) – level of how descriptive the output to console message will be</p></li>
+<li><p><strong>bds</strong> (<em>list of dicts</em>) – GPy-compatible bounds for each of the hyperparameters to be optimized</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="prot_brnn.bayesian_optimization.BayesianOptimizer.compute_cv_loss">
+<code class="sig-name descname">compute_cv_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hyperparameters</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.compute_cv_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.bayesian_optimization.BayesianOptimizer.compute_cv_loss" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the average cross-val loss for a given set of hyperparameters</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="prot_brnn.bayesian_optimization.BayesianOptimizer.eval_cv_brnns">
+<code class="sig-name descname">eval_cv_brnns</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">lr</span></em>, <em class="sig-param"><span class="n">nl</span></em>, <em class="sig-param"><span class="n">hs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.eval_cv_brnns"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.bayesian_optimization.BayesianOptimizer.eval_cv_brnns" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train and test a network with given parameters across all cross-val folds</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="prot_brnn.bayesian_optimization.BayesianOptimizer.initial_search">
+<code class="sig-name descname">initial_search</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.initial_search"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.bayesian_optimization.BayesianOptimizer.initial_search" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate loss and estimate noise for an initial set of hyperparameters</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="prot_brnn.bayesian_optimization.BayesianOptimizer.optimize">
+<code class="sig-name descname">optimize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.optimize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.bayesian_optimization.BayesianOptimizer.optimize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set up and run Bayesian Optimization on the BRNN using GPy</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="id4">
+<code class="sig-name descname">compute_cv_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hyperparameters</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.compute_cv_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#id4" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the average cross-val loss for a given set of hyperparameters</p>
+<p>Given N sets of hyperparameters, determine the average cross-validation loss
+for BRNNs trained with these parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>hyperparameters</strong> (<em>numpy float array</em>) – Each row corresponds to a set of hyperparameters, in the order:
+[log_learining_rate, n_layers, hidden_size]</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a Nx1 numpy array of the average cross-val loss
+per set of input hyperparameters</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>numpy float array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="id5">
+<code class="sig-name descname">eval_cv_brnns</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">lr</span></em>, <em class="sig-param"><span class="n">nl</span></em>, <em class="sig-param"><span class="n">hs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.eval_cv_brnns"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#id5" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train and test a network with given parameters across all cross-val folds</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lr</strong> (<em>float</em>) – Learning rate of the network</p></li>
+<li><p><strong>nl</strong> (<em>int</em>) – Number of hidden layers (for each direction) in the network</p></li>
+<li><p><strong>hs</strong> (<em>int</em>) – Size of hidden vectors in the network</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>the best validation loss from each fold of cross validation</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>numpy float array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="id6">
+<code class="sig-name descname">initial_search</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.initial_search"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#id6" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate loss and estimate noise for an initial set of hyperparameters</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>x</strong> (<em>numpy array</em>) – Array containing initial hyperparameters to test</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>numpy array</em> – Array containing the average losses of the input hyperparameters</p></li>
+<li><p><em>float</em> – The standard deviation of loss across cross-val folds for the
+input hyperparameters; an estimation of the training noise</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="id7">
+<code class="sig-name descname">optimize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.optimize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#id7" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set up and run Bayesian Optimization on the BRNN using GPy</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>the best hyperparameters are chosen by Bayesian Optimization. Returned
+in the order: [lr, nl, hs]</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-prot_brnn.brnn_plot">
+<span id="brnn-plot-py"></span><h2>brnn_plot.py<a class="headerlink" href="#module-prot_brnn.brnn_plot" title="Permalink to this headline">¶</a></h2>
+<dl class="py function">
+<dt id="prot_brnn.brnn_plot.confusion_matrix">
+<code class="sig-prename descclassname">prot_brnn.brnn_plot.</code><code class="sig-name descname">confusion_matrix</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true_classes</span></em>, <em class="sig-param"><span class="n">predicted_classes</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_plot.html#confusion_matrix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_plot.confusion_matrix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a confusion matrix for a sequence classification problem</p>
+<p>Figure is displayed to console if possible and saved to file in current
+directory with the name ‘seq_CM.png’.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>true_classes</strong> (<em>list of PyTorch IntTensors</em>) – A list where each item is a [1 x 1] tensor with the true class label of a
+particular sequence</p></li>
+<li><p><strong>predicted_classes</strong> (<em>list of PyTorch FloatTensors</em>) – A list where each item is a [1 x num_classes] tensor prediction of the
+class label for a particular sequence</p></li>
+<li><p><strong>num_classes</strong> (<em>int</em>) – Number of distinct data classes</p></li>
+<li><p><strong>output_dir</strong> (<em>str, optional</em>) – directory to which the plot will be saved (default is current directory)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.brnn_plot.res_confusion_matrix">
+<code class="sig-prename descclassname">prot_brnn.brnn_plot.</code><code class="sig-name descname">res_confusion_matrix</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true_classes</span></em>, <em class="sig-param"><span class="n">predicted_classes</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_plot.html#res_confusion_matrix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_plot.res_confusion_matrix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a confusion matrix for a residue classification problem</p>
+<p>Figure is displayed to console if possible and saved to file in current
+directory with the name ‘res_CM.png’.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>true_classes</strong> (<em>list of PyTorch IntTensors</em>) – A list where each item is a [1 x len(sequence)] tensor with the true class
+label of the residues in a particular sequence</p></li>
+<li><p><strong>predicted_classes</strong> (<em>list of PyTorch FloatTensors</em>) – A list where each item is a [1 x num_classes x len(sequence)] tensor
+with predictions of the class label for each residue in a particular
+sequence</p></li>
+<li><p><strong>num_classes</strong> (<em>int</em>) – Number of distinct data classes</p></li>
+<li><p><strong>output_dir</strong> (<em>str, optional</em>) – directory to which the plot will be saved (default is current directory)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.brnn_plot.residue_regression_scatterplot">
+<code class="sig-prename descclassname">prot_brnn.brnn_plot.</code><code class="sig-name descname">residue_regression_scatterplot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true</span></em>, <em class="sig-param"><span class="n">predicted</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_plot.html#residue_regression_scatterplot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_plot.residue_regression_scatterplot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a scatterplot for a residue-mapped values regression problem</p>
+<p>Each sequence is plotted with a unique marker-color combination, up to 70
+different sequences.</p>
+<p>Figure is displayed to console if possible and saved to file in current
+directory with the name ‘res_scatter.png’.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>true</strong> (<em>list of PyTorch FloatTensors</em>) – A list where each item is a [1 x len(sequence)] tensor with the true
+regression values of each residue in a sequence</p></li>
+<li><p><strong>predicted</strong> (<em>list of PyTorch FloatTensors</em>) – A list where each item is a [1 x len(sequence)] tensor with the
+regression predictions for each residue in a sequence</p></li>
+<li><p><strong>output_dir</strong> (<em>str, optional</em>) – directory to which the plot will be saved (default is current directory)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.brnn_plot.sequence_regression_scatterplot">
+<code class="sig-prename descclassname">prot_brnn.brnn_plot.</code><code class="sig-name descname">sequence_regression_scatterplot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true</span></em>, <em class="sig-param"><span class="n">predicted</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_plot.html#sequence_regression_scatterplot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_plot.sequence_regression_scatterplot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a scatterplot for a sequence-mapped values regression problem</p>
+<p>Figure is displayed to console if possible and saved to file in current
+directory with the name ‘seq_scatter.png’.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>true</strong> (<em>list of PyTorch FloatTensors</em>) – A list where each item is a [1 x 1] tensor with the true regression value
+of a particular sequence</p></li>
+<li><p><strong>predicted</strong> (<em>list of PyTorch FloatTensors</em>) – A list where each item is a [1 x 1] tensor with the regression prediction
+for a particular sequence</p></li>
+<li><p><strong>output_dir</strong> (<em>str, optional</em>) – directory to which the plot will be saved (default is current directory)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="prot_brnn.brnn_plot.training_loss">
+<code class="sig-prename descclassname">prot_brnn.brnn_plot.</code><code class="sig-name descname">training_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">train_loss</span></em>, <em class="sig-param"><span class="n">val_loss</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_plot.html#training_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_plot.training_loss" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plot training and validation loss per epoch</p>
+<p>Figure is not displayed, but saved to file in current directory with the name
+‘train_test.png’.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>train_loss</strong> (<em>list</em>) – training loss across each epoch</p></li>
+<li><p><strong>val_loss</strong> (<em>list</em>) – validation loss across each epoch</p></li>
+<li><p><strong>output_dir</strong> (<em>str, optional</em>) – directory to which the plot will be saved (default is current directory)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="usage/quickstart.html" class="btn btn-neutral float-right" title="Quickstart yo! This is what is up!" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="getting_started.html" class="btn btn-neutral float-left" title="Getting Started" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2020, Holehouse Lab. Project structure based on the Computational Molecular Science Python Cookiecutter version 1.3
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
