@@ -82,10 +82,11 @@
               <p class="caption"><span class="caption-text">Contents:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting Started</a></li>
-<li class="toctree-l1"><a class="reference internal" href="api.html">prot_brnn API Documentation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="api.html#driving-scripts">Driving scripts:</a></li>
-<li class="toctree-l1"><a class="reference internal" href="api.html#modules">Modules:</a></li>
-<li class="toctree-l1"><a class="reference internal" href="usage/quickstart.html">Quickstart yo! This is what is up!</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/brnn_train.html">brnn_train</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/brnn_predict.html">brnn_predict</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/brnn_optimize.html">brnn_optimize</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">Module Documentation</a></li>
 </ul>
 
             
@@ -154,9 +155,6 @@
 <div class="genindex-jumpbox">
  <a href="#B"><strong>B</strong></a>
  | <a href="#C"><strong>C</strong></a>
- | <a href="#E"><strong>E</strong></a>
- | <a href="#F"><strong>F</strong></a>
- | <a href="#I"><strong>I</strong></a>
  | <a href="#M"><strong>M</strong></a>
  | <a href="#O"><strong>O</strong></a>
  | <a href="#P"><strong>P</strong></a>
@@ -169,15 +167,7 @@
 <h2 id="B">B</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#prot_brnn.bayesian_optimization.BayesianOptimizer">BayesianOptimizer (class in prot_brnn.bayesian_optimization)</a>
-</li>
       <li><a href="api.html#prot_brnn.encode_sequence.biophysics">biophysics() (in module prot_brnn.encode_sequence)</a>
-</li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#prot_brnn.brnn_architecture.BRNN_MtM">BRNN_MtM (class in prot_brnn.brnn_architecture)</a>
-</li>
-      <li><a href="api.html#prot_brnn.brnn_architecture.BRNN_MtO">BRNN_MtO (class in prot_brnn.brnn_architecture)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -185,39 +175,7 @@
 <h2 id="C">C</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#id4">compute_cv_loss() (prot_brnn.bayesian_optimization.BayesianOptimizer method)</a>, <a href="api.html#prot_brnn.bayesian_optimization.BayesianOptimizer.compute_cv_loss">[1]</a>
-</li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api.html#prot_brnn.brnn_plot.confusion_matrix">confusion_matrix() (in module prot_brnn.brnn_plot)</a>
-</li>
-  </ul></td>
-</tr></table>
-
-<h2 id="E">E</h2>
-<table style="width: 100%" class="indextable genindextable"><tr>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#id5">eval_cv_brnns() (prot_brnn.bayesian_optimization.BayesianOptimizer method)</a>, <a href="api.html#prot_brnn.bayesian_optimization.BayesianOptimizer.eval_cv_brnns">[1]</a>
-</li>
-  </ul></td>
-</tr></table>
-
-<h2 id="F">F</h2>
-<table style="width: 100%" class="indextable genindextable"><tr>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#id0">forward() (prot_brnn.brnn_architecture.BRNN_MtM method)</a>, <a href="api.html#prot_brnn.brnn_architecture.BRNN_MtM.forward">[1]</a>
-
-      <ul>
-        <li><a href="api.html#id1">(prot_brnn.brnn_architecture.BRNN_MtO method)</a>, <a href="api.html#prot_brnn.brnn_architecture.BRNN_MtO.forward">[1]</a>
-</li>
-      </ul></li>
-  </ul></td>
-</tr></table>
-
-<h2 id="I">I</h2>
-<table style="width: 100%" class="indextable genindextable"><tr>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#id6">initial_search() (prot_brnn.bayesian_optimization.BayesianOptimizer method)</a>, <a href="api.html#prot_brnn.bayesian_optimization.BayesianOptimizer.initial_search">[1]</a>
 </li>
   </ul></td>
 </tr></table>
@@ -229,17 +187,13 @@
     module
 
       <ul>
-        <li><a href="api.html#module-prot_brnn.bayesian_optimization">prot_brnn.bayesian_optimization</a>
-</li>
-        <li><a href="api.html#module-prot_brnn.brnn_architecture">prot_brnn.brnn_architecture</a>
-</li>
         <li><a href="api.html#module-prot_brnn.brnn_plot">prot_brnn.brnn_plot</a>
 </li>
         <li><a href="api.html#module-prot_brnn.encode_sequence">prot_brnn.encode_sequence</a>
 </li>
         <li><a href="api.html#module-prot_brnn.process_input_data">prot_brnn.process_input_data</a>
 </li>
-        <li><a href="api.html#module-prot_brnn.train_network">prot_brnn.train_network</a>, <a href="index.html#module-prot_brnn.train_network">[1]</a>
+        <li><a href="api.html#module-prot_brnn.train_network">prot_brnn.train_network</a>
 </li>
       </ul></li>
   </ul></td>
@@ -251,10 +205,6 @@
       <li><a href="api.html#prot_brnn.encode_sequence.one_hot">one_hot() (in module prot_brnn.encode_sequence)</a>
 </li>
   </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#id7">optimize() (prot_brnn.bayesian_optimization.BayesianOptimizer method)</a>, <a href="api.html#prot_brnn.bayesian_optimization.BayesianOptimizer.optimize">[1]</a>
-</li>
-  </ul></td>
 </tr></table>
 
 <h2 id="P">P</h2>
@@ -263,28 +213,12 @@
       <li><a href="api.html#prot_brnn.process_input_data.parse_file">parse_file() (in module prot_brnn.process_input_data)</a>
 </li>
       <li>
-    prot_brnn.bayesian_optimization
-
-      <ul>
-        <li><a href="api.html#module-prot_brnn.bayesian_optimization">module</a>
-</li>
-      </ul></li>
-      <li>
-    prot_brnn.brnn_architecture
-
-      <ul>
-        <li><a href="api.html#module-prot_brnn.brnn_architecture">module</a>
-</li>
-      </ul></li>
-      <li>
     prot_brnn.brnn_plot
 
       <ul>
         <li><a href="api.html#module-prot_brnn.brnn_plot">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     prot_brnn.encode_sequence
 
@@ -292,6 +226,8 @@
         <li><a href="api.html#module-prot_brnn.encode_sequence">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     prot_brnn.process_input_data
 
@@ -303,7 +239,7 @@
     prot_brnn.train_network
 
       <ul>
-        <li><a href="api.html#module-prot_brnn.train_network">module</a>, <a href="index.html#module-prot_brnn.train_network">[1]</a>
+        <li><a href="api.html#module-prot_brnn.train_network">module</a>
 </li>
       </ul></li>
   </ul></td>
@@ -350,13 +286,13 @@
 <h2 id="T">T</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#prot_brnn.train_network.test_labeled_data">test_labeled_data() (in module prot_brnn.train_network)</a>, <a href="index.html#prot_brnn.train_network.test_labeled_data">[1]</a>
+      <li><a href="api.html#prot_brnn.train_network.test_labeled_data">test_labeled_data() (in module prot_brnn.train_network)</a>
 </li>
-      <li><a href="api.html#prot_brnn.train_network.test_unlabeled_data">test_unlabeled_data() (in module prot_brnn.train_network)</a>, <a href="index.html#prot_brnn.train_network.test_unlabeled_data">[1]</a>
+      <li><a href="api.html#prot_brnn.train_network.test_unlabeled_data">test_unlabeled_data() (in module prot_brnn.train_network)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#prot_brnn.train_network.train">train() (in module prot_brnn.train_network)</a>, <a href="index.html#prot_brnn.train_network.train">[1]</a>
+      <li><a href="api.html#prot_brnn.train_network.train">train() (in module prot_brnn.train_network)</a>
 </li>
       <li><a href="api.html#prot_brnn.brnn_plot.training_loss">training_loss() (in module prot_brnn.brnn_plot)</a>
 </li>

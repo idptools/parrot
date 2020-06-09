@@ -1,64 +1,76 @@
-# prot-brnn
+# prot_brnn
 
-## Introduction
-
-This package is designed to be useful for a variety of protein bioinformatic applications. prot-brnn encodes a 
-computationally-robust bidirectional recurrent neural network (BRNN) behind an easy-to-use commandline interface. With only an 
-input datafile containg sequences and mapped values, the user can automatically train a BRNN for their purposes. This trained
-network can then be applied to new, unlabeled data to generate predictions and generate biological hypotheses.
+**prot_brnn** prot-brnn encodes a computationally-robust bidirectional recurrent neural network (BRNN) behind an easy-to-use 
+commandline interface in order to facilitate a variety of protein bioinformatics tasks. With only an input datafile 
+containing sequences and mapped values, the user can automatically train a BRNN for their purposes. This trained network can
+then be applied to new, unlabeled data to generate predictions and generate biological hypotheses.
 
 This package can handle regression and classification ML problems, as well as sequence-mapped and residue-mapped input data.
 
-## Usage: (as of May 20, 2020)
+## Usage: (as of June 8, 2020)
 
-There are three primary actions that can be done within the prot-brnn package. Each of these are described in more detail
-below.
+There are three primary actions that can be done within the prot_brnn package. Each of these are briefly described below and
+for more information on their usage, visit their individual documentation pages.
+
 1. Train a BRNN with user-specified hyperparameters
-2. Train a BRNN with unspecified, automatically-determined, optimal hyperparameters
+2. Train a BRNN with automatically-determined, optimal hyperparameters
 3. Generate predictions on unlabeled sequences using a trained BRNN
 
-### 1. Train BRNN with provided hyperparameters: run_prot_brnn.py
+### Input data format:
 
-< Describe why you would want to do this. Preliminary data exploration. User has intuition with ML. >  
-Format data in the following manner:
+Before data can be integrated into training a BRNN, it must be formatted in the following manner:
 
-seqID1 seq1 seq1data1 <seq1data2> <seq1data3> ... <seq1dataN1>  
-seqID2 seq2 seq2data1 <seq2data2> <seq2data3> ... <seq2dataN2>  
-...  
-seqIDM seqM seqMdata1 <seqMdata2> <seqMdata3> ... <seqMdataNM>
+	seqID1 seq1 seq1data1 <seq1data2> <seq1data3> ... <seq1dataN1>  
+	seqID2 seq2 seq2data1 <seq2data2> <seq2data3> ... <seq2dataN2>  
+	.
+	.
+	.  
+	seqIDM seqM seqMdata1 <seqMdata2> <seqMdata3> ... <seqMdataNM>
   
 Where Ni is the length of sequence i, and M is the total number of labeled sequences. Items must be whitespace-separated.
-For sequence-mapped data (i.e. each sequence constitutes a *single datapoint*), each row will only contain three columns. For 
-residue-mapped data (i.e. a sequence of N amino acids consists of *N datapoints*), each row will contain N + 2 columns. Please
-note that it is not required that sequences are the same length. For example, if Sequence #1 has 12 amino acids and Sequence
-#2 has 15 amino acids, then these two rows in the input file will contain 14 and 17 fields respectively.
+For **sequence-mapped data** (i.e. each sequence constitutes a *single datapoint*), each row will only contain three columns.
+Note that it is not required that sequences are the same length. For example, if Sequence #1 has 12 amino acids and Sequence #2
+has 15 amino acids, then these two rows in the input file will contain 14 and 17 fields respectively.
 
-Optionally, you may use datasets that exclude the first column containing the ID of each sequence. In this case, be sure to use the `--excludeSeqID` flag.
+Optionally, you may use datasets that exclude the first column containing the ID of each sequence. In this case, be sure to 
+use the `--excludeSeqID` flag.
 
-#### Classification problem
-If the user wishes to categorize sequences or residues into distinct classes, then the labeled data should be integer class 
-labels. For example, if there are 3 classes, then each datapoint should be either a '0', '1', or '2' (with no quote marks). 
-For example datasets, look at those provided in the **datasets** folder.
-
-Run the following command to train a network on the classification problem:
-
-    python run_prot_brnn.py <./path/to/dataset.tsv> <./path/to/outputNetwork.pt> --datatype <sequence / residues> --stop iter **-nc <num of classes (int>1)>** -e <num of epochs (int>1)> -nl <num layers in the network (int>1)> -hs <hidden vector size (int>1)> -b <batch size> -lr <learning rate>
+**Classification problem:** the labeled data should be integer class labels. For example, if there are 3 classes, then each
+datapoint should be either a '0', '1', or '2' (with no quote marks).
   
-#### Regression problem
-If the user wishes to map each sequence or residue to a continuous real number, then labeled data should be a float. Run using
-the following command:
+**Regression problem:** If the user wishes to map each sequence or residue to a continuous real number, then each datapoint 
+should be a float
 
-    python run_prot_brnn.py <./path/to/dataset.tsv> <./path/to/outputNetwork.pt> --datatype <sequence / residues> --stop iter **nc 1** -e <num of epochs> -nl <num of layers in the network> -hs <hidden vector size> -b <batch size> -lr <learning rate>
+For example datasets, see the TSV files provided in the **data** folder.
 
-### 2. Train BRNN following hyperparameter optimization -- hyperparameter_optimization.py
-Work in progress...
+### 1. Train BRNN with provided hyperparameters: ``brnn_train``
 
-### 3. Generate predictions with trained BRNN -- predict_seqs.py
-< Describe sequence format >  
-< Generate hypotheses >
+The ``brnn_train`` command is most useful in the initial stages of data exploration. This command requires the user to 
+specify the hyperparameters to train the network, so it may not achieve the optimal results compared to more extensive training
+and hyperparameter search. However, if one wishes to quickly train a network for a given task, this command will give a sense
+of how effective a BRNN will be. Running ``brnn_train`` on a dataset for a large number of epochs can inform for how many epochs
+to train for during the more extensive hyperparameter optimization.
 
-## TO DO: 
-- Implement automatic hyperparameter search
-- Document code better
-- Test prot-brnn on a wide range of use-cases
-- Package scripts into PyPI module (using cookiecutter)
+### 2. Optimize hyperparameters and train BRNN: ``brnn_optimization``
+
+The ``brnn_optimization`` command initiates an extensive search for the best-performing network hyperparameters for a given
+dataset using Bayesian optimiztion. Three hyperparameters, the learning rate, number of hidden layers, and hidden vector size
+can greatly impact network performance and training speed, so it is important to tune these for each particular dataset. This
+command will search across hyperparameter space by iteratively training and validating network performance (with 5-fold cross
+validation). The best performing hyperparameters will be selected, and used to train a network from scratch as if running
+``brnn_train`` with these parameters.
+
+### 3. Generate predictions with trained BRNN: ``brnn_predict``
+
+Once a network has been trained for a particular machine learning task, the user can generate predictions on new sequences
+with this network using the ``brnn_predict`` command. The user provides a list of sequences they would like to predict and
+the saved network, and a file is outputted with the predictions.
+
+### Copyright
+
+Copyright (c) 2020, Holehouse Lab
+
+#### Acknowledgements
+ 
+Project based on the 
+[Computational Molecular Science Python Cookiecutter](https://github.com/molssi/cookiecutter-cms) version 1.3.

@@ -1,0 +1,6 @@
+predict
+=======
+
+`predict` is the command for making predictions using a trained BRNN.
+
+

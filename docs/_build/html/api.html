@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>prot_brnn API Documentation &mdash; prot_brnn  documentation</title>
+  <title>Module Documentation &mdash; prot_brnn  documentation</title>
   
 
   
@@ -35,8 +35,7 @@
   <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Quickstart yo! This is what is up!" href="usage/quickstart.html" />
-    <link rel="prev" title="Getting Started" href="getting_started.html" /> 
+    <link rel="prev" title="Examples" href="usage/examples.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -83,23 +82,19 @@
               <p class="caption"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting Started</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">prot_brnn API Documentation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="#driving-scripts">Driving scripts:</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#brnn-train">brnn_train</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#brnn-predict">brnn_predict</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#brnn-optimize">brnn_optimize</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="#modules">Modules:</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#module-prot_brnn.brnn_architecture">brnn_architecture.py</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/brnn_train.html">brnn_train</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/brnn_predict.html">brnn_predict</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/brnn_optimize.html">brnn_optimize</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/examples.html">Examples</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Module Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#brnn-architecture-py">brnn_architecture.py</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#module-prot_brnn.encode_sequence">encode_sequence.py</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#module-prot_brnn.process_input_data">process_input_data.py</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#module-prot_brnn.train_network">train_network.py</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#module-prot_brnn.bayesian_optimization">bayesian_optimization.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#bayesian-optimization-py">bayesian_optimization.py</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#module-prot_brnn.brnn_plot">brnn_plot.py</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="usage/quickstart.html">Quickstart yo! This is what is up!</a></li>
 </ul>
 
             
@@ -145,7 +140,7 @@
     
       <li><a href="index.html">Docs</a> &raquo;</li>
         
-      <li>prot_brnn API Documentation</li>
+      <li>Module Documentation</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -164,8 +159,8 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="prot-brnn-api-documentation">
-<h1>prot_brnn API Documentation<a class="headerlink" href="#prot-brnn-api-documentation" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-documentation">
+<h1>Module Documentation<a class="headerlink" href="#module-documentation" title="Permalink to this headline">¶</a></h1>
 <table class="longtable docutils align-default">
 <colgroup>
 <col style="width: 10%" />
@@ -174,26 +169,11 @@
 <tbody>
 </tbody>
 </table>
-</div>
-<div class="section" id="driving-scripts">
-<h1>Driving scripts:<a class="headerlink" href="#driving-scripts" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="brnn-train">
-<h2>brnn_train<a class="headerlink" href="#brnn-train" title="Permalink to this headline">¶</a></h2>
-</div>
-<div class="section" id="brnn-predict">
-<h2>brnn_predict<a class="headerlink" href="#brnn-predict" title="Permalink to this headline">¶</a></h2>
-</div>
-<div class="section" id="brnn-optimize">
-<h2>brnn_optimize<a class="headerlink" href="#brnn-optimize" title="Permalink to this headline">¶</a></h2>
-</div>
-</div>
-<div class="section" id="modules">
-<h1>Modules:<a class="headerlink" href="#modules" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="module-prot_brnn.brnn_architecture">
-<span id="brnn-architecture-py"></span><h2>brnn_architecture.py<a class="headerlink" href="#module-prot_brnn.brnn_architecture" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="brnn-architecture-py">
+<h2>brnn_architecture.py<a class="headerlink" href="#brnn-architecture-py" title="Permalink to this headline">¶</a></h2>
 <dl class="py class">
-<dt id="prot_brnn.brnn_architecture.BRNN_MtM">
-<em class="property">class </em><code class="sig-prename descclassname">prot_brnn.brnn_architecture.</code><code class="sig-name descname">BRNN_MtM</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">hidden_size</span></em>, <em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtM"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_architecture.BRNN_MtM" title="Permalink to this definition">¶</a></dt>
+<dt>
+<em class="property">class </em><code class="sig-prename descclassname">prot_brnn.brnn_architecture.</code><code class="sig-name descname">BRNN_MtM</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">hidden_size</span></em>, <em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtM"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>A PyTorch many-to-many bidirectional recurrent neural network</p>
 <p>A class containing the PyTorch implementation of a BRNN. The network consists
 of repeating LSTM units in the hidden layers that propogate sequence information
@@ -222,14 +202,14 @@ returns the output for that residue in the sequence.</p></li>
 </dd>
 </dl>
 <dl class="py method">
-<dt id="prot_brnn.brnn_architecture.BRNN_MtM.forward">
-<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtM.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_architecture.BRNN_MtM.forward" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtM.forward"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>Propogate input sequences through the network to produce outputs</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="id0">
-<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtM.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#id0" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtM.forward"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>Propogate input sequences through the network to produce outputs</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -250,8 +230,8 @@ be in the format:
 </dd></dl>
 
 <dl class="py class">
-<dt id="prot_brnn.brnn_architecture.BRNN_MtO">
-<em class="property">class </em><code class="sig-prename descclassname">prot_brnn.brnn_architecture.</code><code class="sig-name descname">BRNN_MtO</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">hidden_size</span></em>, <em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtO"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_architecture.BRNN_MtO" title="Permalink to this definition">¶</a></dt>
+<dt>
+<em class="property">class </em><code class="sig-prename descclassname">prot_brnn.brnn_architecture.</code><code class="sig-name descname">BRNN_MtO</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">hidden_size</span></em>, <em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtO"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>A PyTorch many-to-one bidirectional recurrent neural network</p>
 <p>A class containing the PyTorch implementation of a BRNN. The network consists
 of repeating LSTM units in the hidden layers that propogate sequence information
@@ -280,14 +260,14 @@ returns the output for that residue in the sequence.</p></li>
 </dd>
 </dl>
 <dl class="py method">
-<dt id="prot_brnn.brnn_architecture.BRNN_MtO.forward">
-<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtO.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_architecture.BRNN_MtO.forward" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtO.forward"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>Propogate input sequences through the network to produce outputs</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="id1">
-<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtO.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#id1" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtO.forward"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>Propogate input sequences through the network to produce outputs</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -338,7 +318,7 @@ acid letter will cause the program to exit.</p>
 <code class="sig-prename descclassname">prot_brnn.encode_sequence.</code><code class="sig-name descname">one_hot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/encode_sequence.html#one_hot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.encode_sequence.one_hot" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convert an amino acid sequence to a PyTorch tensor of one-hot vectors</p>
 <p>Each amino acid is represented by a length 20 vector with a single <cite>1</cite> and
-19 <a href="#id2"><span class="problematic" id="id3">`</span></a>0`s. Inputing a sequence with a nono-canonical amino acid letter will
+19 <a href="#id1"><span class="problematic" id="id2">`</span></a>0`s. Inputing a sequence with a nono-canonical amino acid letter will
 cause the program to exit.</p>
 <p>E.g. Glutamic acid (E) is encoded: [0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]</p>
 <dl class="field-list simple">
@@ -769,11 +749,11 @@ is 1).</p></li>
 </dd></dl>
 
 </div>
-<div class="section" id="module-prot_brnn.bayesian_optimization">
-<span id="bayesian-optimization-py"></span><h2>bayesian_optimization.py<a class="headerlink" href="#module-prot_brnn.bayesian_optimization" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="bayesian-optimization-py">
+<h2>bayesian_optimization.py<a class="headerlink" href="#bayesian-optimization-py" title="Permalink to this headline">¶</a></h2>
 <dl class="py class">
-<dt id="prot_brnn.bayesian_optimization.BayesianOptimizer">
-<em class="property">class </em><code class="sig-prename descclassname">prot_brnn.bayesian_optimization.</code><code class="sig-name descname">BayesianOptimizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">cv_dataloaders</span></em>, <em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">n_epochs</span></em>, <em class="sig-param"><span class="n">n_classes</span></em>, <em class="sig-param"><span class="n">dtype</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">verbosity</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.bayesian_optimization.BayesianOptimizer" title="Permalink to this definition">¶</a></dt>
+<dt>
+<em class="property">class </em><code class="sig-prename descclassname">prot_brnn.bayesian_optimization.</code><code class="sig-name descname">BayesianOptimizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">cv_dataloaders</span></em>, <em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">n_epochs</span></em>, <em class="sig-param"><span class="n">n_classes</span></em>, <em class="sig-param"><span class="n">dtype</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">verbosity</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>A class for conducting Bayesian Optimization on a PyTorch RNN</p>
 <p>Sets up and runs GPy Bayesian Optimization in order to choose the best-
 performing hyperparameters for a RNN for a given machine learning task.
@@ -798,32 +778,32 @@ DataLoader and a validation set DataLoader.</p></li>
 </dd>
 </dl>
 <dl class="py method">
-<dt id="prot_brnn.bayesian_optimization.BayesianOptimizer.compute_cv_loss">
-<code class="sig-name descname">compute_cv_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hyperparameters</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.compute_cv_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.bayesian_optimization.BayesianOptimizer.compute_cv_loss" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="sig-name descname">compute_cv_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hyperparameters</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.compute_cv_loss"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>Compute the average cross-val loss for a given set of hyperparameters</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="prot_brnn.bayesian_optimization.BayesianOptimizer.eval_cv_brnns">
-<code class="sig-name descname">eval_cv_brnns</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">lr</span></em>, <em class="sig-param"><span class="n">nl</span></em>, <em class="sig-param"><span class="n">hs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.eval_cv_brnns"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.bayesian_optimization.BayesianOptimizer.eval_cv_brnns" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="sig-name descname">eval_cv_brnns</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">lr</span></em>, <em class="sig-param"><span class="n">nl</span></em>, <em class="sig-param"><span class="n">hs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.eval_cv_brnns"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>Train and test a network with given parameters across all cross-val folds</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="prot_brnn.bayesian_optimization.BayesianOptimizer.initial_search">
-<code class="sig-name descname">initial_search</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.initial_search"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.bayesian_optimization.BayesianOptimizer.initial_search" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="sig-name descname">initial_search</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.initial_search"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>Calculate loss and estimate noise for an initial set of hyperparameters</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="prot_brnn.bayesian_optimization.BayesianOptimizer.optimize">
-<code class="sig-name descname">optimize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.optimize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.bayesian_optimization.BayesianOptimizer.optimize" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="sig-name descname">optimize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.optimize"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>Set up and run Bayesian Optimization on the BRNN using GPy</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="id4">
-<code class="sig-name descname">compute_cv_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hyperparameters</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.compute_cv_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#id4" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="sig-name descname">compute_cv_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hyperparameters</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.compute_cv_loss"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>Compute the average cross-val loss for a given set of hyperparameters</p>
 <p>Given N sets of hyperparameters, determine the average cross-validation loss
 for BRNNs trained with these parameters.</p>
@@ -843,8 +823,8 @@ per set of input hyperparameters</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="id5">
-<code class="sig-name descname">eval_cv_brnns</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">lr</span></em>, <em class="sig-param"><span class="n">nl</span></em>, <em class="sig-param"><span class="n">hs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.eval_cv_brnns"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#id5" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="sig-name descname">eval_cv_brnns</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">lr</span></em>, <em class="sig-param"><span class="n">nl</span></em>, <em class="sig-param"><span class="n">hs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.eval_cv_brnns"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>Train and test a network with given parameters across all cross-val folds</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -864,8 +844,8 @@ per set of input hyperparameters</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="id6">
-<code class="sig-name descname">initial_search</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.initial_search"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#id6" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="sig-name descname">initial_search</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.initial_search"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>Calculate loss and estimate noise for an initial set of hyperparameters</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -883,8 +863,8 @@ input hyperparameters; an estimation of the training noise</p></li>
 </dd></dl>
 
 <dl class="py method">
-<dt id="id7">
-<code class="sig-name descname">optimize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.optimize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#id7" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="sig-name descname">optimize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer.optimize"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>Set up and run Bayesian Optimization on the BRNN using GPy</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns</dt>
@@ -1011,10 +991,8 @@ for a particular sequence</p></li>
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="usage/quickstart.html" class="btn btn-neutral float-right" title="Quickstart yo! This is what is up!" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
-      
-        <a href="getting_started.html" class="btn btn-neutral float-left" title="Getting Started" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="usage/examples.html" class="btn btn-neutral float-left" title="Examples" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

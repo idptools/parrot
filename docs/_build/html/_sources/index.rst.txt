@@ -6,16 +6,9 @@ Welcome to prot_brnn's documentation!
    :caption: Contents:
 
    getting_started
+   usage/brnn_train
+   usage/brnn_predict
+   usage/brnn_optimize
+   usage/examples
    api
-   usage/quickstart
 
-.. automodule:: prot_brnn.train_network
-	:members:
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

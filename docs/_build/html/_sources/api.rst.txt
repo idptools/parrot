@@ -1,30 +1,14 @@
-prot_brnn API Documentation
-===========================
+Module Documentation
+====================
 
 .. autosummary::
    :toctree: autosummary
-
-Driving scripts:
-================
-
-brnn_train
-----------
-
-.. automodule:: scripts/brnn_train
-
-brnn_predict
-------------
-
-brnn_optimize
--------------
-
-Modules:
-========
 
 brnn_architecture.py
 --------------------
 
 .. automodule:: prot_brnn.brnn_architecture
+   :noindex:
    :members:
 
 encode_sequence.py
@@ -49,6 +33,7 @@ bayesian_optimization.py
 ------------------------
 
 .. automodule:: prot_brnn.bayesian_optimization
+   :noindex:
    :members:
 
 brnn_plot.py
