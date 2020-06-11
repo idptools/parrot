@@ -22,6 +22,7 @@ Where `data_file` specifies the path to the whitespace-separated datafile and `o
 	*  ``-b`` : Training batch size (default is 32). Must be a positive integer, and ideally should be in the range of 50-500. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance.
 	*  ``-e`` : Number of epochs to train for during each iteration of optimization on each data fold (default is 200).
 	*  ``--split`` : Path to split_file for manually dividing dataset into training, validation and test sets.
+	*  ``--setFractions`` : Include this flag to manually set the proportions of the data belonging to the training, validation and test sets. This option must be followed by three floats (representing train, validation, and test) between 0 and 1 that cumulatively sum to 1.
 	*  ``--excludeSeqID`` : Include this flag if the `data_file` is formatted such that it does not have sequence IDs as the first column in each row.
 	*  ``--encodeBiophysics`` : Include this flag if you wish to represent each amino acid as a length ## vector representing biophysical properties, rather than a length 20 one-hot vector.
 	*  ``--verbose`` / ``-v`` : The level of information that should be printed to console during training. There will be no output if this flag is not included, and maximum output if this flag is included twice or more.

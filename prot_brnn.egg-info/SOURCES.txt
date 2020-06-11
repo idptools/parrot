@@ -17,11 +17,12 @@ prot_brnn.egg-info/SOURCES.txt
 prot_brnn.egg-info/dependency_links.txt
 prot_brnn.egg-info/top_level.txt
 prot_brnn/data/README.md
-prot_brnn/data/look_and_say.dat
 prot_brnn/data/res_class_dataset.tsv
 prot_brnn/data/res_regress_dataset.tsv
 prot_brnn/data/seq_class_dataset.tsv
 prot_brnn/data/seq_regress_dataset.tsv
+prot_brnn/data/seqfile.txt
+prot_brnn/data/seqfile_noIDs.txt
 prot_brnn/tests/__init__.py
 prot_brnn/tests/test_prot_brnn.py
 scripts/brnn_optimize

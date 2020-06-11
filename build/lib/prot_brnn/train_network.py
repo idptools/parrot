@@ -1,5 +1,14 @@
 """
-The core training module of the project
+File that carries out the core training of the package.
+
+.............................................................................
+prot_brnn was developed by the Holehouse lab
+     Original release ---- 2020
+
+Question/comments/concerns? Raise an issue on github:
+https://github.com/holehouse-lab/prot-brnn
+
+Licensed under the MIT license. 
 """
 
 import torch 
@@ -327,4 +336,3 @@ def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot'):
 		pred_dict[seq] = outputs
 
 	return pred_dict
-

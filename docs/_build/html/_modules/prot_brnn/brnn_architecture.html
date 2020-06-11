@@ -149,7 +149,20 @@
            <div itemprop="articleBody">
             
   <h1>Source code for prot_brnn.brnn_architecture</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">torch</span> 
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This file contains code for the underlying architecture of the BRNN.</span>
+
+<span class="sd">.............................................................................</span>
+<span class="sd">prot_brnn was developed by the Holehouse lab</span>
+<span class="sd">     Original release ---- 2020</span>
+
+<span class="sd">Question/comments/concerns? Raise an issue on github:</span>
+<span class="sd">https://github.com/holehouse-lab/prot-brnn</span>
+
+<span class="sd">Licensed under the MIT license. </span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">torch</span> 
 <span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
 
 <div class="viewcode-block" id="BRNN_MtM"><a class="viewcode-back" href="../../api.html#prot_brnn.brnn_architecture.BRNN_MtM">[docs]</a><span class="k">class</span> <span class="nc">BRNN_MtM</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
@@ -217,9 +230,9 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span> <span class="o">=</span> <span class="n">num_layers</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span> <span class="o">=</span> <span class="n">num_classes</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">lstm</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LSTM</span><span class="p">(</span><span class="n">input_size</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">,</span> <span class="n">num_layers</span><span class="p">,</span> 
-        					<span class="n">batch_first</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">bidirectional</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">fc</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">in_features</span><span class="o">=</span><span class="n">hidden_size</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> 	<span class="c1"># *2 for bidirection</span>
-        					<span class="n">out_features</span><span class="o">=</span><span class="n">num_classes</span><span class="p">)</span> 
+                            <span class="n">batch_first</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">bidirectional</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fc</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">in_features</span><span class="o">=</span><span class="n">hidden_size</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span>  <span class="c1"># *2 for bidirection</span>
+                            <span class="n">out_features</span><span class="o">=</span><span class="n">num_classes</span><span class="p">)</span> 
     
 <div class="viewcode-block" id="BRNN_MtM.forward"><a class="viewcode-back" href="../../api.html#prot_brnn.brnn_architecture.BRNN_MtM.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Propogate input sequences through the network to produce outputs</span>
@@ -240,10 +253,10 @@
 
         <span class="c1"># Set initial states</span>
         <span class="c1"># h0 and c0 dimensions: [num_layers*2 X batch_size X hidden_size]</span>
-        <span class="n">h0</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> 	<span class="c1"># *2 for bidirection</span>
-        				 <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">hidden_size</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">h0</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span>     <span class="c1"># *2 for bidirection</span>
+                         <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">hidden_size</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
         <span class="n">c0</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> 
-        				 <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">hidden_size</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+                         <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">hidden_size</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
         
         <span class="c1"># Forward propagate LSTM</span>
         <span class="c1"># out: tensor of shape: [batch_size, seq_length, hidden_size*2]</span>
@@ -317,9 +330,9 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">hidden_size</span> <span class="o">=</span> <span class="n">hidden_size</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span> <span class="o">=</span> <span class="n">num_layers</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">lstm</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LSTM</span><span class="p">(</span><span class="n">input_size</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">,</span> <span class="n">num_layers</span><span class="p">,</span> 
-        					<span class="n">batch_first</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">bidirectional</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">fc</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">in_features</span><span class="o">=</span><span class="n">hidden_size</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> 	<span class="c1"># *2 for bidirection</span>
-        					<span class="n">out_features</span><span class="o">=</span><span class="n">num_classes</span><span class="p">)</span> 
+                            <span class="n">batch_first</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">bidirectional</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fc</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">in_features</span><span class="o">=</span><span class="n">hidden_size</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span>  <span class="c1"># *2 for bidirection</span>
+                            <span class="n">out_features</span><span class="o">=</span><span class="n">num_classes</span><span class="p">)</span> 
     
 <div class="viewcode-block" id="BRNN_MtO.forward"><a class="viewcode-back" href="../../api.html#prot_brnn.brnn_architecture.BRNN_MtO.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Propogate input sequences through the network to produce outputs</span>
@@ -342,10 +355,10 @@
 
         <span class="c1"># Set initial states</span>
         <span class="c1"># h0 and c0 dimensions: [num_layers*2 X batch_size X hidden_size]</span>
-        <span class="n">h0</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> 	<span class="c1"># *2 for bidirection</span>
-        				 <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">hidden_size</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">h0</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span>     <span class="c1"># *2 for bidirection</span>
+                         <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">hidden_size</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
         <span class="n">c0</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> 
-        				 <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">hidden_size</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+                         <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">hidden_size</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
         
         <span class="c1"># Forward propagate LSTM</span>
         <span class="c1"># out: tensor of shape: [batch_size, seq_length, hidden_size*2]</span>

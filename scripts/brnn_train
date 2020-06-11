@@ -1,10 +1,18 @@
 #!/usr/bin/env python
 """
-Usage: brnn_train
+Usage: $ brnn_train data_file output_network <flags>
+  
+Driver script for training a bidirectional recurrent neural network with user
+specified parameters. For more information on usage, use the '-h' flag.
 
-Driver script for the prot_brnn package.
+.............................................................................
+prot_brnn was developed by the Holehouse lab
+     Original release ---- 2020
 
-Batch size should be 16-1024, Optimally ~1-5% of dataset
+Question/comments/concerns? Raise an issue on github:
+https://github.com/holehouse-lab/prot-brnn
+
+Licensed under the MIT license. 
 """
 
 import torch 
@@ -26,9 +34,9 @@ parser.add_argument('output_network', help='path for the returned trained networ
 parser.add_argument('--datatype', metavar='dtype', default='sequence', type=str, required=True,
 					help="Required. Format of the input data file, must be 'sequence' or 'residues'")
 parser.add_argument('--split', default='', metavar='split_file', 
-			type=str, help="file indicating how to split datafile into training, validation, and testing sets")
+			type=str, help="file indicating how to split datafile into training, validation, and test sets")
 parser.add_argument('--stop', default='iter', metavar='stop_condition', 
-						type=str, help="training stop condition: either 'auto' or 'iter' (default)")
+						type=str, help="training stop condition: either 'auto' or 'iter' (default 'iter')")
 parser.add_argument('-nc', default=1, type=int, metavar='num_classes', required=True,
 					help='Required. Number of output classes, for regression put 1')
 parser.add_argument('-hs', default=5, type=int, metavar='hidden_size', 
@@ -39,14 +47,15 @@ parser.add_argument('-b', default=32, type=int, metavar='batch_size', help='(def
 parser.add_argument('-lr', default=0.001, type=float, metavar='learning_rate', help='(def=0.001)')
 parser.add_argument('-e', default=30, type=int, metavar='num_epochs', 
 						help='number of training epochs (def=30)')
+parser.add_argument('--setFractions', nargs=3, default=[0.7, 0.15, 0.15], type=float, 
+			metavar=('train', 'val', 'test'),
+			help='Proportion of dataset that should be divided into training, validation, and test sets')
 parser.add_argument('--excludeSeqID', action='store_true')
 parser.add_argument('--encodeBiophysics', action='store_true')
+parser.add_argument('--forceCPU', action='store_true')
 parser.add_argument('--verbose', '-v', action='count', default=0)
 
 args = parser.parse_args()
-
-# Device configuration
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyper-parameters
 hidden_size = args.hs
@@ -54,12 +63,15 @@ num_layers = args.nl
 batch_size = args.b
 learning_rate = args.lr
 num_epochs = args.e
+
+# Other flags
 dtype = args.datatype
 num_classes = args.nc
 split_file = args.split
 stop_cond = args.stop
 verbosity = args.verbose
-
+forceCPU = args.forceCPU
+setFractions = args.setFractions
 excludeSeqID = args.excludeSeqID
 encodeBiophysics = args.encodeBiophysics
 
@@ -69,6 +81,12 @@ if encodeBiophysics:
 else:
 	encoding_scheme = 'onehot'
 	input_size = 20
+
+# Device configuration
+if forceCPU:
+	device = 'cpu'
+else:
+	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 ###############################################################################
 ########################      Validate arguments:      ########################
@@ -155,13 +173,23 @@ if batch_size < 1:
 	print('Error: batch size must be a positive integer.')
 	sys.exit()
 
+# Ensure that the sum of setFractions adds up to 1
+for frac in setFractions:
+	if 0 >= frac or frac >= 1:
+		print('Error: all set fractions must be between 0 and 1.')
+		sys.exit()
+if sum(setFractions) != 1.0:
+	print('Error: set fractions must sum to 1')
+	sys.exit()
+
 
 ###############################################################################
 
 # Split data
 train, val, test = pid.split_data(data_file, datatype=dtype, problem_type=problem_type, 
-									excludeSeqID=excludeSeqID, split_file=split_file, 
-									encoding_scheme=encoding_scheme)
+								excludeSeqID=excludeSeqID, split_file=split_file, 
+								encoding_scheme=encoding_scheme, percent_val=setFractions[1],
+								percent_test=setFractions[2])
 
 # Add data to dataloaders
 train_loader = torch.utils.data.DataLoader(dataset=train,

@@ -1,3 +1,16 @@
+"""
+This file contains code for conducting Bayesian optimization.
+
+.............................................................................
+prot_brnn was developed by the Holehouse lab
+     Original release ---- 2020
+
+Question/comments/concerns? Raise an issue on github:
+https://github.com/holehouse-lab/prot-brnn
+
+Licensed under the MIT license. 
+"""
+
 import numpy as np
 import GPy
 import GPyOpt
@@ -6,7 +19,6 @@ from prot_brnn import train_network
 from prot_brnn import brnn_architecture
 import math
 
-# TODO: are variance and lengthscale also hyperparameters that I will need to optimize somehow?
 class BayesianOptimizer(object):
 	"""A class for conducting Bayesian Optimization on a PyTorch RNN
 
@@ -226,6 +238,7 @@ class BayesianOptimizer(object):
 			in the order: [lr, nl, hs]
 		"""
 
+		# Initial hyperparameter search -- used to get noise estimate
 		x_init = np.array([[-5.0, 5, 10], [-3.0, 5, 5], [0.0, 8, 20], [-3.0, 15, 5], [-3.0, 3, 30]])
 		y_init, noise = self.initial_search(x_init)
 
@@ -246,12 +259,12 @@ class BayesianOptimizer(object):
 										 domain=self.bds,
 										 model_type='GP',
 										 acquisition_type ='EI',
-										 acquisition_jitter = 0.05, # TODO: what is this?
+										 acquisition_jitter = 0.05,
 										 X=x_init,
 										 Y=y_init,
 										 noise_var = noise,
 										 maximize=False)
-		# TODO: what should max_iter be set at - 75?
+		
 		optimizer.run_optimization(max_iter=75)
 
 		ins = optimizer.get_evaluations()[0]

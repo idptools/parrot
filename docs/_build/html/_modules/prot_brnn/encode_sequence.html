@@ -149,18 +149,22 @@
            <div itemprop="articleBody">
             
   <h1>Source code for prot_brnn.encode_sequence</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">File containing functions for encoding a string of amino acids into a numeric vector.</span>
+
+<span class="sd">.............................................................................</span>
+<span class="sd">prot_brnn was developed by the Holehouse lab</span>
+<span class="sd">     Original release ---- 2020</span>
+
+<span class="sd">Question/comments/concerns? Raise an issue on github:</span>
+<span class="sd">https://github.com/holehouse-lab/prot-brnn</span>
+
+<span class="sd">Licensed under the MIT license. </span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">import</span> <span class="nn">torch</span>
 <span class="kn">import</span> <span class="nn">sys</span>
-
-<span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">File containing function(s) for encoding a string of amino acids into a numeric vector.</span>
-
-<span class="sd">Although these functions could easily be contained in another file, it is provided here</span>
-<span class="sd">to allow for easy extensibility. In case the user wishes to define their own encoding</span>
-<span class="sd">scheme, they can modify the two schemes provided below or add their own. (Additionally,</span>
-<span class="sd">they must modify the code where the encoding functions are called in &lt;file_name.py&gt;)</span>
-<span class="sd">&#39;&#39;&#39;</span>
 
 <span class="c1">############  One-hot encoding  #############</span>
 <span class="n">ONE_HOT</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;A&#39;</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;C&#39;</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;D&#39;</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span> <span class="s1">&#39;E&#39;</span><span class="p">:</span><span class="mi">3</span><span class="p">,</span> <span class="s1">&#39;F&#39;</span><span class="p">:</span><span class="mi">4</span><span class="p">,</span> <span class="s1">&#39;G&#39;</span><span class="p">:</span><span class="mi">5</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">:</span><span class="mi">6</span><span class="p">,</span> <span class="s1">&#39;I&#39;</span><span class="p">:</span><span class="mi">7</span><span class="p">,</span> <span class="s1">&#39;K&#39;</span><span class="p">:</span><span class="mi">8</span><span class="p">,</span> <span class="s1">&#39;L&#39;</span><span class="p">:</span><span class="mi">9</span><span class="p">,</span>
@@ -169,8 +173,8 @@
 <div class="viewcode-block" id="one_hot"><a class="viewcode-back" href="../../api.html#prot_brnn.encode_sequence.one_hot">[docs]</a><span class="k">def</span> <span class="nf">one_hot</span><span class="p">(</span><span class="n">seq</span><span class="p">):</span>
 	<span class="sd">&quot;&quot;&quot;Convert an amino acid sequence to a PyTorch tensor of one-hot vectors</span>
 
-<span class="sd">	Each amino acid is represented by a length 20 vector with a single `1` and</span>
-<span class="sd">	19 `0`s. Inputing a sequence with a nono-canonical amino acid letter will</span>
+<span class="sd">	Each amino acid is represented by a length 20 vector with a single 1 and</span>
+<span class="sd">	19 0&#39;s Inputing a sequence with a nono-canonical amino acid letter will</span>
 <span class="sd">	cause the program to exit.</span>
 
 <span class="sd">	E.g. Glutamic acid (E) is encoded: [0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]</span>
@@ -266,8 +270,6 @@
 <span class="c1">##################################################</span>
 
 <span class="c1"># Add other encoding schemes here</span>
-
-
 </pre></div>
 
            </div>

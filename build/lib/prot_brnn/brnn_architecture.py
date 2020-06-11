@@ -1,3 +1,16 @@
+"""
+This file contains code for the underlying architecture of the BRNN.
+
+.............................................................................
+prot_brnn was developed by the Holehouse lab
+     Original release ---- 2020
+
+Question/comments/concerns? Raise an issue on github:
+https://github.com/holehouse-lab/prot-brnn
+
+Licensed under the MIT license. 
+"""
+
 import torch 
 import torch.nn as nn
 
@@ -66,9 +79,9 @@ class BRNN_MtM(nn.Module):
         self.num_layers = num_layers
         self.num_classes = num_classes
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, 
-        					batch_first=True, bidirectional=True)
-        self.fc = nn.Linear(in_features=hidden_size*2, 	# *2 for bidirection
-        					out_features=num_classes) 
+                            batch_first=True, bidirectional=True)
+        self.fc = nn.Linear(in_features=hidden_size*2,  # *2 for bidirection
+                            out_features=num_classes) 
     
     def forward(self, x):
         """Propogate input sequences through the network to produce outputs
@@ -89,10 +102,10 @@ class BRNN_MtM(nn.Module):
 
         # Set initial states
         # h0 and c0 dimensions: [num_layers*2 X batch_size X hidden_size]
-        h0 = torch.zeros(self.num_layers*2, 	# *2 for bidirection
-        				 x.size(0), self.hidden_size).to(self.device)
+        h0 = torch.zeros(self.num_layers*2,     # *2 for bidirection
+                         x.size(0), self.hidden_size).to(self.device)
         c0 = torch.zeros(self.num_layers*2, 
-        				 x.size(0), self.hidden_size).to(self.device)
+                         x.size(0), self.hidden_size).to(self.device)
         
         # Forward propagate LSTM
         # out: tensor of shape: [batch_size, seq_length, hidden_size*2]
@@ -166,9 +179,9 @@ class BRNN_MtO(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, 
-        					batch_first=True, bidirectional=True)
-        self.fc = nn.Linear(in_features=hidden_size*2, 	# *2 for bidirection
-        					out_features=num_classes) 
+                            batch_first=True, bidirectional=True)
+        self.fc = nn.Linear(in_features=hidden_size*2,  # *2 for bidirection
+                            out_features=num_classes) 
     
     def forward(self, x):
         """Propogate input sequences through the network to produce outputs
@@ -191,10 +204,10 @@ class BRNN_MtO(nn.Module):
 
         # Set initial states
         # h0 and c0 dimensions: [num_layers*2 X batch_size X hidden_size]
-        h0 = torch.zeros(self.num_layers*2, 	# *2 for bidirection
-        				 x.size(0), self.hidden_size).to(self.device)
+        h0 = torch.zeros(self.num_layers*2,     # *2 for bidirection
+                         x.size(0), self.hidden_size).to(self.device)
         c0 = torch.zeros(self.num_layers*2, 
-        				 x.size(0), self.hidden_size).to(self.device)
+                         x.size(0), self.hidden_size).to(self.device)
         
         # Forward propagate LSTM
         # out: tensor of shape: [batch_size, seq_length, hidden_size*2]

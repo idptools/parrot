@@ -1,8 +1,19 @@
 #!python
 """
-Usage: brnn_predict
+Usage: $ brnn_predict data_file saved_network output_file <flags>
+  
+Driver script for generating predictions on a list of sequences using a trained
+bidirectional recurrent neural network. For more information on usage, use the '-h'
+flag.
 
-This describes the script.
+.............................................................................
+prot_brnn was developed by the Holehouse lab
+     Original release ---- 2020
+
+Question/comments/concerns? Raise an issue on github:
+https://github.com/holehouse-lab/prot-brnn
+
+Licensed under the MIT license. 
 """
 
 import numpy as np
@@ -36,9 +47,12 @@ device = 'cpu'
 # Hyper-parameters
 hidden_size = args.hs
 num_layers = args.nl
+
+# Data format
 dtype = args.datatype
 num_classes = args.nc
 
+# Other flags
 excludeSeqID = args.excludeSeqID
 encodeBiophysics = args.encodeBiophysics
 

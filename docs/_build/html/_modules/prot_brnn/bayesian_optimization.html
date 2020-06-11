@@ -149,7 +149,20 @@
            <div itemprop="articleBody">
             
   <h1>Source code for prot_brnn.bayesian_optimization</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This file contains code for conducting Bayesian optimization.</span>
+
+<span class="sd">.............................................................................</span>
+<span class="sd">prot_brnn was developed by the Holehouse lab</span>
+<span class="sd">     Original release ---- 2020</span>
+
+<span class="sd">Question/comments/concerns? Raise an issue on github:</span>
+<span class="sd">https://github.com/holehouse-lab/prot-brnn</span>
+
+<span class="sd">Licensed under the MIT license. </span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">import</span> <span class="nn">GPy</span>
 <span class="kn">import</span> <span class="nn">GPyOpt</span>
 <span class="kn">from</span> <span class="nn">GPyOpt.methods</span> <span class="kn">import</span> <span class="n">BayesianOptimization</span>
@@ -157,7 +170,6 @@
 <span class="kn">from</span> <span class="nn">prot_brnn</span> <span class="kn">import</span> <span class="n">brnn_architecture</span>
 <span class="kn">import</span> <span class="nn">math</span>
 
-<span class="c1"># TODO: are variance and lengthscale also hyperparameters that I will need to optimize somehow?</span>
 <div class="viewcode-block" id="BayesianOptimizer"><a class="viewcode-back" href="../../api.html#prot_brnn.bayesian_optimization.BayesianOptimizer">[docs]</a><span class="k">class</span> <span class="nc">BayesianOptimizer</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 	<span class="sd">&quot;&quot;&quot;A class for conducting Bayesian Optimization on a PyTorch RNN</span>
 
@@ -377,6 +389,7 @@
 <span class="sd">			in the order: [lr, nl, hs]</span>
 <span class="sd">		&quot;&quot;&quot;</span>
 
+		<span class="c1"># Initial hyperparameter search -- used to get noise estimate</span>
 		<span class="n">x_init</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="o">-</span><span class="mf">5.0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">10</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">],</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">5</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">30</span><span class="p">]])</span>
 		<span class="n">y_init</span><span class="p">,</span> <span class="n">noise</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">initial_search</span><span class="p">(</span><span class="n">x_init</span><span class="p">)</span>
 
@@ -397,12 +410,12 @@
 										 <span class="n">domain</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bds</span><span class="p">,</span>
 										 <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;GP&#39;</span><span class="p">,</span>
 										 <span class="n">acquisition_type</span> <span class="o">=</span><span class="s1">&#39;EI&#39;</span><span class="p">,</span>
-										 <span class="n">acquisition_jitter</span> <span class="o">=</span> <span class="mf">0.05</span><span class="p">,</span> <span class="c1"># TODO: what is this?</span>
+										 <span class="n">acquisition_jitter</span> <span class="o">=</span> <span class="mf">0.05</span><span class="p">,</span>
 										 <span class="n">X</span><span class="o">=</span><span class="n">x_init</span><span class="p">,</span>
 										 <span class="n">Y</span><span class="o">=</span><span class="n">y_init</span><span class="p">,</span>
 										 <span class="n">noise_var</span> <span class="o">=</span> <span class="n">noise</span><span class="p">,</span>
 										 <span class="n">maximize</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-		<span class="c1"># TODO: what should max_iter be set at - 75?</span>
+		
 		<span class="n">optimizer</span><span class="o">.</span><span class="n">run_optimization</span><span class="p">(</span><span class="n">max_iter</span><span class="o">=</span><span class="mi">75</span><span class="p">)</span>
 
 		<span class="n">ins</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">get_evaluations</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>

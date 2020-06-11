@@ -1,3 +1,16 @@
+"""
+File containing functions for plotting training results.
+
+.............................................................................
+prot_brnn was developed by the Holehouse lab
+     Original release ---- 2020
+
+Question/comments/concerns? Raise an issue on github:
+https://github.com/holehouse-lab/prot-brnn
+
+Licensed under the MIT license. 
+"""
+
 import numpy as np
 import torch
 import itertools
@@ -224,4 +237,3 @@ def res_confusion_matrix(true_classes, predicted_classes, num_classes, output_di
 	plt.tight_layout()
 	plt.savefig(output_dir + 'res_CM.png')
 	plt.show()
-

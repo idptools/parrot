@@ -149,7 +149,20 @@
            <div itemprop="articleBody">
             
   <h1>Source code for prot_brnn.brnn_plot</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">File containing functions for plotting training results.</span>
+
+<span class="sd">.............................................................................</span>
+<span class="sd">prot_brnn was developed by the Holehouse lab</span>
+<span class="sd">     Original release ---- 2020</span>
+
+<span class="sd">Question/comments/concerns? Raise an issue on github:</span>
+<span class="sd">https://github.com/holehouse-lab/prot-brnn</span>
+
+<span class="sd">Licensed under the MIT license. </span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">import</span> <span class="nn">torch</span>
 <span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">from</span> <span class="nn">scipy.stats</span> <span class="kn">import</span> <span class="n">linregress</span>
@@ -375,7 +388,6 @@
 	<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 	<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">+</span> <span class="s1">&#39;res_CM.png&#39;</span><span class="p">)</span>
 	<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
-
 </pre></div>
 
            </div>

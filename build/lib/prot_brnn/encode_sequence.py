@@ -1,15 +1,19 @@
+"""
+File containing functions for encoding a string of amino acids into a numeric vector.
+
+.............................................................................
+prot_brnn was developed by the Holehouse lab
+     Original release ---- 2020
+
+Question/comments/concerns? Raise an issue on github:
+https://github.com/holehouse-lab/prot-brnn
+
+Licensed under the MIT license. 
+"""
+
 import numpy as np
 import torch
 import sys
-
-'''
-File containing function(s) for encoding a string of amino acids into a numeric vector.
-
-Although these functions could easily be contained in another file, it is provided here
-to allow for easy extensibility. In case the user wishes to define their own encoding
-scheme, they can modify the two schemes provided below or add their own. (Additionally,
-they must modify the code where the encoding functions are called in <file_name.py>)
-'''
 
 ############  One-hot encoding  #############
 ONE_HOT = {'A':0, 'C':1, 'D':2, 'E':3, 'F':4, 'G':5, 'H':6, 'I':7, 'K':8, 'L':9,
@@ -18,8 +22,8 @@ ONE_HOT = {'A':0, 'C':1, 'D':2, 'E':3, 'F':4, 'G':5, 'H':6, 'I':7, 'K':8, 'L':9,
 def one_hot(seq):
 	"""Convert an amino acid sequence to a PyTorch tensor of one-hot vectors
 
-	Each amino acid is represented by a length 20 vector with a single `1` and
-	19 `0`s. Inputing a sequence with a nono-canonical amino acid letter will
+	Each amino acid is represented by a length 20 vector with a single 1 and
+	19 0's Inputing a sequence with a nono-canonical amino acid letter will
 	cause the program to exit.
 
 	E.g. Glutamic acid (E) is encoded: [0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
@@ -115,5 +119,3 @@ def biophysics(seq):
 ##################################################
 
 # Add other encoding schemes here
-
-

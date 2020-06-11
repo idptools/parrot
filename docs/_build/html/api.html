@@ -171,6 +171,10 @@
 </table>
 <div class="section" id="brnn-architecture-py">
 <h2>brnn_architecture.py<a class="headerlink" href="#brnn-architecture-py" title="Permalink to this headline">¶</a></h2>
+<p>This file contains code for the underlying architecture of the BRNN.</p>
+<p>Question/comments/concerns? Raise an issue on github:
+<a class="reference external" href="https://github.com/holehouse-lab/prot-brnn">https://github.com/holehouse-lab/prot-brnn</a></p>
+<p>Licensed under the MIT license.</p>
 <dl class="py class">
 <dt>
 <em class="property">class </em><code class="sig-prename descclassname">prot_brnn.brnn_architecture.</code><code class="sig-name descname">BRNN_MtM</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">hidden_size</span></em>, <em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_architecture.html#BRNN_MtM"><span class="viewcode-link">[source]</span></a></dt>
@@ -290,6 +294,10 @@ be in the format:
 </div>
 <div class="section" id="module-prot_brnn.encode_sequence">
 <span id="encode-sequence-py"></span><h2>encode_sequence.py<a class="headerlink" href="#module-prot_brnn.encode_sequence" title="Permalink to this headline">¶</a></h2>
+<p>File containing functions for encoding a string of amino acids into a numeric vector.</p>
+<p>Question/comments/concerns? Raise an issue on github:
+<a class="reference external" href="https://github.com/holehouse-lab/prot-brnn">https://github.com/holehouse-lab/prot-brnn</a></p>
+<p>Licensed under the MIT license.</p>
 <dl class="py function">
 <dt id="prot_brnn.encode_sequence.biophysics">
 <code class="sig-prename descclassname">prot_brnn.encode_sequence.</code><code class="sig-name descname">biophysics</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/encode_sequence.html#biophysics"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.encode_sequence.biophysics" title="Permalink to this definition">¶</a></dt>
@@ -317,8 +325,8 @@ acid letter will cause the program to exit.</p>
 <dt id="prot_brnn.encode_sequence.one_hot">
 <code class="sig-prename descclassname">prot_brnn.encode_sequence.</code><code class="sig-name descname">one_hot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/encode_sequence.html#one_hot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.encode_sequence.one_hot" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convert an amino acid sequence to a PyTorch tensor of one-hot vectors</p>
-<p>Each amino acid is represented by a length 20 vector with a single <cite>1</cite> and
-19 <a href="#id1"><span class="problematic" id="id2">`</span></a>0`s. Inputing a sequence with a nono-canonical amino acid letter will
+<p>Each amino acid is represented by a length 20 vector with a single 1 and
+19 0’s Inputing a sequence with a nono-canonical amino acid letter will
 cause the program to exit.</p>
 <p>E.g. Glutamic acid (E) is encoded: [0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]</p>
 <dl class="field-list simple">
@@ -337,6 +345,10 @@ cause the program to exit.</p>
 </div>
 <div class="section" id="module-prot_brnn.process_input_data">
 <span id="process-input-data-py"></span><h2>process_input_data.py<a class="headerlink" href="#module-prot_brnn.process_input_data" title="Permalink to this headline">¶</a></h2>
+<p>File for processing an input datafile into a PyTorch-compatible format.</p>
+<p>Question/comments/concerns? Raise an issue on github:
+<a class="reference external" href="https://github.com/holehouse-lab/prot-brnn">https://github.com/holehouse-lab/prot-brnn</a></p>
+<p>Licensed under the MIT license.</p>
 <dl class="py class">
 <dt id="prot_brnn.process_input_data.SequenceDataset">
 <em class="property">class </em><code class="sig-prename descclassname">prot_brnn.process_input_data.</code><code class="sig-name descname">SequenceDataset</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">subset</span><span class="o">=</span><span class="default_value">array([], dtype=float64)</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span><span class="o">=</span><span class="default_value">'onehot'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/process_input_data.html#SequenceDataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.process_input_data.SequenceDataset" title="Permalink to this definition">¶</a></dt>
@@ -632,7 +644,10 @@ vectors. The proportions of the two vectors will be <cite>fraction</cite> and
 </div>
 <div class="section" id="module-prot_brnn.train_network">
 <span id="train-network-py"></span><h2>train_network.py<a class="headerlink" href="#module-prot_brnn.train_network" title="Permalink to this headline">¶</a></h2>
-<p>The core training module of the project</p>
+<p>File that carries out the core training of the package.</p>
+<p>Question/comments/concerns? Raise an issue on github:
+<a class="reference external" href="https://github.com/holehouse-lab/prot-brnn">https://github.com/holehouse-lab/prot-brnn</a></p>
+<p>Licensed under the MIT license.</p>
 <dl class="py function">
 <dt id="prot_brnn.train_network.test_labeled_data">
 <code class="sig-prename descclassname">prot_brnn.train_network.</code><code class="sig-name descname">test_labeled_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">network</span></em>, <em class="sig-param"><span class="n">test_loader</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/train_network.html#test_labeled_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.train_network.test_labeled_data" title="Permalink to this definition">¶</a></dt>
@@ -751,6 +766,10 @@ is 1).</p></li>
 </div>
 <div class="section" id="bayesian-optimization-py">
 <h2>bayesian_optimization.py<a class="headerlink" href="#bayesian-optimization-py" title="Permalink to this headline">¶</a></h2>
+<p>This file contains code for conducting Bayesian optimization.</p>
+<p>Question/comments/concerns? Raise an issue on github:
+<a class="reference external" href="https://github.com/holehouse-lab/prot-brnn">https://github.com/holehouse-lab/prot-brnn</a></p>
+<p>Licensed under the MIT license.</p>
 <dl class="py class">
 <dt>
 <em class="property">class </em><code class="sig-prename descclassname">prot_brnn.bayesian_optimization.</code><code class="sig-name descname">BayesianOptimizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">cv_dataloaders</span></em>, <em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">n_epochs</span></em>, <em class="sig-param"><span class="n">n_classes</span></em>, <em class="sig-param"><span class="n">dtype</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">verbosity</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/bayesian_optimization.html#BayesianOptimizer"><span class="viewcode-link">[source]</span></a></dt>
@@ -882,6 +901,10 @@ in the order: [lr, nl, hs]</p>
 </div>
 <div class="section" id="module-prot_brnn.brnn_plot">
 <span id="brnn-plot-py"></span><h2>brnn_plot.py<a class="headerlink" href="#module-prot_brnn.brnn_plot" title="Permalink to this headline">¶</a></h2>
+<p>File containing functions for plotting training results.</p>
+<p>Question/comments/concerns? Raise an issue on github:
+<a class="reference external" href="https://github.com/holehouse-lab/prot-brnn">https://github.com/holehouse-lab/prot-brnn</a></p>
+<p>Licensed under the MIT license.</p>
 <dl class="py function">
 <dt id="prot_brnn.brnn_plot.confusion_matrix">
 <code class="sig-prename descclassname">prot_brnn.brnn_plot.</code><code class="sig-name descname">confusion_matrix</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true_classes</span></em>, <em class="sig-param"><span class="n">predicted_classes</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/prot_brnn/brnn_plot.html#confusion_matrix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#prot_brnn.brnn_plot.confusion_matrix" title="Permalink to this definition">¶</a></dt>

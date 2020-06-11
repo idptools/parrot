@@ -1,8 +1,19 @@
 #!/usr/bin/env python
 """
-Usage: brnn_optimze
+Usage: $ brnn_optimize data_file output_network <flags>
+  
+Driver script for finding optimal hyperparameters for a bidirectional recurrent 
+neural network on a given dataset, then training a network with those parameters
+For more information on usage, use the '-h' flag.
 
-Driver script for automatic hyperparameter optimization.
+.............................................................................
+prot_brnn was developed by the Holehouse lab
+     Original release ---- 2020
+
+Question/comments/concerns? Raise an issue on github:
+https://github.com/holehouse-lab/prot-brnn
+
+Licensed under the MIT license. 
 """
 
 import torch 
@@ -31,23 +42,27 @@ parser.add_argument('-nc', default=1, type=int, metavar='num_classes', required=
 parser.add_argument('-b', default=32, type=int, metavar='batch_size', help='(def=32)')
 parser.add_argument('-e', default=200, type=int, metavar='num_epochs', 
 						help='number of training epochs (def=200)')
+parser.add_argument('--setFractions', nargs=3, default=[0.7, 0.15, 0.15], type=float, 
+			metavar=('train', 'val', 'test'),
+			help='Proportion of dataset that should be divided into training, validation, and test sets')
 parser.add_argument('--excludeSeqID', action='store_true')
 parser.add_argument('--encodeBiophysics', action='store_true')
+parser.add_argument('--forceCPU', action='store_true')
 parser.add_argument('--verbose', '-v', action='count', default=0)
 
 args = parser.parse_args()
 
-# Device configuration
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 # Hyper-parameters
 batch_size = args.b
 num_epochs = args.e
+
+# Other flags
 dtype = args.datatype
 num_classes = args.nc
 split_file = args.split
 verbosity = args.verbose
-
+forceCPU = args.forceCPU
+setFractions = args.setFractions
 excludeSeqID = args.excludeSeqID
 encodeBiophysics = args.encodeBiophysics
 
@@ -57,6 +72,12 @@ if encodeBiophysics:
 else:
 	encoding_scheme = 'onehot'
 	input_size = 20
+
+# Device configuration
+if forceCPU:
+	device = 'cpu'
+else:
+	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 ###############################################################################
 ########################      Validate arguments:      ########################
@@ -109,7 +130,6 @@ else:
 	print("Error: Invalid datatype argument -- must be 'residues' or 'sequence'.")
 	sys.exit()
 
-
 # Ensure that  batch size and num epochs are both positive ints
 if num_epochs < 1:
 	print('Error: number of epochs must be a positive integer.')
@@ -118,13 +138,23 @@ if batch_size < 1:
 	print('Error: batch size must be a positive integer.')
 	sys.exit()
 
+# Ensure that the sum of setFractions adds up to 1
+for frac in setFractions:
+	if 0 >= frac or frac >= 1:
+		print('Error: all set fractions must be between 0 and 1.')
+		sys.exit()
+if sum(setFractions) != 1.0:
+	print('Error: set fractions must sum to 1')
+	sys.exit()
+
 ###############################################################################
 
 
 # Split data
 cvs, train, val, test = pid.split_data_cv(data_file, datatype=dtype, problem_type=problem_type, 
-											excludeSeqID=excludeSeqID, split_file=split_file, 
-											encoding_scheme=encoding_scheme)
+										excludeSeqID=excludeSeqID, split_file=split_file, 
+										encoding_scheme=encoding_scheme, percent_val=setFractions[1], 
+										percent_test=setFractions[2])
 
 # Convert CV datasets to dataloaders
 cv_loaders = []
@@ -142,6 +172,13 @@ best_hyperparams = optimizer.optimize()
 lr = 10**best_hyperparams[0]
 nl = int(best_hyperparams[1])
 hs = int(best_hyperparams[2])
+
+# Save these hyperparamters to a file so that the user has a record
+params_file = saved_weights[:-len(network_filename)] + 'optimal_hyperparams.txt'
+with open(params_file, 'w') as f:
+	f.write('Learning rate: %.5f\n' % lr)
+	f.write('Num Layers: %d\n' % nl)
+	f.write('Hidden vector size: %d\n' % hs)
 
 ## Use these best hyperparams to train the network from scratch using the entire train/val sets
 # Add data to dataloaders
@@ -178,4 +215,3 @@ test_loss = train_network.test_labeled_data(brnn_network, test_loader, datatype=
 						num_classes=num_classes, device=device)
 if verbosity > 0:
 	print('\nTest Loss: %.4f' % test_loss)
-

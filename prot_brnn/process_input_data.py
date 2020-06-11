@@ -1,3 +1,16 @@
+"""
+File for processing an input datafile into a PyTorch-compatible format.
+
+.............................................................................
+prot_brnn was developed by the Holehouse lab
+     Original release ---- 2020
+
+Question/comments/concerns? Raise an issue on github:
+https://github.com/holehouse-lab/prot-brnn
+
+Licensed under the MIT license. 
+"""
+
 import numpy as np
 import torch 
 import torch.nn as nn
