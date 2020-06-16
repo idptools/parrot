@@ -1,9 +1,6 @@
 Module Documentation
 ====================
 
-.. autosummary::
-   :toctree: autosummary
-
 brnn_architecture.py
 --------------------
 

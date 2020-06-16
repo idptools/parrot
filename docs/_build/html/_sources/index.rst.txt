@@ -1,5 +1,5 @@
 Welcome to prot_brnn's documentation!
-=========================================================
+=====================================
 
 .. toctree::
    :maxdepth: 2
@@ -11,4 +11,4 @@ Welcome to prot_brnn's documentation!
    usage/brnn_optimize
    usage/examples
    api
-
+   usage/ml_faqs

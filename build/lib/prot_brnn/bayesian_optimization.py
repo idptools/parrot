@@ -239,7 +239,7 @@ class BayesianOptimizer(object):
 		"""
 
 		# Initial hyperparameter search -- used to get noise estimate
-		x_init = np.array([[-5.0, 5, 10], [-3.0, 5, 5], [0.0, 8, 20], [-3.0, 15, 5], [-3.0, 3, 30]])
+		x_init = np.array([[-5.0, 5, 10], [-3.0, 5, 5], [0.0, 8, 20], [-2.0, 15, 5], [-3.0, 3, 30]])
 		y_init, noise = self.initial_search(x_init)
 
 		if self.verbosity > 0:

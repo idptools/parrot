@@ -21,10 +21,11 @@ Where `data_file` specifies the path to the whitespace-separated datafile and `o
 	*  ``--help`` / ``-h`` : Display a help message.
 	*  ``-b`` : Training batch size (default is 32). Must be a positive integer, and ideally should be in the range of 50-500. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance.
 	*  ``-e`` : Number of epochs to train for during each iteration of optimization on each data fold (default is 200).
-	*  ``--split`` : Path to split_file for manually dividing dataset into training, validation and test sets.
+	*  ``--split`` : Path to split_file for manually dividing dataset into training, validation and test sets. The file should contain three lines, corresponding to training, validation and test sets respectively. Each line should have integers separated by whitespace, with the integers specify which sequences/lines in the `datafile` (0-indexed) will belong to which dataset. The cross-validation folds will be divided from the training and validation data.
 	*  ``--setFractions`` : Include this flag to manually set the proportions of the data belonging to the training, validation and test sets. This option must be followed by three floats (representing train, validation, and test) between 0 and 1 that cumulatively sum to 1.
 	*  ``--excludeSeqID`` : Include this flag if the `data_file` is formatted such that it does not have sequence IDs as the first column in each row.
 	*  ``--encodeBiophysics`` : Include this flag if you wish to represent each amino acid as a length ## vector representing biophysical properties, rather than a length 20 one-hot vector.
+	*  ``--forceCPU`` : Include this flag to force network training on the CPU, even if a GPU is available. Use if your machine has a GPU, but the GPU has insufficient memory.
 	*  ``--verbose`` / ``-v`` : The level of information that should be printed to console during training. There will be no output if this flag is not included, and maximum output if this flag is included twice or more.
 
 **Output:**
@@ -32,7 +33,3 @@ Where `data_file` specifies the path to the whitespace-separated datafile and `o
 ``brnn_optimize`` will produce similar output as ``brnn_train``. Firstly, the saved network weights from the training process will be located at the path provided by `output_network`. Additionally, there will be two PNG images saved to this same directory. The first, called 'train_test.png' displays the network's performance on the training and validation sets over the course of training. The second image describes the network performance on the held out test set, and will vary depending on the data format and machine learning task. If training a network for a classification task, the image will be a confusion matrix. If training for a regression task, the image will be a scatterplot comparing the predicted and true values of the test set sequences.
 
 Output text detailing network performance across training can be printed to console if the ``--verbose`` flag is provided.
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:

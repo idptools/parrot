@@ -14,8 +14,8 @@ Licensed under the MIT license.
 import numpy as np
 import torch
 import sys
+import os
 
-############  One-hot encoding  #############
 ONE_HOT = {'A':0, 'C':1, 'D':2, 'E':3, 'F':4, 'G':5, 'H':6, 'I':7, 'K':8, 'L':9,
 		   'M':10,'N':11,'P':12,'Q':13,'R':14,'S':15,'T':16,'V':17,'W':18,'Y':19}
 
@@ -50,39 +50,37 @@ def one_hot(seq):
 	return torch.from_numpy(m)
 
 ############  Biophysical scale encoding  #############
-# TODO: add more
 
-# Map each amino acid to a vector of biophysical properties (int)
-## TODO: list the properties here
-# 0: Hydrophobicity (Kyte-Doolitle * 10)
+# Map each amino acid to a vector of biophysical properties
+# 0: Hydrophobicity
 # 1: Charge
-# 2: pI * 10
-# 3: Molecular weight (Da)
-
-# Others potentially?
-# Solvation surface area
-# Pi-system (AKA aromatic)
-# ...
-BIOPHYSICS = {	'A':[18, 0, 60, 89], 
-				'C':[25, 0, 51, 121], 
-				'D':[-35, -1, 28, 133], 
-				'E':[-35, -1, 32, 147], 
-				'F':[28, 0, 55, 165], 
-				'G':[-4, 0, 60, 75], 
-				'H':[-32, 1, 76, 155], 
-				'I':[45, 0, 60, 131], 
-				'K':[-39, 1, 97, 146], 
-				'L':[38, 0, 60, 131],
-		   		'M':[19, 0, 57, 149],
-		   		'N':[-35, 0, 54, 132],
-		   		'P':[-16, 0, 63, 115],
-		   		'Q':[-35, 0, 57, 146],
-		   		'R':[-45, 1, 108, 174],
-		   		'S':[-8, 0, 57, 105],
-		   		'T':[-7, 0, 56, 119],
-		   		'V':[42, 0, 60, 117],
-		   		'W':[-9, 0, 59, 204],
-		   		'Y':[-13, 0, 57, 181]
+# 2: pI
+# 3: Molecular weight (g/mol)
+# 4: Aromatic amino acid
+# 5: Capable of hydrogen bonding
+# 6: Side chain SASA (measured from ACE-XX-NME dipeptide)
+# 7: Backbone SASA (measured from ACE-XX-NME dipeptide)
+# 8: Free energy of solvation
+BIOPHYSICS = {	'A':[ 1.8,  0,  6.0,  89.1, 0, 0,  75.8,  76.1,    1.9], 
+				'C':[ 2.5,  0,  5.1, 121.2, 0, 0, 115.4,  67.9,   -1.2], 
+				'D':[-3.5, -1,  2.8, 133.1, 0, 1, 130.3,  71.8, -107.3], 
+				'E':[-3.5, -1,  3.2, 147.1, 0, 1, 161.8,  68.1, -107.3], 
+				'F':[ 2.8,  0,  5.5, 165.2, 1, 0, 209.4,  66.0,   -0.8], 
+				'G':[-0.4,  0,  6.0,  75.1, 0, 0,   0.0, 115.0,    0.0], 
+				'H':[-3.2,  1,  7.6, 155.2, 0, 1, 180.8,  67.5,  -52.7], # Avg of HIP and HIE 
+				'I':[ 4.5,  0,  6.0, 131.2, 0, 0, 172.7,  60.3,    2.2], 
+				'K':[-3.9,  1,  9.7, 146.2, 0, 1, 205.9,  68.7, -100.9], 
+				'L':[ 3.8,  0,  6.0, 131.2, 0, 0, 172.0,  64.5,    2.3],
+		   		'M':[ 1.9,  0,  5.7, 149.2, 0, 0, 184.8,  67.8,   -1.4],
+		   		'N':[-3.5,  0,  5.4, 132.1, 0, 1, 142.7,  66.8,   -9.7],
+		   		'P':[-1.6,  0,  6.3, 115.1, 0, 0, 134.3,  55.8,    2.0],
+		   		'Q':[-3.5,  0,  5.7, 146.2, 0, 1, 173.3,  66.6,   -9.4],
+		   		'R':[-4.5,  1, 10.8, 174.2, 0, 1, 236.5,  66.7, -100.9],
+		   		'S':[-0.8,  0,  5.7, 105.1, 0, 1,  95.9,  72.9,   -5.1],
+		   		'T':[-0.7,  0,  5.6, 119.1, 0, 1, 130.9,  64.1,   -5.0],
+		   		'V':[ 4.2,  0,  6.0, 117.1, 0, 0, 143.1,  61.7,    2.0],
+		   		'W':[-0.9,  0,  5.9, 204.2, 1, 1, 254.6,  64.3,   -5.9],
+		   		'Y':[-1.3,  0,  5.7, 181.2, 1, 1, 222.5,  71.9,   -6.1]
 		   		}
 
 def biophysics(seq):
@@ -90,11 +88,10 @@ def biophysics(seq):
 
 	Each amino acid is represented by a length 4 vector with each value representing
 	a biophysical property. The four encoded biophysical scales are Kyte-Doolittle
-	hydrophobicity, charge, isoelectric point, and molecular weight. Each value is 
-	scaled so that all are integers. Inputing a sequence with a nono-canonical amino
-	acid letter will cause the program to exit.
+	hydrophobicity, charge, isoelectric point, and molecular weight. Inputing a 
+	sequence with a nono-canonical amino acid letter will cause the program to exit.
 
-	E.g. Glutamic acid (E) is encoded: [-35, -1, 32, 147]
+	E.g. Glutamic acid (E) is encoded: [-3.5, -1., 3.2, 147]
 
 	Parameters
 	----------
@@ -103,7 +100,7 @@ def biophysics(seq):
 
 	Returns
 	-------
-	torch.IntTensor
+	torch.FloatTensor
 		a PyTorch tensor representing the encoded sequence
 	"""
 	l = len(seq)
@@ -118,4 +115,57 @@ def biophysics(seq):
 
 ##################################################
 
-# Add other encoding schemes here
+def parse_encode_file(file):
+	"""Helper function to convert an encoding file into key:value dictionary"""
+
+	with open(file) as f:
+		lines = [x.strip().split() for x in f]
+
+	l = len(lines[0]) - 1
+	d = {}
+	for line in lines:
+		d[line[0]] = line[1:]
+
+		if len(line) - 1 != l:
+			print('Error: encoding file has invalid format.')
+			sys.exit()
+
+	return d, l
+
+# TODO: test this
+class UserEncoder():
+	"""User-specified amino acid-to-vector encoding scheme"""
+
+	def __init__(self, encode_file):
+		"""
+		Parameters
+		----------
+		encode_file : str
+			A path to a file that describes the encoding scheme
+		"""
+
+		self.encode_file = os.path.abspath(encode_file)
+		if not os.path.isfile(self.encode_file):
+			print('Error: encoding file does not exist.')
+			sys.exit()
+
+		self.encode_dict, self.input_size = parse_encode_file(self.encode_file)
+
+	def __len__(self):
+		"""Get length of encoding scheme"""
+
+		return self.input_size
+
+	def encode(self, seq):
+		"""Convert an amino acid sequence into this encoding scheme"""
+
+		l = len(seq)
+		m = np.zeros((l, self.input_size))
+
+		try:
+			for i in range(l):
+				m[i] = self.encode_dict[seq[i]]
+		except:
+			print('Error: invalid amino acid detected:', seq[i])
+			sys.exit()
+		return torch.from_numpy(m)

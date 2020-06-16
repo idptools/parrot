@@ -89,12 +89,11 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Examples</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#brnn-train">brnn_train</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#brnn-optimize">brnn_optimize</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#brnn-predict">brnn_predict</a><ul class="simple">
-</ul>
-</li>
+<li class="toctree-l2"><a class="reference internal" href="#brnn-predict">brnn_predict</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../api.html">Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ml_faqs.html">Machine Learning FAQs:</a></li>
 </ul>
 
             
@@ -237,18 +236,63 @@ In our first example, each of the 300 sequences in <em>seq_class_dataset.tsv</em
 <p>As in the other regression task, a residue regression task will produce a scatter plot that shows the network’s performance on the test set. Each combination of marker shape and color in this scatterplot belong to a single sequence, which may provide some insight on whether the network systematically mis-predicts all sequences, or if there are only a few specific sequences that are outliers.</p>
 <a class="reference internal image-reference" href="../_images/res_scatter.png"><img alt="../_images/res_scatter.png" src="../_images/res_scatter.png" style="width: 400px;" /></a>
 <p><strong>Other flags:</strong></p>
-<p>TODO:</p>
-<p>-Auto stop condition
--Set fractions
--Manual split file
--Exclude sequence IDs
--Encode biophysics</p>
+<p><code class="docutils literal notranslate"><span class="pre">--stop</span></code>:
+This flag determines the stop condition for network training. Currently, there are two options implemented: either ‘iter’ or ‘auto’. In all of the previous examples we used the default behavior, ‘iter’, which means that the number we specify for the <code class="docutils literal notranslate"><span class="pre">-e</span></code> flag will be the number of iterations that we train the network. Alternatively, using ‘auto’ means that training will stop automatically once performance on the validation set has plateaued for <code class="docutils literal notranslate"><span class="pre">-e</span></code> epochs. Thus, with ‘auto’ it is recommended to use a smaller number of epochs (5-15) for <code class="docutils literal notranslate"><span class="pre">-e</span></code> so training does not extend for a significantly long period of time.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">brnn_train</span> <span class="n">datasets</span><span class="o">/</span><span class="n">seq_regress_dataset</span><span class="o">.</span><span class="n">tsv</span> <span class="n">output_dir</span><span class="o">/</span><span class="n">network</span><span class="o">.</span><span class="n">pt</span> <span class="o">--</span><span class="n">datatype</span> <span class="n">sequence</span> <span class="o">-</span><span class="n">nc</span> <span class="mi">1</span> <span class="o">-</span><span class="n">nl</span> <span class="mi">2</span> <span class="o">-</span><span class="n">hs</span> <span class="mi">5</span> <span class="o">-</span><span class="n">lr</span> <span class="mf">0.001</span> <span class="o">-</span><span class="n">e</span> <span class="mi">10</span> <span class="o">-</span><span class="n">b</span> <span class="mi">32</span> <span class="o">-</span><span class="n">vv</span> <span class="o">--</span><span class="n">stop</span> <span class="n">auto</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Epoch</span> <span class="mi">0</span> <span class="n">Loss</span> <span class="mf">0.1779</span>
+<span class="n">Epoch</span> <span class="mi">1</span> <span class="n">Loss</span> <span class="mf">0.1752</span>
+<span class="n">Epoch</span> <span class="mi">2</span> <span class="n">Loss</span> <span class="mf">0.1727</span>
+<span class="o">...</span>
+<span class="n">Epoch</span> <span class="mi">98</span>        <span class="n">Loss</span> <span class="mf">0.0456</span>
+<span class="n">Epoch</span> <span class="mi">99</span>        <span class="n">Loss</span> <span class="mf">0.0456</span>
+<span class="n">Epoch</span> <span class="mi">100</span>       <span class="n">Loss</span> <span class="mf">0.0456</span>
+<span class="n">Epoch</span> <span class="mi">101</span>       <span class="n">Loss</span> <span class="mf">0.0456</span>
+<span class="n">Epoch</span> <span class="mi">102</span>       <span class="n">Loss</span> <span class="mf">0.0456</span>
+<span class="n">Epoch</span> <span class="mi">103</span>       <span class="n">Loss</span> <span class="mf">0.0456</span>
+<span class="n">Epoch</span> <span class="mi">104</span>       <span class="n">Loss</span> <span class="mf">0.0456</span>
+<span class="n">Epoch</span> <span class="mi">105</span>       <span class="n">Loss</span> <span class="mf">0.0456</span>
+<span class="n">Epoch</span> <span class="mi">106</span>       <span class="n">Loss</span> <span class="mf">0.0456</span>
+<span class="n">Epoch</span> <span class="mi">107</span>       <span class="n">Loss</span> <span class="mf">0.0456</span>
+<span class="n">Epoch</span> <span class="mi">108</span>       <span class="n">Loss</span> <span class="mf">0.0456</span>
+<span class="n">Epoch</span> <span class="mi">109</span>       <span class="n">Loss</span> <span class="mf">0.0456</span>
+<span class="n">Epoch</span> <span class="mi">110</span>       <span class="n">Loss</span> <span class="mf">0.0455</span>
+<span class="n">Epoch</span> <span class="mi">111</span>       <span class="n">Loss</span> <span class="mf">0.0455</span>
+<span class="n">Epoch</span> <span class="mi">112</span>       <span class="n">Loss</span> <span class="mf">0.0455</span>
+</pre></div>
+</div>
+<p>Training stops here because performance hasd stopped improving. Worth mentioning: in some cases such as this dataset, ‘auto’ can actually get stuck in a local minimum well before the network is fully trained. Be mindful of this when using ‘auto’ stop condition.</p>
+<p><code class="docutils literal notranslate"><span class="pre">--setFractions</span></code>:
+This flag allows the user to set the proportions of data that will be a part of the training set, validation set, and test set. By default, the split is 70:15:15. This flag takes three input arguments, between 0 and 1, that must sum to 1.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">brnn_train</span> <span class="n">datasets</span><span class="o">/</span><span class="n">seq_regress_dataset</span><span class="o">.</span><span class="n">tsv</span> <span class="n">output_dir</span><span class="o">/</span><span class="n">network</span><span class="o">.</span><span class="n">pt</span> <span class="o">--</span><span class="n">datatype</span> <span class="n">sequence</span> <span class="o">-</span><span class="n">nc</span> <span class="mi">1</span> <span class="o">-</span><span class="n">nl</span> <span class="mi">2</span> <span class="o">-</span><span class="n">hs</span> <span class="mi">5</span> <span class="o">-</span><span class="n">lr</span> <span class="mf">0.001</span> <span class="o">-</span><span class="n">e</span> <span class="mi">200</span> <span class="o">-</span><span class="n">b</span> <span class="mi">32</span> <span class="o">-</span><span class="n">v</span> <span class="o">--</span><span class="n">setFractions</span> <span class="mf">0.5</span> <span class="mf">0.4</span> <span class="mf">0.1</span>
+</pre></div>
+</div>
+<p>Notice that the output graph from this command will have fewer datapoints because of the reduced test set. Most likely, the accuracy will be a little worse then the default proportions because the training set is also smaller.</p>
+<p><code class="docutils literal notranslate"><span class="pre">--split</span></code>:
+This flag allows the user even greater control over the training set, validation set, and test set split of their input data. This flag requires an argument that is a path to a <cite>split_file</cite>, which specifically allocates sequences in <cite>datafile</cite> to the different datasets. An example <cite>split_file</cite> is provided in the /data folder for reference.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">brnn_train</span> <span class="n">datasets</span><span class="o">/</span><span class="n">seq_regress_dataset</span><span class="o">.</span><span class="n">tsv</span> <span class="n">output_dir</span><span class="o">/</span><span class="n">network</span><span class="o">.</span><span class="n">pt</span> <span class="o">--</span><span class="n">datatype</span> <span class="n">sequence</span> <span class="o">-</span><span class="n">nc</span> <span class="mi">1</span> <span class="o">-</span><span class="n">nl</span> <span class="mi">2</span> <span class="o">-</span><span class="n">hs</span> <span class="mi">5</span> <span class="o">-</span><span class="n">lr</span> <span class="mf">0.001</span> <span class="o">-</span><span class="n">e</span> <span class="mi">200</span> <span class="o">-</span><span class="n">b</span> <span class="mi">32</span> <span class="o">-</span><span class="n">v</span> <span class="o">--</span><span class="n">split</span> <span class="n">datasets</span><span class="o">/</span><span class="n">split_file</span><span class="o">.</span><span class="n">tsv</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">--excludeSeqID</span></code>:
+Include this flag if your <cite>datafile</cite> is formatted without sequence IDs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">EHCWTYIFQMYRIDQTQRVKRGEKPIIYLEPMAR</span> <span class="mf">3.8235294117647056</span>
+<span class="n">SDAWVMKFLWDKCGDHFIQYQKPANRWEWVD</span> <span class="mf">3.870967741935484</span>
+<span class="n">IYPEQSPDNAWAW</span> <span class="mf">3.076923076923077</span>
+<span class="o">.</span>
+<span class="o">.</span>
+<span class="o">.</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">brnn_train</span> <span class="n">datasets</span><span class="o">/</span><span class="n">seq_regress_dataset</span><span class="o">.</span><span class="n">tsv</span> <span class="n">output_dir</span><span class="o">/</span><span class="n">network</span><span class="o">.</span><span class="n">pt</span> <span class="o">--</span><span class="n">datatype</span> <span class="n">sequence</span> <span class="o">-</span><span class="n">nc</span> <span class="mi">1</span> <span class="o">-</span><span class="n">nl</span> <span class="mi">2</span> <span class="o">-</span><span class="n">hs</span> <span class="mi">5</span> <span class="o">-</span><span class="n">lr</span> <span class="mf">0.001</span> <span class="o">-</span><span class="n">e</span> <span class="mi">200</span> <span class="o">-</span><span class="n">b</span> <span class="mi">32</span> <span class="o">-</span><span class="n">v</span> <span class="o">--</span><span class="n">excludeSeqID</span>
+</pre></div>
+</div>
 </div>
 <div class="section" id="brnn-optimize">
 <h2>brnn_optimize<a class="headerlink" href="#brnn-optimize" title="Permalink to this headline">¶</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">brnn_optimize</span></code> will train a network like <code class="docutils literal notranslate"><span class="pre">brnn_train</span></code>, however this command does not require the user to specify hyperparameters. Instead, it relies upon Bayesian Optimization to automatically select hyperparameters. Although Bayesian Optimization is much more efficient than grid search optimization, it still requires many iterations to converge upon the best hyperparameters. Additionally, this command relies upon 5-fold cross validation for each set of hyperparameters to achieve an accurate estimate of network performance. All together, this means that <code class="docutils literal notranslate"><span class="pre">brnn_optimize</span></code> can take over 400x longer to run than <code class="docutils literal notranslate"><span class="pre">brnn_train</span></code>. It is strongly recommended to only run this command on a machine with a GPU.</p>
 <p>Nonetheless, usage for <code class="docutils literal notranslate"><span class="pre">brnn_optimize</span></code> is remarkably similar to <code class="docutils literal notranslate"><span class="pre">brnn_train</span></code>, since many of the flags are identical. As an example, let’s run the command on a residue regression dataset:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">brnn_optimize</span> <span class="n">prot</span><span class="o">-</span><span class="n">brnn</span><span class="o">/</span><span class="n">prot_brnn</span><span class="o">/</span><span class="n">data</span><span class="o">/</span><span class="n">res_regress_dataset</span><span class="o">.</span><span class="n">tsv</span> <span class="n">saved_networks</span><span class="o">/</span><span class="n">cv_example</span><span class="o">.</span><span class="n">pt</span> <span class="o">--</span><span class="n">datatype</span> <span class="n">residues</span> <span class="o">-</span><span class="n">nc</span> <span class="mi">1</span> <span class="o">-</span><span class="n">e</span> <span class="mi">200</span> <span class="o">-</span><span class="n">b</span> <span class="mi">32</span> <span class="o">-</span><span class="n">vv</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">brnn_optimize</span> <span class="n">datasets</span><span class="o">/</span><span class="n">res_regress_dataset</span><span class="o">.</span><span class="n">tsv</span> <span class="n">output_dir</span><span class="o">/</span><span class="n">cv_example</span><span class="o">.</span><span class="n">pt</span> <span class="o">--</span><span class="n">datatype</span> <span class="n">residues</span> <span class="o">-</span><span class="n">nc</span> <span class="mi">1</span> <span class="o">-</span><span class="n">e</span> <span class="mi">200</span> <span class="o">-</span><span class="n">b</span> <span class="mi">32</span> <span class="o">-</span><span class="n">vv</span>
 </pre></div>
 </div>
 <p>Notice how we do not need to specify number of layers, hidden vector size, or learning rate as these are the parameters we are optimizing. Perhaps the most important consideration is the number of epochs. Running the optimization procedure with a large number of epochs is more likely to identify the best performing hyperparameters, however more epochs also means significantly longer run time. It is recommended to play around with your data using <code class="docutils literal notranslate"><span class="pre">brnn_train</span></code> with a few different parameters and visualizing ‘train_test.png’. Ideally, you should set the number of epochs to be around the point where validation accuracy tends to plateau during training.</p>
@@ -310,9 +354,27 @@ In our first example, each of the 300 sequences in <em>seq_class_dataset.tsv</em
 </div>
 <div class="section" id="brnn-predict">
 <h2>brnn_predict<a class="headerlink" href="#brnn-predict" title="Permalink to this headline">¶</a></h2>
-<p>Use the trained network from optimize and predict on an example list of sequences (put in /data).</p>
-<p>Show input, command (hyperparams MUST be identical), output.</p>
-<div class="toctree-wrapper compound">
+<p>Use the trained network from optimize and predict on an list of sequences (example provided in /data folder). In this case we will make residue regression prediction using the network trained from <code class="docutils literal notranslate"><span class="pre">brnn_optimize</span></code> above. The most important thing to keep in mind when using <code class="docutils literal notranslate"><span class="pre">brnn_predict</span></code> is that your <code class="docutils literal notranslate"><span class="pre">-nl</span></code> and <code class="docutils literal notranslate"><span class="pre">-hs</span></code> hyperparameters (and encoding scheme) must exactly match those used for network training, or else you will get an error.</p>
+<p>Using the example input file:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a1</span> <span class="n">EADDGLYWQQN</span>
+<span class="n">b2</span> <span class="n">RRLKHEEDSTSTSTSTSTQ</span>
+<span class="n">c3</span> <span class="n">YYYGGAFAFAGRM</span>
+<span class="n">d4</span> <span class="n">GGIL</span>
+<span class="n">e5</span> <span class="n">GREPCCMLLYILILAAAQRDESSSSST</span>
+<span class="n">f6</span> <span class="n">PGDEADLGHRSLVWADD</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">brnn_predict</span> <span class="n">datasets</span><span class="o">/</span><span class="n">seqfile</span><span class="o">.</span><span class="n">txt</span> <span class="n">output_dir</span><span class="o">/</span><span class="n">cv_example</span><span class="o">.</span><span class="n">pt</span> <span class="n">output_dir</span><span class="o">/</span><span class="n">seq_predictions</span><span class="o">.</span><span class="n">txt</span> <span class="o">--</span><span class="n">datatype</span> <span class="n">residues</span> <span class="o">-</span><span class="n">nc</span> <span class="mi">1</span> <span class="o">-</span><span class="n">nl</span> <span class="mi">1</span> <span class="o">-</span><span class="n">hs</span> <span class="mi">29</span>
+</pre></div>
+</div>
+<p>Running this command produces an output file with predictions:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a1</span> <span class="n">EADDGLYWQQN</span> <span class="o">-</span><span class="mf">1.220267</span> <span class="o">-</span><span class="mf">1.7227852</span> <span class="o">-</span><span class="mf">1.6810288</span> <span class="o">-</span><span class="mf">2.4043236</span> <span class="o">-</span><span class="mf">0.09417024</span> <span class="mf">0.64092124</span> <span class="mf">0.5456871</span> <span class="o">-</span><span class="mf">1.8928833</span> <span class="o">-</span><span class="mf">2.7887173</span> <span class="o">-</span><span class="mf">3.6044078</span> <span class="o">-</span><span class="mf">2.4574862</span>
+<span class="n">b2</span> <span class="n">RRLKHEEDSTSTSTSTSTQ</span> <span class="o">-</span><span class="mf">3.7224112</span> <span class="o">-</span><span class="mf">1.8503121</span> <span class="o">-</span><span class="mf">1.5983793</span> <span class="o">-</span><span class="mf">1.2008493</span> <span class="o">-</span><span class="mf">3.5577574</span> <span class="o">-</span><span class="mf">3.4514222</span> <span class="o">-</span><span class="mf">3.5511665</span> <span class="o">-</span><span class="mf">2.6457114</span> <span class="o">-</span><span class="mf">1.7057183</span> <span class="o">-</span><span class="mf">0.78130686</span> <span class="o">-</span><span class="mf">0.7216715</span> <span class="o">-</span><span class="mf">0.7898313</span> <span class="o">-</span><span class="mf">0.70238614</span> <span class="o">-</span><span class="mf">0.7789676</span> <span class="o">-</span><span class="mf">0.7124919</span> <span class="o">-</span><span class="mf">0.7318907</span> <span class="o">-</span><span class="mf">0.7426094</span> <span class="o">-</span><span class="mf">1.5785892</span> <span class="o">-</span><span class="mf">1.572853</span>
+<span class="n">c3</span> <span class="n">YYYGGAFAFAGRM</span> <span class="o">-</span><span class="mf">0.9441874</span> <span class="o">-</span><span class="mf">1.3341192</span> <span class="o">-</span><span class="mf">0.9653273</span> <span class="o">-</span><span class="mf">0.69102514</span> <span class="mf">0.32323557</span> <span class="mf">1.4534209</span> <span class="mf">2.1537614</span> <span class="mf">2.429162</span> <span class="mf">2.2840738</span> <span class="mf">1.4165663</span> <span class="o">-</span><span class="mf">0.881636</span> <span class="o">-</span><span class="mf">1.2768524</span> <span class="o">-</span><span class="mf">0.95433706</span>
+<span class="n">d4</span> <span class="n">GGIL</span> <span class="o">-</span><span class="mf">0.5195379</span> <span class="mf">1.1197864</span> <span class="mf">2.240749</span> <span class="mf">2.7807207</span>
+<span class="n">e5</span> <span class="n">GREPCCMLLYILILAAAQRDESSSSST</span> <span class="o">-</span><span class="mf">2.0686545</span> <span class="o">-</span><span class="mf">2.7998338</span> <span class="o">-</span><span class="mf">3.2005563</span> <span class="o">-</span><span class="mf">0.89753973</span> <span class="mf">1.1320789</span> <span class="mf">2.3304148</span> <span class="mf">2.7493396</span> <span class="mf">3.2426906</span> <span class="mf">2.1906257</span> <span class="mf">2.5232615</span> <span class="mf">2.4606586</span> <span class="mf">4.522563</span> <span class="mf">4.0591545</span> <span class="mf">3.4521952</span> <span class="mf">2.415197</span> <span class="mf">1.8450507</span> <span class="mf">0.0069223046</span> <span class="o">-</span><span class="mf">2.052992</span> <span class="o">-</span><span class="mf">3.8073626</span> <span class="o">-</span><span class="mf">3.8168678</span> <span class="o">-</span><span class="mf">2.6170073</span> <span class="o">-</span><span class="mf">1.7135364</span> <span class="o">-</span><span class="mf">0.8026675</span> <span class="o">-</span><span class="mf">0.7848917</span> <span class="o">-</span><span class="mf">0.76005983</span> <span class="o">-</span><span class="mf">0.73561</span> <span class="o">-</span><span class="mf">0.6911867</span>
+<span class="n">f6</span> <span class="n">PGDEADLGHRSLVWADD</span> <span class="o">-</span><span class="mf">1.0060852</span> <span class="o">-</span><span class="mf">1.9269344</span> <span class="o">-</span><span class="mf">2.5225387</span> <span class="o">-</span><span class="mf">1.6895776</span> <span class="o">-</span><span class="mf">1.7939533</span> <span class="mf">0.6811078</span> <span class="mf">0.026133358</span> <span class="o">-</span><span class="mf">0.08126199</span> <span class="o">-</span><span class="mf">2.7815032</span> <span class="o">-</span><span class="mf">2.8138366</span> <span class="o">-</span><span class="mf">0.3407705</span> <span class="mf">2.483284</span> <span class="mf">2.4456654</span> <span class="mf">1.9606701</span> <span class="o">-</span><span class="mf">0.705072</span> <span class="o">-</span><span class="mf">1.9476694</span> <span class="o">-</span><span class="mf">2.6707811</span>
+</pre></div>
 </div>
 </div>
 </div>

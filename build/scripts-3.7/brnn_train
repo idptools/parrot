@@ -26,6 +26,7 @@ from prot_brnn import process_input_data as pid
 from prot_brnn import brnn_architecture
 from prot_brnn import train_network
 from prot_brnn import brnn_plot
+from prot_brnn import encode_sequence
 
 # Parse the command line arguments
 parser = argparse.ArgumentParser(description='Train and test a bi-directional RNN using entire sequence.')
@@ -50,8 +51,9 @@ parser.add_argument('-e', default=30, type=int, metavar='num_epochs',
 parser.add_argument('--setFractions', nargs=3, default=[0.7, 0.15, 0.15], type=float, 
 			metavar=('train', 'val', 'test'),
 			help='Proportion of dataset that should be divided into training, validation, and test sets')
+parser.add_argument('--encode', default='onehot', type=str, metavar='encoding_scheme',
+					help="'onehot' (default), 'biophysics', or specify a path to a user-created scheme")
 parser.add_argument('--excludeSeqID', action='store_true')
-parser.add_argument('--encodeBiophysics', action='store_true')
 parser.add_argument('--forceCPU', action='store_true')
 parser.add_argument('--verbose', '-v', action='count', default=0)
 
@@ -69,18 +71,11 @@ dtype = args.datatype
 num_classes = args.nc
 split_file = args.split
 stop_cond = args.stop
+encode = args.encode
 verbosity = args.verbose
 forceCPU = args.forceCPU
 setFractions = args.setFractions
 excludeSeqID = args.excludeSeqID
-encodeBiophysics = args.encodeBiophysics
-
-if encodeBiophysics:
-	encoding_scheme = 'biophysics'
-	input_size = 4
-else:
-	encoding_scheme = 'onehot'
-	input_size = 20
 
 # Device configuration
 if forceCPU:
@@ -113,6 +108,21 @@ if split_file != '':
 else:
 	split_file=None
 
+# Set encoding scheme and/or validate user scheme
+if encode == 'onehot':
+	encoding_scheme = 'onehot'
+	input_size = 20
+	encoder = None
+elif encode == 'biophysics':
+	encoding_scheme = 'biophysics'
+	input_size = 9
+	encoder = None
+else:
+	encoding_scheme = 'user'
+	encode_file = encode
+	encoder = encode_sequence.UserEncoder(encode_file)
+	input_size = len(encoder)
+	
 # Initialize network as classifier or regressor
 if num_classes > 1:
 	problem_type = 'classification'
@@ -188,8 +198,8 @@ if sum(setFractions) != 1.0:
 # Split data
 train, val, test = pid.split_data(data_file, datatype=dtype, problem_type=problem_type, 
 								excludeSeqID=excludeSeqID, split_file=split_file, 
-								encoding_scheme=encoding_scheme, percent_val=setFractions[1],
-								percent_test=setFractions[2])
+								encoding_scheme=encoding_scheme, encoder=encoder, 
+								percent_val=setFractions[1], percent_test=setFractions[2])
 
 # Add data to dataloaders
 train_loader = torch.utils.data.DataLoader(dataset=train,

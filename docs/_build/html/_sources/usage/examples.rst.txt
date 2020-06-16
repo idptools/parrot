@@ -115,13 +115,68 @@ As in the other regression task, a residue regression task will produce a scatte
 
 **Other flags:**
 
-TODO:
+``--stop``:
+This flag determines the stop condition for network training. Currently, there are two options implemented: either 'iter' or 'auto'. In all of the previous examples we used the default behavior, 'iter', which means that the number we specify for the ``-e`` flag will be the number of iterations that we train the network. Alternatively, using 'auto' means that training will stop automatically once performance on the validation set has plateaued for ``-e`` epochs. Thus, with 'auto' it is recommended to use a smaller number of epochs (5-15) for ``-e`` so training does not extend for a significantly long period of time.
 
--Auto stop condition
--Set fractions
--Manual split file
--Exclude sequence IDs
--Encode biophysics
+.. code-block::
+
+	brnn_train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -nc 1 -nl 2 -hs 5 -lr 0.001 -e 10 -b 32 -vv --stop auto
+
+.. code-block::
+
+	Epoch 0	Loss 0.1779
+	Epoch 1	Loss 0.1752
+	Epoch 2	Loss 0.1727
+	...
+	Epoch 98	Loss 0.0456
+	Epoch 99	Loss 0.0456
+	Epoch 100	Loss 0.0456
+	Epoch 101	Loss 0.0456
+	Epoch 102	Loss 0.0456
+	Epoch 103	Loss 0.0456
+	Epoch 104	Loss 0.0456
+	Epoch 105	Loss 0.0456
+	Epoch 106	Loss 0.0456
+	Epoch 107	Loss 0.0456
+	Epoch 108	Loss 0.0456
+	Epoch 109	Loss 0.0456
+	Epoch 110	Loss 0.0455
+	Epoch 111	Loss 0.0455
+	Epoch 112	Loss 0.0455
+
+Training stops here because performance hasd stopped improving. Worth mentioning: in some cases such as this dataset, 'auto' can actually get stuck in a local minimum well before the network is fully trained. Be mindful of this when using 'auto' stop condition.
+
+``--setFractions``:
+This flag allows the user to set the proportions of data that will be a part of the training set, validation set, and test set. By default, the split is 70:15:15. This flag takes three input arguments, between 0 and 1, that must sum to 1.
+
+.. code-block::
+
+	brnn_train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -nc 1 -nl 2 -hs 5 -lr 0.001 -e 200 -b 32 -v --setFractions 0.5 0.4 0.1
+
+Notice that the output graph from this command will have fewer datapoints because of the reduced test set. Most likely, the accuracy will be a little worse then the default proportions because the training set is also smaller.
+
+``--split``:
+This flag allows the user even greater control over the training set, validation set, and test set split of their input data. This flag requires an argument that is a path to a `split_file`, which specifically allocates sequences in `datafile` to the different datasets. An example `split_file` is provided in the /data folder for reference.
+
+.. code-block::
+
+	brnn_train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -nc 1 -nl 2 -hs 5 -lr 0.001 -e 200 -b 32 -v --split datasets/split_file.tsv 
+
+``--excludeSeqID``:
+Include this flag if your `datafile` is formatted without sequence IDs:
+
+.. code-block::
+
+	EHCWTYIFQMYRIDQTQRVKRGEKPIIYLEPMAR 3.8235294117647056
+	SDAWVMKFLWDKCGDHFIQYQKPANRWEWVD 3.870967741935484
+	IYPEQSPDNAWAW 3.076923076923077
+	.
+	.
+	.
+
+.. code-block::
+
+	brnn_train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -nc 1 -nl 2 -hs 5 -lr 0.001 -e 200 -b 32 -v --excludeSeqID
 
 brnn_optimize
 -------------
@@ -132,7 +187,7 @@ Nonetheless, usage for ``brnn_optimize`` is remarkably similar to ``brnn_train``
 
 .. code-block::
 
-	brnn_optimize prot-brnn/prot_brnn/data/res_regress_dataset.tsv saved_networks/cv_example.pt --datatype residues -nc 1 -e 200 -b 32 -vv
+	brnn_optimize datasets/res_regress_dataset.tsv output_dir/cv_example.pt --datatype residues -nc 1 -e 200 -b 32 -vv
 
 Notice how we do not need to specify number of layers, hidden vector size, or learning rate as these are the parameters we are optimizing. Perhaps the most important consideration is the number of epochs. Running the optimization procedure with a large number of epochs is more likely to identify the best performing hyperparameters, however more epochs also means significantly longer run time. It is recommended to play around with your data using ``brnn_train`` with a few different parameters and visualizing 'train_test.png'. Ideally, you should set the number of epochs to be around the point where validation accuracy tends to plateau during training.
 
@@ -201,11 +256,32 @@ Lastly, a network is trained on all the data using the optimal hyperparameters. 
 brnn_predict
 ------------
 
-Use the trained network from optimize and predict on an example list of sequences (put in /data).
+Use the trained network from optimize and predict on an list of sequences (example provided in /data folder). In this case we will make residue regression prediction using the network trained from ``brnn_optimize`` above. The most important thing to keep in mind when using ``brnn_predict`` is that your ``-nl`` and ``-hs`` hyperparameters (and encoding scheme) must exactly match those used for network training, or else you will get an error.
 
-Show input, command (hyperparams MUST be identical), output.
+Using the example input file:
+
+.. code-block::
+
+	a1 EADDGLYWQQN
+	b2 RRLKHEEDSTSTSTSTSTQ
+	c3 YYYGGAFAFAGRM
+	d4 GGIL
+	e5 GREPCCMLLYILILAAAQRDESSSSST
+	f6 PGDEADLGHRSLVWADD
+
+.. code-block::
+
+	brnn_predict datasets/seqfile.txt output_dir/cv_example.pt output_dir/seq_predictions.txt --datatype residues -nc 1 -nl 1 -hs 29
+
+Running this command produces an output file with predictions:
+
+.. code-block::
+
+	a1 EADDGLYWQQN -1.220267 -1.7227852 -1.6810288 -2.4043236 -0.09417024 0.64092124 0.5456871 -1.8928833 -2.7887173 -3.6044078 -2.4574862
+	b2 RRLKHEEDSTSTSTSTSTQ -3.7224112 -1.8503121 -1.5983793 -1.2008493 -3.5577574 -3.4514222 -3.5511665 -2.6457114 -1.7057183 -0.78130686 -0.7216715 -0.7898313 -0.70238614 -0.7789676 -0.7124919 -0.7318907 -0.7426094 -1.5785892 -1.572853
+	c3 YYYGGAFAFAGRM -0.9441874 -1.3341192 -0.9653273 -0.69102514 0.32323557 1.4534209 2.1537614 2.429162 2.2840738 1.4165663 -0.881636 -1.2768524 -0.95433706
+	d4 GGIL -0.5195379 1.1197864 2.240749 2.7807207
+	e5 GREPCCMLLYILILAAAQRDESSSSST -2.0686545 -2.7998338 -3.2005563 -0.89753973 1.1320789 2.3304148 2.7493396 3.2426906 2.1906257 2.5232615 2.4606586 4.522563 4.0591545 3.4521952 2.415197 1.8450507 0.0069223046 -2.052992 -3.8073626 -3.8168678 -2.6170073 -1.7135364 -0.8026675 -0.7848917 -0.76005983 -0.73561 -0.6911867
+	f6 PGDEADLGHRSLVWADD -1.0060852 -1.9269344 -2.5225387 -1.6895776 -1.7939533 0.6811078 0.026133358 -0.08126199 -2.7815032 -2.8138366 -0.3407705 2.483284 2.4456654 1.9606701 -0.705072 -1.9476694 -2.6707811
 
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:

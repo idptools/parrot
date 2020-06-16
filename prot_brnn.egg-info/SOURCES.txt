@@ -16,6 +16,7 @@ prot_brnn.egg-info/PKG-INFO
 prot_brnn.egg-info/SOURCES.txt
 prot_brnn.egg-info/dependency_links.txt
 prot_brnn.egg-info/top_level.txt
+prot_brnn/data/.DS_Store
 prot_brnn/data/README.md
 prot_brnn/data/res_class_dataset.tsv
 prot_brnn/data/res_regress_dataset.tsv

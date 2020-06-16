@@ -22,6 +22,7 @@ import argparse
 from prot_brnn import brnn_architecture
 from prot_brnn import process_input_data as pid
 from prot_brnn import train_network
+from prot_brnn import encode_sequence
 import os
 import sys
 
@@ -38,6 +39,8 @@ parser.add_argument('-hs', default=5, type=int, metavar='hidden_size',
 						help='hidden vector size (def=5)')
 parser.add_argument('-nl', default=1, type=int, metavar='num_layers', 
 						help='number of layers per direction (def=1)')
+parser.add_argument('--encode', default='onehot', type=str, metavar='encoding_scheme',
+					help="'onehot' (default), 'biophysics', or specify a path to a user-created scheme")
 parser.add_argument('--excludeSeqID', action='store_true')
 parser.add_argument('--encodeBiophysics', action='store_true')
 
@@ -53,15 +56,8 @@ dtype = args.datatype
 num_classes = args.nc
 
 # Other flags
+encode = args.encode
 excludeSeqID = args.excludeSeqID
-encodeBiophysics = args.encodeBiophysics
-
-if encodeBiophysics:
-	encoding_scheme = 'biophysics'
-	input_size = 4
-else:
-	encoding_scheme = 'onehot'
-	input_size = 20
 
 ###############################################################################
 ########################      Validate arguments:      ########################
@@ -83,6 +79,21 @@ output_filename = output_file.split('/')[-1]
 if not os.path.exists(output_file[:-len(output_filename)]):
 	print('Error: Output network directory does not exist.')
 	sys.exit()
+
+# Set encoding scheme and/or validate user scheme
+if encode == 'onehot':
+	encoding_scheme = 'onehot'
+	input_size = 20
+	encoder = None
+elif encode == 'biophysics':
+	encoding_scheme = 'biophysics'
+	input_size = 9
+	encoder = None
+else:
+	encoding_scheme = 'user'
+	encode_file = encode
+	encoder = encode_sequence.UserEncoder(encode_file)
+	input_size = len(encoder)
 
 # Initialize network as classifier or regressor
 if num_classes > 1:
@@ -135,7 +146,8 @@ else:
 		sequences.append(line[1])
 		seq_id_dict[line[1]] = line[0]
 
-pred_dict = train_network.test_unlabeled_data(brnn_network, sequences, device, encoding_scheme=encoding_scheme)
+pred_dict = train_network.test_unlabeled_data(brnn_network, sequences, device, 
+							encoding_scheme=encoding_scheme, encoder=encoder)
 
 if problem_type == 'classification':
 	if dtype == 'sequence':

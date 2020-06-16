@@ -102,7 +102,8 @@ class SequenceDataset(Dataset):
 		produce unintended consequences.
 	"""
 
-	def __init__(self, data, subset=np.array([]), encoding_scheme='onehot'):
+	def __init__(self, data, subset=np.array([]), encoding_scheme='onehot', 
+															encoder=None):
 		"""
 		Parameters
 		----------
@@ -117,9 +118,13 @@ class SequenceDataset(Dataset):
 			Description of how an amino acid sequence should be encoded as a numeric 
 			vector. Providing a string other than 'onehot' or 'biophysics' will 
 			produce unintended consequences (default is 'onehot').
+		encoder : UserEncoder object, optional
+			TODO: write me
 		"""
 
 		self.encoding_scheme = encoding_scheme
+		self.encoder = encoder
+
 		if len(subset) == 0:
 			self.data = data
 		else:
@@ -154,12 +159,15 @@ class SequenceDataset(Dataset):
 			sequence_vector = encode_sequence.one_hot(self.data[idx][1])
 		elif self.encoding_scheme == 'biophysics':
 			sequence_vector = encode_sequence.biophysics(self.data[idx][1])
+		elif self.encoding_scheme == 'user':
+			sequence_vector = self.encoder.encode(self.data[idx][1])
 
 		value = self.data[idx][2]
 		sample = (sequence_vector, value)
+
 		return sample
 
-# Collate sequence samples into a batch
+
 def seq_class_collate(batch):
 	"""Collates sequences and their values into a batch
 
@@ -188,7 +196,7 @@ def seq_class_collate(batch):
 	for i,j in enumerate(orig_seq_vectors):
 		padded_seq_vectors[i][0:len(j)] = j
 
-	padded_seq_vectors = torch.IntTensor(padded_seq_vectors)
+	padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)  #CHANGEME
 	targets = torch.LongTensor(orig_targets)
 
 	return (padded_seq_vectors, targets)
@@ -222,13 +230,11 @@ def seq_regress_collate(batch):
 	for i,j in enumerate(orig_seq_vectors):
 		padded_seq_vectors[i][0:len(j)] = j
 
-	padded_seq_vectors = torch.IntTensor(padded_seq_vectors)
+	padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)
 	targets = torch.FloatTensor(orig_targets)
 
 	return (padded_seq_vectors, targets)
 
-# TODO: keep an eye on class-0 overprediction -- in order to zero-pad variable
-# length sequences, empty "pad" residues must be assigned a class (here '0')
 def res_class_collate(batch):
 	"""Collates sequences and their values into a batch
 
@@ -263,7 +269,7 @@ def res_class_collate(batch):
 	for i,j in enumerate(orig_targets):
 		padded_targets[i][0:len(j)] = j
 
-	padded_seq_vectors = torch.IntTensor(padded_seq_vectors)
+	padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)
 	padded_targets = torch.LongTensor(padded_targets)
 	return (padded_seq_vectors, padded_targets)
 
@@ -301,8 +307,9 @@ def res_regress_collate(batch):
 	for i,j in enumerate(orig_targets):
 		padded_targets[i][0:len(j)] = j
 
-	padded_seq_vectors = torch.IntTensor(padded_seq_vectors)
-	padded_targets = torch.FloatTensor(padded_targets).view((len(padded_targets), len(padded_targets[0]), 1))
+	padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)
+	padded_targets = torch.FloatTensor(padded_targets).view(
+			(len(padded_targets), len(padded_targets[0]), 1))
 
 	return (padded_seq_vectors, padded_targets)
 
@@ -360,7 +367,8 @@ def read_split_file(split_file):
 	return training_samples, val_samples, test_samples
 
 def split_data(data_file, datatype, problem_type, excludeSeqID=False, 
-			split_file=None, encoding_scheme='onehot', percent_val=0.15, percent_test=0.15):
+			split_file=None, encoding_scheme='onehot', encoder=None,
+			percent_val=0.15, percent_test=0.15):
 	"""Divide a datafile into training, validation, and test datasets
 
 	Takes in a datafile and specification of the data format and the machine
@@ -396,6 +404,9 @@ def split_data(data_file, datatype, problem_type, excludeSeqID=False,
 	encoding_scheme : str, optional
 		The method to be used for encoding protein sequences as numeric vectors.
 		Currently 'onehot' and 'biophysics' are implemented (default is 'onehot').
+	encoder : UserEncoder object, optional
+		TODO: write me
+
 	percent_val : float, optional
 		If `split_file` is not provided, the fraction of the data that should be
 		randomly assigned to the validation set. Should be in the range [0-1]
@@ -431,23 +442,29 @@ def split_data(data_file, datatype, problem_type, excludeSeqID=False,
 		val_samples, test_samples = vector_split(val_test_samples, val_test_fraction)
 
 		# Generate datasets using these random partitions
-		train_set = SequenceDataset(data=data, subset=training_samples, encoding_scheme=encoding_scheme)
-		val_set = SequenceDataset(data=data, subset=val_samples, encoding_scheme=encoding_scheme)
-		test_set = SequenceDataset(data=data, subset=test_samples, encoding_scheme=encoding_scheme)
+		train_set = SequenceDataset(data=data, subset=training_samples,
+						encoding_scheme=encoding_scheme, encoder=encoder)
+		val_set = SequenceDataset(data=data, subset=val_samples,
+						encoding_scheme=encoding_scheme, encoder=encoder)
+		test_set = SequenceDataset(data=data, subset=test_samples,
+						encoding_scheme=encoding_scheme, encoder=encoder)
 
 	else:
 		training_samples, val_samples, test_samples = read_split_file(split_file)
 
 		# Generate datasets using the provided partitions
-		train_set = SequenceDataset(data=data, subset=training_samples, encoding_scheme=encoding_scheme)
-		val_set = SequenceDataset(data=data, subset=val_samples, encoding_scheme=encoding_scheme)
-		test_set = SequenceDataset(data=data, subset=test_samples, encoding_scheme=encoding_scheme)
+		train_set = SequenceDataset(data=data, subset=training_samples,
+						encoding_scheme=encoding_scheme, encoder=encoder)
+		val_set = SequenceDataset(data=data, subset=val_samples,
+						encoding_scheme=encoding_scheme, encoder=encoder)
+		test_set = SequenceDataset(data=data, subset=test_samples,
+						encoding_scheme=encoding_scheme, encoder=encoder)
 
 	return train_set, val_set, test_set
 
 def split_data_cv(data_file, datatype, problem_type, excludeSeqID=False, 
-					split_file=None, encoding_scheme='onehot', percent_val=0.15, 
-					percent_test=0.15, n_folds=5):
+					split_file=None, encoding_scheme='onehot', encoder=None,
+					percent_val=0.15, percent_test=0.15, n_folds=5):
 	"""Divide a datafile into training, val, test and 5 cross-val datasets.
 
 	Takes in a datafile and specification of the data format and the machine
@@ -484,6 +501,9 @@ def split_data_cv(data_file, datatype, problem_type, excludeSeqID=False,
 	encoding_scheme : str, optional
 		The method to be used for encoding protein sequences as numeric vectors.
 		Currently 'onehot' and 'biophysics' are implemented (default is 'onehot').
+	encoder : UserEncoder object, optional
+		TODO: write me
+
 	percent_val : float, optional
 		If `split_file` is not provided, the fraction of the data that should be
 		randomly assigned to the validation set. Should be in the range [0-1]
@@ -525,18 +545,24 @@ def split_data_cv(data_file, datatype, problem_type, excludeSeqID=False,
 		val_samples, test_samples = vector_split(val_test_samples, val_test_fraction)
 
 		# Generate datasets using these random partitions
-		train_set = SequenceDataset(data=data, subset=training_samples, encoding_scheme=encoding_scheme)
-		val_set = SequenceDataset(data=data, subset=val_samples, encoding_scheme=encoding_scheme)
-		test_set = SequenceDataset(data=data, subset=test_samples, encoding_scheme=encoding_scheme)
+		train_set = SequenceDataset(data=data, subset=training_samples, 
+						encoding_scheme=encoding_scheme, encoder=encoder)
+		val_set = SequenceDataset(data=data, subset=val_samples,
+						encoding_scheme=encoding_scheme, encoder=encoder)
+		test_set = SequenceDataset(data=data, subset=test_samples,
+						encoding_scheme=encoding_scheme, encoder=encoder)
 
 	# If provided, split datasets according to split_file
 	else:
 		training_samples, val_samples, test_samples = read_split_file(split_file)
 
 		# Generate datasets using the provided partitions
-		train_set = SequenceDataset(data=data, subset=training_samples, encoding_scheme=encoding_scheme)
-		val_set = SequenceDataset(data=data, subset=val_samples, encoding_scheme=encoding_scheme)
-		test_set = SequenceDataset(data=data, subset=test_samples, encoding_scheme=encoding_scheme)
+		train_set = SequenceDataset(data=data, subset=training_samples,
+						encoding_scheme=encoding_scheme, encoder=encoder)
+		val_set = SequenceDataset(data=data, subset=val_samples,
+						encoding_scheme=encoding_scheme, encoder=encoder)
+		test_set = SequenceDataset(data=data, subset=test_samples,
+						encoding_scheme=encoding_scheme, encoder=encoder)
 
 	# Second step: combine train and val samples, and split evenly into n_folds
 	cv_samples = np.append(training_samples, val_samples)
@@ -556,7 +582,10 @@ def split_data_cv(data_file, datatype, problem_type, excludeSeqID=False,
 		cv_train.sort()
 		cv_test.sort()
 
-		cv_sets.append( (SequenceDataset(data=data, subset=cv_train, encoding_scheme=encoding_scheme), 
-						 SequenceDataset(data=data, subset=cv_test, encoding_scheme=encoding_scheme)) )
+		# Tuple of cross val train and test sets
+		cv_sets.append( (SequenceDataset(data=data, subset=cv_train,
+							encoding_scheme=encoding_scheme, encoder=encoder), 
+						 SequenceDataset(data=data, subset=cv_test,
+							encoding_scheme=encoding_scheme, encoder=encoder)) )
 
 	return cv_sets, train_set, val_set, test_set

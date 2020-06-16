@@ -85,11 +85,10 @@
 <li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a></li>
 <li class="toctree-l1"><a class="reference internal" href="brnn_train.html">brnn_train</a></li>
 <li class="toctree-l1"><a class="reference internal" href="brnn_predict.html">brnn_predict</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">brnn_optimize</a><ul class="simple">
-</ul>
-</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">brnn_optimize</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api.html">Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ml_faqs.html">Machine Learning FAQs:</a></li>
 </ul>
 
             
@@ -175,18 +174,17 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">--help</span></code> / <code class="docutils literal notranslate"><span class="pre">-h</span></code> : Display a help message.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">-b</span></code> : Training batch size (default is 32). Must be a positive integer, and ideally should be in the range of 50-500. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">-e</span></code> : Number of epochs to train for during each iteration of optimization on each data fold (default is 200).</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">--split</span></code> : Path to split_file for manually dividing dataset into training, validation and test sets.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--split</span></code> : Path to split_file for manually dividing dataset into training, validation and test sets. The file should contain three lines, corresponding to training, validation and test sets respectively. Each line should have integers separated by whitespace, with the integers specify which sequences/lines in the <cite>datafile</cite> (0-indexed) will belong to which dataset. The cross-validation folds will be divided from the training and validation data.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--setFractions</span></code> : Include this flag to manually set the proportions of the data belonging to the training, validation and test sets. This option must be followed by three floats (representing train, validation, and test) between 0 and 1 that cumulatively sum to 1.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--excludeSeqID</span></code> : Include this flag if the <cite>data_file</cite> is formatted such that it does not have sequence IDs as the first column in each row.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--encodeBiophysics</span></code> : Include this flag if you wish to represent each amino acid as a length ## vector representing biophysical properties, rather than a length 20 one-hot vector.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--forceCPU</span></code> : Include this flag to force network training on the CPU, even if a GPU is available. Use if your machine has a GPU, but the GPU has insufficient memory.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--verbose</span></code> / <code class="docutils literal notranslate"><span class="pre">-v</span></code> : The level of information that should be printed to console during training. There will be no output if this flag is not included, and maximum output if this flag is included twice or more.</p></li>
 </ul>
 </div></blockquote>
 <p><strong>Output:</strong></p>
 <p><code class="docutils literal notranslate"><span class="pre">brnn_optimize</span></code> will produce similar output as <code class="docutils literal notranslate"><span class="pre">brnn_train</span></code>. Firstly, the saved network weights from the training process will be located at the path provided by <cite>output_network</cite>. Additionally, there will be two PNG images saved to this same directory. The first, called ‘train_test.png’ displays the network’s performance on the training and validation sets over the course of training. The second image describes the network performance on the held out test set, and will vary depending on the data format and machine learning task. If training a network for a classification task, the image will be a confusion matrix. If training for a regression task, the image will be a scatterplot comparing the predicted and true values of the test set sequences.</p>
 <p>Output text detailing network performance across training can be printed to console if the <code class="docutils literal notranslate"><span class="pre">--verbose</span></code> flag is provided.</p>
-<div class="toctree-wrapper compound">
-</div>
 </div>
 
 

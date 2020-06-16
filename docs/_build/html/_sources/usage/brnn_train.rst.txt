@@ -25,10 +25,11 @@ Where `data_file` specifies the path to the whitespace-separated datafile and `o
 	*  ``-b`` : Training batch size (default is 32). Must be a positive integer, and ideally should be in the range of 50-500. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance.
 	*  ``-e`` : Number of training epochs (default is 30). Function varies depending on ``--stop`` flag.
 	*  ``--stop`` : Stop condition to terminate training. Must be either 'auto' or 'iter' (default is 'iter'). If 'iter', then train for exactly ``-e`` epochs and stop. If 'auto', then train until performance as plateaued for ``-e`` epochs.
-	*  ``--split`` : Path to split_file for manually dividing dataset into training, validation and test sets.
+	*  ``--split`` : Path to split_file for manually dividing dataset into training, validation and test sets. The file should contain three lines, corresponding to training, validation and test sets respectively. Each line should have integers separated by whitespace, with the integers specify which sequences/lines in the `datafile` (0-indexed) will belong to which dataset.
 	*  ``--setFractions`` : Include this flag to manually set the proportions of the data belonging to the training, validation and test sets. This option must be followed by three floats (representing train, validation, and test) between 0 and 1 that cumulatively sum to 1.
 	*  ``--excludeSeqID`` : Include this flag if the `data_file` is formatted such that it does not have sequence IDs as the first column in each row.
 	*  ``--encodeBiophysics`` : Include this flag if you wish to represent each amino acid as a length ## vector representing biophysical properties, rather than a length 20 one-hot vector.
+	*  ``--forceCPU`` : Include this flag to force network training on the CPU, even if a GPU is available. Use if your machine has a GPU, but the GPU has insufficient memory.
 	*  ``--verbose`` / ``-v`` : The level of information that should be printed to console during training. There will be no output if this flag is not included, and maximum output if this flag is included twice or more.
 
 **Output:**
@@ -37,6 +38,4 @@ After running ``brnn_train``, several files will be saved to disk. Firstly, the 
 
 Output text detailing network performance across training can be printed to console if the ``--verbose`` flag is provided.
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+

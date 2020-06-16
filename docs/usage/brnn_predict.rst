@@ -27,7 +27,3 @@ Once prot_brnn is installed, the user can run ``brnn_predict`` from the command 
 **Output:**
 
 ``brnn_predict`` will produce a single text file as output. This file will be formatted similarly to the original datafiles used for network training: each row contains a sequence ID (exluded if ``--excludeSeqID1`` is provided), an amino acid sequence, and the prediction values for that sequence.
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:

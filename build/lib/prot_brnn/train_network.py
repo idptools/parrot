@@ -295,7 +295,7 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 	# TODO: return training samples and predictions as output file?
 	return test_loss / len(test_loader.dataset)
 
-def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot'):
+def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot', encoder=None):
 	"""Test a trained BRNN on unlabeled sequences
 
 	Use a trained network to make predictions on previously-unseen data.
@@ -315,6 +315,8 @@ def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot'):
 	encoding_scheme : str
 		How amino acid sequences are to be encoded as numeric vectors. Currently,
 		'onehot' and 'biophysics' are the implemented options.
+	encoder:
+		TODO: ...
 
 	Returns
 	-------
@@ -324,11 +326,13 @@ def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot'):
 
 	pred_dict = {}
 	for seq in sequences:
-
 		if encoding_scheme == 'onehot':
 			seq_vector = encode_sequence.one_hot(seq)
 		elif encoding_scheme == 'biophysics':
 			seq_vector = encode_sequence.biophysics(seq)
+		elif encoding_scheme == 'user':
+			seq_vector = encoder.encode(seq)
+
 		seq_vector = seq_vector.view(1, len(seq_vector), -1)
 
 		# Forward pass
