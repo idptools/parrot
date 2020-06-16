@@ -1,0 +1,315 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>prot_brnn.encode_sequence &mdash; prot_brnn  documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> prot_brnn
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/brnn_train.html">brnn_train</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/brnn_predict.html">brnn_predict</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/brnn_optimize.html">brnn_optimize</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/ml_faqs.html">Machine Learning FAQs:</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">prot_brnn</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+        
+      <li>prot_brnn.encode_sequence</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for prot_brnn.encode_sequence</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">File containing functions for encoding a string of amino acids into a numeric vector.</span>
+
+<span class="sd">.............................................................................</span>
+<span class="sd">prot_brnn was developed by the Holehouse lab</span>
+<span class="sd">     Original release ---- 2020</span>
+
+<span class="sd">Question/comments/concerns? Raise an issue on github:</span>
+<span class="sd">https://github.com/holehouse-lab/prot-brnn</span>
+
+<span class="sd">Licensed under the MIT license. </span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<span class="c1">############  One-hot encoding  #############</span>
+<span class="n">ONE_HOT</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;A&#39;</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;C&#39;</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;D&#39;</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span> <span class="s1">&#39;E&#39;</span><span class="p">:</span><span class="mi">3</span><span class="p">,</span> <span class="s1">&#39;F&#39;</span><span class="p">:</span><span class="mi">4</span><span class="p">,</span> <span class="s1">&#39;G&#39;</span><span class="p">:</span><span class="mi">5</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">:</span><span class="mi">6</span><span class="p">,</span> <span class="s1">&#39;I&#39;</span><span class="p">:</span><span class="mi">7</span><span class="p">,</span> <span class="s1">&#39;K&#39;</span><span class="p">:</span><span class="mi">8</span><span class="p">,</span> <span class="s1">&#39;L&#39;</span><span class="p">:</span><span class="mi">9</span><span class="p">,</span>
+		   <span class="s1">&#39;M&#39;</span><span class="p">:</span><span class="mi">10</span><span class="p">,</span><span class="s1">&#39;N&#39;</span><span class="p">:</span><span class="mi">11</span><span class="p">,</span><span class="s1">&#39;P&#39;</span><span class="p">:</span><span class="mi">12</span><span class="p">,</span><span class="s1">&#39;Q&#39;</span><span class="p">:</span><span class="mi">13</span><span class="p">,</span><span class="s1">&#39;R&#39;</span><span class="p">:</span><span class="mi">14</span><span class="p">,</span><span class="s1">&#39;S&#39;</span><span class="p">:</span><span class="mi">15</span><span class="p">,</span><span class="s1">&#39;T&#39;</span><span class="p">:</span><span class="mi">16</span><span class="p">,</span><span class="s1">&#39;V&#39;</span><span class="p">:</span><span class="mi">17</span><span class="p">,</span><span class="s1">&#39;W&#39;</span><span class="p">:</span><span class="mi">18</span><span class="p">,</span><span class="s1">&#39;Y&#39;</span><span class="p">:</span><span class="mi">19</span><span class="p">}</span>
+
+<div class="viewcode-block" id="one_hot"><a class="viewcode-back" href="../../api.html#prot_brnn.encode_sequence.one_hot">[docs]</a><span class="k">def</span> <span class="nf">one_hot</span><span class="p">(</span><span class="n">seq</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Convert an amino acid sequence to a PyTorch tensor of one-hot vectors</span>
+
+<span class="sd">	Each amino acid is represented by a length 20 vector with a single 1 and</span>
+<span class="sd">	19 0&#39;s Inputing a sequence with a nono-canonical amino acid letter will</span>
+<span class="sd">	cause the program to exit.</span>
+
+<span class="sd">	E.g. Glutamic acid (E) is encoded: [0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	seq : str</span>
+<span class="sd">		An uppercase sequence of amino acids (single letter code)</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	torch.IntTensor</span>
+<span class="sd">		a PyTorch tensor representing the encoded sequence</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="n">l</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span>
+	<span class="n">m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">l</span><span class="p">,</span> <span class="mi">20</span><span class="p">))</span>
+	<span class="k">try</span><span class="p">:</span>
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">l</span><span class="p">):</span>
+			<span class="n">m</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">ONE_HOT</span><span class="p">[</span><span class="n">seq</span><span class="p">[</span><span class="n">i</span><span class="p">]]]</span> <span class="o">=</span> <span class="mi">1</span>
+	<span class="k">except</span><span class="p">:</span>
+		<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Error: invalid amino acid detected:&#39;</span><span class="p">,</span> <span class="n">seq</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+		<span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">()</span>
+	<span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">m</span><span class="p">)</span></div>
+
+<span class="c1">############  Biophysical scale encoding  #############</span>
+<span class="c1"># TODO: add more</span>
+
+<span class="c1"># Map each amino acid to a vector of biophysical properties (int)</span>
+<span class="c1">## TODO: list the properties here</span>
+<span class="c1"># 0: Hydrophobicity (Kyte-Doolitle * 10)</span>
+<span class="c1"># 1: Charge</span>
+<span class="c1"># 2: pI * 10</span>
+<span class="c1"># 3: Molecular weight (Da)</span>
+
+<span class="c1"># Others potentially?</span>
+<span class="c1"># Solvation surface area</span>
+<span class="c1"># Pi-system (AKA aromatic)</span>
+<span class="c1"># ...</span>
+<span class="n">BIOPHYSICS</span> <span class="o">=</span> <span class="p">{</span>	<span class="s1">&#39;A&#39;</span><span class="p">:[</span><span class="mi">18</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="mi">89</span><span class="p">],</span> 
+				<span class="s1">&#39;C&#39;</span><span class="p">:[</span><span class="mi">25</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">51</span><span class="p">,</span> <span class="mi">121</span><span class="p">],</span> 
+				<span class="s1">&#39;D&#39;</span><span class="p">:[</span><span class="o">-</span><span class="mi">35</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">28</span><span class="p">,</span> <span class="mi">133</span><span class="p">],</span> 
+				<span class="s1">&#39;E&#39;</span><span class="p">:[</span><span class="o">-</span><span class="mi">35</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">147</span><span class="p">],</span> 
+				<span class="s1">&#39;F&#39;</span><span class="p">:[</span><span class="mi">28</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">55</span><span class="p">,</span> <span class="mi">165</span><span class="p">],</span> 
+				<span class="s1">&#39;G&#39;</span><span class="p">:[</span><span class="o">-</span><span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="mi">75</span><span class="p">],</span> 
+				<span class="s1">&#39;H&#39;</span><span class="p">:[</span><span class="o">-</span><span class="mi">32</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">76</span><span class="p">,</span> <span class="mi">155</span><span class="p">],</span> 
+				<span class="s1">&#39;I&#39;</span><span class="p">:[</span><span class="mi">45</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="mi">131</span><span class="p">],</span> 
+				<span class="s1">&#39;K&#39;</span><span class="p">:[</span><span class="o">-</span><span class="mi">39</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">97</span><span class="p">,</span> <span class="mi">146</span><span class="p">],</span> 
+				<span class="s1">&#39;L&#39;</span><span class="p">:[</span><span class="mi">38</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="mi">131</span><span class="p">],</span>
+		   		<span class="s1">&#39;M&#39;</span><span class="p">:[</span><span class="mi">19</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">57</span><span class="p">,</span> <span class="mi">149</span><span class="p">],</span>
+		   		<span class="s1">&#39;N&#39;</span><span class="p">:[</span><span class="o">-</span><span class="mi">35</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">54</span><span class="p">,</span> <span class="mi">132</span><span class="p">],</span>
+		   		<span class="s1">&#39;P&#39;</span><span class="p">:[</span><span class="o">-</span><span class="mi">16</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">63</span><span class="p">,</span> <span class="mi">115</span><span class="p">],</span>
+		   		<span class="s1">&#39;Q&#39;</span><span class="p">:[</span><span class="o">-</span><span class="mi">35</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">57</span><span class="p">,</span> <span class="mi">146</span><span class="p">],</span>
+		   		<span class="s1">&#39;R&#39;</span><span class="p">:[</span><span class="o">-</span><span class="mi">45</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">108</span><span class="p">,</span> <span class="mi">174</span><span class="p">],</span>
+		   		<span class="s1">&#39;S&#39;</span><span class="p">:[</span><span class="o">-</span><span class="mi">8</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">57</span><span class="p">,</span> <span class="mi">105</span><span class="p">],</span>
+		   		<span class="s1">&#39;T&#39;</span><span class="p">:[</span><span class="o">-</span><span class="mi">7</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">56</span><span class="p">,</span> <span class="mi">119</span><span class="p">],</span>
+		   		<span class="s1">&#39;V&#39;</span><span class="p">:[</span><span class="mi">42</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="mi">117</span><span class="p">],</span>
+		   		<span class="s1">&#39;W&#39;</span><span class="p">:[</span><span class="o">-</span><span class="mi">9</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">59</span><span class="p">,</span> <span class="mi">204</span><span class="p">],</span>
+		   		<span class="s1">&#39;Y&#39;</span><span class="p">:[</span><span class="o">-</span><span class="mi">13</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">57</span><span class="p">,</span> <span class="mi">181</span><span class="p">]</span>
+		   		<span class="p">}</span>
+
+<div class="viewcode-block" id="biophysics"><a class="viewcode-back" href="../../api.html#prot_brnn.encode_sequence.biophysics">[docs]</a><span class="k">def</span> <span class="nf">biophysics</span><span class="p">(</span><span class="n">seq</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Convert an amino acid sequence to a PyTorch tensor with biophysical encoding</span>
+
+<span class="sd">	Each amino acid is represented by a length 4 vector with each value representing</span>
+<span class="sd">	a biophysical property. The four encoded biophysical scales are Kyte-Doolittle</span>
+<span class="sd">	hydrophobicity, charge, isoelectric point, and molecular weight. Each value is </span>
+<span class="sd">	scaled so that all are integers. Inputing a sequence with a nono-canonical amino</span>
+<span class="sd">	acid letter will cause the program to exit.</span>
+
+<span class="sd">	E.g. Glutamic acid (E) is encoded: [-35, -1, 32, 147]</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	seq : str</span>
+<span class="sd">		An uppercase sequence of amino acids (single letter code)</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	torch.IntTensor</span>
+<span class="sd">		a PyTorch tensor representing the encoded sequence</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+	<span class="n">l</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span>
+	<span class="n">m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">l</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">BIOPHYSICS</span><span class="p">[</span><span class="s1">&#39;A&#39;</span><span class="p">])))</span>
+	<span class="k">try</span><span class="p">:</span>
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">l</span><span class="p">):</span>
+			<span class="n">m</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">BIOPHYSICS</span><span class="p">[</span><span class="n">seq</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span>
+	<span class="k">except</span><span class="p">:</span>
+		<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Error: invalid amino acid detected:&#39;</span><span class="p">,</span> <span class="n">seq</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+		<span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">()</span>
+	<span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">m</span><span class="p">)</span></div>
+
+<span class="c1">##################################################</span>
+
+<span class="c1"># Add other encoding schemes here</span>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2020, Holehouse Lab. Project structure based on the Computational Molecular Science Python Cookiecutter version 1.3
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

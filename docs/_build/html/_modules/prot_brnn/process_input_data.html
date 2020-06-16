@@ -1,0 +1,756 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>prot_brnn.process_input_data &mdash; prot_brnn  documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> prot_brnn
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/brnn_train.html">brnn_train</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/brnn_predict.html">brnn_predict</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/brnn_optimize.html">brnn_optimize</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/ml_faqs.html">Machine Learning FAQs:</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">prot_brnn</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+        
+      <li>prot_brnn.process_input_data</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for prot_brnn.process_input_data</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">File for processing an input datafile into a PyTorch-compatible format.</span>
+
+<span class="sd">.............................................................................</span>
+<span class="sd">prot_brnn was developed by the Holehouse lab</span>
+<span class="sd">     Original release ---- 2020</span>
+
+<span class="sd">Question/comments/concerns? Raise an issue on github:</span>
+<span class="sd">https://github.com/holehouse-lab/prot-brnn</span>
+
+<span class="sd">Licensed under the MIT license. </span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">torch</span> 
+<span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+<span class="kn">from</span> <span class="nn">torch.utils.data</span> <span class="kn">import</span> <span class="n">Dataset</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">from</span> <span class="nn">prot_brnn</span> <span class="kn">import</span> <span class="n">encode_sequence</span>
+
+<div class="viewcode-block" id="parse_file"><a class="viewcode-back" href="../../api.html#prot_brnn.process_input_data.parse_file">[docs]</a><span class="k">def</span> <span class="nf">parse_file</span><span class="p">(</span><span class="n">tsvfile</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Parse a datafile containing sequences and values.</span>
+
+<span class="sd">	Each line of of the input tsv file contains a sequence of amino acids, a value</span>
+<span class="sd">	(or values) corresponding to that sequence, and an optional sequence ID. This </span>
+<span class="sd">	file will be parsed into a more convenient list of lists. </span>
+
+<span class="sd">	If excludeSeqID is False, then the format of each line in the file should be:</span>
+<span class="sd">	&lt;seqID&gt; &lt;sequence&gt; &lt;value(s)&gt;</span>
+
+<span class="sd">	If excludeSeqID is True, then the format of each line in the file should be:</span>
+<span class="sd">	&lt;sequence&gt; &lt;value(s)&gt;</span>
+
+<span class="sd">	`value(s)` will either be a single number if `datatype` is &#39;sequence&#39; or a</span>
+<span class="sd">	len(sequence) series of whitespace-separated numbers if it is &#39;residues&#39;.</span>
+
+<span class="sd">	If `problem_type` is &#39;regression&#39;, then each value can be any real number. But</span>
+<span class="sd">	if it is &#39;classification&#39; then each value should be an integer in the range</span>
+<span class="sd">	[0-N] where N is the number of classes.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	tsvfile : str</span>
+<span class="sd">		Path to a whitespace-separated datafile</span>
+<span class="sd">	datatype : str</span>
+<span class="sd">		Description of the format of the values in `tsvfile`. Providing a string</span>
+<span class="sd">		other than &#39;sequence&#39; or &#39;residues&#39; will produce unintended behavior.</span>
+<span class="sd">	problem_type : str</span>
+<span class="sd">		Description of the machine-learning task. Providing a string other than</span>
+<span class="sd">		&#39;regression&#39; or &#39;classification&#39; will produce unintended behavior.</span>
+<span class="sd">	excludeSeqID : bool, optional</span>
+<span class="sd">		Boolean indicating whether or not each line in `tsvfile` has a sequence ID</span>
+<span class="sd">		(default is False)</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	list of lists</span>
+<span class="sd">		A list representing the entire `tsvfile`. Each inner list corresponds to a</span>
+<span class="sd">		single line in the file and has the format [seqID, sequence, values].</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">tsvfile</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+		<span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="n">line</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="p">]</span>
+
+		<span class="c1"># Add a dummy seqID if none are provided</span>
+		<span class="k">if</span> <span class="n">excludeSeqID</span><span class="p">:</span>
+			<span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">:</span>
+				<span class="n">line</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+
+		<span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>		<span class="c1"># A value for each residue in a sequence</span>
+			<span class="n">data</span> <span class="o">=</span> <span class="p">[[</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span> <span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float</span><span class="p">)]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">]</span>
+		<span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>	<span class="c1"># A single value per sequence</span>
+			<span class="n">data</span> <span class="o">=</span> <span class="p">[[</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">])]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">]</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Invalid datatype.&#39;</span><span class="p">)</span>
+
+	<span class="k">if</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;classification&#39;</span><span class="p">:</span>
+		<span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
+			<span class="k">for</span> <span class="n">sample</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+				<span class="n">sample</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sample</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+
+		<span class="k">else</span><span class="p">:</span>
+			<span class="k">for</span> <span class="n">sample</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+				<span class="n">sample</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">sample</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+	<span class="k">return</span> <span class="n">data</span></div>
+
+<div class="viewcode-block" id="SequenceDataset"><a class="viewcode-back" href="../../api.html#prot_brnn.process_input_data.SequenceDataset">[docs]</a><span class="k">class</span> <span class="nc">SequenceDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;A PyTorch-compatible dataset containing sequences and values</span>
+
+<span class="sd">	Stores a collection of sequences as tensors along with their corresponding</span>
+<span class="sd">	target values. This class is designed to be provided to PyTorch Dataloaders.</span>
+
+
+<span class="sd">	Attributes</span>
+<span class="sd">	----------</span>
+<span class="sd">	data : list of lists</span>
+<span class="sd">		Each inner list represents a single sequence in the dataset and should</span>
+<span class="sd">		have the format: [seqID, sequence, value(s)]</span>
+<span class="sd">	encoding_scheme : str</span>
+<span class="sd">		Description of how an amino acid sequence should be encoded as a numeric </span>
+<span class="sd">		vector. Providing a string other than &#39;onehot&#39; or &#39;biophysics&#39; will </span>
+<span class="sd">		produce unintended consequences.</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="s1">&#39;onehot&#39;</span><span class="p">):</span>
+		<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">		Parameters</span>
+<span class="sd">		----------</span>
+<span class="sd">		data : list of lists</span>
+<span class="sd">			Each inner list represents a single sequence in the dataset and should</span>
+<span class="sd">			have the format: [seqID, sequence, value(s)]</span>
+<span class="sd">		subset : numpy int array, optional</span>
+<span class="sd">			Array containing the indices of `data` that are to be a part of this</span>
+<span class="sd">			dataset. Providing an empty array causes all of `data` to be integrated</span>
+<span class="sd">			into the dataset (default is empty array).</span>
+<span class="sd">		encoding_scheme : str, optional</span>
+<span class="sd">			Description of how an amino acid sequence should be encoded as a numeric </span>
+<span class="sd">			vector. Providing a string other than &#39;onehot&#39; or &#39;biophysics&#39; will </span>
+<span class="sd">			produce unintended consequences (default is &#39;onehot&#39;).</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="bp">self</span><span class="o">.</span><span class="n">encoding_scheme</span> <span class="o">=</span> <span class="n">encoding_scheme</span>
+		<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">subset</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">all_data</span> <span class="o">=</span> <span class="n">data</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="p">[</span><span class="n">all_data</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">subset</span><span class="p">]</span>
+
+	<span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+		<span class="sd">&quot;&quot;&quot;Get the number of sequences in this dataset.&quot;&quot;&quot;</span>
+
+		<span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+
+	<span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+		<span class="sd">&quot;&quot;&quot;Get the sequence and values of a specified index.</span>
+
+<span class="sd">		Converts a string sequence to an encoded numeric vector.</span>
+
+<span class="sd">		Parameters</span>
+<span class="sd">		----------</span>
+<span class="sd">		idx : int, optional</span>
+<span class="sd">			Index of the desired sequence</span>
+
+<span class="sd">		Returns</span>
+<span class="sd">		-------</span>
+<span class="sd">		tuple</span>
+<span class="sd">			a tuple of a sequence vector and its corresponding values</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">idx</span><span class="p">):</span>
+			<span class="n">idx</span> <span class="o">=</span> <span class="n">idx</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">encoding_scheme</span> <span class="o">==</span> <span class="s1">&#39;onehot&#39;</span><span class="p">:</span>
+			<span class="n">sequence_vector</span> <span class="o">=</span> <span class="n">encode_sequence</span><span class="o">.</span><span class="n">one_hot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">idx</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+		<span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">encoding_scheme</span> <span class="o">==</span> <span class="s1">&#39;biophysics&#39;</span><span class="p">:</span>
+			<span class="n">sequence_vector</span> <span class="o">=</span> <span class="n">encode_sequence</span><span class="o">.</span><span class="n">biophysics</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">idx</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+
+		<span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">idx</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span>
+		<span class="n">sample</span> <span class="o">=</span> <span class="p">(</span><span class="n">sequence_vector</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+		<span class="k">return</span> <span class="n">sample</span></div>
+
+<span class="c1"># Collate sequence samples into a batch</span>
+<div class="viewcode-block" id="seq_class_collate"><a class="viewcode-back" href="../../api.html#prot_brnn.process_input_data.seq_class_collate">[docs]</a><span class="k">def</span> <span class="nf">seq_class_collate</span><span class="p">(</span><span class="n">batch</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Collates sequences and their values into a batch</span>
+
+<span class="sd">	Transforms a collection of tuples of sequence vectors and values into a single</span>
+<span class="sd">	tuple by stacking along a newly-created batch dimension. This function is </span>
+<span class="sd">	specifically designed for classification problems with sequence-mapped data.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	batch : list</span>
+<span class="sd">		A list of tuples of the form (sequence_vector, target_value(s))</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	tuple</span>
+<span class="sd">		a tuple with concatenated sequence_vectors and target_values(s)</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="n">orig_seq_vectors</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">orig_targets</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+
+	<span class="n">longest_seq</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
+
+	<span class="n">padded_seq_vectors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="nb">len</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">),</span> <span class="n">longest_seq</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])])</span>
+
+	<span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">j</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">):</span>
+		<span class="n">padded_seq_vectors</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">:</span><span class="nb">len</span><span class="p">(</span><span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="n">j</span>
+
+	<span class="n">padded_seq_vectors</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">IntTensor</span><span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">)</span>
+	<span class="n">targets</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">LongTensor</span><span class="p">(</span><span class="n">orig_targets</span><span class="p">)</span>
+
+	<span class="k">return</span> <span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">,</span> <span class="n">targets</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="seq_regress_collate"><a class="viewcode-back" href="../../api.html#prot_brnn.process_input_data.seq_regress_collate">[docs]</a><span class="k">def</span> <span class="nf">seq_regress_collate</span><span class="p">(</span><span class="n">batch</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Collates sequences and their values into a batch</span>
+
+<span class="sd">	Transforms a collection of tuples of sequence vectors and values into a single</span>
+<span class="sd">	tuple by stacking along a newly-created batch dimension. This function is </span>
+<span class="sd">	specifically designed for regression problems with sequence-mapped data.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	batch : list</span>
+<span class="sd">		A list of tuples of the form (sequence_vector, target_value(s))</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	tuple</span>
+<span class="sd">		a tuple with concatenated sequence_vectors and target_values(s)</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="n">orig_seq_vectors</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">orig_targets</span> <span class="o">=</span> <span class="p">[[</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span><span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+
+	<span class="n">longest_seq</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
+
+	<span class="n">padded_seq_vectors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="nb">len</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">),</span> <span class="n">longest_seq</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])])</span>
+
+	<span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">j</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">):</span>
+		<span class="n">padded_seq_vectors</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">:</span><span class="nb">len</span><span class="p">(</span><span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="n">j</span>
+
+	<span class="n">padded_seq_vectors</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">IntTensor</span><span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">)</span>
+	<span class="n">targets</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">orig_targets</span><span class="p">)</span>
+
+	<span class="k">return</span> <span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">,</span> <span class="n">targets</span><span class="p">)</span></div>
+
+<span class="c1"># TODO: keep an eye on class-0 overprediction -- in order to zero-pad variable</span>
+<span class="c1"># length sequences, empty &quot;pad&quot; residues must be assigned a class (here &#39;0&#39;)</span>
+<div class="viewcode-block" id="res_class_collate"><a class="viewcode-back" href="../../api.html#prot_brnn.process_input_data.res_class_collate">[docs]</a><span class="k">def</span> <span class="nf">res_class_collate</span><span class="p">(</span><span class="n">batch</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Collates sequences and their values into a batch</span>
+
+<span class="sd">	Transforms a collection of tuples of sequence vectors and values into a single</span>
+<span class="sd">	tuple by stacking along a newly-created batch dimension. This function is </span>
+<span class="sd">	specifically designed for classification problems with residue-mapped data. To</span>
+<span class="sd">	account for sequences with different lengths, all sequence vectors are zero-</span>
+<span class="sd">	padded to the length of the longest sequence in the batch</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	batch : list</span>
+<span class="sd">		A list of tuples of the form (sequence_vector, target_value(s))</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	tuple</span>
+<span class="sd">		a tuple with concatenated sequence_vectors and target_values(s)</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="n">orig_seq_vectors</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">orig_targets</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+
+	<span class="n">longest_seq</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
+
+	<span class="n">padded_seq_vectors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="nb">len</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">),</span> <span class="n">longest_seq</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])])</span>
+	<span class="n">padded_targets</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="nb">len</span><span class="p">(</span><span class="n">orig_targets</span><span class="p">),</span> <span class="n">longest_seq</span><span class="p">])</span>
+
+	<span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">j</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">):</span>
+		<span class="n">padded_seq_vectors</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">:</span><span class="nb">len</span><span class="p">(</span><span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="n">j</span>
+
+	<span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">j</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">orig_targets</span><span class="p">):</span>
+		<span class="n">padded_targets</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">:</span><span class="nb">len</span><span class="p">(</span><span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="n">j</span>
+
+	<span class="n">padded_seq_vectors</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">IntTensor</span><span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">)</span>
+	<span class="n">padded_targets</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">LongTensor</span><span class="p">(</span><span class="n">padded_targets</span><span class="p">)</span>
+	<span class="k">return</span> <span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">,</span> <span class="n">padded_targets</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="res_regress_collate"><a class="viewcode-back" href="../../api.html#prot_brnn.process_input_data.res_regress_collate">[docs]</a><span class="k">def</span> <span class="nf">res_regress_collate</span><span class="p">(</span><span class="n">batch</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Collates sequences and their values into a batch</span>
+
+<span class="sd">	Transforms a collection of tuples of sequence vectors and values into a single</span>
+<span class="sd">	tuple by stacking along a newly-created batch dimension. This function is </span>
+<span class="sd">	specifically designed for regression problems with residue-mapped data. To</span>
+<span class="sd">	account for sequences with different lengths, all sequence vectors are zero-</span>
+<span class="sd">	padded to the length of the longest sequence in the batch</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	batch : list</span>
+<span class="sd">		A list of tuples of the form (sequence_vector, target_value(s))</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	tuple</span>
+<span class="sd">		a tuple with concatenated sequence_vectors and target_values(s)</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="n">orig_seq_vectors</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">orig_targets</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+
+	<span class="n">longest_seq</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
+
+	<span class="n">padded_seq_vectors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="nb">len</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">),</span> <span class="n">longest_seq</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])])</span>
+	<span class="n">padded_targets</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="nb">len</span><span class="p">(</span><span class="n">orig_targets</span><span class="p">),</span> <span class="n">longest_seq</span><span class="p">])</span>
+
+	<span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">j</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">):</span>
+		<span class="n">padded_seq_vectors</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">:</span><span class="nb">len</span><span class="p">(</span><span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="n">j</span>
+
+	<span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">j</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">orig_targets</span><span class="p">):</span>
+		<span class="n">padded_targets</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">:</span><span class="nb">len</span><span class="p">(</span><span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="n">j</span>
+
+	<span class="n">padded_seq_vectors</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">IntTensor</span><span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">)</span>
+	<span class="n">padded_targets</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">padded_targets</span><span class="p">)</span><span class="o">.</span><span class="n">view</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">padded_targets</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">padded_targets</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="mi">1</span><span class="p">))</span>
+
+	<span class="k">return</span> <span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">,</span> <span class="n">padded_targets</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="vector_split"><a class="viewcode-back" href="../../api.html#prot_brnn.process_input_data.vector_split">[docs]</a><span class="k">def</span> <span class="nf">vector_split</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">fraction</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Split a vector randomly by a specified proportion</span>
+
+<span class="sd">	Randomly divide the values of a vector into two, non-overlapping smaller </span>
+<span class="sd">	vectors. The proportions of the two vectors will be `fraction` and </span>
+<span class="sd">	(1 - `fraction`).</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	v : numpy array</span>
+<span class="sd">		The vector to divide</span>
+<span class="sd">	fraction : float</span>
+<span class="sd">		Size proportion for the returned vectors. Should be in the range [0-1].</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	numpy array</span>
+<span class="sd">		a subset of `v` of length `fraction` * len(v) (rounding up)</span>
+<span class="sd">	numpy array</span>
+<span class="sd">		a subset of `v` of length (1-`fraction`) * len(v). </span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="n">segment1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">fraction</span><span class="o">*</span><span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">)),</span> <span class="n">replace</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+	<span class="n">segment1</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+	<span class="n">segment2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">setdiff1d</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">segment1</span><span class="p">,</span> <span class="n">assume_unique</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+	<span class="k">return</span> <span class="n">segment1</span><span class="p">,</span> <span class="n">segment2</span></div>
+
+<div class="viewcode-block" id="read_split_file"><a class="viewcode-back" href="../../api.html#prot_brnn.process_input_data.read_split_file">[docs]</a><span class="k">def</span> <span class="nf">read_split_file</span><span class="p">(</span><span class="n">split_file</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Read in a split_file</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	split_file : str</span>
+<span class="sd">		Path to a whitespace-separated splitfile</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	numpy int array</span>
+<span class="sd">		an array of the indices for the training set samples</span>
+<span class="sd">	numpy int array</span>
+<span class="sd">		an array of the indices for the validation set samples</span>
+<span class="sd">	numpy int array</span>
+<span class="sd">		an array of the indices for the testing set samples</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">split_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+		<span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="n">line</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="p">]</span>
+		<span class="n">training_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span>
+		<span class="n">val_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">[</span><span class="mi">1</span><span class="p">]])</span>
+		<span class="n">test_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">[</span><span class="mi">2</span><span class="p">]])</span>
+	<span class="k">return</span> <span class="n">training_samples</span><span class="p">,</span> <span class="n">val_samples</span><span class="p">,</span> <span class="n">test_samples</span></div>
+
+<div class="viewcode-block" id="split_data"><a class="viewcode-back" href="../../api.html#prot_brnn.process_input_data.split_data">[docs]</a><span class="k">def</span> <span class="nf">split_data</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+			<span class="n">split_file</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="s1">&#39;onehot&#39;</span><span class="p">,</span> <span class="n">percent_val</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">percent_test</span><span class="o">=</span><span class="mf">0.15</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Divide a datafile into training, validation, and test datasets</span>
+
+<span class="sd">	Takes in a datafile and specification of the data format and the machine</span>
+<span class="sd">	learning problem, and returns PyTorch-compatible Dataset objects for</span>
+<span class="sd">	the training, validation and test sets of the data. The user may optionally</span>
+<span class="sd">	specify how the dataset should be split into these subsets, as well as how</span>
+<span class="sd">	protein sequences should be encoded as numeric vectors.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	data_file : str</span>
+<span class="sd">		Path to the datafile containing sequences and corresponding values</span>
+<span class="sd">	datatype : str</span>
+<span class="sd">		Format of the values within `data_file`. Should be &#39;sequence&#39; if the</span>
+<span class="sd">		`data_file` contains a single value per sequence, or &#39;residues&#39; if</span>
+<span class="sd">		it contains a value for each residue per sequence.</span>
+<span class="sd">	problem_type : str</span>
+<span class="sd">		The machine learning task to be addressed. Should be either &#39;regression&#39;</span>
+<span class="sd">		or &#39;classification&#39;.</span>
+<span class="sd">	excludeSeqID : bool, optional</span>
+<span class="sd">		Flag that indicates how `data_file` is formatted. If False (default),</span>
+<span class="sd">		then each line in the file should begin with a column containing a</span>
+<span class="sd">		sequence ID. If True, then the datafile will not have this ID column,</span>
+<span class="sd">		and will begin with the protein sequence.</span>
+<span class="sd">	split_file : str, optional</span>
+<span class="sd">		Path to a file containing information on how to divide the data into</span>
+<span class="sd">		training, validation and test datasets. Default is None, which will</span>
+<span class="sd">		cause the data to be divided randomly, with proportions based on</span>
+<span class="sd">		`percent_val` and `percent_test`. If `split_file` is provided it must</span>
+<span class="sd">		contain 3 lines in the file, corresponding to the training, validation</span>
+<span class="sd">		and test sets. Each line should have whitespace-separated integer indices</span>
+<span class="sd">		which correspond to lines in `data_file`.</span>
+<span class="sd">	encoding_scheme : str, optional</span>
+<span class="sd">		The method to be used for encoding protein sequences as numeric vectors.</span>
+<span class="sd">		Currently &#39;onehot&#39; and &#39;biophysics&#39; are implemented (default is &#39;onehot&#39;).</span>
+<span class="sd">	percent_val : float, optional</span>
+<span class="sd">		If `split_file` is not provided, the fraction of the data that should be</span>
+<span class="sd">		randomly assigned to the validation set. Should be in the range [0-1]</span>
+<span class="sd">		(default is 0.15).</span>
+<span class="sd">	percent_test : float, optional</span>
+<span class="sd">		If `split_file` is not provided, the fraction of the data that should be</span>
+<span class="sd">		randomly assigned to the test set. Should be in the range [0-1] (default</span>
+<span class="sd">		is 0.15). The proportion of the training set will be calculated by the</span>
+<span class="sd">		difference between 1 and the sum of `percent_val` and `percent_train`, so</span>
+<span class="sd">		these should not sum to be greater than 1.</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	SequenceDataset object</span>
+<span class="sd">		a dataset containing the training set sequences and values</span>
+<span class="sd">	SequenceDataset object</span>
+<span class="sd">		a dataset containing the validation set sequences and values</span>
+<span class="sd">	SequenceDataset object</span>
+<span class="sd">		a dataset containing the test set sequences and values</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="n">data</span> <span class="o">=</span> <span class="n">parse_file</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="n">excludeSeqID</span><span class="p">)</span>
+	<span class="n">num_samples</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+	<span class="k">if</span> <span class="n">split_file</span> <span class="o">==</span> <span class="kc">None</span><span class="p">:</span>
+		<span class="n">percent_train</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">percent_val</span> <span class="o">-</span> <span class="n">percent_test</span>
+
+		<span class="n">all_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">num_samples</span><span class="p">)</span>
+		<span class="n">training_samples</span><span class="p">,</span> <span class="n">val_test_samples</span> <span class="o">=</span> <span class="n">vector_split</span><span class="p">(</span><span class="n">all_samples</span><span class="p">,</span> <span class="n">percent_train</span><span class="p">)</span>
+
+		<span class="c1"># Repeat procedure to split val and test sets</span>
+		<span class="n">val_test_fraction</span> <span class="o">=</span> <span class="n">percent_val</span> <span class="o">/</span> <span class="p">(</span><span class="n">percent_val</span> <span class="o">+</span> <span class="n">percent_test</span><span class="p">)</span>
+		<span class="n">val_samples</span><span class="p">,</span> <span class="n">test_samples</span> <span class="o">=</span> <span class="n">vector_split</span><span class="p">(</span><span class="n">val_test_samples</span><span class="p">,</span> <span class="n">val_test_fraction</span><span class="p">)</span>
+
+		<span class="c1"># Generate datasets using these random partitions</span>
+		<span class="n">train_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">training_samples</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">)</span>
+		<span class="n">val_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">val_samples</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">)</span>
+		<span class="n">test_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">test_samples</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">)</span>
+
+	<span class="k">else</span><span class="p">:</span>
+		<span class="n">training_samples</span><span class="p">,</span> <span class="n">val_samples</span><span class="p">,</span> <span class="n">test_samples</span> <span class="o">=</span> <span class="n">read_split_file</span><span class="p">(</span><span class="n">split_file</span><span class="p">)</span>
+
+		<span class="c1"># Generate datasets using the provided partitions</span>
+		<span class="n">train_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">training_samples</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">)</span>
+		<span class="n">val_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">val_samples</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">)</span>
+		<span class="n">test_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">test_samples</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">)</span>
+
+	<span class="k">return</span> <span class="n">train_set</span><span class="p">,</span> <span class="n">val_set</span><span class="p">,</span> <span class="n">test_set</span></div>
+
+<div class="viewcode-block" id="split_data_cv"><a class="viewcode-back" href="../../api.html#prot_brnn.process_input_data.split_data_cv">[docs]</a><span class="k">def</span> <span class="nf">split_data_cv</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+					<span class="n">split_file</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="s1">&#39;onehot&#39;</span><span class="p">,</span> <span class="n">percent_val</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> 
+					<span class="n">percent_test</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">n_folds</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Divide a datafile into training, val, test and 5 cross-val datasets.</span>
+
+<span class="sd">	Takes in a datafile and specification of the data format and the machine</span>
+<span class="sd">	learning problem, and returns PyTorch-compatible Dataset objects for</span>
+<span class="sd">	the training, validation, test and cross-validation sets of the data. The</span>
+<span class="sd">	user may optionally specify how the dataset should be split into these </span>
+<span class="sd">	subsets, as well as how protein sequences should be encoded as numeric </span>
+<span class="sd">	vectors.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	data_file : str</span>
+<span class="sd">		Path to the datafile containing sequences and corresponding values</span>
+<span class="sd">	datatype : str</span>
+<span class="sd">		Format of the values within `data_file`. Should be &#39;sequence&#39; if the</span>
+<span class="sd">		`data_file` contains a single value per sequence, or &#39;residues&#39; if</span>
+<span class="sd">		it contains a value for each residue per sequence.</span>
+<span class="sd">	problem_type : str</span>
+<span class="sd">		The machine learning task to be addressed. Should be either &#39;regression&#39;</span>
+<span class="sd">		or &#39;classification&#39;.</span>
+<span class="sd">	excludeSeqID : bool, optional</span>
+<span class="sd">		Flag that indicates how `data_file` is formatted. If False (default),</span>
+<span class="sd">		then each line in the file should begin with a column containing a</span>
+<span class="sd">		sequence ID. If True, then the datafile will not have this ID column,</span>
+<span class="sd">		and will begin with the protein sequence.</span>
+<span class="sd">	split_file : str, optional</span>
+<span class="sd">		Path to a file containing information on how to divide the data into</span>
+<span class="sd">		training, validation and test datasets. Default is None, which will</span>
+<span class="sd">		cause the data to be divided randomly, with proportions based on</span>
+<span class="sd">		`percent_val` and `percent_test`. If `split_file` is provided it must</span>
+<span class="sd">		contain 3 lines in the file, corresponding to the training, validation</span>
+<span class="sd">		and test sets. Each line should have whitespace-separated integer indices</span>
+<span class="sd">		which correspond to lines in `data_file`.</span>
+<span class="sd">	encoding_scheme : str, optional</span>
+<span class="sd">		The method to be used for encoding protein sequences as numeric vectors.</span>
+<span class="sd">		Currently &#39;onehot&#39; and &#39;biophysics&#39; are implemented (default is &#39;onehot&#39;).</span>
+<span class="sd">	percent_val : float, optional</span>
+<span class="sd">		If `split_file` is not provided, the fraction of the data that should be</span>
+<span class="sd">		randomly assigned to the validation set. Should be in the range [0-1]</span>
+<span class="sd">		(default is 0.15).</span>
+<span class="sd">	percent_test : float, optional</span>
+<span class="sd">		If `split_file` is not provided, the fraction of the data that should be</span>
+<span class="sd">		randomly assigned to the test set. Should be in the range [0-1] (default</span>
+<span class="sd">		is 0.15). The proportion of the training set will be calculated by the</span>
+<span class="sd">		difference between 1 and the sum of `percent_val` and `percent_train`, so</span>
+<span class="sd">		these should not sum to be greater than 1.</span>
+<span class="sd">	n_folds : int, optional</span>
+<span class="sd">		Number of folds for cross-validation (default is 5).</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	list of tuples of SequenceDataset objects</span>
+<span class="sd">		a list of tuples of length `n_folds`. Each tuple contains the training</span>
+<span class="sd">		and validation datasets for one of the cross-val folds.</span>
+<span class="sd">	SequenceDataset object</span>
+<span class="sd">		a dataset containing the training set sequences and values</span>
+<span class="sd">	SequenceDataset object</span>
+<span class="sd">		a dataset containing the validation set sequences and values</span>
+<span class="sd">	SequenceDataset object</span>
+<span class="sd">		a dataset containing the test set sequences and values</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="n">data</span> <span class="o">=</span> <span class="n">parse_file</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="n">excludeSeqID</span><span class="p">)</span>
+	<span class="n">n_samples</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+	<span class="c1"># Initial step: split into training, val, and test sets</span>
+	<span class="k">if</span> <span class="n">split_file</span> <span class="o">==</span> <span class="kc">None</span><span class="p">:</span>
+		<span class="n">percent_train</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">percent_val</span> <span class="o">-</span> <span class="n">percent_test</span>
+
+		<span class="n">all_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">n_samples</span><span class="p">)</span>
+		<span class="n">training_samples</span><span class="p">,</span> <span class="n">val_test_samples</span> <span class="o">=</span> <span class="n">vector_split</span><span class="p">(</span><span class="n">all_samples</span><span class="p">,</span> <span class="n">percent_train</span><span class="p">)</span>
+
+		<span class="c1"># Repeat procedure to split val and test sets</span>
+		<span class="n">val_test_fraction</span> <span class="o">=</span> <span class="n">percent_val</span> <span class="o">/</span> <span class="p">(</span><span class="n">percent_val</span> <span class="o">+</span> <span class="n">percent_test</span><span class="p">)</span>
+		<span class="n">val_samples</span><span class="p">,</span> <span class="n">test_samples</span> <span class="o">=</span> <span class="n">vector_split</span><span class="p">(</span><span class="n">val_test_samples</span><span class="p">,</span> <span class="n">val_test_fraction</span><span class="p">)</span>
+
+		<span class="c1"># Generate datasets using these random partitions</span>
+		<span class="n">train_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">training_samples</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">)</span>
+		<span class="n">val_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">val_samples</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">)</span>
+		<span class="n">test_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">test_samples</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">)</span>
+
+	<span class="c1"># If provided, split datasets according to split_file</span>
+	<span class="k">else</span><span class="p">:</span>
+		<span class="n">training_samples</span><span class="p">,</span> <span class="n">val_samples</span><span class="p">,</span> <span class="n">test_samples</span> <span class="o">=</span> <span class="n">read_split_file</span><span class="p">(</span><span class="n">split_file</span><span class="p">)</span>
+
+		<span class="c1"># Generate datasets using the provided partitions</span>
+		<span class="n">train_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">training_samples</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">)</span>
+		<span class="n">val_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">val_samples</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">)</span>
+		<span class="n">test_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">test_samples</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">)</span>
+
+	<span class="c1"># Second step: combine train and val samples, and split evenly into n_folds</span>
+	<span class="n">cv_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">training_samples</span><span class="p">,</span> <span class="n">val_samples</span><span class="p">)</span>
+	<span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">cv_samples</span><span class="p">)</span>	<span class="c1"># Shuffle train and val to avoid bias</span>
+
+	<span class="c1"># Split into n_folds</span>
+	<span class="n">cv_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array_split</span><span class="p">(</span><span class="n">cv_samples</span><span class="p">,</span> <span class="n">n_folds</span><span class="p">)</span>
+
+	<span class="c1"># cv_sets will be a list of tuples: (fold_k_train_dataset, fold_k_test_dataset)</span>
+	<span class="n">cv_sets</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">cv_samples</span><span class="p">)):</span>
+		<span class="n">cv_test</span> <span class="o">=</span> <span class="n">cv_samples</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+		<span class="n">cv_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+		<span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">cv_samples</span><span class="p">)):</span>
+			<span class="k">if</span> <span class="n">j</span> <span class="o">!=</span> <span class="n">i</span><span class="p">:</span>
+				<span class="n">cv_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cv_train</span><span class="p">,</span> <span class="n">cv_samples</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+		<span class="n">cv_train</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+		<span class="n">cv_test</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+
+		<span class="n">cv_sets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">cv_train</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">),</span> 
+						 <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">cv_test</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">))</span> <span class="p">)</span>
+
+	<span class="k">return</span> <span class="n">cv_sets</span><span class="p">,</span> <span class="n">train_set</span><span class="p">,</span> <span class="n">val_set</span><span class="p">,</span> <span class="n">test_set</span></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2020, Holehouse Lab. Project structure based on the Computational Molecular Science Python Cookiecutter version 1.3
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

@@ -1,0 +1,5 @@
+optimize
+========
+
+`optimize` is a command for performing hyperparameter optimization on a given dataset,
+then training a BRNN using the optimal hyperparameters.
