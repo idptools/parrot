@@ -11,13 +11,15 @@ https://github.com/holehouse-lab/prot-brnn
 Licensed under the MIT license. 
 """
 
+import math
+
 import numpy as np
 import GPy
 import GPyOpt
 from GPyOpt.methods import BayesianOptimization
+
 from prot_brnn import train_network
 from prot_brnn import brnn_architecture
-import math
 
 class BayesianOptimizer(object):
 	"""A class for conducting Bayesian Optimization on a PyTorch RNN

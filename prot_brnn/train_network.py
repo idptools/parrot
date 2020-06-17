@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
+
 from prot_brnn import brnn_plot
 from prot_brnn import encode_sequence
 

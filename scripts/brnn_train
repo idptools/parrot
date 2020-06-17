@@ -15,13 +15,15 @@ https://github.com/holehouse-lab/prot-brnn
 Licensed under the MIT license. 
 """
 
+import os
+import sys
+
 import torch 
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import numpy as np 
-import os
-import sys
 import argparse
+
 from prot_brnn import process_input_data as pid
 from prot_brnn import brnn_architecture
 from prot_brnn import train_network
@@ -88,8 +90,9 @@ else:
 # Ensure that provided data_file exists
 data_file = os.path.abspath(args.data_file)
 if not os.path.isfile(data_file):
-	print('Error: Datafile does not exist.')
-	sys.exit()
+	raise FileNotFoundError('Datafile does not exist.')
+	# print('Error: Datafile does not exist.')
+	# sys.exit()
 
 # Ensure that output network location is valid
 saved_weights = os.path.abspath(args.output_network)

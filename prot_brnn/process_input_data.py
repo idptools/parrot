@@ -11,11 +11,13 @@ https://github.com/holehouse-lab/prot-brnn
 Licensed under the MIT license. 
 """
 
+import math
+
 import numpy as np
 import torch 
 import torch.nn as nn
 from torch.utils.data import Dataset
-import math
+
 from prot_brnn import encode_sequence
 
 def parse_file(tsvfile, datatype, problem_type, excludeSeqID=False):
