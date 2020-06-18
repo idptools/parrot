@@ -13,14 +13,14 @@ Once PARROT is installed, the user can run ``parrot-predict`` from the command l
 
 **Required flags:**
 
-	*  ``--datatype`` : Describes how values are formatted in `datafile`. Should be 'sequence' if there is a single value per sequence, or 'residues' if there are values for every residue in each sequence. See the example datasets in the **data** folder for more information.
-	*  ``-nc`` : The number of classes for the machine learning task. If the task is regression, then specify '1'.
+	*  ``--datatype`` / ``-d`` : Describes how values are formatted in `datafile`. Should be 'sequence' if there is a single value per sequence, or 'residues' if there are values for every residue in each sequence. See the example datasets in the **data** folder for more information.
+	*  ``--classes`` / ``-c`` : The number of classes for the machine learning task. If the task is regression, then specify '1'.
 
 **Optional flags:**
 
 	*  ``--help`` / ``-h`` : Display a help message.
-	*  ``-nl`` : Number of hidden layers in the BRNN (default is 1). Must be a positive integer and must be identical to the number of layers used when the network was trained.
-	*  ``-hs`` : Size of hidden vectors within the BRNN (default is 5). Must be a positive integer and must be identical to the hidden size used when the network was trained.
+	*  ``--num-layers`` / ``-nl`` : Number of hidden layers in the BRNN (default is 1). Must be a positive integer and must be identical to the number of layers used when the network was trained.
+	*  ``--hidden-size`` / ``-hs`` : Size of hidden vectors within the BRNN (default is 5). Must be a positive integer and must be identical to the hidden size used when the network was trained.
 	*  ``--excludeSeqID`` : Include this flag if the `seq_file` is formatted such that it does not have sequence IDs as the first column in each row.
 	*  ``--encodeBiophysics`` : Include this flag if you wish to represent each amino acid as a length 4 vector representing biophysical properties, rather than a length 20 one-hot vector. This flag must be included if the network was trained with biophysical encoding.
 

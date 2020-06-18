@@ -34,13 +34,13 @@ parser = argparse.ArgumentParser(description='Make predictions with a bi-directi
 parser.add_argument('seq_file', help='path to tsv file with format: <idx> <sequence> <data>')
 parser.add_argument('saved_network', help='path to the trained network weights file')
 parser.add_argument('output_file', help='file with sequences and their predicted values')
-parser.add_argument('--datatype', metavar='dtype', default='sequence', type=str, required=True,
+parser.add_argument('-d', '--datatype', metavar='dtype', default='sequence', type=str, required=True,
 					help="Required. Format of the input data file, must be 'sequence' or 'residues'")
-parser.add_argument('-nc', default=1, type=int, metavar='num_classes', required=True,
+parser.add_argument('-c', '--classes', default=1, type=int, metavar='num_classes', required=True,
 					help='Required. Number of output classes, for regression put 1')
-parser.add_argument('-hs', default=5, type=int, metavar='hidden_size', 
+parser.add_argument('-hs', '--hidden-size', default=5, type=int, metavar='hidden_size', 
 						help='hidden vector size (def=5)')
-parser.add_argument('-nl', default=1, type=int, metavar='num_layers', 
+parser.add_argument('-nl', '--num-layers', default=1, type=int, metavar='num_layers', 
 						help='number of layers per direction (def=1)')
 parser.add_argument('--encode', default='onehot', type=str, metavar='encoding_scheme',
 					help="'onehot' (default), 'biophysics', or specify a path to a user-created scheme")
@@ -51,12 +51,12 @@ args = parser.parse_args()
 device = 'cpu'
 
 # Hyper-parameters
-hidden_size = args.hs
-num_layers = args.nl
+hidden_size = args.hidden_size
+num_layers = args.num_layers
 
 # Data format
 dtype = args.datatype
-num_classes = args.nc
+num_classes = args.classes
 
 # Other flags
 encode = args.encode

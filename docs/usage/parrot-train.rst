@@ -13,17 +13,17 @@ Where `data_file` specifies the path to the whitespace-separated datafile and `o
 
 **Required flags:**
 
-	*  ``--datatype`` : Describes how values are formatted in `datafile`. Should be 'sequence' if there is a single value per sequence, or 'residues' if there are values for every residue in each sequence. See the example datasets in the **data** folder for more information.
-	*  ``-nc`` : The number of classes for the machine learning task. If the task is regression, then specify '1'.
+	*  ``--datatype`` / ``-d`` : Describes how values are formatted in `datafile`. Should be 'sequence' if there is a single value per sequence, or 'residues' if there are values for every residue in each sequence. See the example datasets in the **data** folder for more information.
+	*  ``--classes`` / ``-c`` : The number of classes for the machine learning task. If the task is regression, then specify '1'.
 
 **Optional flags:**
 
 	*  ``--help`` / ``-h`` : Display a help message.
-	*  ``-lr`` : Learning rate of the network (default is 0.001). Must be a float between 0 and 1.
-	*  ``-nl`` : Number of hidden layers in the BRNN (default is 1). Must be a positive integer.
-	*  ``-hs`` : Size of hidden vectors within the BRNN (default is 5). Must be a positive integer.
-	*  ``-b`` : Training batch size (default is 32). Must be a positive integer, and ideally should be in the range of 50-500. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance.
-	*  ``-e`` : Number of training epochs (default is 30). Function varies depending on ``--stop`` flag.
+	*  ``--learning-rate`` / ``-lr`` : Learning rate of the network (default is 0.001). Must be a float between 0 and 1.
+	*  ``--num-layers`` / ``-nl`` : Number of hidden layers in the BRNN (default is 1). Must be a positive integer.
+	*  ``--hidden-size`` / ``-hs`` : Size of hidden vectors within the BRNN (default is 5). Must be a positive integer.
+	*  ``--batch`` / ``-b`` : Training batch size (default is 32). Must be a positive integer, and ideally should be in the range of 50-500. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance.
+	*  ``--epochs`` / ``-e`` : Number of training epochs (default is 30). Function varies depending on ``--stop`` flag.
 	*  ``--stop`` : Stop condition to terminate training. Must be either 'auto' or 'iter' (default is 'iter'). If 'iter', then train for exactly ``-e`` epochs and stop. If 'auto', then train until performance as plateaued for ``-e`` epochs.
 	*  ``--split`` : Path to split_file for manually dividing dataset into training, validation and test sets. The file should contain three lines, corresponding to training, validation and test sets respectively. Each line should have integers separated by whitespace, with the integers specify which sequences/lines in the `datafile` (0-indexed) will belong to which dataset.
 	*  ``--setFractions`` : Include this flag to manually set the proportions of the data belonging to the training, validation and test sets. This option must be followed by three floats (representing train, validation, and test) between 0 and 1 that cumulatively sum to 1.

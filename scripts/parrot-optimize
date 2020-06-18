@@ -36,15 +36,16 @@ from parrot import encode_sequence
 parser = argparse.ArgumentParser(description='Train and test a bi-directional RNN using entire sequence.')
 parser.add_argument('data_file', help='path to tsv file with format: <idx> <sequence> <data>')
 parser.add_argument('output_network', help='path for the returned trained network')
-parser.add_argument('--datatype', metavar='dtype', default='sequence', type=str, required=True,
+parser.add_argument('-d', '--datatype', metavar='dtype', default='sequence', type=str, required=True,
 					help="Required. Format of the input data file, must be 'sequence' or 'residues'")
-parser.add_argument('--split', default='', metavar='split_file', 
-			type=str, help="file indicating how to split datafile into training, validation, and testing sets")
-parser.add_argument('-nc', default=1, type=int, metavar='num_classes', required=True,
+parser.add_argument('-c', '--classes', default=1, type=int, metavar='num_classes', required=True,
 					help='Required. Number of output classes, for regression put 1')
-parser.add_argument('-b', default=32, type=int, metavar='batch_size', help='(def=32)')
-parser.add_argument('-e', default=200, type=int, metavar='num_epochs', 
-						help='number of training epochs (def=200)')
+parser.add_argument('-b', '--batch', default=32, type=int, metavar='batch_size', 
+						help='(def=32)')
+parser.add_argument('-e', '--epochs', default=30, type=int, metavar='num_epochs', 
+						help='number of training epochs (def=30)')
+parser.add_argument('--split', default='', metavar='split_file', type=str, 
+	help="file indicating how to split datafile into training, validation, and testing sets")
 parser.add_argument('--setFractions', nargs=3, default=[0.7, 0.15, 0.15], type=float, 
 			metavar=('train', 'val', 'test'),
 			help='Proportion of dataset that should be divided into training, validation, and test sets')
@@ -57,12 +58,14 @@ parser.add_argument('--verbose', '-v', action='count', default=0)
 args = parser.parse_args()
 
 # Hyper-parameters
-batch_size = args.b
-num_epochs = args.e
+batch_size = args.batch
+num_epochs = args.epochs
+
+# Data format
+dtype = args.datatype
+num_classes = args.classes
 
 # Other flags
-dtype = args.datatype
-num_classes = args.nc
 split_file = args.split
 encode = args.encode
 verbosity = args.verbose

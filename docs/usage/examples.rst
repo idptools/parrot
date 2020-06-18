@@ -23,7 +23,7 @@ Let's train a network with ``parrot-train`` that can identify the inherent patte
 
 .. code-block::
 
-	parrot-train datasets/seq_class_dataset.tsv output_dir/network.pt --datatype sequence -nc 3 -nl 2 -hs 5 -lr 0.001 -e 200 -b 32 -v
+	parrot-train datasets/seq_class_dataset.tsv output_dir/network.pt --datatype sequence --classes 3 -nl 2 -hs 5 -lr 0.001 -e 200 -b 32 -v
 
 Training has a stochastic component, so running this multiple times may yield slightly different results. The output should look something like:
 
@@ -63,11 +63,11 @@ Using PARROT on a machine learning regression task is very similar to classifica
 	.
 	.
 
-The only difference in the ``parrot-train`` command in this regression case (other than the datafile path) is the ``-nc`` argument. Since we are doing regression, we will put '1' here. We could also change the network hyperparameters, but for now let's just use the same as above. Notice that we are using a different output network name so as to not overwrite the previous network.
+The only difference in the ``parrot-train`` command in this regression case (other than the datafile path) is the ``-c``/``--classes`` argument. Since we are doing regression, we will put '1' here. We could also change the network hyperparameters, but for now let's just use the same as above. Notice that we are using a different output network name so as to not overwrite the previous network.
 
 .. code-block::
 
-	parrot-train datasets/seq_regress_dataset.tsv output_dir/network2.pt --datatype sequence -nc 1 -nl 2 -hs 5 -lr 0.001 -e 200 -b 32 -v
+	parrot-train datasets/seq_regress_dataset.tsv output_dir/network2.pt --datatype sequence --classes 1 -nl 2 -hs 5 -lr 0.001 -e 200 -b 32 -v
 
 After this command, we see a similar output as before. In this case, in addition to ``train_test.png`` (this overwrites the previous image--if you are using the same output directory for lots of training, it may be wise to rename these files after each run) you will see a scatter plot detailing the predictions on the test set data.
 
@@ -93,7 +93,7 @@ Despite this major difference, the ``parrot-train`` command is similar to the ab
 
 .. code-block::
 
-	parrot-train datasets/res_class_dataset.tsv output_dir/network3.pt --datatype residues -nc 3 -nl 3 -hs 8 -lr 0.001 -e 200 -b 32 -v
+	parrot-train datasets/res_class_dataset.tsv output_dir/network3.pt --datatype residues --classes 3 -nl 3 -hs 8 -lr 0.001 -e 200 -b 32 -v
 
 This will save a confusion matrix 'res_CM.png' to the output directory. It's nearly identical to the confusion matrix for sequence classification, although in this case it is for every single residue in all of the sequences in the test set.
 
@@ -102,11 +102,11 @@ This will save a confusion matrix 'res_CM.png' to the output directory. It's nea
 
 **Residue regression:**
 
-The final kind of machine learning task that PARROT can handle is regression on every residue in a sequence. For this command ``--datatype`` should be set to 'residues' and ``-nc`` should be '1'. In this example I also changed the learning rate hyperparameter ``-lr``.
+The final kind of machine learning task that PARROT can handle is regression on every residue in a sequence. For this command ``--datatype`` should be set to 'residues' and ``--classes`` should be '1'. In this example I also changed the learning rate hyperparameter ``-lr``.
 
 .. code-block::
 
-	parrot-train prot-brnn/PARROT/data/res_regress_dataset.tsv saved_networks/example.pt --datatype residues -nc 1 -nl 3 -hs 8 -lr 0.005 -e 200 -b 32 -v
+	parrot-train prot-brnn/PARROT/data/res_regress_dataset.tsv saved_networks/example.pt --datatype residues --classes 1 -nl 3 -hs 8 -lr 0.005 -e 200 -b 32 -v
 
 As in the other regression task, a residue regression task will produce a scatter plot that shows the network's performance on the test set. Each combination of marker shape and color in this scatterplot belong to a single sequence, which may provide some insight on whether the network systematically mis-predicts all sequences, or if there are only a few specific sequences that are outliers.
 
@@ -120,7 +120,7 @@ This flag determines the stop condition for network training. Currently, there a
 
 .. code-block::
 
-	parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -nc 1 -nl 2 -hs 5 -lr 0.001 -e 10 -b 32 -vv --stop auto
+	parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -c 1 -nl 2 -hs 5 -lr 0.001 -e 10 -b 32 -vv --stop auto
 
 .. code-block::
 
@@ -151,7 +151,7 @@ This flag allows the user to set the proportions of data that will be a part of 
 
 .. code-block::
 
-	parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -nc 1 -nl 2 -hs 5 -lr 0.001 -e 200 -b 32 -v --setFractions 0.5 0.4 0.1
+	parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -c 1 -nl 2 -hs 5 -lr 0.001 -e 200 -b 32 -v --setFractions 0.5 0.4 0.1
 
 Notice that the output graph from this command will have fewer datapoints because of the reduced test set. Most likely, the accuracy will be a little worse then the default proportions because the training set is also smaller.
 
@@ -160,7 +160,7 @@ This flag allows the user even greater control over the training set, validation
 
 .. code-block::
 
-	parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -nc 1 -nl 2 -hs 5 -lr 0.001 -e 200 -b 32 -v --split datasets/split_file.tsv 
+	parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -c 1 -nl 2 -hs 5 -lr 0.001 -e 200 -b 32 -v --split datasets/split_file.tsv 
 
 ``--excludeSeqID``:
 Include this flag if your `datafile` is formatted without sequence IDs:
@@ -176,7 +176,7 @@ Include this flag if your `datafile` is formatted without sequence IDs:
 
 .. code-block::
 
-	parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -nc 1 -nl 2 -hs 5 -lr 0.001 -e 200 -b 32 -v --excludeSeqID
+	parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -c 1 -nl 2 -hs 5 -lr 0.001 -e 200 -b 32 -v --excludeSeqID
 
 parrot-optimize
 ---------------
@@ -187,7 +187,7 @@ Nonetheless, usage for ``parrot-optimize`` is remarkably similar to ``parrot-tra
 
 .. code-block::
 
-	parrot-optimize datasets/res_regress_dataset.tsv output_dir/cv_example.pt --datatype residues -nc 1 -e 200 -b 32 -vv
+	parrot-optimize datasets/res_regress_dataset.tsv output_dir/cv_example.pt --datatype residues --classes 1 -e 200 -b 32 -vv
 
 Notice how we do not need to specify number of layers, hidden vector size, or learning rate as these are the parameters we are optimizing. Perhaps the most important consideration is the number of epochs. Running the optimization procedure with a large number of epochs is more likely to identify the best performing hyperparameters, however more epochs also means significantly longer run time. It is recommended to play around with your data using ``parrot-train`` with a few different parameters and visualizing 'train_test.png'. Ideally, you should set the number of epochs to be around the point where validation accuracy tends to plateau during training.
 
@@ -271,7 +271,7 @@ Using the example input file:
 
 .. code-block::
 
-	parrot-predict datasets/seqfile.txt output_dir/cv_example.pt output_dir/seq_predictions.txt --datatype residues -nc 1 -nl 1 -hs 29
+	parrot-predict datasets/seqfile.txt output_dir/cv_example.pt output_dir/seq_predictions.txt --datatype residues --classes 1 -nl 1 -hs 29
 
 Running this command produces an output file with predictions:
 
