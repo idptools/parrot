@@ -49,7 +49,19 @@ setup(
 
     # Additional entries you may want simply uncomment the lines you want and fill in the data
     # url='http://www.my_package.com',  # Website
-    # install_requires=[],              # Required packages, pulls from pip if needed; do not use for Conda deployment
+    download_url = 'https://github.com/idptools/parrot/archive/v0.1-alpha.tar.gz',
+    install_requires=[
+            'torch',
+            'numpy',
+            'argparse',
+            'itertools',
+            'scipy',
+            'matplotlib',
+            'seaborn',
+            'pandas',
+            'GPy',
+            'GPyOpt'
+        ],              # Required packages, pulls from pip if needed; do not use for Conda deployment
     # platforms=['Linux',
     #            'Mac OS-X',
     #            'Unix',
