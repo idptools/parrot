@@ -16,15 +16,18 @@ https://github.com/holehouse-lab/prot-brnn
 Licensed under the MIT license. 
 """
 
+import os
+import sys
+
 import numpy as np
 import torch
 import argparse
+
 from prot_brnn import brnn_architecture
 from prot_brnn import process_input_data as pid
 from prot_brnn import train_network
 from prot_brnn import encode_sequence
-import os
-import sys
+
 
 # Parse the command line arguments
 parser = argparse.ArgumentParser(description='Make predictions with a bi-directional RNN.')

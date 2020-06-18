@@ -16,13 +16,15 @@ https://github.com/holehouse-lab/prot-brnn
 Licensed under the MIT license. 
 """
 
+import os
+import sys
+
 import torch 
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import numpy as np 
-import os
-import sys
 import argparse
+
 from prot_brnn import process_input_data as pid
 from prot_brnn import brnn_architecture
 from prot_brnn import train_network

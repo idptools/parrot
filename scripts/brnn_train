@@ -86,28 +86,25 @@ else:
 	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 ###############################################################################
-########################      Validate arguments:      ########################
+################    Validate arguments and initialize:      ###################
+
 # Ensure that provided data_file exists
 data_file = os.path.abspath(args.data_file)
 if not os.path.isfile(data_file):
 	raise FileNotFoundError('Datafile does not exist.')
-	# print('Error: Datafile does not exist.')
-	# sys.exit()
 
 # Ensure that output network location is valid
 saved_weights = os.path.abspath(args.output_network)
 network_filename = saved_weights.split('/')[-1]
 output_dir = saved_weights[:-len(network_filename)]
 if not os.path.exists(output_dir):
-	print('Error: Output network directory does not exist.')
-	sys.exit()
+	raise FileNotFoundError('Output network directory does not exist.')
 
 # If provided, check that split_file exists
 if split_file != '':
 	split_file = os.path.abspath(split_file)
 	if not os.path.isfile(split_file):
-		print('Error: Split-file does not exist.')
-		sys.exit()
+		raise FileNotFoundError('Split-file does not exist.')
 else:
 	split_file=None
 
@@ -132,8 +129,36 @@ if num_classes > 1:
 elif num_classes == 1:
 	problem_type = 'regression'
 else:
-	print('Error: number of classes must be a positive integer.')
-	sys.exit()
+	raise ValueError('Number of classes must be a positive integer.')
+
+# Ensure that learning rate is between 0 and 1
+if learning_rate >= 1 or learning_rate <= 0:
+	raise ValueError('Learning rate must be between 0 and 1.')
+
+# Ensure that stop condition is 'iter' or 'auto'
+if stop_cond == 'auto':
+	if num_epochs > 10:
+		raise RuntimeWarning("Stop condition is set to 'auto' and num_epochs > 10." +
+							 " Network training may take a long time.")
+elif stop_cond != 'iter':
+	raise ValueError('Invalid argument for `--stop` -- must be "auto" or "iter".')
+
+# Ensure that hidden size, num layers, batch size, and num epochs are all positive ints
+if hidden_size < 1:
+	raise ValueError('Hidden vector size must be a positive integer.')
+if num_layers < 1:
+	raise ValueError('Number of layers must be a positive integer.')
+if num_epochs < 1:
+	raise ValueError('Number of epochs must be a positive integer.')
+if batch_size < 1:
+	raise ValueError('Batch size must be a positive integer.')
+
+# Ensure that the sum of setFractions adds up to 1
+for frac in setFractions:
+	if 0 >= frac or frac >= 1:
+		raise ValueError('All set fractions must be between 0 and 1.')
+if sum(setFractions) != 1.0:
+	raise ValueError('Set fractions must sum to 1.')
 
 # Initialize network architecture depending on data format
 if dtype == 'sequence':
@@ -155,46 +180,7 @@ elif dtype == 'residues':
 	else:
 		collate_function = pid.res_regress_collate
 else:
-	print("Error: Invalid datatype argument -- must be 'residues' or 'sequence'.")
-	sys.exit()
-
-# Ensure that learning rate is between 0 and 1
-if learning_rate >= 1 or learning_rate <= 0:
-	print("Error: Learning rate must be between 0 and 1.")
-	sys.exit()
-
-# Ensure that stop condition is 'iter' or 'auto'
-if stop_cond == 'auto':
-	if num_epochs > 10:
-		print("Warning: stop condition is set to 'auto' and num_epochs > 10." +
-			" Network training may take a long time.")
-elif stop_cond != 'iter':
-	print("Error: Invalid stop condtiion. Must be 'auto' or 'iter'.")
-	sys.exit()
-
-# Ensure that hidden size, num layers, batch size, and num epochs are all positive ints
-if hidden_size < 1:
-	print('Error: hidden vector size must be a positive integer.')
-	sys.exit()
-if num_layers < 1:
-	print('Error: number of layers must be a positive integer.')
-	sys.exit()
-if num_epochs < 1:
-	print('Error: number of epochs must be a positive integer.')
-	sys.exit()
-if batch_size < 1:
-	print('Error: batch size must be a positive integer.')
-	sys.exit()
-
-# Ensure that the sum of setFractions adds up to 1
-for frac in setFractions:
-	if 0 >= frac or frac >= 1:
-		print('Error: all set fractions must be between 0 and 1.')
-		sys.exit()
-if sum(setFractions) != 1.0:
-	print('Error: set fractions must sum to 1')
-	sys.exit()
-
+	raise ValueError('Invalid argument `--datatype`: must be "residues" or "sequence".')
 
 ###############################################################################
 

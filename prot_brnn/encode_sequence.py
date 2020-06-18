@@ -46,8 +46,8 @@ def one_hot(seq):
 		for i in range(l):
 			m[i, ONE_HOT[seq[i]]] = 1
 	except:
-		print('Error: invalid amino acid detected:', seq[i])
-		sys.exit()
+		error_str = 'Invalid amino acid detected: ' + seq[i]
+		raise ValueError(error_str)
 	return torch.from_numpy(m)
 
 ############  Biophysical scale encoding  #############
@@ -110,11 +110,11 @@ def biophysics(seq):
 		for i in range(l):
 			m[i] = BIOPHYSICS[seq[i]]
 	except:
-		print('Error: invalid amino acid detected:', seq[i])
-		sys.exit()
+		error_str = 'Invalid amino acid detected: ' + seq[i]
+		raise ValueError(error_str)
 	return torch.from_numpy(m)
 
-##################################################
+################## User-specified encoding ####################
 
 def parse_encode_file(file):
 	"""Helper function to convert an encoding file into key:value dictionary"""
@@ -128,12 +128,10 @@ def parse_encode_file(file):
 		d[line[0]] = line[1:]
 
 		if len(line) - 1 != l:
-			print('Error: encoding file has invalid format.')
-			sys.exit()
+			raise ValueError('Vectors in encoding file do not have same length.')
 
 	return d, l
 
-# TODO: test this
 class UserEncoder():
 	"""User-specified amino acid-to-vector encoding scheme"""
 
@@ -147,8 +145,7 @@ class UserEncoder():
 
 		self.encode_file = os.path.abspath(encode_file)
 		if not os.path.isfile(self.encode_file):
-			print('Error: encoding file does not exist.')
-			sys.exit()
+			raise FileNotFoundError('Encoding file does not exist.')
 
 		self.encode_dict, self.input_size = parse_encode_file(self.encode_file)
 
@@ -167,6 +164,6 @@ class UserEncoder():
 			for i in range(l):
 				m[i] = self.encode_dict[seq[i]]
 		except:
-			print('Error: invalid amino acid detected:', seq[i])
-			sys.exit()
+			error_str = 'Invalid amino acid detected: ' + seq[i]
+			raise ValueError(error_str)
 		return torch.from_numpy(m)
