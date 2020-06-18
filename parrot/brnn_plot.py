@@ -2,11 +2,11 @@
 File containing functions for plotting training results.
 
 .............................................................................
-prot_brnn was developed by the Holehouse lab
+idptools-parrot was developed by the Holehouse lab
      Original release ---- 2020
 
 Question/comments/concerns? Raise an issue on github:
-https://github.com/holehouse-lab/prot-brnn
+https://github.com/idptools/parrot
 
 Licensed under the MIT license. 
 """

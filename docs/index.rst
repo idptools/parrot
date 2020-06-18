@@ -1,14 +1,14 @@
-Welcome to prot_brnn's documentation!
-=====================================
+Welcome to PARROT's documentation!
+==================================
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
    getting_started
-   usage/brnn_train
-   usage/brnn_predict
-   usage/brnn_optimize
+   usage/parrot-train
+   usage/parrot-optimize
+   usage/parrot-predict
    usage/examples
    api
    usage/ml_faqs

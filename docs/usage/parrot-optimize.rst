@@ -1,13 +1,13 @@
-brnn_optimize
-=============
+parrot-optimize
+===============
 
-``brnn_optimize`` is a command for performing hyperparameter optimization on a given dataset. The dataset is divided 5-fold and iteratively retrained and validated using cross validation to estimate the performance of the network using a given set of hyperparameters. Bayesian optimization ensures that in each iteration, hyperparameters are selected that better sample hyperparameter space and/or are expected to improve performance. After 80 iterations, the algorithm will return the best-performing hyperparameters and a new network will be trained on the cumulative cross-validation data, then tested on held out test data. The final trained BRNN will be saved to disk along with a plot that provides a performance estimate.
+``parrot-optimize`` is a command for performing hyperparameter optimization on a given dataset. The dataset is divided 5-fold and iteratively retrained and validated using cross validation to estimate the performance of the network using a given set of hyperparameters. Bayesian optimization ensures that in each iteration, hyperparameters are selected that better sample hyperparameter space and/or are expected to improve performance. After 80 iterations, the algorithm will return the best-performing hyperparameters and a new network will be trained on the cumulative cross-validation data, then tested on held out test data. The final trained BRNN will be saved to disk along with a plot that provides a performance estimate.
 
-Once prot_brnn is installed, the user can run ``brnn_optimize`` from the command line:
+Once PARROT is installed, the user can run ``parrot-optimize`` from the command line:
 
 .. code-block::
 	
-	$ brnn_optimize data_file output_network <flags>
+	$ parrot-optimize data_file output_network <flags>
 
 Where `data_file` specifies the path to the whitespace-separated datafile and `output_network` is the path to where the final trained network will be saved on disk. Of note, the output images from this script will be saved to the same directory as `output_network`.
 
@@ -30,6 +30,6 @@ Where `data_file` specifies the path to the whitespace-separated datafile and `o
 
 **Output:**
 
-``brnn_optimize`` will produce similar output as ``brnn_train``. Firstly, the saved network weights from the training process will be located at the path provided by `output_network`. Additionally, there will be two PNG images saved to this same directory. The first, called 'train_test.png' displays the network's performance on the training and validation sets over the course of training. The second image describes the network performance on the held out test set, and will vary depending on the data format and machine learning task. If training a network for a classification task, the image will be a confusion matrix. If training for a regression task, the image will be a scatterplot comparing the predicted and true values of the test set sequences.
+``parrot-optimize`` will produce similar output as ``parrot-train``. Firstly, the saved network weights from the training process will be located at the path provided by `output_network`. Additionally, there will be two PNG images saved to this same directory. The first, called 'train_test.png' displays the network's performance on the training and validation sets over the course of training. The second image describes the network performance on the held out test set, and will vary depending on the data format and machine learning task. If training a network for a classification task, the image will be a confusion matrix. If training for a regression task, the image will be a scatterplot comparing the predicted and true values of the test set sequences.
 
 Output text detailing network performance across training can be printed to console if the ``--verbose`` flag is provided.

@@ -1,13 +1,13 @@
-brnn_predict
-============
+parrot-predict
+==============
 
-``brnn_predict`` is a command for making predictions using a trained BRNN. The ``brnn_train`` and ``brnn_optimize`` commands both save a trained network to disk, and this trained network can be applied to unlabeled sequences to make predictions for whatever machine learning task the network was trained on. The prediction will be saved to memory in a text file.
+``parrot-predict`` is a command for making predictions using a trained BRNN. The ``parrot-train`` and ``parrot-optimize`` commands both save a trained network to disk, and this trained network can be applied to unlabeled sequences to make predictions for whatever machine learning task the network was trained on. The prediction will be saved to memory in a text file.
 
-Once prot_brnn is installed, the user can run ``brnn_predict`` from the command line:
+Once PARROT is installed, the user can run ``parrot-predict`` from the command line:
 
 .. code-block::
 	
-	$ brnn_predict seq_file saved_network output_file <flags>
+	$ parrot-predict seq_file saved_network output_file <flags>
 
 `seq_file` specifies the path to the file containing the list of sequences. Each line of `seq_file` should have two whitespace-separated columns: a sequence ID and the amino acid sequence. Optionally, the file may also be formatted without the sequence IDs. Two example `seq_file` can be found in the **data** folder. `saved_network` is the path to where the trained network is saved in memory. `output_file` is the path to where the predictions will be saved as a text file.
 
@@ -26,4 +26,4 @@ Once prot_brnn is installed, the user can run ``brnn_predict`` from the command 
 
 **Output:**
 
-``brnn_predict`` will produce a single text file as output. This file will be formatted similarly to the original datafiles used for network training: each row contains a sequence ID (exluded if ``--excludeSeqID1`` is provided), an amino acid sequence, and the prediction values for that sequence.
+``parrot-predict`` will produce a single text file as output. This file will be formatted similarly to the original datafiles used for network training: each row contains a sequence ID (exluded if ``--excludeSeqID1`` is provided), an amino acid sequence, and the prediction values for that sequence.

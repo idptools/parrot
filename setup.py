@@ -1,6 +1,6 @@
 """
-prot_brnn
-Bidirectional recurrent neural network framework for protein bioinformatics
+PARROT
+A bidirectional recurrent neural network framework for protein bioinformatics
 """
 import sys
 from setuptools import setup, find_packages
@@ -21,7 +21,7 @@ except:
 
 setup(
     # Self-descriptive entries which should always be present
-    name='prot_brnn',
+    name='parrot',
     author='Holehouse Lab',
     author_email='degriffith@wustl.edu',
     description=short_description[0],
@@ -43,9 +43,9 @@ setup(
 
     # Allows `setup.py test` to work correctly with pytest
     setup_requires=[] + pytest_runner,
-    scripts=['scripts/brnn_train',
-             'scripts/brnn_predict',
-             'scripts/brnn_optimize'],
+    scripts=['scripts/parrot-train',
+             'scripts/parrot-predict',
+             'scripts/parrot-optimize'],
 
     # Additional entries you may want simply uncomment the lines you want and fill in the data
     # url='http://www.my_package.com',  # Website
@@ -54,9 +54,9 @@ setup(
     #            'Mac OS-X',
     #            'Unix',
     #            'Windows'],            # Valid platforms your code works on, adjust to your flavor
-    # python_requires=">=3.5",          # Python version restrictions
+    python_requires=">=3.5",          # Python version restrictions
 
     # Manual control if final package is compressible or not, set False to prevent the .egg from being made
-    # zip_safe=False,
+    zip_safe=False,
 
 )

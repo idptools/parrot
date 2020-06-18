@@ -1,6 +1,6 @@
 """
-prot_brnn
-Bidirectional recurrent neural network framework for protein bioinformatics
+PARROT
+A bidirectional recurrent neural network framework for protein bioinformatics
 """
 
 # Add imports here

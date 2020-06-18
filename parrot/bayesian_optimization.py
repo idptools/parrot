@@ -2,11 +2,11 @@
 This file contains code for conducting Bayesian optimization.
 
 .............................................................................
-prot_brnn was developed by the Holehouse lab
+idptools-parrot was developed by the Holehouse lab
      Original release ---- 2020
 
 Question/comments/concerns? Raise an issue on github:
-https://github.com/holehouse-lab/prot-brnn
+https://github.com/idptools/parrot
 
 Licensed under the MIT license. 
 """
@@ -18,8 +18,8 @@ import GPy
 import GPyOpt
 from GPyOpt.methods import BayesianOptimization
 
-from prot_brnn import train_network
-from prot_brnn import brnn_architecture
+from parrot import train_network
+from parrot import brnn_architecture
 
 class BayesianOptimizer(object):
 	"""A class for conducting Bayesian Optimization on a PyTorch RNN

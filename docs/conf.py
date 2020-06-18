@@ -18,12 +18,12 @@ import sys
 sys.path.insert(0, os.path.abspath('..'))
 sys.path.insert(0, os.path.abspath('../scripts/'))
 
-import prot_brnn
+import parrot
 
 
 # -- Project information -----------------------------------------------------
 
-project = 'prot_brnn'
+project = 'parrot'
 copyright = ("2020, Holehouse Lab. Project structure based on the "
              "Computational Molecular Science Python Cookiecutter version 1.3")
 author = 'Holehouse Lab'
@@ -118,7 +118,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'prot_brnndoc'
+htmlhelp_basename = 'parrotdoc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -145,8 +145,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'prot_brnn.tex', 'prot_brnn Documentation',
-     'prot_brnn', 'manual'),
+    (master_doc, 'parrot.tex', 'parrot Documentation',
+     'parrot', 'manual'),
 ]
 
 
@@ -155,7 +155,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'prot_brnn', 'prot_brnn Documentation',
+    (master_doc, 'parrot', 'parrot Documentation',
      [author], 1)
 ]
 
@@ -166,8 +166,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'prot_brnn', 'prot_brnn Documentation',
-     author, 'prot_brnn', 'Bidirectional recurrent neural network framework for protein bioinformatics',
+    (master_doc, 'parrot', 'parrot Documentation',
+     author, 'parrot', 'A bidirectional recurrent neural network framework for protein bioinformatics',
      'Miscellaneous'),
 ]
 

@@ -2,11 +2,11 @@
 File that carries out the core training of the package.
 
 .............................................................................
-prot_brnn was developed by the Holehouse lab
+idptools-parrot was developed by the Holehouse lab
      Original release ---- 2020
 
 Question/comments/concerns? Raise an issue on github:
-https://github.com/holehouse-lab/prot-brnn
+https://github.com/idptools/parrot
 
 Licensed under the MIT license. 
 """
@@ -16,8 +16,8 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 
-from prot_brnn import brnn_plot
-from prot_brnn import encode_sequence
+from parrot import brnn_plot
+from parrot import encode_sequence
 
 def train(network, train_loader, val_loader, datatype, problem_type, weights_file,
 	stop_condition, device, learn_rate, n_epochs, verbosity=1):

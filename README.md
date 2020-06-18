@@ -1,15 +1,12 @@
-# prot_brnn
+# PARROT: Protein Analysis using RecuRrent neural networks On Training data
 
-**prot_brnn** prot-brnn encodes a computationally-robust bidirectional recurrent neural network (BRNN) behind an easy-to-use 
-commandline interface in order to facilitate a variety of protein bioinformatics tasks. With only an input datafile 
-containing sequences and mapped values, the user can automatically train a BRNN for their purposes. This trained network can
-then be applied to new, unlabeled data to generate predictions and generate biological hypotheses.
+**PARROT** encodes a computationally-robust bidirectional recurrent neural network (BRNN) behind an easy-to-use commandline interface. PARROT is well-suited for a variety of protein bioinformatics tasks. With only an input datafile containing sequences and mapped values, the user can automatically train a BRNN for whatever purpose. This trained network can then be applied to new, unlabeled data to generate predictions and generate biological hypotheses.
 
 This package can handle regression and classification ML problems, as well as sequence-mapped and residue-mapped input data.
 
-## Usage: (as of June 8, 2020)
+## Usage:
 
-There are three primary actions that can be done within the prot_brnn package. Each of these are briefly described below and
+There are three primary commands that can be run within the parrot package. Each of these are briefly described below and
 for more information on their usage, visit their individual documentation pages.
 
 1. Train a BRNN with user-specified hyperparameters
@@ -43,27 +40,27 @@ should be a float
 
 For example datasets, see the TSV files provided in the **data** folder.
 
-### 1. Train BRNN with provided hyperparameters: ``brnn_train``
+### 1. Train BRNN with provided hyperparameters: ``parrot-train``
 
-The ``brnn_train`` command is most useful in the initial stages of data exploration. This command requires the user to 
+The ``parrot-train`` command is most useful in the initial stages of data exploration. This command requires the user to 
 specify the hyperparameters to train the network, so it may not achieve the optimal results compared to more extensive training
 and hyperparameter search. However, if one wishes to quickly train a network for a given task, this command will give a sense
 of how effective a BRNN will be. Running ``brnn_train`` on a dataset for a large number of epochs can inform for how many epochs
 to train for during the more extensive hyperparameter optimization.
 
-### 2. Optimize hyperparameters and train BRNN: ``brnn_optimization``
+### 2. Optimize hyperparameters and train BRNN: ``parrot-optimize``
 
-The ``brnn_optimization`` command initiates an extensive search for the best-performing network hyperparameters for a given
+The ``parrot-optimize`` command initiates an extensive search for the best-performing network hyperparameters for a given
 dataset using Bayesian optimiztion. Three hyperparameters, the learning rate, number of hidden layers, and hidden vector size
 can greatly impact network performance and training speed, so it is important to tune these for each particular dataset. This
 command will search across hyperparameter space by iteratively training and validating network performance (with 5-fold cross
 validation). The best performing hyperparameters will be selected, and used to train a network from scratch as if running
 ``brnn_train`` with these parameters.
 
-### 3. Generate predictions with trained BRNN: ``brnn_predict``
+### 3. Generate predictions with trained BRNN: ``parrot-predict``
 
 Once a network has been trained for a particular machine learning task, the user can generate predictions on new sequences
-with this network using the ``brnn_predict`` command. The user provides a list of sequences they would like to predict and
+with this network using the ``parrot-predict`` command. The user provides a list of sequences they would like to predict and
 the saved network, and a file is outputted with the predictions.
 
 ### Copyright
