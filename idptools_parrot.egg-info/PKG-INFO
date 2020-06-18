@@ -1,11 +1,12 @@
 Metadata-Version: 2.1
-Name: parrot
-Version: 0+untagged.32.g1ed4a01.dirty
+Name: idptools-parrot
+Version: 0.1+1.g352057a.dirty
 Summary: UNKNOWN
 Home-page: UNKNOWN
 Author: Holehouse Lab
 Author-email: degriffith@wustl.edu
 License: MIT
+Download-URL: https://github.com/idptools/parrot/archive/v0.1-alpha.tar.gz
 Description: # PARROT: Protein Analysis using RecuRrent neural networks On Training data
         
         **PARROT** encodes a computationally-robust bidirectional recurrent neural network (BRNN) behind an easy-to-use commandline interface. PARROT is well-suited for a variety of protein bioinformatics tasks. With only an input datafile containing sequences and mapped values, the user can automatically train a BRNN for whatever purpose. This trained network can then be applied to new, unlabeled data to generate predictions and generate biological hypotheses.

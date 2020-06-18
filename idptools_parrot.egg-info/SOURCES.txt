@@ -4,6 +4,12 @@ README.md
 setup.cfg
 setup.py
 versioneer.py
+idptools_parrot.egg-info/PKG-INFO
+idptools_parrot.egg-info/SOURCES.txt
+idptools_parrot.egg-info/dependency_links.txt
+idptools_parrot.egg-info/not-zip-safe
+idptools_parrot.egg-info/requires.txt
+idptools_parrot.egg-info/top_level.txt
 parrot/__init__.py
 parrot/_version.py
 parrot/bayesian_optimization.py
@@ -12,11 +18,6 @@ parrot/brnn_plot.py
 parrot/encode_sequence.py
 parrot/process_input_data.py
 parrot/train_network.py
-parrot.egg-info/PKG-INFO
-parrot.egg-info/SOURCES.txt
-parrot.egg-info/dependency_links.txt
-parrot.egg-info/not-zip-safe
-parrot.egg-info/top_level.txt
 parrot/tests/__init__.py
 parrot/tests/test_prot_brnn.py
 scripts/parrot-optimize
