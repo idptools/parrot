@@ -21,7 +21,7 @@ except:
 
 setup(
     # Self-descriptive entries which should always be present
-    name='parrot',
+    name='idptools-parrot',
     author='Holehouse Lab',
     author_email='degriffith@wustl.edu',
     description=short_description[0],
