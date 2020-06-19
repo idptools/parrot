@@ -54,7 +54,7 @@ setup(
             'torch',
             'numpy',
             'argparse',
-            'itertools',
+            'more-itertools',
             'scipy',
             'matplotlib',
             'seaborn',
