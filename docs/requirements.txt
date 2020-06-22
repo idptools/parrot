@@ -3,6 +3,15 @@
 #
 ###### Requirements without Version Specifiers ######
 numpy
+torch
+argparse
+more-itertools
+scipy
+matplotlib
+seaborn
+pandas
+GPy
+GPyOpt
 #
 ###### Requirements with Version Specifiers ######
 #   See https://www.python.org/dev/peps/pep-0440/#version-specifiers
