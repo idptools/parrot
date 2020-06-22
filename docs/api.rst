@@ -36,5 +36,5 @@ bayesian_optimization.py
 brnn_plot.py
 ------------
 
-.. automodule:: parrot_brnn.brnn_plot
+.. automodule:: parrot.brnn_plot
    :members:
