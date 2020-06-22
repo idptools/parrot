@@ -4,6 +4,20 @@
 
 This package can handle regression and classification ML problems, as well as sequence-mapped and residue-mapped input data.
 
+## Installation:
+
+PARROT is available through GitHub or the Python Package Index (PyPI). To install through PyPI, run
+
+	$ pip install idptools-parrot
+
+To clone the GitHub repository and gain the ability to modify a local copy of the code, run
+
+	$ git clone https://github.com/idptools/parrot.git
+	$ cd parrot
+	$ pip install .
+
+This will install PARROT locally. If you modify the source code in the local repository, be sure to reinstall with pip.
+
 ## Usage:
 
 There are three primary commands that can be run within the parrot package. Each of these are briefly described below and
