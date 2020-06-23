@@ -16,8 +16,12 @@ This will install PARROT locally. If you modify the source code in the local rep
 
 ## Testing
 
-To see if your installation of PARROT is working properly, you can run the unit tests included in the package.
+To see if your installation of PARROT is working properly, you can run the unit test included in the package by navigating to the parrot/tests folder within the installation directory and running:
+
+	$ pytest -v
+
+Example data can be found in the parrot/data folder on GitHub and information on usage can be found on the Examples page of the documentation.
 
 ## Documentation
 
-Accessing 
+The documentation for PARROT can be accessed at https://idptools-parrot.readthedocs.io/en/latest/index.html

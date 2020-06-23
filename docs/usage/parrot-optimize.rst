@@ -5,7 +5,7 @@ parrot-optimize
 
 Once PARROT is installed, the user can run ``parrot-optimize`` from the command line:
 
-.. code-block::
+.. code-block:: bash
 	
 	$ parrot-optimize data_file output_network <flags>
 

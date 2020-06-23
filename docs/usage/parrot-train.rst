@@ -5,7 +5,7 @@ parrot-train
 
 Once PARROT is installed, the user can run ``parrot-train`` from the command line:
 
-.. code-block::
+.. code-block:: bash
 	
 	$ parrot-train data_file output_network <flags>
 
@@ -37,5 +37,3 @@ Where `data_file` specifies the path to the whitespace-separated datafile and `o
 After running ``parrot-train``, several files will be saved to disk. Firstly, the saved network weights from the training process will be located at the path provided by `output_network`. Additionally, there will be two PNG images saved to this same directory. The first, called 'train_test.png' displays the network's performance on the training and validation sets over the course of training. The second image describes the network performance on the held out test set, and will vary depending on the data format and machine learning task. If training a network for a classification task, the image will be a confusion matrix. If training for a regression task, the image will be a scatterplot comparing the predicted and true values of the test set sequences.
 
 Output text detailing network performance across training can be printed to console if the ``--verbose`` flag is provided.
-
-

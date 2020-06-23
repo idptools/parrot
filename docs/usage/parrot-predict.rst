@@ -5,7 +5,7 @@ parrot-predict
 
 Once PARROT is installed, the user can run ``parrot-predict`` from the command line:
 
-.. code-block::
+.. code-block:: bash
 	
 	$ parrot-predict seq_file saved_network output_file <flags>
 
