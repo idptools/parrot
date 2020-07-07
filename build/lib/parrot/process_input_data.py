@@ -1,5 +1,6 @@
 """
-File for processing an input datafile into a PyTorch-compatible format.
+Module with functions for processing an input datafile into a PyTorch-compatible
+format
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -102,6 +103,10 @@ class SequenceDataset(Dataset):
 		Description of how an amino acid sequence should be encoded as a numeric 
 		vector. Providing a string other than 'onehot' or 'biophysics' will 
 		produce unintended consequences.
+	encoder: UserEncoder object, optional
+		If encoding_scheme is 'user', encoder should be a UserEncoder object
+		that can convert amino acid sequences to numeric vectors. If
+		encoding_scheme is not 'user', use None.
 	"""
 
 	def __init__(self, data, subset=np.array([]), encoding_scheme='onehot', 
@@ -120,8 +125,10 @@ class SequenceDataset(Dataset):
 			Description of how an amino acid sequence should be encoded as a numeric 
 			vector. Providing a string other than 'onehot' or 'biophysics' will 
 			produce unintended consequences (default is 'onehot').
-		encoder : UserEncoder object, optional
-			TODO: write me
+		encoder: UserEncoder object, optional
+			If encoding_scheme is 'user', encoder should be a UserEncoder object
+			that can convert amino acid sequences to numeric vectors. If
+			encoding_scheme is not 'user', use None.
 		"""
 
 		self.encoding_scheme = encoding_scheme
@@ -164,8 +171,9 @@ class SequenceDataset(Dataset):
 		elif self.encoding_scheme == 'user':
 			sequence_vector = self.encoder.encode(self.data[idx][1])
 
+		name = self.data[idx][0]
 		value = self.data[idx][2]
-		sample = (sequence_vector, value)
+		sample = (name, sequence_vector, value)
 
 		return sample
 
@@ -188,8 +196,9 @@ def seq_class_collate(batch):
 		a tuple with concatenated sequence_vectors and target_values(s)
 	"""
 
-	orig_seq_vectors = [item[0] for item in batch]
-	orig_targets = [item[1] for item in batch]
+	names = [item[0] for item in batch]
+	orig_seq_vectors = [item[1] for item in batch]
+	orig_targets = [item[2] for item in batch]
 
 	longest_seq = len(max(orig_seq_vectors, key=lambda x: len(x)))
 
@@ -198,10 +207,10 @@ def seq_class_collate(batch):
 	for i,j in enumerate(orig_seq_vectors):
 		padded_seq_vectors[i][0:len(j)] = j
 
-	padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)  #CHANGEME
+	padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)
 	targets = torch.LongTensor(orig_targets)
 
-	return (padded_seq_vectors, targets)
+	return (names, padded_seq_vectors, targets)
 
 
 def seq_regress_collate(batch):
@@ -219,11 +228,12 @@ def seq_regress_collate(batch):
 	Returns
 	-------
 	tuple
-		a tuple with concatenated sequence_vectors and target_values(s)
+		a tuple with concatenated sequence_vectors and target_value(s)
 	"""
 
-	orig_seq_vectors = [item[0] for item in batch]
-	orig_targets = [[item[1]]for item in batch]
+	names = [item[0] for item in batch]
+	orig_seq_vectors = [item[1] for item in batch]
+	orig_targets = [[item[2]]for item in batch]
 
 	longest_seq = len(max(orig_seq_vectors, key=lambda x: len(x)))
 
@@ -235,7 +245,7 @@ def seq_regress_collate(batch):
 	padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)
 	targets = torch.FloatTensor(orig_targets)
 
-	return (padded_seq_vectors, targets)
+	return (names, padded_seq_vectors, targets)
 
 def res_class_collate(batch):
 	"""Collates sequences and their values into a batch
@@ -257,8 +267,9 @@ def res_class_collate(batch):
 		a tuple with concatenated sequence_vectors and target_values(s)
 	"""
 
-	orig_seq_vectors = [item[0] for item in batch]
-	orig_targets = [item[1] for item in batch]
+	names = [item[0] for item in batch]
+	orig_seq_vectors = [item[1] for item in batch]
+	orig_targets = [item[2] for item in batch]
 
 	longest_seq = len(max(orig_seq_vectors, key=lambda x: len(x)))
 
@@ -273,7 +284,8 @@ def res_class_collate(batch):
 
 	padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)
 	padded_targets = torch.LongTensor(padded_targets)
-	return (padded_seq_vectors, padded_targets)
+
+	return (names, padded_seq_vectors, padded_targets)
 
 def res_regress_collate(batch):
 	"""Collates sequences and their values into a batch
@@ -295,8 +307,9 @@ def res_regress_collate(batch):
 		a tuple with concatenated sequence_vectors and target_values(s)
 	"""
 
-	orig_seq_vectors = [item[0] for item in batch]
-	orig_targets = [item[1] for item in batch]
+	names = [item[0] for item in batch]
+	orig_seq_vectors = [item[1] for item in batch]
+	orig_targets = [item[2] for item in batch]
 
 	longest_seq = len(max(orig_seq_vectors, key=lambda x: len(x)))
 
@@ -313,7 +326,7 @@ def res_regress_collate(batch):
 	padded_targets = torch.FloatTensor(padded_targets).view(
 			(len(padded_targets), len(padded_targets[0]), 1))
 
-	return (padded_seq_vectors, padded_targets)
+	return (names, padded_seq_vectors, padded_targets)
 
 
 def vector_split(v, fraction):
@@ -406,9 +419,10 @@ def split_data(data_file, datatype, problem_type, excludeSeqID=False,
 	encoding_scheme : str, optional
 		The method to be used for encoding protein sequences as numeric vectors.
 		Currently 'onehot' and 'biophysics' are implemented (default is 'onehot').
-	encoder : UserEncoder object, optional
-		TODO: write me
-
+	encoder: UserEncoder object, optional
+		If encoding_scheme is 'user', encoder should be a UserEncoder object
+		that can convert amino acid sequences to numeric vectors. If
+		encoding_scheme is not 'user', use None.
 	percent_val : float, optional
 		If `split_file` is not provided, the fraction of the data that should be
 		randomly assigned to the validation set. Should be in the range [0-1]
@@ -503,9 +517,10 @@ def split_data_cv(data_file, datatype, problem_type, excludeSeqID=False,
 	encoding_scheme : str, optional
 		The method to be used for encoding protein sequences as numeric vectors.
 		Currently 'onehot' and 'biophysics' are implemented (default is 'onehot').
-	encoder : UserEncoder object, optional
-		TODO: write me
-
+	encoder: UserEncoder object, optional
+		If encoding_scheme is 'user', encoder should be a UserEncoder object
+		that can convert amino acid sequences to numeric vectors. If
+		encoding_scheme is not 'user', use None.
 	percent_val : float, optional
 		If `split_file` is not provided, the fraction of the data that should be
 		randomly assigned to the validation set. Should be in the range [0-1]

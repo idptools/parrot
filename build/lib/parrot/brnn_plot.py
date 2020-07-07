@@ -1,5 +1,6 @@
 """
-File containing functions for plotting training results.
+Plot training results for regression and classification tasks on both 
+sequence-mapped and residue-mapped data.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -18,6 +19,8 @@ from scipy.stats import linregress
 import matplotlib.pyplot as plt
 import seaborn as sn
 import pandas as pd
+
+from parrot import encode_sequence
 
 def training_loss(train_loss, val_loss, output_dir=''):
 	"""Plot training and validation loss per epoch
@@ -237,3 +240,63 @@ def res_confusion_matrix(true_classes, predicted_classes, num_classes, output_di
 	plt.tight_layout()
 	plt.savefig(output_dir + 'res_CM.png')
 	plt.show()
+
+def output_predictions_to_file(sequence_data, excludeSeqID, encoding_scheme, encoder=None, output_dir=''):
+	"""Output sequences, their true values, and their predicted values to a file
+
+	Parameters
+	----------
+	sequence_data :
+	excludeSeqID :
+	encoding_scheme :
+	encoder : optional
+	"""
+
+	seq_vectors = []
+	true_vals = []
+	pred_vals = []
+	names = []
+	count = 0
+	for sequence in sequence_data:
+		seq_vector, true_val, pred_val, name = sequence
+		seq_vectors.append(seq_vector)
+		true_vals.append(true_val)
+		pred_vals.append(pred_val)
+
+		if excludeSeqID:
+			names.append('test' + str(count))
+			count+=1
+		else:
+			names.append(name)
+
+	# Decode the sequence vectors
+	if encoding_scheme == 'onehot':
+		sequences = encode_sequence.rev_one_hot(seq_vectors)
+	elif encoding_scheme == 'biophysics':
+		sequences = encode_sequence.rev_biophysics(seq_vectors)
+	else:
+		sequences = encoder.decode(seq_vectors)
+
+	# Write to file
+	filename = 'test_set_predictions.tsv'
+
+	with open(output_dir + filename, 'w') as tsvfile:
+		for i in range(len(names)):
+
+			# Adjust formatting for residues or sequence data
+			if isinstance(true_vals[i], np.ndarray):
+				true_vals_format = ' '.join(true_vals[i].astype(str))
+				pred_vals_format = ' '.join(pred_vals[i].astype(str))
+			else:
+				true_vals_format = true_vals[i]
+				pred_vals_format = pred_vals[i]
+
+			'''
+			Format:
+			NAME_TRUE SEQUENCE TRUE_VALUE(S)
+			NAME_PRED SEQUENCE PRED_VALUE(S)
+			'''
+			output_str = "%s_TRUE %s %s\n" % (names[i], sequences[i], true_vals_format)
+			output_str = output_str + "%s_PRED %s %s\n" % (names[i], sequences[i], pred_vals_format)
+	
+			tsvfile.write(output_str)

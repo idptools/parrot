@@ -165,7 +165,7 @@
 <h1>Module Documentation<a class="headerlink" href="#module-documentation" title="Permalink to this headline">¶</a></h1>
 <div class="section" id="brnn-architecture-py">
 <h2>brnn_architecture.py<a class="headerlink" href="#brnn-architecture-py" title="Permalink to this headline">¶</a></h2>
-<p>This file contains code for the underlying architecture of the BRNN.</p>
+<p>The underlying architecture of the bidirectional LSTM network used in PARROT</p>
 <p>Question/comments/concerns? Raise an issue on github:
 <a class="reference external" href="https://github.com/idptools/parrot">https://github.com/idptools/parrot</a></p>
 <p>Licensed under the MIT license.</p>
@@ -295,11 +295,31 @@ be in the format:
 <dl class="py class">
 <dt id="parrot.encode_sequence.UserEncoder">
 <em class="property">class </em><code class="sig-prename descclassname">parrot.encode_sequence.</code><code class="sig-name descname">UserEncoder</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">encode_file</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/encode_sequence.html#UserEncoder"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.encode_sequence.UserEncoder" title="Permalink to this definition">¶</a></dt>
-<dd><p>User-specified amino acid-to-vector encoding scheme</p>
+<dd><p>User-specified amino acid-to-vector encoding scheme object</p>
+<dl class="field-list simple">
+<dt class="field-odd">Variables</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>encode_file</strong> (<em>str</em>) – A path to a file that describes the encoding scheme</p></li>
+<li><p><strong>encode_dict</strong> (<em>dict</em>) – A dictionary that maps each amino acid to a numeric vector</p></li>
+<li><p><strong>input_size</strong> (<em>int</em>) – The length of the encoding vector used for each amino acid</p></li>
+</ul>
+</dd>
+</dl>
 <dl class="py method">
 <dt id="parrot.encode_sequence.UserEncoder.encode">
 <code class="sig-name descname">encode</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/encode_sequence.html#UserEncoder.encode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.encode_sequence.UserEncoder.encode" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convert an amino acid sequence into this encoding scheme</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>seq</strong> (<em>str</em>) – An uppercase sequence of amino acids (single letter code)</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a PyTorch tensor representing the encoded sequence</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>torch.FloatTensor</p>
+</dd>
+</dl>
 </dd></dl>
 
 </dd></dl>
@@ -308,11 +328,13 @@ be in the format:
 <dt id="parrot.encode_sequence.biophysics">
 <code class="sig-prename descclassname">parrot.encode_sequence.</code><code class="sig-name descname">biophysics</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/encode_sequence.html#biophysics"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.encode_sequence.biophysics" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convert an amino acid sequence to a PyTorch tensor with biophysical encoding</p>
-<p>Each amino acid is represented by a length 4 vector with each value representing
-a biophysical property. The four encoded biophysical scales are Kyte-Doolittle
-hydrophobicity, charge, isoelectric point, and molecular weight. Inputing a
-sequence with a nono-canonical amino acid letter will cause the program to exit.</p>
-<p>E.g. Glutamic acid (E) is encoded: [-3.5, -1., 3.2, 147]</p>
+<p>Each amino acid is represented by a length 9 vector with each value representing
+a biophysical property. The nine encoded biophysical scales are Kyte-Doolittle
+hydrophobicity, charge, isoelectric point, molecular weight, aromaticity,
+h-bonding ability, side chain solvent accessible surface area, backbone SASA, and
+free energy of solvation. Inputing a sequence with a nono-canonical amino acid
+letter will cause the program to exit.</p>
+<p>E.g. Glutamic acid (E) is: [-3.5, -1,  3.2, 147.1, 0, 1, 161.8,  68.1, -107.3]</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><p><strong>seq</strong> (<em>str</em>) – An uppercase sequence of amino acids (single letter code)</p>
@@ -353,10 +375,23 @@ cause the program to exit.</p>
 <dd><p>Helper function to convert an encoding file into key:value dictionary</p>
 </dd></dl>
 
+<dl class="py function">
+<dt id="parrot.encode_sequence.rev_biophysics">
+<code class="sig-prename descclassname">parrot.encode_sequence.</code><code class="sig-name descname">rev_biophysics</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq_vectors</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/encode_sequence.html#rev_biophysics"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.encode_sequence.rev_biophysics" title="Permalink to this definition">¶</a></dt>
+<dd><p>Decode a list of biophysically-encoded sequence vectors into amino acid sequences</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="parrot.encode_sequence.rev_one_hot">
+<code class="sig-prename descclassname">parrot.encode_sequence.</code><code class="sig-name descname">rev_one_hot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq_vectors</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/encode_sequence.html#rev_one_hot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.encode_sequence.rev_one_hot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Decode a list of one-hot sequence vectors back into amino acid sequences</p>
+</dd></dl>
+
 </div>
 <div class="section" id="module-parrot.process_input_data">
 <span id="process-input-data-py"></span><h2>process_input_data.py<a class="headerlink" href="#module-parrot.process_input_data" title="Permalink to this headline">¶</a></h2>
-<p>File for processing an input datafile into a PyTorch-compatible format.</p>
+<p>Module with functions for processing an input datafile into a PyTorch-compatible
+format</p>
 <p>Question/comments/concerns? Raise an issue on github:
 <a class="reference external" href="https://github.com/idptools/parrot">https://github.com/idptools/parrot</a></p>
 <p>Licensed under the MIT license.</p>
@@ -374,6 +409,9 @@ have the format: [seqID, sequence, value(s)]</p></li>
 <li><p><strong>encoding_scheme</strong> (<em>str</em>) – Description of how an amino acid sequence should be encoded as a numeric
 vector. Providing a string other than ‘onehot’ or ‘biophysics’ will
 produce unintended consequences.</p></li>
+<li><p><strong>encoder</strong> (<em>UserEncoder object</em><em>, </em><em>optional</em>) – If encoding_scheme is ‘user’, encoder should be a UserEncoder object
+that can convert amino acid sequences to numeric vectors. If
+encoding_scheme is not ‘user’, use None.</p></li>
 </ul>
 </dd>
 </dl>
@@ -512,7 +550,7 @@ specifically designed for regression problems with sequence-mapped data.</p>
 <dd class="field-odd"><p><strong>batch</strong> (<em>list</em>) – A list of tuples of the form (sequence_vector, target_value(s))</p>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>a tuple with concatenated sequence_vectors and target_values(s)</p>
+<dd class="field-even"><p>a tuple with concatenated sequence_vectors and target_value(s)</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>tuple</p>
@@ -551,7 +589,9 @@ and test sets. Each line should have whitespace-separated integer indices
 which correspond to lines in <cite>data_file</cite>.</p></li>
 <li><p><strong>encoding_scheme</strong> (<em>str, optional</em>) – The method to be used for encoding protein sequences as numeric vectors.
 Currently ‘onehot’ and ‘biophysics’ are implemented (default is ‘onehot’).</p></li>
-<li><p><strong>encoder</strong> (<em>UserEncoder object, optional</em>) – TODO: write me</p></li>
+<li><p><strong>encoder</strong> (<em>UserEncoder object, optional</em>) – If encoding_scheme is ‘user’, encoder should be a UserEncoder object
+that can convert amino acid sequences to numeric vectors. If
+encoding_scheme is not ‘user’, use None.</p></li>
 <li><p><strong>percent_val</strong> (<em>float, optional</em>) – If <cite>split_file</cite> is not provided, the fraction of the data that should be
 randomly assigned to the validation set. Should be in the range [0-1]
 (default is 0.15).</p></li>
@@ -605,7 +645,9 @@ and test sets. Each line should have whitespace-separated integer indices
 which correspond to lines in <cite>data_file</cite>.</p></li>
 <li><p><strong>encoding_scheme</strong> (<em>str, optional</em>) – The method to be used for encoding protein sequences as numeric vectors.
 Currently ‘onehot’ and ‘biophysics’ are implemented (default is ‘onehot’).</p></li>
-<li><p><strong>encoder</strong> (<em>UserEncoder object, optional</em>) – TODO: write me</p></li>
+<li><p><strong>encoder</strong> (<em>UserEncoder object, optional</em>) – If encoding_scheme is ‘user’, encoder should be a UserEncoder object
+that can convert amino acid sequences to numeric vectors. If
+encoding_scheme is not ‘user’, use None.</p></li>
 <li><p><strong>percent_val</strong> (<em>float, optional</em>) – If <cite>split_file</cite> is not provided, the fraction of the data that should be
 randomly assigned to the validation set. Should be in the range [0-1]
 (default is 0.15).</p></li>
@@ -657,7 +699,7 @@ vectors. The proportions of the two vectors will be <cite>fraction</cite> and
 </div>
 <div class="section" id="module-parrot.train_network">
 <span id="train-network-py"></span><h2>train_network.py<a class="headerlink" href="#module-parrot.train_network" title="Permalink to this headline">¶</a></h2>
-<p>File that carries out the core training of the package.</p>
+<p>Core training module of PARROT</p>
 <p>Question/comments/concerns? Raise an issue on github:
 <a class="reference external" href="https://github.com/idptools/parrot">https://github.com/idptools/parrot</a></p>
 <p>Licensed under the MIT license.</p>
@@ -708,9 +750,11 @@ weights. **</p>
 <li><p><strong>sequences</strong> (<em>list</em>) – A list of amino acid sequences to test using the network</p></li>
 <li><p><strong>device</strong> (<em>str</em>) – Location of where testing will take place–should be either ‘cpu’ or
 ‘cuda’ (GPU). If available, training on GPU is typically much faster.</p></li>
-<li><p><strong>encoding_scheme</strong> (<em>str</em>) – How amino acid sequences are to be encoded as numeric vectors. Currently,
-‘onehot’ and ‘biophysics’ are the implemented options.</p></li>
-<li><p><strong>encoder</strong> – TODO: …</p></li>
+<li><p><strong>encoding_scheme</strong> (<em>str, optional</em>) – How amino acid sequences are to be encoded as numeric vectors. Currently,
+‘onehot’,’biophysics’ and ‘user’ are the implemented options.</p></li>
+<li><p><strong>encoder</strong> (<em>UserEncoder object, optional</em>) – If encoding_scheme is ‘user’, encoder should be a UserEncoder object
+that can convert amino acid sequences to numeric vectors. If
+encoding_scheme is not ‘user’, use None.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -915,7 +959,8 @@ in the order: [lr, nl, hs]</p>
 </div>
 <div class="section" id="module-parrot.brnn_plot">
 <span id="brnn-plot-py"></span><h2>brnn_plot.py<a class="headerlink" href="#module-parrot.brnn_plot" title="Permalink to this headline">¶</a></h2>
-<p>File containing functions for plotting training results.</p>
+<p>Plot training results for regression and classification tasks on both
+sequence-mapped and residue-mapped data.</p>
 <p>Question/comments/concerns? Raise an issue on github:
 <a class="reference external" href="https://github.com/idptools/parrot">https://github.com/idptools/parrot</a></p>
 <p>Licensed under the MIT license.</p>
@@ -934,6 +979,22 @@ particular sequence</p></li>
 class label for a particular sequence</p></li>
 <li><p><strong>num_classes</strong> (<em>int</em>) – Number of distinct data classes</p></li>
 <li><p><strong>output_dir</strong> (<em>str, optional</em>) – directory to which the plot will be saved (default is current directory)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="parrot.brnn_plot.output_predictions_to_file">
+<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">output_predictions_to_file</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">sequence_data</span></em>, <em class="sig-param"><span class="n">excludeSeqID</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span></em>, <em class="sig-param"><span class="n">encoder</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#output_predictions_to_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.output_predictions_to_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Output sequences, their true values, and their predicted values to a file</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sequence_data</strong></p></li>
+<li><p><strong>excludeSeqID</strong></p></li>
+<li><p><strong>encoding_scheme</strong></p></li>
+<li><p><strong>encoder</strong> (<em>optional</em>)</p></li>
 </ul>
 </dd>
 </dl>

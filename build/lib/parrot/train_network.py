@@ -1,5 +1,5 @@
 """
-File that carries out the core training of the package.
+Core training module of PARROT
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -124,7 +124,7 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 		val_loss = 0
 
 		# Iterate over batches
-		for i, (vectors, targets) in enumerate(train_loader):
+		for i, (names, vectors, targets) in enumerate(train_loader):		# CHANGEME
 			vectors = vectors.to(device)
 			targets = targets.to(device)
 		
@@ -145,7 +145,7 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 			loss.backward()
 			optimizer.step()
 
-		for vectors, targets in val_loader:
+		for names, vectors, targets in val_loader:		# CHANGEME
 			vectors = vectors.to(device)
 			targets = targets.to(device)
 
@@ -248,19 +248,20 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 	# Set loss criteria
 	if problem_type == 'regression':
 		if datatype == 'residues':
-			criterion = nn.MSELoss(reduction='sum') # TODO: Is this the best way? 'none'?
+			criterion = nn.MSELoss(reduction='sum')
 		elif datatype == 'sequence':
 			criterion = nn.L1Loss()	# TODO: L1 or MSE?
 	elif problem_type == 'classification':
 		if datatype == 'residues':
-			criterion = nn.CrossEntropyLoss(reduction='sum') # TODO: double check if this is correct
+			criterion = nn.CrossEntropyLoss(reduction='sum')
 		elif datatype == 'sequence':
 			criterion = nn.CrossEntropyLoss()
 
 	test_loss = 0
 	all_targets = []
 	all_outputs = []
-	for vectors, targets in test_loader:
+	predictions = []
+	for names, vectors, targets in test_loader: 	# batch size of 1 # CHANGEME
 		all_targets.append(targets)
 
 		vectors = vectors.to(device)
@@ -278,23 +279,49 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 		test_loss += loss.data.item() # Increment test loss
 		all_outputs.append(outputs.detach())
 
-	# Calculate 'accuracy' depending on the problem type and datatype
+		# Add to list as: [seq_vector, true value, predicted value, name]
+		predictions.append( [vectors[0].numpy(), targets.numpy()[0], outputs.detach().numpy(), names[0]] )
+
+	# Plot 'accuracy' depending on the problem type and datatype
 	if problem_type == 'regression':
 		if datatype == 'residues':
 			brnn_plot.residue_regression_scatterplot(all_targets, all_outputs, output_dir=output_dir)
 
+			# Format predictions
+			for i in range(len(predictions)):
+				predictions[i][2] = predictions[i][2].flatten()
+				predictions[i][1] = predictions[i][1].flatten()
+
 		elif datatype == 'sequence':
 			brnn_plot.sequence_regression_scatterplot(all_targets, all_outputs, output_dir=output_dir)
 
+			# Format predictions
+			for i in range(len(predictions)):
+				predictions[i][2] = predictions[i][2][0][0]
+				predictions[i][1] = predictions[i][1][0]
+
 	elif problem_type == 'classification':
+
 		if datatype == 'residues':
 			brnn_plot.res_confusion_matrix(all_targets, all_outputs, num_classes, output_dir=output_dir)
+
+			# Format predictions and assign class predictions
+			for i in range(len(predictions)):
+				pred_values = []
+				for j in range(len(predictions[i][2])):
+					pred_values = np.argmax(predictions[i][2], axis=1)[0]
+				predictions[i][2] = np.array(pred_values, dtype=np.int)
 
 		elif datatype == 'sequence':
 			brnn_plot.confusion_matrix(all_targets, all_outputs, num_classes, output_dir=output_dir)
 
-	# TODO: return training samples and predictions as output file?
-	return test_loss / len(test_loader.dataset)
+			# Format predictions and assign class predictions
+			for i in range(len(predictions)):
+				pred_value = np.argmax(predictions[i][2])
+				predictions[i][2] = int(pred_value)
+				predictions[i][1] = predictions[i][1]
+
+	return test_loss / len(test_loader.dataset), predictions
 
 def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot', encoder=None):
 	"""Test a trained BRNN on unlabeled sequences
@@ -313,11 +340,13 @@ def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot', en
 	device : str
 		Location of where testing will take place--should be either 'cpu' or
 		'cuda' (GPU). If available, training on GPU is typically much faster.
-	encoding_scheme : str
+	encoding_scheme : str, optional
 		How amino acid sequences are to be encoded as numeric vectors. Currently,
-		'onehot' and 'biophysics' are the implemented options.
-	encoder:
-		TODO: ...
+		'onehot','biophysics' and 'user' are the implemented options.
+	encoder: UserEncoder object, optional
+		If encoding_scheme is 'user', encoder should be a UserEncoder object
+		that can convert amino acid sequences to numeric vectors. If
+		encoding_scheme is not 'user', use None.
 
 	Returns
 	-------

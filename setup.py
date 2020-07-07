@@ -41,6 +41,9 @@ setup(
     # Comment out this line to prevent the files from being packaged with your software
     include_package_data=True,
 
+    # Include data files
+    package_data={'parrot': ['data/*']},
+
     # Allows `setup.py test` to work correctly with pytest
     setup_requires=[] + pytest_runner,
     scripts=['scripts/parrot-train',

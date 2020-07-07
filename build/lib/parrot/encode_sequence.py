@@ -50,6 +50,21 @@ def one_hot(seq):
 		raise ValueError(error_str)
 	return torch.from_numpy(m)
 
+def rev_one_hot(seq_vectors):
+	"""Decode a list of one-hot sequence vectors back into amino acid sequences"""
+
+	REV_ONE_HOT = 'ACDEFGHIKLMNPQRSTVWY'
+	sequences = []
+
+	for seq_vector in seq_vectors:
+		seq = []
+		for residue in seq_vector:
+			seq.append(REV_ONE_HOT[np.argmax(residue)])
+		sequences.append("".join(seq))
+
+	return sequences
+
+
 ############  Biophysical scale encoding  #############
 
 # Map each amino acid to a vector of biophysical properties
@@ -87,12 +102,14 @@ BIOPHYSICS = {	'A':[ 1.8,  0,  6.0,  89.1, 0, 0,  75.8,  76.1,    1.9],
 def biophysics(seq):
 	"""Convert an amino acid sequence to a PyTorch tensor with biophysical encoding
 
-	Each amino acid is represented by a length 4 vector with each value representing
-	a biophysical property. The four encoded biophysical scales are Kyte-Doolittle
-	hydrophobicity, charge, isoelectric point, and molecular weight. Inputing a 
-	sequence with a nono-canonical amino acid letter will cause the program to exit.
+	Each amino acid is represented by a length 9 vector with each value representing
+	a biophysical property. The nine encoded biophysical scales are Kyte-Doolittle
+	hydrophobicity, charge, isoelectric point, molecular weight, aromaticity, 
+	h-bonding ability, side chain solvent accessible surface area, backbone SASA, and 
+	free energy of solvation. Inputing a sequence with a nono-canonical amino acid 
+	letter will cause the program to exit.
 
-	E.g. Glutamic acid (E) is encoded: [-3.5, -1., 3.2, 147]
+	E.g. Glutamic acid (E) is: [-3.5, -1,  3.2, 147.1, 0, 1, 161.8,  68.1, -107.3]
 
 	Parameters
 	----------
@@ -114,6 +131,23 @@ def biophysics(seq):
 		raise ValueError(error_str)
 	return torch.from_numpy(m)
 
+def rev_biophysics(seq_vectors):
+	"""Decode a list of biophysically-encoded sequence vectors into amino acid sequences"""
+
+	REV_BIOPHYSICS = {}
+	for key, value in BIOPHYSICS.items():
+		REV_BIOPHYSICS[str(value[6])] = key
+
+	sequences = []
+	for seq_vector in seq_vectors:
+		seq = []
+		for residue in seq_vector:
+			seq.append(REV_BIOPHYSICS[str(residue[6])])
+		sequences.append("".join(seq))
+
+	return sequences
+
+
 ################## User-specified encoding ####################
 
 def parse_encode_file(file):
@@ -133,7 +167,17 @@ def parse_encode_file(file):
 	return d, l
 
 class UserEncoder():
-	"""User-specified amino acid-to-vector encoding scheme"""
+	"""User-specified amino acid-to-vector encoding scheme object
+
+	Attributes
+	----------
+	encode_file : str
+		A path to a file that describes the encoding scheme
+	encode_dict : dict
+		A dictionary that maps each amino acid to a numeric vector
+	input_size : int
+		The length of the encoding vector used for each amino acid
+	"""
 
 	def __init__(self, encode_file):
 		"""
@@ -155,7 +199,18 @@ class UserEncoder():
 		return self.input_size
 
 	def encode(self, seq):
-		"""Convert an amino acid sequence into this encoding scheme"""
+		"""Convert an amino acid sequence into this encoding scheme
+
+		Parameters
+		----------
+		seq : str
+			An uppercase sequence of amino acids (single letter code)
+
+		Returns
+		-------
+		torch.FloatTensor
+			a PyTorch tensor representing the encoded sequence
+		"""
 
 		l = len(seq)
 		m = np.zeros((l, self.input_size))
@@ -167,3 +222,20 @@ class UserEncoder():
 			error_str = 'Invalid amino acid detected: ' + seq[i]
 			raise ValueError(error_str)
 		return torch.from_numpy(m)
+
+	def decode(self, seq_vectors):
+
+		# Create a reverse of the encode_dict using hashing
+		rev_dict = {}
+		for key, value in self.encode_dict.items():
+			value = np.array(value, dtype=np.float32)
+			rev_dict[hash(tuple(value))] = key
+
+		sequences = []
+		for seq_vector in seq_vectors:
+			seq = []
+			for residue in seq_vector:
+				seq.append(rev_dict[hash(tuple(residue))])
+			sequences.append("".join(seq))
+
+		return sequences

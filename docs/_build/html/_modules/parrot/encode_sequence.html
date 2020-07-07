@@ -202,6 +202,21 @@
 		<span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">error_str</span><span class="p">)</span>
 	<span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">m</span><span class="p">)</span></div>
 
+<div class="viewcode-block" id="rev_one_hot"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.rev_one_hot">[docs]</a><span class="k">def</span> <span class="nf">rev_one_hot</span><span class="p">(</span><span class="n">seq_vectors</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Decode a list of one-hot sequence vectors back into amino acid sequences&quot;&quot;&quot;</span>
+
+	<span class="n">REV_ONE_HOT</span> <span class="o">=</span> <span class="s1">&#39;ACDEFGHIKLMNPQRSTVWY&#39;</span>
+	<span class="n">sequences</span> <span class="o">=</span> <span class="p">[]</span>
+
+	<span class="k">for</span> <span class="n">seq_vector</span> <span class="ow">in</span> <span class="n">seq_vectors</span><span class="p">:</span>
+		<span class="n">seq</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="k">for</span> <span class="n">residue</span> <span class="ow">in</span> <span class="n">seq_vector</span><span class="p">:</span>
+			<span class="n">seq</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">REV_ONE_HOT</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">residue</span><span class="p">)])</span>
+		<span class="n">sequences</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">seq</span><span class="p">))</span>
+
+	<span class="k">return</span> <span class="n">sequences</span></div>
+
+
 <span class="c1">############  Biophysical scale encoding  #############</span>
 
 <span class="c1"># Map each amino acid to a vector of biophysical properties</span>
@@ -239,12 +254,14 @@
 <div class="viewcode-block" id="biophysics"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.biophysics">[docs]</a><span class="k">def</span> <span class="nf">biophysics</span><span class="p">(</span><span class="n">seq</span><span class="p">):</span>
 	<span class="sd">&quot;&quot;&quot;Convert an amino acid sequence to a PyTorch tensor with biophysical encoding</span>
 
-<span class="sd">	Each amino acid is represented by a length 4 vector with each value representing</span>
-<span class="sd">	a biophysical property. The four encoded biophysical scales are Kyte-Doolittle</span>
-<span class="sd">	hydrophobicity, charge, isoelectric point, and molecular weight. Inputing a </span>
-<span class="sd">	sequence with a nono-canonical amino acid letter will cause the program to exit.</span>
+<span class="sd">	Each amino acid is represented by a length 9 vector with each value representing</span>
+<span class="sd">	a biophysical property. The nine encoded biophysical scales are Kyte-Doolittle</span>
+<span class="sd">	hydrophobicity, charge, isoelectric point, molecular weight, aromaticity, </span>
+<span class="sd">	h-bonding ability, side chain solvent accessible surface area, backbone SASA, and </span>
+<span class="sd">	free energy of solvation. Inputing a sequence with a nono-canonical amino acid </span>
+<span class="sd">	letter will cause the program to exit.</span>
 
-<span class="sd">	E.g. Glutamic acid (E) is encoded: [-3.5, -1., 3.2, 147]</span>
+<span class="sd">	E.g. Glutamic acid (E) is: [-3.5, -1,  3.2, 147.1, 0, 1, 161.8,  68.1, -107.3]</span>
 
 <span class="sd">	Parameters</span>
 <span class="sd">	----------</span>
@@ -266,6 +283,23 @@
 		<span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">error_str</span><span class="p">)</span>
 	<span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">m</span><span class="p">)</span></div>
 
+<div class="viewcode-block" id="rev_biophysics"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.rev_biophysics">[docs]</a><span class="k">def</span> <span class="nf">rev_biophysics</span><span class="p">(</span><span class="n">seq_vectors</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Decode a list of biophysically-encoded sequence vectors into amino acid sequences&quot;&quot;&quot;</span>
+
+	<span class="n">REV_BIOPHYSICS</span> <span class="o">=</span> <span class="p">{}</span>
+	<span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">BIOPHYSICS</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+		<span class="n">REV_BIOPHYSICS</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="mi">6</span><span class="p">])]</span> <span class="o">=</span> <span class="n">key</span>
+
+	<span class="n">sequences</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="k">for</span> <span class="n">seq_vector</span> <span class="ow">in</span> <span class="n">seq_vectors</span><span class="p">:</span>
+		<span class="n">seq</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="k">for</span> <span class="n">residue</span> <span class="ow">in</span> <span class="n">seq_vector</span><span class="p">:</span>
+			<span class="n">seq</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">REV_BIOPHYSICS</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">residue</span><span class="p">[</span><span class="mi">6</span><span class="p">])])</span>
+		<span class="n">sequences</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">seq</span><span class="p">))</span>
+
+	<span class="k">return</span> <span class="n">sequences</span></div>
+
+
 <span class="c1">################## User-specified encoding ####################</span>
 
 <div class="viewcode-block" id="parse_encode_file"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.parse_encode_file">[docs]</a><span class="k">def</span> <span class="nf">parse_encode_file</span><span class="p">(</span><span class="n">file</span><span class="p">):</span>
@@ -285,7 +319,17 @@
 	<span class="k">return</span> <span class="n">d</span><span class="p">,</span> <span class="n">l</span></div>
 
 <div class="viewcode-block" id="UserEncoder"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.UserEncoder">[docs]</a><span class="k">class</span> <span class="nc">UserEncoder</span><span class="p">():</span>
-	<span class="sd">&quot;&quot;&quot;User-specified amino acid-to-vector encoding scheme&quot;&quot;&quot;</span>
+	<span class="sd">&quot;&quot;&quot;User-specified amino acid-to-vector encoding scheme object</span>
+
+<span class="sd">	Attributes</span>
+<span class="sd">	----------</span>
+<span class="sd">	encode_file : str</span>
+<span class="sd">		A path to a file that describes the encoding scheme</span>
+<span class="sd">	encode_dict : dict</span>
+<span class="sd">		A dictionary that maps each amino acid to a numeric vector</span>
+<span class="sd">	input_size : int</span>
+<span class="sd">		The length of the encoding vector used for each amino acid</span>
+<span class="sd">	&quot;&quot;&quot;</span>
 
 	<span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">encode_file</span><span class="p">):</span>
 		<span class="sd">&quot;&quot;&quot;</span>
@@ -307,7 +351,18 @@
 		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_size</span>
 
 <div class="viewcode-block" id="UserEncoder.encode"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.UserEncoder.encode">[docs]</a>	<span class="k">def</span> <span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq</span><span class="p">):</span>
-		<span class="sd">&quot;&quot;&quot;Convert an amino acid sequence into this encoding scheme&quot;&quot;&quot;</span>
+		<span class="sd">&quot;&quot;&quot;Convert an amino acid sequence into this encoding scheme</span>
+
+<span class="sd">		Parameters</span>
+<span class="sd">		----------</span>
+<span class="sd">		seq : str</span>
+<span class="sd">			An uppercase sequence of amino acids (single letter code)</span>
+
+<span class="sd">		Returns</span>
+<span class="sd">		-------</span>
+<span class="sd">		torch.FloatTensor</span>
+<span class="sd">			a PyTorch tensor representing the encoded sequence</span>
+<span class="sd">		&quot;&quot;&quot;</span>
 
 		<span class="n">l</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span>
 		<span class="n">m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">l</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_size</span><span class="p">))</span>
@@ -318,7 +373,24 @@
 		<span class="k">except</span><span class="p">:</span>
 			<span class="n">error_str</span> <span class="o">=</span> <span class="s1">&#39;Invalid amino acid detected: &#39;</span> <span class="o">+</span> <span class="n">seq</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 			<span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">error_str</span><span class="p">)</span>
-		<span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">m</span><span class="p">)</span></div></div>
+		<span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">m</span><span class="p">)</span></div>
+
+	<span class="k">def</span> <span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq_vectors</span><span class="p">):</span>
+
+		<span class="c1"># Create a reverse of the encode_dict using hashing</span>
+		<span class="n">rev_dict</span> <span class="o">=</span> <span class="p">{}</span>
+		<span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">encode_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+			<span class="n">value</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+			<span class="n">rev_dict</span><span class="p">[</span><span class="nb">hash</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">value</span><span class="p">))]</span> <span class="o">=</span> <span class="n">key</span>
+
+		<span class="n">sequences</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="k">for</span> <span class="n">seq_vector</span> <span class="ow">in</span> <span class="n">seq_vectors</span><span class="p">:</span>
+			<span class="n">seq</span> <span class="o">=</span> <span class="p">[]</span>
+			<span class="k">for</span> <span class="n">residue</span> <span class="ow">in</span> <span class="n">seq_vector</span><span class="p">:</span>
+				<span class="n">seq</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rev_dict</span><span class="p">[</span><span class="nb">hash</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">residue</span><span class="p">))])</span>
+			<span class="n">sequences</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">seq</span><span class="p">))</span>
+
+		<span class="k">return</span> <span class="n">sequences</span></div>
 </pre></div>
 
            </div>

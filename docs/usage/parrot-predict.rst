@@ -21,8 +21,8 @@ Once PARROT is installed, the user can run ``parrot-predict`` from the command l
 	*  ``--help`` / ``-h`` : Display a help message.
 	*  ``--num-layers`` / ``-nl`` : Number of hidden layers in the BRNN (default is 1). Must be a positive integer and must be identical to the number of layers used when the network was trained.
 	*  ``--hidden-size`` / ``-hs`` : Size of hidden vectors within the BRNN (default is 5). Must be a positive integer and must be identical to the hidden size used when the network was trained.
+	*  ``--encode`` : Include this flag to specify the numeric encoding scheme for each amino acid. Available options are 'onehot' (default), 'biophysics' or user-specified. If you wish to manually specify an encoding scheme, provide a path to a text file describing the amino acid to vector mapping. The encoding scheme used for sequence prediction must be identical to that used for network training.
 	*  ``--excludeSeqID`` : Include this flag if the `seq_file` is formatted such that it does not have sequence IDs as the first column in each row.
-	*  ``--encodeBiophysics`` : Include this flag if you wish to represent each amino acid as a length 4 vector representing biophysical properties, rather than a length 20 one-hot vector. This flag must be included if the network was trained with biophysical encoding.
 
 **Output:**
 

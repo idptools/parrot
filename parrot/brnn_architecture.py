@@ -1,5 +1,5 @@
 """
-This file contains code for the underlying architecture of the BRNN.
+The underlying architecture of the bidirectional LSTM network used in PARROT
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -199,8 +199,6 @@ class BRNN_MtO(nn.Module):
             be in the format:
             [batch_dim X 1 X num_classes]
         """
-
-        # TODO: double check this documentation...
 
         # Set initial states
         # h0 and c0 dimensions: [num_layers*2 X batch_size X hidden_size]

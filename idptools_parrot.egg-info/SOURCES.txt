@@ -19,7 +19,7 @@ parrot/encode_sequence.py
 parrot/process_input_data.py
 parrot/train_network.py
 parrot/tests/__init__.py
-parrot/tests/test_prot_brnn.py
+parrot/tests/test_parrot.py
 scripts/parrot-optimize
 scripts/parrot-predict
 scripts/parrot-train

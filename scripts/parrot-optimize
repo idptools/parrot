@@ -41,7 +41,7 @@ parser.add_argument('-d', '--datatype', metavar='dtype', default='sequence', typ
 parser.add_argument('-c', '--classes', default=1, type=int, metavar='num_classes', required=True,
 					help='Required. Number of output classes, for regression put 1')
 parser.add_argument('-b', '--batch', default=32, type=int, metavar='batch_size', 
-						help='(def=32)')
+						help='size of training batch (def=32)')
 parser.add_argument('-e', '--epochs', default=30, type=int, metavar='num_epochs', 
 						help='number of training epochs (def=30)')
 parser.add_argument('--split', default='', metavar='split_file', type=str, 
@@ -51,9 +51,13 @@ parser.add_argument('--setFractions', nargs=3, default=[0.7, 0.15, 0.15], type=f
 			help='Proportion of dataset that should be divided into training, validation, and test sets')
 parser.add_argument('--encode', default='onehot', type=str, metavar='encoding_scheme',
 					help="'onehot' (default), 'biophysics', or specify a path to a user-created scheme")
-parser.add_argument('--excludeSeqID', action='store_true')
-parser.add_argument('--forceCPU', action='store_true')
-parser.add_argument('--verbose', '-v', action='count', default=0)
+parser.add_argument('--excludeSeqID', action='store_true', 
+		help='use if data_file lacks sequence IDs in the first column of each line')
+parser.add_argument('--forceCPU', action='store_true', 
+		help='force network to train on CPU, even if GPU is available')
+parser.add_argument('--verbose', '-v', action='count', default=0, 
+	help='''how descriptive output to console should be. Excluding this flag will 
+			cause no output, using this flag two or more times will cause maximum output''')
 
 args = parser.parse_args()
 
@@ -90,7 +94,8 @@ if not os.path.isfile(data_file):
 # Ensure that output network location is valid
 saved_weights = os.path.abspath(args.output_network)
 network_filename = saved_weights.split('/')[-1]
-if not os.path.exists(saved_weights[:-len(network_filename)]):
+output_dir = saved_weights[:-len(network_filename)]
+if not os.path.exists(output_dir):
 	raise FileNotFoundError('Output network directory does not exist.')
 
 # If provided, check that split_file exists
@@ -215,8 +220,13 @@ train_loss, val_loss = train_network.train(brnn_network, train_loader, val_loade
 brnn_plot.training_loss(train_loss, val_loss)
 
 # Test network
-test_loss = train_network.test_labeled_data(brnn_network, test_loader, datatype=dtype, 
-						problem_type=problem_type, weights_file=saved_weights, 
-						num_classes=num_classes, device=device)
+test_loss, test_set_predictions = train_network.test_labeled_data(brnn_network, test_loader, 
+									datatype=dtype, problem_type=problem_type, 
+									weights_file=saved_weights, num_classes=num_classes, 
+									device=device)
 if verbosity > 0:
 	print('\nTest Loss: %.4f' % test_loss)
+
+# Output the test set predictions to a text file
+brnn_plot.output_predictions_to_file(test_set_predictions, excludeSeqID, encoding_scheme, 
+														encoder, output_dir=output_dir)

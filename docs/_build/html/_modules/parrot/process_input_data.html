@@ -151,7 +151,8 @@
             
   <h1>Source code for parrot.process_input_data</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">File for processing an input datafile into a PyTorch-compatible format.</span>
+<span class="sd">Module with functions for processing an input datafile into a PyTorch-compatible</span>
+<span class="sd">format</span>
 
 <span class="sd">.............................................................................</span>
 <span class="sd">idptools-parrot was developed by the Holehouse lab</span>
@@ -254,6 +255,10 @@
 <span class="sd">		Description of how an amino acid sequence should be encoded as a numeric </span>
 <span class="sd">		vector. Providing a string other than &#39;onehot&#39; or &#39;biophysics&#39; will </span>
 <span class="sd">		produce unintended consequences.</span>
+<span class="sd">	encoder: UserEncoder object, optional</span>
+<span class="sd">		If encoding_scheme is &#39;user&#39;, encoder should be a UserEncoder object</span>
+<span class="sd">		that can convert amino acid sequences to numeric vectors. If</span>
+<span class="sd">		encoding_scheme is not &#39;user&#39;, use None.</span>
 <span class="sd">	&quot;&quot;&quot;</span>
 
 	<span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="s1">&#39;onehot&#39;</span><span class="p">,</span> 
@@ -272,8 +277,10 @@
 <span class="sd">			Description of how an amino acid sequence should be encoded as a numeric </span>
 <span class="sd">			vector. Providing a string other than &#39;onehot&#39; or &#39;biophysics&#39; will </span>
 <span class="sd">			produce unintended consequences (default is &#39;onehot&#39;).</span>
-<span class="sd">		encoder : UserEncoder object, optional</span>
-<span class="sd">			TODO: write me</span>
+<span class="sd">		encoder: UserEncoder object, optional</span>
+<span class="sd">			If encoding_scheme is &#39;user&#39;, encoder should be a UserEncoder object</span>
+<span class="sd">			that can convert amino acid sequences to numeric vectors. If</span>
+<span class="sd">			encoding_scheme is not &#39;user&#39;, use None.</span>
 <span class="sd">		&quot;&quot;&quot;</span>
 
 		<span class="bp">self</span><span class="o">.</span><span class="n">encoding_scheme</span> <span class="o">=</span> <span class="n">encoding_scheme</span>
@@ -316,8 +323,9 @@
 		<span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">encoding_scheme</span> <span class="o">==</span> <span class="s1">&#39;user&#39;</span><span class="p">:</span>
 			<span class="n">sequence_vector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">idx</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
 
+		<span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">idx</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
 		<span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">idx</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span>
-		<span class="n">sample</span> <span class="o">=</span> <span class="p">(</span><span class="n">sequence_vector</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+		<span class="n">sample</span> <span class="o">=</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">sequence_vector</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
 
 		<span class="k">return</span> <span class="n">sample</span></div>
 
@@ -340,8 +348,9 @@
 <span class="sd">		a tuple with concatenated sequence_vectors and target_values(s)</span>
 <span class="sd">	&quot;&quot;&quot;</span>
 
-	<span class="n">orig_seq_vectors</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
-	<span class="n">orig_targets</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">orig_seq_vectors</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">orig_targets</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
 
 	<span class="n">longest_seq</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
 
@@ -350,10 +359,10 @@
 	<span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">j</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">):</span>
 		<span class="n">padded_seq_vectors</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">:</span><span class="nb">len</span><span class="p">(</span><span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="n">j</span>
 
-	<span class="n">padded_seq_vectors</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">)</span>  <span class="c1">#CHANGEME</span>
+	<span class="n">padded_seq_vectors</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">)</span>
 	<span class="n">targets</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">LongTensor</span><span class="p">(</span><span class="n">orig_targets</span><span class="p">)</span>
 
-	<span class="k">return</span> <span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">,</span> <span class="n">targets</span><span class="p">)</span></div>
+	<span class="k">return</span> <span class="p">(</span><span class="n">names</span><span class="p">,</span> <span class="n">padded_seq_vectors</span><span class="p">,</span> <span class="n">targets</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="seq_regress_collate"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.seq_regress_collate">[docs]</a><span class="k">def</span> <span class="nf">seq_regress_collate</span><span class="p">(</span><span class="n">batch</span><span class="p">):</span>
@@ -371,11 +380,12 @@
 <span class="sd">	Returns</span>
 <span class="sd">	-------</span>
 <span class="sd">	tuple</span>
-<span class="sd">		a tuple with concatenated sequence_vectors and target_values(s)</span>
+<span class="sd">		a tuple with concatenated sequence_vectors and target_value(s)</span>
 <span class="sd">	&quot;&quot;&quot;</span>
 
-	<span class="n">orig_seq_vectors</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
-	<span class="n">orig_targets</span> <span class="o">=</span> <span class="p">[[</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span><span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">orig_seq_vectors</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">orig_targets</span> <span class="o">=</span> <span class="p">[[</span><span class="n">item</span><span class="p">[</span><span class="mi">2</span><span class="p">]]</span><span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
 
 	<span class="n">longest_seq</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
 
@@ -387,7 +397,7 @@
 	<span class="n">padded_seq_vectors</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">)</span>
 	<span class="n">targets</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">orig_targets</span><span class="p">)</span>
 
-	<span class="k">return</span> <span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">,</span> <span class="n">targets</span><span class="p">)</span></div>
+	<span class="k">return</span> <span class="p">(</span><span class="n">names</span><span class="p">,</span> <span class="n">padded_seq_vectors</span><span class="p">,</span> <span class="n">targets</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="res_class_collate"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.res_class_collate">[docs]</a><span class="k">def</span> <span class="nf">res_class_collate</span><span class="p">(</span><span class="n">batch</span><span class="p">):</span>
 	<span class="sd">&quot;&quot;&quot;Collates sequences and their values into a batch</span>
@@ -409,8 +419,9 @@
 <span class="sd">		a tuple with concatenated sequence_vectors and target_values(s)</span>
 <span class="sd">	&quot;&quot;&quot;</span>
 
-	<span class="n">orig_seq_vectors</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
-	<span class="n">orig_targets</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">orig_seq_vectors</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">orig_targets</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
 
 	<span class="n">longest_seq</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
 
@@ -425,7 +436,8 @@
 
 	<span class="n">padded_seq_vectors</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">)</span>
 	<span class="n">padded_targets</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">LongTensor</span><span class="p">(</span><span class="n">padded_targets</span><span class="p">)</span>
-	<span class="k">return</span> <span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">,</span> <span class="n">padded_targets</span><span class="p">)</span></div>
+
+	<span class="k">return</span> <span class="p">(</span><span class="n">names</span><span class="p">,</span> <span class="n">padded_seq_vectors</span><span class="p">,</span> <span class="n">padded_targets</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="res_regress_collate"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.res_regress_collate">[docs]</a><span class="k">def</span> <span class="nf">res_regress_collate</span><span class="p">(</span><span class="n">batch</span><span class="p">):</span>
 	<span class="sd">&quot;&quot;&quot;Collates sequences and their values into a batch</span>
@@ -447,8 +459,9 @@
 <span class="sd">		a tuple with concatenated sequence_vectors and target_values(s)</span>
 <span class="sd">	&quot;&quot;&quot;</span>
 
-	<span class="n">orig_seq_vectors</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
-	<span class="n">orig_targets</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">orig_seq_vectors</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+	<span class="n">orig_targets</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
 
 	<span class="n">longest_seq</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">orig_seq_vectors</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
 
@@ -465,7 +478,7 @@
 	<span class="n">padded_targets</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">padded_targets</span><span class="p">)</span><span class="o">.</span><span class="n">view</span><span class="p">(</span>
 			<span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">padded_targets</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">padded_targets</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="mi">1</span><span class="p">))</span>
 
-	<span class="k">return</span> <span class="p">(</span><span class="n">padded_seq_vectors</span><span class="p">,</span> <span class="n">padded_targets</span><span class="p">)</span></div>
+	<span class="k">return</span> <span class="p">(</span><span class="n">names</span><span class="p">,</span> <span class="n">padded_seq_vectors</span><span class="p">,</span> <span class="n">padded_targets</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="vector_split"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.vector_split">[docs]</a><span class="k">def</span> <span class="nf">vector_split</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">fraction</span><span class="p">):</span>
@@ -558,9 +571,10 @@
 <span class="sd">	encoding_scheme : str, optional</span>
 <span class="sd">		The method to be used for encoding protein sequences as numeric vectors.</span>
 <span class="sd">		Currently &#39;onehot&#39; and &#39;biophysics&#39; are implemented (default is &#39;onehot&#39;).</span>
-<span class="sd">	encoder : UserEncoder object, optional</span>
-<span class="sd">		TODO: write me</span>
-
+<span class="sd">	encoder: UserEncoder object, optional</span>
+<span class="sd">		If encoding_scheme is &#39;user&#39;, encoder should be a UserEncoder object</span>
+<span class="sd">		that can convert amino acid sequences to numeric vectors. If</span>
+<span class="sd">		encoding_scheme is not &#39;user&#39;, use None.</span>
 <span class="sd">	percent_val : float, optional</span>
 <span class="sd">		If `split_file` is not provided, the fraction of the data that should be</span>
 <span class="sd">		randomly assigned to the validation set. Should be in the range [0-1]</span>
@@ -655,9 +669,10 @@
 <span class="sd">	encoding_scheme : str, optional</span>
 <span class="sd">		The method to be used for encoding protein sequences as numeric vectors.</span>
 <span class="sd">		Currently &#39;onehot&#39; and &#39;biophysics&#39; are implemented (default is &#39;onehot&#39;).</span>
-<span class="sd">	encoder : UserEncoder object, optional</span>
-<span class="sd">		TODO: write me</span>
-
+<span class="sd">	encoder: UserEncoder object, optional</span>
+<span class="sd">		If encoding_scheme is &#39;user&#39;, encoder should be a UserEncoder object</span>
+<span class="sd">		that can convert amino acid sequences to numeric vectors. If</span>
+<span class="sd">		encoding_scheme is not &#39;user&#39;, use None.</span>
 <span class="sd">	percent_val : float, optional</span>
 <span class="sd">		If `split_file` is not provided, the fraction of the data that should be</span>
 <span class="sd">		randomly assigned to the validation set. Should be in the range [0-1]</span>

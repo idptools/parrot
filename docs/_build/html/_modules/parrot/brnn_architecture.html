@@ -151,7 +151,7 @@
             
   <h1>Source code for parrot.brnn_architecture</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">This file contains code for the underlying architecture of the BRNN.</span>
+<span class="sd">The underlying architecture of the bidirectional LSTM network used in PARROT</span>
 
 <span class="sd">.............................................................................</span>
 <span class="sd">idptools-parrot was developed by the Holehouse lab</span>
@@ -351,8 +351,6 @@
 <span class="sd">            be in the format:</span>
 <span class="sd">            [batch_dim X 1 X num_classes]</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-
-        <span class="c1"># TODO: double check this documentation...</span>
 
         <span class="c1"># Set initial states</span>
         <span class="c1"># h0 and c0 dimensions: [num_layers*2 X batch_size X hidden_size]</span>

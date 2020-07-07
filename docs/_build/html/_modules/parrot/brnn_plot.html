@@ -151,7 +151,8 @@
             
   <h1>Source code for parrot.brnn_plot</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">File containing functions for plotting training results.</span>
+<span class="sd">Plot training results for regression and classification tasks on both </span>
+<span class="sd">sequence-mapped and residue-mapped data.</span>
 
 <span class="sd">.............................................................................</span>
 <span class="sd">idptools-parrot was developed by the Holehouse lab</span>
@@ -170,6 +171,8 @@
 <span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
 <span class="kn">import</span> <span class="nn">seaborn</span> <span class="k">as</span> <span class="nn">sn</span>
 <span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+
+<span class="kn">from</span> <span class="nn">parrot</span> <span class="kn">import</span> <span class="n">encode_sequence</span>
 
 <div class="viewcode-block" id="training_loss"><a class="viewcode-back" href="../../api.html#parrot.brnn_plot.training_loss">[docs]</a><span class="k">def</span> <span class="nf">training_loss</span><span class="p">(</span><span class="n">train_loss</span><span class="p">,</span> <span class="n">val_loss</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
 	<span class="sd">&quot;&quot;&quot;Plot training and validation loss per epoch</span>
@@ -389,6 +392,66 @@
 	<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 	<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">+</span> <span class="s1">&#39;res_CM.png&#39;</span><span class="p">)</span>
 	<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="output_predictions_to_file"><a class="viewcode-back" href="../../api.html#parrot.brnn_plot.output_predictions_to_file">[docs]</a><span class="k">def</span> <span class="nf">output_predictions_to_file</span><span class="p">(</span><span class="n">sequence_data</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="p">,</span> <span class="n">encoder</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
+	<span class="sd">&quot;&quot;&quot;Output sequences, their true values, and their predicted values to a file</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	sequence_data :</span>
+<span class="sd">	excludeSeqID :</span>
+<span class="sd">	encoding_scheme :</span>
+<span class="sd">	encoder : optional</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="n">seq_vectors</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="n">true_vals</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="n">pred_vals</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="n">names</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+	<span class="k">for</span> <span class="n">sequence</span> <span class="ow">in</span> <span class="n">sequence_data</span><span class="p">:</span>
+		<span class="n">seq_vector</span><span class="p">,</span> <span class="n">true_val</span><span class="p">,</span> <span class="n">pred_val</span><span class="p">,</span> <span class="n">name</span> <span class="o">=</span> <span class="n">sequence</span>
+		<span class="n">seq_vectors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">seq_vector</span><span class="p">)</span>
+		<span class="n">true_vals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">true_val</span><span class="p">)</span>
+		<span class="n">pred_vals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pred_val</span><span class="p">)</span>
+
+		<span class="k">if</span> <span class="n">excludeSeqID</span><span class="p">:</span>
+			<span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;test&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">count</span><span class="p">))</span>
+			<span class="n">count</span><span class="o">+=</span><span class="mi">1</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+	<span class="c1"># Decode the sequence vectors</span>
+	<span class="k">if</span> <span class="n">encoding_scheme</span> <span class="o">==</span> <span class="s1">&#39;onehot&#39;</span><span class="p">:</span>
+		<span class="n">sequences</span> <span class="o">=</span> <span class="n">encode_sequence</span><span class="o">.</span><span class="n">rev_one_hot</span><span class="p">(</span><span class="n">seq_vectors</span><span class="p">)</span>
+	<span class="k">elif</span> <span class="n">encoding_scheme</span> <span class="o">==</span> <span class="s1">&#39;biophysics&#39;</span><span class="p">:</span>
+		<span class="n">sequences</span> <span class="o">=</span> <span class="n">encode_sequence</span><span class="o">.</span><span class="n">rev_biophysics</span><span class="p">(</span><span class="n">seq_vectors</span><span class="p">)</span>
+	<span class="k">else</span><span class="p">:</span>
+		<span class="n">sequences</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">seq_vectors</span><span class="p">)</span>
+
+	<span class="c1"># Write to file</span>
+	<span class="n">filename</span> <span class="o">=</span> <span class="s1">&#39;test_set_predictions.tsv&#39;</span>
+
+	<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">+</span> <span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">tsvfile</span><span class="p">:</span>
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">names</span><span class="p">)):</span>
+
+			<span class="c1"># Adjust formatting for residues or sequence data</span>
+			<span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">true_vals</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+				<span class="n">true_vals_format</span> <span class="o">=</span> <span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">true_vals</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">))</span>
+				<span class="n">pred_vals_format</span> <span class="o">=</span> <span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pred_vals</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">))</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="n">true_vals_format</span> <span class="o">=</span> <span class="n">true_vals</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+				<span class="n">pred_vals_format</span> <span class="o">=</span> <span class="n">pred_vals</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+			<span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">			Format:</span>
+<span class="sd">			NAME_TRUE SEQUENCE TRUE_VALUE(S)</span>
+<span class="sd">			NAME_PRED SEQUENCE PRED_VALUE(S)</span>
+<span class="sd">			&#39;&#39;&#39;</span>
+			<span class="n">output_str</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">_TRUE </span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">names</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">sequences</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">true_vals_format</span><span class="p">)</span>
+			<span class="n">output_str</span> <span class="o">=</span> <span class="n">output_str</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">_PRED </span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">names</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">sequences</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">pred_vals_format</span><span class="p">)</span>
+	
+			<span class="n">tsvfile</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">output_str</span><span class="p">)</span></div>
 </pre></div>
 
            </div>
