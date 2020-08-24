@@ -86,7 +86,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-predict.html">parrot-predict</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../api.html">Module Documentation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../usage/ml_faqs.html">Machine Learning FAQs:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/ml_faqs.html">Machine Learning Resources:</a></li>
 </ul>
 
             
@@ -388,6 +388,10 @@
 <span class="sd">	-------</span>
 <span class="sd">	float</span>
 <span class="sd">		The average loss across the entire test set</span>
+<span class="sd">	list of lists</span>
+<span class="sd">		Details of the output predictions for each of the sequences in the test set. Each</span>
+<span class="sd">		inner list represents a sample in the test set, with the format: [sequence_vector,</span>
+<span class="sd">		true_value, predicted_value, sequence_ID]</span>
 <span class="sd">	&quot;&quot;&quot;</span>
 
 	<span class="c1"># Load network weights</span>

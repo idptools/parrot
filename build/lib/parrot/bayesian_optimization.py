@@ -50,6 +50,8 @@ class BayesianOptimizer(object):
 		Path to which the network weights will be saved during training
 	device : str
 		'cpu' or 'cuda' depending on system hardware
+	max_iterations : int
+		Maximum number of iterations to perform the optimization procedure
 	verbosity : int
 		level of how descriptive the output to console message will be
 	bds : list of dicts
@@ -67,8 +69,8 @@ class BayesianOptimizer(object):
 		Set up and run Bayesian Optimization on the BRNN using GPy
 	"""
 
-	def __init__(self, cv_dataloaders, input_size, n_epochs, 
-				n_classes, dtype, weights_file, device, verbosity):
+	def __init__(self, cv_dataloaders, input_size, n_epochs, n_classes, 
+				dtype, weights_file, max_iterations, device, verbosity):
 		"""
 		Parameters
 		----------
@@ -87,6 +89,8 @@ class BayesianOptimizer(object):
 			Path to which the network weights will be saved during training
 		device : str
 			'cpu' or 'cuda' depending on system hardware
+		max_iterations : int
+			Maximum number of iterations to perform the optimization procedure
 		verbosity : int
 			level of how descriptive the output to console message will be
 		"""
@@ -103,6 +107,7 @@ class BayesianOptimizer(object):
 
 		self.dtype = dtype
 		self.weights_file = weights_file
+		self.max_iterations = max_iterations
 		self.device = device
 		self.verbosity = verbosity
 
@@ -138,11 +143,12 @@ class BayesianOptimizer(object):
 			nl = int(nl)
 			hs = int(hs)
 
-			if self.verbosity > 0:
-				print('  %.6f	|     %2d       |         %2d' % (lr, nl, hs))
-
 			# Train and validate network with these hyperparams using k-fold CV
 			cv_outputs[i] = self.eval_cv_brnns(lr, nl, hs)
+			avg = np.average(cv_outputs[i])
+
+			if self.verbosity > 0:
+				print('  %.6f	|     %2d       |         %2d           |    %.3f' % (lr, nl, hs, avg))
 
 		outputs = np.average(cv_outputs, axis=1)
 		return outputs
@@ -186,9 +192,6 @@ class BayesianOptimizer(object):
 			# Take best val loss
 			best_val_loss = np.min(val_losses)
 			cv_losses[k] = best_val_loss
-
-			if self.verbosity > 1:
-				print('[%d/%d] Loss: %.6f' % (k+1, self.n_folds, best_val_loss))
 
 		return cv_losses
 
@@ -254,8 +257,8 @@ class BayesianOptimizer(object):
 
 			print('Primary optimization:')
 			print('--------------------\n')
-			print('Learning rate   |   n_layers   |   hidden vector size')
-			print('=====================================================')	
+			print('Learning rate   |   n_layers   |   hidden vector size |  avg CV loss  ')
+			print('======================================================================')	
 
 		optimizer = BayesianOptimization(f=self.compute_cv_loss, 
 										 domain=self.bds,
@@ -267,7 +270,7 @@ class BayesianOptimizer(object):
 										 noise_var = noise,
 										 maximize=False)
 		
-		optimizer.run_optimization(max_iter=75)
+		optimizer.run_optimization(max_iter=self.max_iterations)
 
 		ins = optimizer.get_evaluations()[0]
 		outs = optimizer.get_evaluations()[1].flatten()

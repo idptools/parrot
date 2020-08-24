@@ -147,7 +147,7 @@ if learning_rate >= 1 or learning_rate <= 0:
 if stop_cond == 'auto':
 	if num_epochs > 10:
 		print("Warning: Stop condition is set to 'auto' and num_epochs > 10." +
-							 " Network training may take a long time.")
+							 " Network training may take a long time.\n")
 elif stop_cond != 'iter':
 	raise ValueError('Invalid argument for `--stop` -- must be "auto" or "iter".')
 
@@ -211,6 +211,21 @@ test_loader = torch.utils.data.DataLoader(dataset=test,
                                           batch_size=1,		# Set test batch size to 1
                                           collate_fn=collate_function,
                                           shuffle=False)
+
+# Output to std out
+if verbosity > 0:
+	print("PARROT with user-specified parameters")
+	print("-------------------------------------")
+	if verbosity > 1:
+		print('Train on:\t%s' % device)
+		print("Datatype:\t%s" % dtype)
+		print("ML Task:\t%s" % problem_type)
+		print("Learning rate:\t%f" % learning_rate)
+		print("Number of layers:\t%d" % num_layers)
+		print("Hidden vector size:\t%d" % hidden_size)
+		print("Batch size:\t%d\n" % batch_size)
+
+	print("Validation set loss per epoch:")
 
 # Train network
 train_loss, val_loss = train_network.train(brnn_network, train_loader, val_loader, datatype=dtype, 

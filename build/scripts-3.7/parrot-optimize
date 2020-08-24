@@ -44,6 +44,8 @@ parser.add_argument('-b', '--batch', default=32, type=int, metavar='batch_size',
 						help='size of training batch (def=32)')
 parser.add_argument('-e', '--epochs', default=30, type=int, metavar='num_epochs', 
 						help='number of training epochs (def=30)')
+parser.add_argument('--max-iter', default=75, type=int, metavar='max_iter',
+					help='Maximum number of iterations for the optimization procedure (def=75)')
 parser.add_argument('--split', default='', metavar='split_file', type=str, 
 	help="file indicating how to split datafile into training, validation, and testing sets")
 parser.add_argument('--setFractions', nargs=3, default=[0.7, 0.15, 0.15], type=float, 
@@ -64,6 +66,7 @@ args = parser.parse_args()
 # Hyper-parameters
 batch_size = args.batch
 num_epochs = args.epochs
+max_iterations = args.max_iter
 
 # Data format
 dtype = args.datatype
@@ -175,8 +178,22 @@ for cv_train, cv_val in cvs:
                                            		collate_fn=collate_function, shuffle=False)
 	cv_loaders.append((cv_train_loader, cv_val_loader))
 
-optimizer = bayesian_optimization.BayesianOptimizer(cv_loaders, input_size, num_epochs, num_classes, 
-													dtype, saved_weights, device, verbosity)
+# Output to std out
+if verbosity > 0:
+	print("PARROT with hyperparameter optimization")
+	print("---------------------------------------")
+	if verbosity > 1:
+		print('Train on:\t%s' % device)
+		print("Datatype:\t%s" % dtype)
+		print("ML Task:\t%s" % problem_type)
+		print("Batch size:\t%d" % batch_size)
+		print("Number of epochs:\t%d" % num_epochs)
+		print("Number of optimization iterations:\t%d\n" % max_iterations)
+
+# Optimization procedure
+optimizer = bayesian_optimization.BayesianOptimizer(cv_loaders, input_size, num_epochs, 
+													num_classes, dtype, saved_weights, 
+													max_iterations, device, verbosity)
 	
 best_hyperparams = optimizer.optimize()
 lr = 10**best_hyperparams[0]

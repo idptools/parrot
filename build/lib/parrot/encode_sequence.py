@@ -51,7 +51,18 @@ def one_hot(seq):
 	return torch.from_numpy(m)
 
 def rev_one_hot(seq_vectors):
-	"""Decode a list of one-hot sequence vectors back into amino acid sequences"""
+	"""Decode a list of one-hot sequence vectors into amino acid sequences
+
+	Parameters
+	----------
+	seq_vectors : list of numpy arrays
+		A list containing sequence vectors
+
+	Returns
+	-------
+	list
+		Strings of amino acid sequences
+	"""
 
 	REV_ONE_HOT = 'ACDEFGHIKLMNPQRSTVWY'
 	sequences = []
@@ -132,7 +143,18 @@ def biophysics(seq):
 	return torch.from_numpy(m)
 
 def rev_biophysics(seq_vectors):
-	"""Decode a list of biophysically-encoded sequence vectors into amino acid sequences"""
+	"""Decode a list of biophysically-encoded sequence vectors into amino acid sequences
+
+	Parameters
+	----------
+	seq_vectors : list of numpy arrays
+		A list containing sequence vectors
+
+	Returns
+	-------
+	list
+		Strings of amino acid sequences
+	"""
 
 	REV_BIOPHYSICS = {}
 	for key, value in BIOPHYSICS.items():
@@ -224,6 +246,18 @@ class UserEncoder():
 		return torch.from_numpy(m)
 
 	def decode(self, seq_vectors):
+		"""Converts a list of sequence vectors back to a list of protein sequences
+
+		Parameters
+		----------
+		seq_vectors : list of numpy arrays
+			A list containing sequence vectors
+
+		Returns
+		-------
+		list
+			Strings of amino acid sequences
+		"""
 
 		# Create a reverse of the encode_dict using hashing
 		rev_dict = {}

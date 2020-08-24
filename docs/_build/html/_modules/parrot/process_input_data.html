@@ -86,7 +86,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-predict.html">parrot-predict</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../api.html">Module Documentation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../usage/ml_faqs.html">Machine Learning FAQs:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/ml_faqs.html">Machine Learning Resources:</a></li>
 </ul>
 
             
@@ -253,8 +253,8 @@
 <span class="sd">		have the format: [seqID, sequence, value(s)]</span>
 <span class="sd">	encoding_scheme : str</span>
 <span class="sd">		Description of how an amino acid sequence should be encoded as a numeric </span>
-<span class="sd">		vector. Providing a string other than &#39;onehot&#39; or &#39;biophysics&#39; will </span>
-<span class="sd">		produce unintended consequences.</span>
+<span class="sd">		vector. Providing a string other than &#39;onehot&#39;, &#39;biophysics&#39;, or &#39;user&#39; </span>
+<span class="sd">		will produce unintended consequences.</span>
 <span class="sd">	encoder: UserEncoder object, optional</span>
 <span class="sd">		If encoding_scheme is &#39;user&#39;, encoder should be a UserEncoder object</span>
 <span class="sd">		that can convert amino acid sequences to numeric vectors. If</span>
@@ -273,10 +273,10 @@
 <span class="sd">			Array containing the indices of `data` that are to be a part of this</span>
 <span class="sd">			dataset. Providing an empty array causes all of `data` to be integrated</span>
 <span class="sd">			into the dataset (default is empty array).</span>
-<span class="sd">		encoding_scheme : str, optional</span>
+<span class="sd">		encoding_scheme : str</span>
 <span class="sd">			Description of how an amino acid sequence should be encoded as a numeric </span>
-<span class="sd">			vector. Providing a string other than &#39;onehot&#39; or &#39;biophysics&#39; will </span>
-<span class="sd">			produce unintended consequences (default is &#39;onehot&#39;).</span>
+<span class="sd">			vector. Providing a string other than &#39;onehot&#39;, &#39;biophysics&#39;, or &#39;user&#39; </span>
+<span class="sd">			will produce unintended consequences.</span>
 <span class="sd">		encoder: UserEncoder object, optional</span>
 <span class="sd">			If encoding_scheme is &#39;user&#39;, encoder should be a UserEncoder object</span>
 <span class="sd">			that can convert amino acid sequences to numeric vectors. If</span>
@@ -310,7 +310,7 @@
 <span class="sd">		Returns</span>
 <span class="sd">		-------</span>
 <span class="sd">		tuple</span>
-<span class="sd">			a tuple of a sequence vector and its corresponding values</span>
+<span class="sd">			a tuple of a name, sequence vector and its corresponding values</span>
 <span class="sd">		&quot;&quot;&quot;</span>
 
 		<span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">idx</span><span class="p">):</span>
@@ -345,7 +345,7 @@
 <span class="sd">	Returns</span>
 <span class="sd">	-------</span>
 <span class="sd">	tuple</span>
-<span class="sd">		a tuple with concatenated sequence_vectors and target_values(s)</span>
+<span class="sd">		a tuple with concatenated names, sequence_vectors and target_values</span>
 <span class="sd">	&quot;&quot;&quot;</span>
 
 	<span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
@@ -380,7 +380,7 @@
 <span class="sd">	Returns</span>
 <span class="sd">	-------</span>
 <span class="sd">	tuple</span>
-<span class="sd">		a tuple with concatenated sequence_vectors and target_value(s)</span>
+<span class="sd">		a tuple with concatenated names, sequence_vectors and target_value</span>
 <span class="sd">	&quot;&quot;&quot;</span>
 
 	<span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
@@ -416,7 +416,7 @@
 <span class="sd">	Returns</span>
 <span class="sd">	-------</span>
 <span class="sd">	tuple</span>
-<span class="sd">		a tuple with concatenated sequence_vectors and target_values(s)</span>
+<span class="sd">		a tuple with concatenated names, sequence_vectors and target_values</span>
 <span class="sd">	&quot;&quot;&quot;</span>
 
 	<span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
@@ -456,7 +456,7 @@
 <span class="sd">	Returns</span>
 <span class="sd">	-------</span>
 <span class="sd">	tuple</span>
-<span class="sd">		a tuple with concatenated sequence_vectors and target_values(s)</span>
+<span class="sd">		a tuple with concatenated names, sequence_vectors and target_values</span>
 <span class="sd">	&quot;&quot;&quot;</span>
 
 	<span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>

@@ -21,7 +21,7 @@ This will install PARROT locally. If you modify the source code in the local rep
 ## Usage:
 
 There are three primary commands that can be run within the parrot package. Each of these are briefly described below and
-for more information on their usage, visit their individual documentation pages.
+for more information on their usage, visit their individual [documentation pages](https://idptools-parrot.readthedocs.io/en/latest/).
 
 1. Train a BRNN with user-specified hyperparameters
 2. Train a BRNN with automatically-determined, optimal hyperparameters

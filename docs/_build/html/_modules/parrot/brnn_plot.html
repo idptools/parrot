@@ -86,7 +86,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-predict.html">parrot-predict</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../api.html">Module Documentation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../usage/ml_faqs.html">Machine Learning FAQs:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/ml_faqs.html">Machine Learning Resources:</a></li>
 </ul>
 
             
@@ -393,15 +393,33 @@
 	<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">+</span> <span class="s1">&#39;res_CM.png&#39;</span><span class="p">)</span>
 	<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="output_predictions_to_file"><a class="viewcode-back" href="../../api.html#parrot.brnn_plot.output_predictions_to_file">[docs]</a><span class="k">def</span> <span class="nf">output_predictions_to_file</span><span class="p">(</span><span class="n">sequence_data</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="p">,</span> <span class="n">encoder</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
+<div class="viewcode-block" id="output_predictions_to_file"><a class="viewcode-back" href="../../api.html#parrot.brnn_plot.output_predictions_to_file">[docs]</a><span class="k">def</span> <span class="nf">output_predictions_to_file</span><span class="p">(</span><span class="n">sequence_data</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="p">,</span> <span class="n">encoder</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+																			<span class="n">output_dir</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
 	<span class="sd">&quot;&quot;&quot;Output sequences, their true values, and their predicted values to a file</span>
+
+<span class="sd">	Used on the output of the test_unlabeled_data() function in the train_network module in</span>
+<span class="sd">	order to detail the performance of the trained network on the test set. Produces the</span>
+<span class="sd">	file &quot;test_set_predictions.tsv&quot; in output_dir. Each pair of lines in this tsvfile</span>
+<span class="sd">	corresponds to a particular test set sequence, with the first containing the true data</span>
+<span class="sd">	values, and the second line having the predicted data values.</span>
 
 <span class="sd">	Parameters</span>
 <span class="sd">	----------</span>
-<span class="sd">	sequence_data :</span>
-<span class="sd">	excludeSeqID :</span>
-<span class="sd">	encoding_scheme :</span>
-<span class="sd">	encoder : optional</span>
+<span class="sd">	sequence_data : list of lists</span>
+<span class="sd">		Details of the output predictions for each of the sequences in the test set. Each</span>
+<span class="sd">		inner list represents a sample in the test set, with the format: [sequence_vector,</span>
+<span class="sd">		true_value, predicted_value, sequence_ID]</span>
+<span class="sd">	excludeSeqID : bool</span>
+<span class="sd">		Boolean indicating whether or not each line in `tsvfile` has a sequence ID</span>
+<span class="sd">		(default is False)		</span>
+<span class="sd">	encoding_scheme : str</span>
+<span class="sd">		Description of how an amino acid sequence should be encoded as a numeric </span>
+<span class="sd">		vector. Providing a string other than &#39;onehot&#39;, &#39;biophysics&#39;, or &#39;user&#39; </span>
+<span class="sd">		will produce unintended consequences.</span>
+<span class="sd">	encoder: UserEncoder object, optional</span>
+<span class="sd">		If encoding_scheme is &#39;user&#39;, encoder should be a UserEncoder object</span>
+<span class="sd">		that can convert amino acid sequences to numeric vectors. If</span>
+<span class="sd">		encoding_scheme is not &#39;user&#39;, use None.</span>
 <span class="sd">	&quot;&quot;&quot;</span>
 
 	<span class="n">seq_vectors</span> <span class="o">=</span> <span class="p">[]</span>

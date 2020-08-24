@@ -35,7 +35,7 @@
   <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Machine Learning FAQs:" href="usage/ml_faqs.html" />
+    <link rel="next" title="Machine Learning Resources:" href="usage/ml_faqs.html" />
     <link rel="prev" title="Examples" href="usage/examples.html" /> 
 </head>
 
@@ -96,7 +96,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#module-parrot.brnn_plot">brnn_plot.py</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="usage/ml_faqs.html">Machine Learning FAQs:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/ml_faqs.html">Machine Learning Resources:</a></li>
 </ul>
 
             
@@ -306,6 +306,23 @@ be in the format:
 </dd>
 </dl>
 <dl class="py method">
+<dt id="parrot.encode_sequence.UserEncoder.decode">
+<code class="sig-name descname">decode</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq_vectors</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/encode_sequence.html#UserEncoder.decode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.encode_sequence.UserEncoder.decode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Converts a list of sequence vectors back to a list of protein sequences</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>seq_vectors</strong> (<em>list of numpy arrays</em>) – A list containing sequence vectors</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Strings of amino acid sequences</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt id="parrot.encode_sequence.UserEncoder.encode">
 <code class="sig-name descname">encode</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/encode_sequence.html#UserEncoder.encode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.encode_sequence.UserEncoder.encode" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convert an amino acid sequence into this encoding scheme</p>
@@ -379,12 +396,34 @@ cause the program to exit.</p>
 <dt id="parrot.encode_sequence.rev_biophysics">
 <code class="sig-prename descclassname">parrot.encode_sequence.</code><code class="sig-name descname">rev_biophysics</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq_vectors</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/encode_sequence.html#rev_biophysics"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.encode_sequence.rev_biophysics" title="Permalink to this definition">¶</a></dt>
 <dd><p>Decode a list of biophysically-encoded sequence vectors into amino acid sequences</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>seq_vectors</strong> (<em>list of numpy arrays</em>) – A list containing sequence vectors</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Strings of amino acid sequences</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py function">
 <dt id="parrot.encode_sequence.rev_one_hot">
 <code class="sig-prename descclassname">parrot.encode_sequence.</code><code class="sig-name descname">rev_one_hot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq_vectors</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/encode_sequence.html#rev_one_hot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.encode_sequence.rev_one_hot" title="Permalink to this definition">¶</a></dt>
-<dd><p>Decode a list of one-hot sequence vectors back into amino acid sequences</p>
+<dd><p>Decode a list of one-hot sequence vectors into amino acid sequences</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>seq_vectors</strong> (<em>list of numpy arrays</em>) – A list containing sequence vectors</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Strings of amino acid sequences</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
 </dd></dl>
 
 </div>
@@ -407,8 +446,8 @@ target values. This class is designed to be provided to PyTorch Dataloaders.</p>
 <li><p><strong>data</strong> (<em>list of lists</em>) – Each inner list represents a single sequence in the dataset and should
 have the format: [seqID, sequence, value(s)]</p></li>
 <li><p><strong>encoding_scheme</strong> (<em>str</em>) – Description of how an amino acid sequence should be encoded as a numeric
-vector. Providing a string other than ‘onehot’ or ‘biophysics’ will
-produce unintended consequences.</p></li>
+vector. Providing a string other than ‘onehot’, ‘biophysics’, or ‘user’
+will produce unintended consequences.</p></li>
 <li><p><strong>encoder</strong> (<em>UserEncoder object</em><em>, </em><em>optional</em>) – If encoding_scheme is ‘user’, encoder should be a UserEncoder object
 that can convert amino acid sequences to numeric vectors. If
 encoding_scheme is not ‘user’, use None.</p></li>
@@ -488,7 +527,7 @@ padded to the length of the longest sequence in the batch</p>
 <dd class="field-odd"><p><strong>batch</strong> (<em>list</em>) – A list of tuples of the form (sequence_vector, target_value(s))</p>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>a tuple with concatenated sequence_vectors and target_values(s)</p>
+<dd class="field-even"><p>a tuple with concatenated names, sequence_vectors and target_values</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>tuple</p>
@@ -510,7 +549,7 @@ padded to the length of the longest sequence in the batch</p>
 <dd class="field-odd"><p><strong>batch</strong> (<em>list</em>) – A list of tuples of the form (sequence_vector, target_value(s))</p>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>a tuple with concatenated sequence_vectors and target_values(s)</p>
+<dd class="field-even"><p>a tuple with concatenated names, sequence_vectors and target_values</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>tuple</p>
@@ -530,7 +569,7 @@ specifically designed for classification problems with sequence-mapped data.</p>
 <dd class="field-odd"><p><strong>batch</strong> (<em>list</em>) – A list of tuples of the form (sequence_vector, target_value(s))</p>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>a tuple with concatenated sequence_vectors and target_values(s)</p>
+<dd class="field-even"><p>a tuple with concatenated names, sequence_vectors and target_values</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>tuple</p>
@@ -550,7 +589,7 @@ specifically designed for regression problems with sequence-mapped data.</p>
 <dd class="field-odd"><p><strong>batch</strong> (<em>list</em>) – A list of tuples of the form (sequence_vector, target_value(s))</p>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>a tuple with concatenated sequence_vectors and target_value(s)</p>
+<dd class="field-even"><p>a tuple with concatenated names, sequence_vectors and target_value</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>tuple</p>
@@ -728,10 +767,13 @@ datasets with values (or class labels) for every residue in a sequence.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>The average loss across the entire test set</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>float</p>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>float</em> – The average loss across the entire test set</p></li>
+<li><p><em>list of lists</em> – Details of the output predictions for each of the sequences in the test set. Each
+inner list represents a sample in the test set, with the format: [sequence_vector,
+true_value, predicted_value, sequence_ID]</p></li>
+</ul>
+</p>
 </dd>
 </dl>
 </dd></dl>
@@ -830,7 +872,7 @@ is 1).</p></li>
 <p>Licensed under the MIT license.</p>
 <dl class="py class">
 <dt>
-<em class="property">class </em><code class="sig-prename descclassname">parrot.bayesian_optimization.</code><code class="sig-name descname">BayesianOptimizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">cv_dataloaders</span></em>, <em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">n_epochs</span></em>, <em class="sig-param"><span class="n">n_classes</span></em>, <em class="sig-param"><span class="n">dtype</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">verbosity</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer"><span class="viewcode-link">[source]</span></a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">parrot.bayesian_optimization.</code><code class="sig-name descname">BayesianOptimizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">cv_dataloaders</span></em>, <em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">n_epochs</span></em>, <em class="sig-param"><span class="n">n_classes</span></em>, <em class="sig-param"><span class="n">dtype</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">max_iterations</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">verbosity</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer"><span class="viewcode-link">[source]</span></a></dt>
 <dd><p>A class for conducting Bayesian Optimization on a PyTorch RNN</p>
 <p>Sets up and runs GPy Bayesian Optimization in order to choose the best-
 performing hyperparameters for a RNN for a given machine learning task.
@@ -849,6 +891,7 @@ DataLoader and a validation set DataLoader.</p></li>
 <li><p><strong>dtype</strong> (<em>str</em>) – ‘sequence’ or ‘residues’</p></li>
 <li><p><strong>weights_file</strong> (<em>str</em>) – Path to which the network weights will be saved during training</p></li>
 <li><p><strong>device</strong> (<em>str</em>) – ‘cpu’ or ‘cuda’ depending on system hardware</p></li>
+<li><p><strong>max_iterations</strong> (<em>int</em>) – Maximum number of iterations to perform the optimization procedure</p></li>
 <li><p><strong>verbosity</strong> (<em>int</em>) – level of how descriptive the output to console message will be</p></li>
 <li><p><strong>bds</strong> (<em>list of dicts</em>) – GPy-compatible bounds for each of the hyperparameters to be optimized</p></li>
 </ul>
@@ -988,13 +1031,25 @@ class label for a particular sequence</p></li>
 <dt id="parrot.brnn_plot.output_predictions_to_file">
 <code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">output_predictions_to_file</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">sequence_data</span></em>, <em class="sig-param"><span class="n">excludeSeqID</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span></em>, <em class="sig-param"><span class="n">encoder</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#output_predictions_to_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.output_predictions_to_file" title="Permalink to this definition">¶</a></dt>
 <dd><p>Output sequences, their true values, and their predicted values to a file</p>
+<p>Used on the output of the test_unlabeled_data() function in the train_network module in
+order to detail the performance of the trained network on the test set. Produces the
+file “test_set_predictions.tsv” in output_dir. Each pair of lines in this tsvfile
+corresponds to a particular test set sequence, with the first containing the true data
+values, and the second line having the predicted data values.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>sequence_data</strong></p></li>
-<li><p><strong>excludeSeqID</strong></p></li>
-<li><p><strong>encoding_scheme</strong></p></li>
-<li><p><strong>encoder</strong> (<em>optional</em>)</p></li>
+<li><p><strong>sequence_data</strong> (<em>list of lists</em>) – Details of the output predictions for each of the sequences in the test set. Each
+inner list represents a sample in the test set, with the format: [sequence_vector,
+true_value, predicted_value, sequence_ID]</p></li>
+<li><p><strong>excludeSeqID</strong> (<em>bool</em>) – Boolean indicating whether or not each line in <cite>tsvfile</cite> has a sequence ID
+(default is False)</p></li>
+<li><p><strong>encoding_scheme</strong> (<em>str</em>) – Description of how an amino acid sequence should be encoded as a numeric
+vector. Providing a string other than ‘onehot’, ‘biophysics’, or ‘user’
+will produce unintended consequences.</p></li>
+<li><p><strong>encoder</strong> (<em>UserEncoder object, optional</em>) – If encoding_scheme is ‘user’, encoder should be a UserEncoder object
+that can convert amino acid sequences to numeric vectors. If
+encoding_scheme is not ‘user’, use None.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1089,7 +1144,7 @@ for a particular sequence</p></li>
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="usage/ml_faqs.html" class="btn btn-neutral float-right" title="Machine Learning FAQs:" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="usage/ml_faqs.html" class="btn btn-neutral float-right" title="Machine Learning Resources:" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="usage/examples.html" class="btn btn-neutral float-left" title="Examples" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

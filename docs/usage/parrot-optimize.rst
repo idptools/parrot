@@ -9,7 +9,7 @@ Once PARROT is installed, the user can run ``parrot-optimize`` from the command 
 	
 	$ parrot-optimize data_file output_network <flags>
 
-Where `data_file` specifies the path to the whitespace-separated datafile and `output_network` is the path to where the final trained network will be saved on disk. Of note, the output images from this script will be saved to the same directory as `output_network`.
+Where `data_file` specifies the path to the whitespace-separated datafile and `output_network` is the path to where the final trained network will be saved on disk. Note, the output images from this script will be saved to the same directory as `output_network`.
 
 **Required flags:**
 
@@ -21,6 +21,7 @@ Where `data_file` specifies the path to the whitespace-separated datafile and `o
 	*  ``--help`` / ``-h`` : Display a help message.
 	*  ``--batch`` / ``-b`` : Training batch size (default is 32). Must be a positive integer, and ideally should be in the range of 50-500. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance.
 	*  ``--epochs`` / ``-e`` : Number of epochs to train for during each iteration of optimization on each data fold (default is 200).
+	*  ``--max-iter`` : Maximum number of iterations the optimization algorithm should run for. Default is 75.
 	*  ``--split`` : Path to split_file for manually dividing dataset into training, validation and test sets. The file should contain three lines, corresponding to training, validation and test sets respectively. Each line should have integers separated by whitespace, with the integers specify which sequences/lines in the `datafile` (0-indexed) will belong to which dataset. The cross-validation folds will be divided from the training and validation data.
 	*  ``--setFractions`` : Include this flag to manually set the proportions of the data belonging to the training, validation and test sets. This option must be followed by three floats (representing train, validation, and test) between 0 and 1 that cumulatively sum to 1.
 	*  ``--encode`` : Include this flag to specify the numeric encoding scheme for each amino acid. Available options are 'onehot' (default), 'biophysics' or user-specified. If you wish to manually specify an encoding scheme, provide a path to a text file describing the amino acid to vector mapping.
@@ -30,6 +31,6 @@ Where `data_file` specifies the path to the whitespace-separated datafile and `o
 
 **Output:**
 
-``parrot-optimize`` will produce similar output as ``parrot-train``. Firstly, the saved network weights from the training process will be located at the path provided by `output_network`. Additionally, there will be two PNG images saved to this same directory. The first, called 'train_test.png' displays the network's performance on the training and validation sets over the course of training. The second image describes the network performance on the held out test set, and will vary depending on the data format and machine learning task. If training a network for a classification task, the image will be a confusion matrix. If training for a regression task, the image will be a scatterplot comparing the predicted and true values of the test set sequences.
+``parrot-optimize`` will produce similar output as ``parrot-train``. Firstly, the saved network weights from the training process will be located at the path provided by `output_network`. Additionally, there will be two PNG images saved to this same directory. The first, called 'train_test.png' displays the network's performance on the training and validation sets over the course of training. The second image describes the network performance on the held out test set, and will vary depending on the data format and machine learning task. If training a network for a classification task, the image will be a confusion matrix. If training for a regression task, the image will be a scatterplot comparing the predicted and true values of the test set sequences. Finally, the file "test_set_predictions.tsv" will be saved into this same directory. This file contains both the true values (provided in the original data_file) and predicted values for each of the sequences within the test set.
 
 Output text detailing network performance across training can be printed to console if the ``--verbose`` flag is provided.

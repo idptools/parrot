@@ -236,6 +236,10 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 	-------
 	float
 		The average loss across the entire test set
+	list of lists
+		Details of the output predictions for each of the sequences in the test set. Each
+		inner list represents a sample in the test set, with the format: [sequence_vector,
+		true_value, predicted_value, sequence_ID]
 	"""
 
 	# Load network weights

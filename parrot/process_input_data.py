@@ -101,8 +101,8 @@ class SequenceDataset(Dataset):
 		have the format: [seqID, sequence, value(s)]
 	encoding_scheme : str
 		Description of how an amino acid sequence should be encoded as a numeric 
-		vector. Providing a string other than 'onehot' or 'biophysics' will 
-		produce unintended consequences.
+		vector. Providing a string other than 'onehot', 'biophysics', or 'user' 
+		will produce unintended consequences.
 	encoder: UserEncoder object, optional
 		If encoding_scheme is 'user', encoder should be a UserEncoder object
 		that can convert amino acid sequences to numeric vectors. If
@@ -121,10 +121,10 @@ class SequenceDataset(Dataset):
 			Array containing the indices of `data` that are to be a part of this
 			dataset. Providing an empty array causes all of `data` to be integrated
 			into the dataset (default is empty array).
-		encoding_scheme : str, optional
+		encoding_scheme : str
 			Description of how an amino acid sequence should be encoded as a numeric 
-			vector. Providing a string other than 'onehot' or 'biophysics' will 
-			produce unintended consequences (default is 'onehot').
+			vector. Providing a string other than 'onehot', 'biophysics', or 'user' 
+			will produce unintended consequences.
 		encoder: UserEncoder object, optional
 			If encoding_scheme is 'user', encoder should be a UserEncoder object
 			that can convert amino acid sequences to numeric vectors. If
@@ -158,7 +158,7 @@ class SequenceDataset(Dataset):
 		Returns
 		-------
 		tuple
-			a tuple of a sequence vector and its corresponding values
+			a tuple of a name, sequence vector and its corresponding values
 		"""
 
 		if torch.is_tensor(idx):
@@ -193,7 +193,7 @@ def seq_class_collate(batch):
 	Returns
 	-------
 	tuple
-		a tuple with concatenated sequence_vectors and target_values(s)
+		a tuple with concatenated names, sequence_vectors and target_values
 	"""
 
 	names = [item[0] for item in batch]
@@ -228,7 +228,7 @@ def seq_regress_collate(batch):
 	Returns
 	-------
 	tuple
-		a tuple with concatenated sequence_vectors and target_value(s)
+		a tuple with concatenated names, sequence_vectors and target_value
 	"""
 
 	names = [item[0] for item in batch]
@@ -264,7 +264,7 @@ def res_class_collate(batch):
 	Returns
 	-------
 	tuple
-		a tuple with concatenated sequence_vectors and target_values(s)
+		a tuple with concatenated names, sequence_vectors and target_values
 	"""
 
 	names = [item[0] for item in batch]
@@ -304,7 +304,7 @@ def res_regress_collate(batch):
 	Returns
 	-------
 	tuple
-		a tuple with concatenated sequence_vectors and target_values(s)
+		a tuple with concatenated names, sequence_vectors and target_values
 	"""
 
 	names = [item[0] for item in batch]

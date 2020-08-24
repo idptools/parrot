@@ -88,7 +88,7 @@
 <li class="toctree-l1"><a class="reference internal" href="parrot-predict.html">parrot-predict</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api.html">Module Documentation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="ml_faqs.html">Machine Learning FAQs:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ml_faqs.html">Machine Learning Resources:</a></li>
 </ul>
 
             
@@ -183,7 +183,7 @@
 </ul>
 </div></blockquote>
 <p><strong>Output:</strong></p>
-<p><code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> will produce similar output as <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code>. Firstly, the saved network weights from the training process will be located at the path provided by <cite>output_network</cite>. Additionally, there will be two PNG images saved to this same directory. The first, called ‘train_test.png’ displays the network’s performance on the training and validation sets over the course of training. The second image describes the network performance on the held out test set, and will vary depending on the data format and machine learning task. If training a network for a classification task, the image will be a confusion matrix. If training for a regression task, the image will be a scatterplot comparing the predicted and true values of the test set sequences.</p>
+<p><code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> will produce similar output as <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code>. Firstly, the saved network weights from the training process will be located at the path provided by <cite>output_network</cite>. Additionally, there will be two PNG images saved to this same directory. The first, called ‘train_test.png’ displays the network’s performance on the training and validation sets over the course of training. The second image describes the network performance on the held out test set, and will vary depending on the data format and machine learning task. If training a network for a classification task, the image will be a confusion matrix. If training for a regression task, the image will be a scatterplot comparing the predicted and true values of the test set sequences. Finally, the file “test_set_predictions.tsv” will be saved into this same directory. This file contains both the true values (provided in the original data_file) and predicted values for each of the sequences within the test set.</p>
 <p>Output text detailing network performance across training can be printed to console if the <code class="docutils literal notranslate"><span class="pre">--verbose</span></code> flag is provided.</p>
 </div>
 

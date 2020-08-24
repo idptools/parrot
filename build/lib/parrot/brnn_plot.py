@@ -241,15 +241,33 @@ def res_confusion_matrix(true_classes, predicted_classes, num_classes, output_di
 	plt.savefig(output_dir + 'res_CM.png')
 	plt.show()
 
-def output_predictions_to_file(sequence_data, excludeSeqID, encoding_scheme, encoder=None, output_dir=''):
+def output_predictions_to_file(sequence_data, excludeSeqID, encoding_scheme, encoder=None,
+																			output_dir=''):
 	"""Output sequences, their true values, and their predicted values to a file
+
+	Used on the output of the test_unlabeled_data() function in the train_network module in
+	order to detail the performance of the trained network on the test set. Produces the
+	file "test_set_predictions.tsv" in output_dir. Each pair of lines in this tsvfile
+	corresponds to a particular test set sequence, with the first containing the true data
+	values, and the second line having the predicted data values.
 
 	Parameters
 	----------
-	sequence_data :
-	excludeSeqID :
-	encoding_scheme :
-	encoder : optional
+	sequence_data : list of lists
+		Details of the output predictions for each of the sequences in the test set. Each
+		inner list represents a sample in the test set, with the format: [sequence_vector,
+		true_value, predicted_value, sequence_ID]
+	excludeSeqID : bool
+		Boolean indicating whether or not each line in `tsvfile` has a sequence ID
+		(default is False)		
+	encoding_scheme : str
+		Description of how an amino acid sequence should be encoded as a numeric 
+		vector. Providing a string other than 'onehot', 'biophysics', or 'user' 
+		will produce unintended consequences.
+	encoder: UserEncoder object, optional
+		If encoding_scheme is 'user', encoder should be a UserEncoder object
+		that can convert amino acid sequences to numeric vectors. If
+		encoding_scheme is not 'user', use None.
 	"""
 
 	seq_vectors = []
