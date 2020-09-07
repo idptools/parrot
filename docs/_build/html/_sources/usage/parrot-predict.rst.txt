@@ -22,8 +22,8 @@ Once PARROT is installed, the user can run ``parrot-predict`` from the command l
 	*  ``--num-layers`` / ``-nl`` : Number of hidden layers in the BRNN (default is 1). Must be a positive integer and must be identical to the number of layers used when the network was trained.
 	*  ``--hidden-size`` / ``-hs`` : Size of hidden vectors within the BRNN (default is 5). Must be a positive integer and must be identical to the hidden size used when the network was trained.
 	*  ``--encode`` : Include this flag to specify the numeric encoding scheme for each amino acid. Available options are 'onehot' (default), 'biophysics' or user-specified. If you wish to manually specify an encoding scheme, provide a path to a text file describing the amino acid to vector mapping. The encoding scheme used for sequence prediction must be identical to that used for network training.
-	*  ``--excludeSeqID`` : Include this flag if the `seq_file` is formatted such that it does not have sequence IDs as the first column in each row.
+	*  ``--exclude-seq-id`` : Include this flag if the `seq_file` is formatted such that it does not have sequence IDs as the first column in each row.
 
 **Output:**
 
-``parrot-predict`` will produce a single text file as output. This file will be formatted similarly to the original datafiles used for network training: each row contains a sequence ID (exluded if ``--excludeSeqID1`` is provided), an amino acid sequence, and the prediction values for that sequence.
+``parrot-predict`` will produce a single text file as output. This file will be formatted similarly to the original datafiles used for network training: each row contains a sequence ID (exluded if the flag ``--exclude-seq-id`` is given), an amino acid sequence, and the prediction values for that sequence.

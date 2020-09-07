@@ -96,10 +96,10 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 		if datatype == 'residues':
 			criterion = nn.MSELoss(reduction='sum')
 		elif datatype == 'sequence':
-			criterion = nn.L1Loss()	# TODO: L1 or MSE?
+			criterion = nn.L1Loss()
 	elif problem_type == 'classification':
 		if datatype == 'residues':
-			criterion = nn.CrossEntropyLoss(reduction='sum') # TODO: double check if this is correct
+			criterion = nn.CrossEntropyLoss(reduction='sum') 
 		elif datatype == 'sequence':
 			criterion = nn.CrossEntropyLoss()
 
@@ -254,7 +254,7 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 		if datatype == 'residues':
 			criterion = nn.MSELoss(reduction='sum')
 		elif datatype == 'sequence':
-			criterion = nn.L1Loss()	# TODO: L1 or MSE?
+			criterion = nn.L1Loss()
 	elif problem_type == 'classification':
 		if datatype == 'residues':
 			criterion = nn.CrossEntropyLoss(reduction='sum')
@@ -265,7 +265,7 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 	all_targets = []
 	all_outputs = []
 	predictions = []
-	for names, vectors, targets in test_loader: 	# batch size of 1 # CHANGEME
+	for names, vectors, targets in test_loader: 	# batch size of 1
 		all_targets.append(targets)
 
 		vectors = vectors.to(device)
@@ -284,7 +284,7 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 		all_outputs.append(outputs.detach())
 
 		# Add to list as: [seq_vector, true value, predicted value, name]
-		predictions.append( [vectors[0].numpy(), targets.numpy()[0], outputs.detach().numpy(), names[0]] )
+		predictions.append( [vectors[0].cpu().numpy(), targets.cpu().numpy()[0], outputs.cpu().detach().numpy(), names[0]] )
 
 	# Plot 'accuracy' depending on the problem type and datatype
 	if problem_type == 'regression':

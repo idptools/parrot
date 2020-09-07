@@ -42,23 +42,23 @@ parser.add_argument('-c', '--classes', default=1, type=int, metavar='num_classes
 					help='Required. Number of output classes, for regression put 1')
 parser.add_argument('-b', '--batch', default=32, type=int, metavar='batch_size', 
 						help='size of training batch (def=32)')
-parser.add_argument('-e', '--epochs', default=30, type=int, metavar='num_epochs', 
-						help='number of training epochs (def=30)')
+parser.add_argument('-e', '--epochs', default=50, type=int, metavar='num_epochs', 
+						help='number of training epochs (def=50)')
 parser.add_argument('--max-iter', default=75, type=int, metavar='max_iter',
 					help='Maximum number of iterations for the optimization procedure (def=75)')
 parser.add_argument('--split', default='', metavar='split_file', type=str, 
-	help="file indicating how to split datafile into training, validation, and testing sets")
-parser.add_argument('--setFractions', nargs=3, default=[0.7, 0.15, 0.15], type=float, 
-			metavar=('train', 'val', 'test'),
+		help="file indicating how to split datafile into training, validation, and testing sets")
+parser.add_argument('--set-fractions', nargs=3, default=[0.7, 0.15, 0.15], type=float, 
+			dest='setFractions', metavar=('train', 'val', 'test'),
 			help='Proportion of dataset that should be divided into training, validation, and test sets')
 parser.add_argument('--encode', default='onehot', type=str, metavar='encoding_scheme',
 					help="'onehot' (default), 'biophysics', or specify a path to a user-created scheme")
-parser.add_argument('--excludeSeqID', action='store_true', 
+parser.add_argument('--exclude-seq-id', dest='excludeSeqID', action='store_true', 
 		help='use if data_file lacks sequence IDs in the first column of each line')
-parser.add_argument('--forceCPU', action='store_true', 
+parser.add_argument('--force-cpu', dest='forceCPU', action='store_true', 
 		help='force network to train on CPU, even if GPU is available')
 parser.add_argument('--verbose', '-v', action='count', default=0, 
-	help='''how descriptive output to console should be. Excluding this flag will 
+		help='''how descriptive output to console should be. Excluding this flag will 
 			cause no output, using this flag two or more times will cause maximum output''')
 
 args = parser.parse_args()

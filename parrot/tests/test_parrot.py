@@ -10,6 +10,7 @@ import pytest
 import sys
 import os
 import pathlib
+import shutil
 
 def test_parrot_imported():
     """Sample test, will always pass so long as import statement worked"""
@@ -18,7 +19,8 @@ def test_parrot_imported():
 def test_noarg_train_call():
 	"""Calling parrot-train with no arguments should return an error"""
 	os.chdir(pathlib.Path(__file__).parent.absolute())
-	script_descriptor = open(os.path.abspath("../../scripts/parrot-train"))
+	loc = shutil.which("parrot-train")
+	script_descriptor = open(os.path.abspath(loc))
 	script = script_descriptor.read()
 	sys.argv = ["parrot-train"]
 
@@ -30,7 +32,8 @@ def test_noarg_train_call():
 def test_train_invalid_dtype():
 	"""Calling parrot-train with invalid datatype arg should return an error"""
 	os.chdir(pathlib.Path(__file__).parent.absolute())
-	script_descriptor = open(os.path.abspath("../../scripts/parrot-train"))
+	loc = shutil.which("parrot-train")
+	script_descriptor = open(os.path.abspath(loc))
 	script = script_descriptor.read()
 	sys.argv = ["parrot-train", "../data/seq_class_dataset.tsv", 
 				"../data/output_network.pt", "-d", "gibberish", "-c", "4"]
@@ -43,7 +46,8 @@ def test_train_invalid_dtype():
 def test_train_invalid_numclasses():
 	"""Calling parrot-train with invalid number of classes should return an error"""
 	os.chdir(pathlib.Path(__file__).parent.absolute())
-	script_descriptor = open(os.path.abspath("../../scripts/parrot-train"))
+	loc = shutil.which("parrot-train")
+	script_descriptor = open(os.path.abspath(loc))
 	script = script_descriptor.read()
 	sys.argv = ["parrot-train", "../data/seq_class_dataset.tsv", 
 				"../data/output_network.pt", "-d", "sequence", "-c", "2"]
@@ -56,10 +60,11 @@ def test_train_invalid_numclasses():
 def test_train_invalid_setFractions():
 	"""Calling parrot-train with --setFractions not summing to 1 should return an error"""
 	os.chdir(pathlib.Path(__file__).parent.absolute())
-	script_descriptor = open(os.path.abspath("../../scripts/parrot-train"))
+	loc = shutil.which("parrot-train")
+	script_descriptor = open(os.path.abspath(loc))
 	script = script_descriptor.read()
 	sys.argv = ["parrot-train", "../data/seq_class_dataset.tsv", "../data/output_network.pt", 
-				"-d", "sequence", "-c", "3", "--setFractions", "0.8", "0.15", "0.15"]
+				"-d", "sequence", "-c", "3", "--set-fractions", "0.8", "0.15", "0.15"]
 
 	with pytest.raises(ValueError):
 		exec(script)
@@ -69,7 +74,8 @@ def test_train_invalid_setFractions():
 def test_noarg_optimize_call():
 	"""Calling parrot-optimize with no arguments should return an error"""
 	os.chdir(pathlib.Path(__file__).parent.absolute())
-	script_descriptor = open(os.path.abspath("../../scripts/parrot-optimize"))
+	loc = shutil.which("parrot-optimize")
+	script_descriptor = open(os.path.abspath(loc))
 	script = script_descriptor.read()
 	sys.argv = ["parrot-optimize"]
 
@@ -81,7 +87,8 @@ def test_noarg_optimize_call():
 def test_optimize_invalid_dtype():
 	"""Calling parrot-optimize with invalid datatype arg should return an error"""
 	os.chdir(pathlib.Path(__file__).parent.absolute())
-	script_descriptor = open(os.path.abspath("../../scripts/parrot-optimize"))
+	loc = shutil.which("parrot-optimize")
+	script_descriptor = open(os.path.abspath(loc))
 	script = script_descriptor.read()
 	sys.argv = ["parrot-optimize", "../data/seq_class_dataset.tsv", 
 				"../data/output_network.pt", "-d", "gibberish", "-c", "4"]
@@ -94,7 +101,8 @@ def test_optimize_invalid_dtype():
 def test_optimize_invalid_numclasses():
 	"""Calling parrot-optimize with invalid number of classes should return an error"""
 	os.chdir(pathlib.Path(__file__).parent.absolute())
-	script_descriptor = open(os.path.abspath("../../scripts/parrot-optimize"))
+	loc = shutil.which("parrot-optimize")
+	script_descriptor = open(os.path.abspath(loc))
 	script = script_descriptor.read()
 	sys.argv = ["parrot-optimize", "../data/seq_class_dataset.tsv", 
 				"../data/output_network.pt", "-d", "sequence", "-c", "2"]

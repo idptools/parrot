@@ -248,10 +248,10 @@
 		<span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
 			<span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MSELoss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">)</span>
 		<span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
-			<span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">L1Loss</span><span class="p">()</span>	<span class="c1"># TODO: L1 or MSE?</span>
+			<span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">L1Loss</span><span class="p">()</span>
 	<span class="k">elif</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;classification&#39;</span><span class="p">:</span>
 		<span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
-			<span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">)</span> <span class="c1"># TODO: double check if this is correct</span>
+			<span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">)</span> 
 		<span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
 			<span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">()</span>
 
@@ -406,7 +406,7 @@
 		<span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
 			<span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MSELoss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">)</span>
 		<span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
-			<span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">L1Loss</span><span class="p">()</span>	<span class="c1"># TODO: L1 or MSE?</span>
+			<span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">L1Loss</span><span class="p">()</span>
 	<span class="k">elif</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;classification&#39;</span><span class="p">:</span>
 		<span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
 			<span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">)</span>
@@ -417,7 +417,7 @@
 	<span class="n">all_targets</span> <span class="o">=</span> <span class="p">[]</span>
 	<span class="n">all_outputs</span> <span class="o">=</span> <span class="p">[]</span>
 	<span class="n">predictions</span> <span class="o">=</span> <span class="p">[]</span>
-	<span class="k">for</span> <span class="n">names</span><span class="p">,</span> <span class="n">vectors</span><span class="p">,</span> <span class="n">targets</span> <span class="ow">in</span> <span class="n">test_loader</span><span class="p">:</span> 	<span class="c1"># batch size of 1 # CHANGEME</span>
+	<span class="k">for</span> <span class="n">names</span><span class="p">,</span> <span class="n">vectors</span><span class="p">,</span> <span class="n">targets</span> <span class="ow">in</span> <span class="n">test_loader</span><span class="p">:</span> 	<span class="c1"># batch size of 1</span>
 		<span class="n">all_targets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span>
 
 		<span class="n">vectors</span> <span class="o">=</span> <span class="n">vectors</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
@@ -436,7 +436,7 @@
 		<span class="n">all_outputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">outputs</span><span class="o">.</span><span class="n">detach</span><span class="p">())</span>
 
 		<span class="c1"># Add to list as: [seq_vector, true value, predicted value, name]</span>
-		<span class="n">predictions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">[</span><span class="n">vectors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">numpy</span><span class="p">(),</span> <span class="n">targets</span><span class="o">.</span><span class="n">numpy</span><span class="p">()[</span><span class="mi">0</span><span class="p">],</span> <span class="n">outputs</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">(),</span> <span class="n">names</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="p">)</span>
+		<span class="n">predictions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">[</span><span class="n">vectors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">(),</span> <span class="n">targets</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()[</span><span class="mi">0</span><span class="p">],</span> <span class="n">outputs</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">(),</span> <span class="n">names</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="p">)</span>
 
 	<span class="c1"># Plot &#39;accuracy&#39; depending on the problem type and datatype</span>
 	<span class="k">if</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;regression&#39;</span><span class="p">:</span>

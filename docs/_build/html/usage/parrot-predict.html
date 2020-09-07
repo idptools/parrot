@@ -88,7 +88,7 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">parrot-predict</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api.html">Module Documentation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="ml_faqs.html">Machine Learning FAQs:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ml_faqs.html">Machine Learning Resources:</a></li>
 </ul>
 
             
@@ -175,11 +175,11 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">--num-layers</span></code> / <code class="docutils literal notranslate"><span class="pre">-nl</span></code> : Number of hidden layers in the BRNN (default is 1). Must be a positive integer and must be identical to the number of layers used when the network was trained.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--hidden-size</span></code> / <code class="docutils literal notranslate"><span class="pre">-hs</span></code> : Size of hidden vectors within the BRNN (default is 5). Must be a positive integer and must be identical to the hidden size used when the network was trained.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--encode</span></code> : Include this flag to specify the numeric encoding scheme for each amino acid. Available options are ‘onehot’ (default), ‘biophysics’ or user-specified. If you wish to manually specify an encoding scheme, provide a path to a text file describing the amino acid to vector mapping. The encoding scheme used for sequence prediction must be identical to that used for network training.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">--excludeSeqID</span></code> : Include this flag if the <cite>seq_file</cite> is formatted such that it does not have sequence IDs as the first column in each row.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--exclude-seq-id</span></code> : Include this flag if the <cite>seq_file</cite> is formatted such that it does not have sequence IDs as the first column in each row.</p></li>
 </ul>
 </div></blockquote>
 <p><strong>Output:</strong></p>
-<p><code class="docutils literal notranslate"><span class="pre">parrot-predict</span></code> will produce a single text file as output. This file will be formatted similarly to the original datafiles used for network training: each row contains a sequence ID (exluded if <code class="docutils literal notranslate"><span class="pre">--excludeSeqID1</span></code> is provided), an amino acid sequence, and the prediction values for that sequence.</p>
+<p><code class="docutils literal notranslate"><span class="pre">parrot-predict</span></code> will produce a single text file as output. This file will be formatted similarly to the original datafiles used for network training: each row contains a sequence ID (exluded if the flag <code class="docutils literal notranslate"><span class="pre">--exclude-seq-id</span></code> is given), an amino acid sequence, and the prediction values for that sequence.</p>
 </div>
 
 

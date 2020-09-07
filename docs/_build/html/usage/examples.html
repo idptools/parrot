@@ -93,7 +93,7 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../api.html">Module Documentation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="ml_faqs.html">Machine Learning FAQs:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ml_faqs.html">Machine Learning Resources:</a></li>
 </ul>
 
             
@@ -165,46 +165,43 @@
 <h2>parrot-train<a class="headerlink" href="#parrot-train" title="Permalink to this headline">¶</a></h2>
 <p><strong>Sequence classification:</strong>
 In our first example, each of the 300 sequences in <em>seq_class_dataset.tsv</em> belongs to one of three classes:</p>
-<blockquote>
-<div><div class="line-block">
-<div class="line">Frag0 WKHNPKHLRP 0</div>
-<div class="line">Frag1 DLFQDEDDAEEEDFMDDIWDPDS 1</div>
-<div class="line">Frag2 YHFAFTHMPALISQTSKYHYYSASMRG 2</div>
-<div class="line">Frag3 CNRNRNHKLKKFKHKKMGVPRKKRKHWK 0</div>
-<div class="line">…</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>Frag0 WKHNPKHLRP <span class="m">0</span>
+Frag1 DLFQDEDDAEEEDFMDDIWDPDS <span class="m">1</span>
+Frag2 YHFAFTHMPALISQTSKYHYYSASMRG <span class="m">2</span>
+Frag3 CNRNRNHKLKKFKHKKMGVPRKKRKHWK <span class="m">0</span>
+...
+</pre></div>
 </div>
-</div></blockquote>
-<p>Let’s train a network with <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> that can identify the inherent pattern (described in data/README.md). For starters, let’s try to train for 200 epochs on a network with 2 hidden layers, a hidden vector size of 5, a learning rate of 0.001 and a batch size of 32. Note that the paths for the dataset and output network may vary on different machines. Let’s also use the <code class="docutils literal notranslate"><span class="pre">-v</span></code> flag to get a sense of training.</p>
+<p>Let’s train a network with <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> that can identify the inherent pattern (described in data/README.md). For starters, let’s try to train for 200 epochs on a network with 2 hidden layers, a hidden vector size of 5, a learning rate of 0.001 and a batch size of 32. Note that the paths for the dataset and output network may vary on different machines. Let’s also use the <code class="docutils literal notranslate"><span class="pre">-v</span></code> flag to get a sense of the training.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>parrot-train datasets/seq_class_dataset.tsv output_dir/network.pt --datatype sequence --classes <span class="m">3</span> -nl <span class="m">2</span> -hs <span class="m">5</span> -lr <span class="m">0</span>.001 -e <span class="m">200</span> -b <span class="m">32</span> -v
 </pre></div>
 </div>
 <p>Training has a stochastic component, so running this multiple times may yield slightly different results. The output should look something like:</p>
-<blockquote>
-<div><div class="line-block">
-<div class="line">Epoch 0       Loss 0.0491</div>
-<div class="line">Epoch 5       Loss 0.0486</div>
-<div class="line">Epoch 10      Loss 0.0482</div>
-<div class="line">…</div>
-<div class="line">Epoch 190     Loss 0.0063</div>
-<div class="line">Epoch 195     Loss 0.0063</div>
-<div class="line"><br /></div>
-<div class="line">Test Loss: 0.1932</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>PARROT with user-specified parameters
+-------------------------------------
+Validation <span class="nb">set</span> loss per epoch:
+Epoch <span class="m">0</span> Loss <span class="m">0</span>.0491
+Epoch <span class="m">5</span> Loss <span class="m">0</span>.0486
+Epoch <span class="m">10</span>        Loss <span class="m">0</span>.0482
+...
+Epoch <span class="m">190</span>       Loss <span class="m">0</span>.0063
+Epoch <span class="m">195</span>       Loss <span class="m">0</span>.0063
+
+Test Loss: <span class="m">0</span>.1932
+</pre></div>
 </div>
-</div></blockquote>
 <p>In <strong>output_dir</strong>, there should also be two PNG files describing the training process and network performance.</p>
 <a class="reference internal image-reference" href="../_images/train_test.png"><img alt="../_images/train_test.png" src="../_images/train_test.png" style="width: 400px;" /></a>
 <a class="reference internal image-reference" href="../_images/seq_CM.png"><img alt="../_images/seq_CM.png" src="../_images/seq_CM.png" style="width: 400px;" /></a>
 <p>This gives us a general sense of how the network will perform on new data in the future. Overall the network performs well, and the only misclassifications are for sequences in class ‘2’.</p>
 <p><strong>Sequence regression:</strong></p>
 <p>Using PARROT on a machine learning regression task is very similar to classification. In <em>seq_regress_dataset.tsv</em>, instead of each sequence being assigned an integer class label, each sequence is represented by a real number.</p>
-<blockquote>
-<div><div class="line-block">
-<div class="line">Frag0 EHCWTYIFQMYRIDQTQRVKRGEKPIIYLEPMAR 3.8235294117647056</div>
-<div class="line">Frag1 SDAWVMKFLWDKCGDHFIQYQKPANRWEWVD 3.870967741935484</div>
-<div class="line">Frag2 IYPEQSPDNAWAW 3.076923076923077</div>
-<div class="line">…</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>Frag0 EHCWTYIFQMYRIDQTQRVKRGEKPIIYLEPMAR <span class="m">3</span>.8235294117647056
+Frag1 SDAWVMKFLWDKCGDHFIQYQKPANRWEWVD <span class="m">3</span>.870967741935484
+Frag2 IYPEQSPDNAWAW <span class="m">3</span>.076923076923077
+...
+</pre></div>
 </div>
-</div></blockquote>
 <p>The only difference in the <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> command in this regression case (other than the datafile path) is the <code class="docutils literal notranslate"><span class="pre">-c</span></code>/<code class="docutils literal notranslate"><span class="pre">--classes</span></code> argument. Since we are doing regression, we will put ‘1’ here. We could also change the network hyperparameters, but for now let’s just use the same as above. Notice that we are using a different output network name so as to not overwrite the previous network.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>parrot-train datasets/seq_regress_dataset.tsv output_dir/network2.pt --datatype sequence --classes <span class="m">1</span> -nl <span class="m">2</span> -hs <span class="m">5</span> -lr <span class="m">0</span>.001 -e <span class="m">200</span> -b <span class="m">32</span> -v
 </pre></div>
@@ -214,14 +211,12 @@ In our first example, each of the 300 sequences in <em>seq_class_dataset.tsv</em
 <p>Not bad!</p>
 <p><strong>Residue classification:</strong></p>
 <p>Now let’s try a task where the objective is to classify each residue in a sequence. Unlike before, in <em>res_class_dataset.tsv</em> there are multiple values per sequence in the datafile.</p>
-<blockquote>
-<div><div class="line-block">
-<div class="line">Frag0 DEDGTEDDMATTK 1 1 1 1 1 1 1 1 1 1 1 1 1</div>
-<div class="line">Frag1 CGSAPSRFVKTCDPDEEDEDDEDE 2 2 2 2 2 2 2 2 2 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1</div>
-<div class="line">Frag2 EWYEDDKPFPCPERVPHHKKGHRGGWRAKKNWKV 1 1 1 1 1 1 1 0 2 2 2 2 2 2 2 2 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0</div>
-<div class="line">…</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>Frag0 DEDGTEDDMATTK <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span>
+Frag1 CGSAPSRFVKTCDPDEEDEDDEDE <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span>
+Frag2 EWYEDDKPFPCPERVPHHKKGHRGGWRAKKNWKV <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">1</span> <span class="m">0</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">2</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span> <span class="m">0</span>
+...
+</pre></div>
 </div>
-</div></blockquote>
 <p>Despite this major difference, the <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> command is similar to the above examples. The only difference will be the value we input after the <code class="docutils literal notranslate"><span class="pre">--datatype</span></code> flag. Before we put ‘sequence’, and here we will put ‘residues’. Just for fun, we will also switch up our number of layers (<code class="docutils literal notranslate"><span class="pre">-nl</span></code>) and hidden size (<code class="docutils literal notranslate"><span class="pre">-hs</span></code>) hyperparameters.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>parrot-train datasets/res_class_dataset.tsv output_dir/network3.pt --datatype residues --classes <span class="m">3</span> -nl <span class="m">3</span> -hs <span class="m">8</span> -lr <span class="m">0</span>.001 -e <span class="m">200</span> -b <span class="m">32</span> -v
 </pre></div>
@@ -241,31 +236,44 @@ This flag determines the stop condition for network training. Currently, there a
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -c <span class="m">1</span> -nl <span class="m">2</span> -hs <span class="m">5</span> -lr <span class="m">0</span>.001 -e <span class="m">10</span> -b <span class="m">32</span> -vv --stop auto
 </pre></div>
 </div>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">|</span> <span class="n">Epoch</span> <span class="mi">0</span>       <span class="n">Loss</span> <span class="mf">0.1779</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">1</span>       <span class="n">Loss</span> <span class="mf">0.1752</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">2</span>       <span class="n">Loss</span> <span class="mf">0.1727</span>
-<span class="o">|</span> <span class="o">...</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">98</span>      <span class="n">Loss</span> <span class="mf">0.0456</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">99</span>      <span class="n">Loss</span> <span class="mf">0.0456</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">100</span>     <span class="n">Loss</span> <span class="mf">0.0456</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">101</span>     <span class="n">Loss</span> <span class="mf">0.0456</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">102</span>     <span class="n">Loss</span> <span class="mf">0.0456</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">103</span>     <span class="n">Loss</span> <span class="mf">0.0456</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">104</span>     <span class="n">Loss</span> <span class="mf">0.0456</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">105</span>     <span class="n">Loss</span> <span class="mf">0.0456</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">106</span>     <span class="n">Loss</span> <span class="mf">0.0456</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">107</span>     <span class="n">Loss</span> <span class="mf">0.0456</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">108</span>     <span class="n">Loss</span> <span class="mf">0.0456</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">109</span>     <span class="n">Loss</span> <span class="mf">0.0456</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">110</span>     <span class="n">Loss</span> <span class="mf">0.0455</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">111</span>     <span class="n">Loss</span> <span class="mf">0.0455</span>
-<span class="o">|</span> <span class="n">Epoch</span> <span class="mi">112</span>     <span class="n">Loss</span> <span class="mf">0.0455</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>PARROT with user-specified parameters
+-------------------------------------
+Train on:       cpu
+Datatype:       sequence
+ML Task:        regression
+Learning rate:  <span class="m">0</span>.001000
+Number of layers:       <span class="m">2</span>
+Hidden vector size:     <span class="m">5</span>
+Batch size:     <span class="m">32</span>
+
+Validation <span class="nb">set</span> loss per epoch:
+
+Epoch <span class="m">0</span> Loss <span class="m">0</span>.1779
+Epoch <span class="m">1</span> Loss <span class="m">0</span>.1752
+Epoch <span class="m">2</span> Loss <span class="m">0</span>.1727
+...
+Epoch <span class="m">98</span>        Loss <span class="m">0</span>.0456
+Epoch <span class="m">99</span>        Loss <span class="m">0</span>.0456
+Epoch <span class="m">100</span>       Loss <span class="m">0</span>.0456
+Epoch <span class="m">101</span>       Loss <span class="m">0</span>.0456
+Epoch <span class="m">102</span>       Loss <span class="m">0</span>.0456
+Epoch <span class="m">103</span>       Loss <span class="m">0</span>.0456
+Epoch <span class="m">104</span>       Loss <span class="m">0</span>.0456
+Epoch <span class="m">105</span>       Loss <span class="m">0</span>.0456
+Epoch <span class="m">106</span>       Loss <span class="m">0</span>.0456
+Epoch <span class="m">107</span>       Loss <span class="m">0</span>.0456
+Epoch <span class="m">108</span>       Loss <span class="m">0</span>.0456
+Epoch <span class="m">109</span>       Loss <span class="m">0</span>.0456
+Epoch <span class="m">110</span>       Loss <span class="m">0</span>.0455
+Epoch <span class="m">111</span>       Loss <span class="m">0</span>.0455
+Epoch <span class="m">112</span>       Loss <span class="m">0</span>.0455
 </pre></div>
 </div>
-<p>Training stops here because performance hasd stopped improving. Worth mentioning: in some cases such as this dataset, ‘auto’ can actually get stuck in a local minimum well before the network is fully trained. Be mindful of this when using ‘auto’ stop condition.</p>
-<p><code class="docutils literal notranslate"><span class="pre">--setFractions</span></code>:
+<p>Training stops here because performance has stopped improving. Worth mentioning: in some cases such as this dataset, ‘auto’ can actually get stuck in a local minimum well before the network is fully trained. Be mindful of this when using ‘auto’ stop condition.</p>
+<p>You might also notice that in this example, the validation loss is listed for every single epoch instead of every 5. This is simply because multiple verbose <code class="docutils literal notranslate"><span class="pre">-v</span></code> flags are provided.</p>
+<p><code class="docutils literal notranslate"><span class="pre">--set-fractions</span></code>:
 This flag allows the user to set the proportions of data that will be a part of the training set, validation set, and test set. By default, the split is 70:15:15. This flag takes three input arguments, between 0 and 1, that must sum to 1.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -c <span class="m">1</span> -nl <span class="m">2</span> -hs <span class="m">5</span> -lr <span class="m">0</span>.001 -e <span class="m">200</span> -b <span class="m">32</span> -v --setFractions <span class="m">0</span>.5 <span class="m">0</span>.4 <span class="m">0</span>.1
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -c <span class="m">1</span> -nl <span class="m">2</span> -hs <span class="m">5</span> -lr <span class="m">0</span>.001 -e <span class="m">200</span> -b <span class="m">32</span> -v --set-fractions <span class="m">0</span>.5 <span class="m">0</span>.4 <span class="m">0</span>.1
 </pre></div>
 </div>
 <p>Notice that the output graph from this command will have fewer datapoints because of the reduced test set. Most likely, the accuracy will be a little worse then the default proportions because the training set is also smaller.</p>
@@ -283,17 +291,16 @@ This flag allows the user even greater control over the training set, validation
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -c <span class="m">1</span> -nl <span class="m">2</span> -hs <span class="m">5</span> -lr <span class="m">0</span>.001 -e <span class="m">200</span> -b <span class="m">32</span> -v --split datasets/split_file.tsv
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">--excludeSeqID</span></code>:
+<p>This can especially be useful if you wish to perform k-fold cross-validation on your dataset, as you can prepare k different split_files that each specify a particular 1/kth of your dataset into the test set.</p>
+<p><code class="docutils literal notranslate"><span class="pre">--exclude-seq-id</span></code>:
 Include this flag if your <cite>datafile</cite> is formatted without sequence IDs:</p>
-<blockquote>
-<div><div class="line-block">
-<div class="line">EHCWTYIFQMYRIDQTQRVKRGEKPIIYLEPMAR 3.8235294117647056</div>
-<div class="line">SDAWVMKFLWDKCGDHFIQYQKPANRWEWVD 3.870967741935484</div>
-<div class="line">IYPEQSPDNAWAW 3.076923076923077</div>
-<div class="line">…</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>EHCWTYIFQMYRIDQTQRVKRGEKPIIYLEPMAR <span class="m">3</span>.8235294117647056
+SDAWVMKFLWDKCGDHFIQYQKPANRWEWVD <span class="m">3</span>.870967741935484
+IYPEQSPDNAWAW <span class="m">3</span>.076923076923077
+...
+</pre></div>
 </div>
-</div></blockquote>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -c <span class="m">1</span> -nl <span class="m">2</span> -hs <span class="m">5</span> -lr <span class="m">0</span>.001 -e <span class="m">200</span> -b <span class="m">32</span> -v --excludeSeqID
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>parrot-train datasets/seq_regress_dataset.tsv output_dir/network.pt --datatype sequence -c <span class="m">1</span> -nl <span class="m">2</span> -hs <span class="m">5</span> -lr <span class="m">0</span>.001 -e <span class="m">200</span> -b <span class="m">32</span> -v --exclude-seq-id
 </pre></div>
 </div>
 </div>
@@ -301,96 +308,124 @@ Include this flag if your <cite>datafile</cite> is formatted without sequence ID
 <h2>parrot-optimize<a class="headerlink" href="#parrot-optimize" title="Permalink to this headline">¶</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> will train a network like <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code>, however this command does not require the user to specify hyperparameters. Instead, it relies upon Bayesian Optimization to automatically select hyperparameters. Although Bayesian Optimization is much more efficient than grid search optimization, it still requires many iterations to converge upon the best hyperparameters. Additionally, this command relies upon 5-fold cross validation for each set of hyperparameters to achieve an accurate estimate of network performance. All together, this means that <code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> can take over 400x longer to run than <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code>. It is strongly recommended to only run this command on a machine with a GPU.</p>
 <p>Nonetheless, usage for <code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> is remarkably similar to <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code>, since many of the flags are identical. As an example, let’s run the command on a residue regression dataset:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>parrot-optimize datasets/res_regress_dataset.tsv output_dir/cv_example.pt --datatype residues --classes <span class="m">1</span> -e <span class="m">200</span> -b <span class="m">32</span> -vv
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>parrot-optimize datasets/res_regress_dataset.tsv output_dir/cv_example.pt --datatype residues --classes <span class="m">1</span> -e <span class="m">30</span> -b <span class="m">64</span> --max-iter <span class="m">20</span> -vv
 </pre></div>
 </div>
-<p>Notice how we do not need to specify number of layers, hidden vector size, or learning rate as these are the parameters we are optimizing. Perhaps the most important consideration is the number of epochs. Running the optimization procedure with a large number of epochs is more likely to identify the best performing hyperparameters, however more epochs also means significantly longer run time. It is recommended to play around with your data using <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> with a few different parameters and visualizing ‘train_test.png’. Ideally, you should set the number of epochs to be around the point where validation accuracy tends to plateau during training.</p>
+<p>Notice how we do not need to specify number of layers, hidden vector size, or learning rate as these are the parameters we are optimizing. Perhaps the most important consideration is the number of epochs. Running the optimization procedure with a large number of epochs is more likely to identify the best performing hyperparameters, however more epochs also means significantly longer run time. <strong>IMPORTANT: I used 30 epochs and 20 iterations here to speed up the example but it is HIGHLY recommended to &gt;150 epochs and the default iterations for normal usage.</strong> It is recommended to play around with your data using <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> with a few different parameters and visualizing ‘train_test.png’ in order to pick the number of epochs. Ideally, you should set the number of epochs to be around the point where validation accuracy tends to plateau during training.</p>
 <p>Let’s break down what is output to console during the optimization procedure:</p>
-<blockquote>
-<div><div class="line-block">
-<div class="line">[1/5] Loss: 75.247434</div>
-<div class="line">[2/5] Loss: 75.689319</div>
-<div class="line">[3/5] Loss: 66.811298</div>
-<div class="line">[4/5] Loss: 72.030063</div>
-<div class="line">…</div>
-<div class="line">[3/5] Loss: 1.476518</div>
-<div class="line">[4/5] Loss: 1.395311</div>
-<div class="line">[5/5] Loss: 1.380726</div>
-<div class="line"><br /></div>
-<div class="line">Initial search results:</div>
-<div class="line">lr            nl      hs      output</div>
-<div class="line">0.00001        5      10      73.2288</div>
-<div class="line">0.00100        5       5      8.7716</div>
-<div class="line">1.00000        8      20      66.9336</div>
-<div class="line">0.00100       15       5      52.8299</div>
-<div class="line">0.00100        3      30      1.4568</div>
-<div class="line">Noise estimate: 3.285178370588926</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>PARROT with hyperparameter optimization
+---------------------------------------
+Train on:       cpu
+Datatype:       residues
+ML Task:        regression
+Batch size:     <span class="m">64</span>
+Number of epochs:       <span class="m">30</span>
+Number of optimization iterations:      <span class="m">20</span>
+
+
+Initial search results:
+lr      nl      hs      output
+<span class="m">0</span>.00001  <span class="m">5</span>      <span class="m">10</span>      <span class="m">3501</span>.8629
+<span class="m">0</span>.00100  <span class="m">5</span>       <span class="m">5</span>      <span class="m">3093</span>.3104
+<span class="m">0</span>.10000  <span class="m">8</span>      <span class="m">10</span>      <span class="m">3340</span>.8367
+<span class="m">0</span>.01000 <span class="m">10</span>       <span class="m">5</span>      <span class="m">2349</span>.9827
+<span class="m">0</span>.00100  <span class="m">3</span>      <span class="m">20</span>      <span class="m">979</span>.0830
+Noise estimate: <span class="m">348</span>.4755793741326
+</pre></div>
 </div>
-</div></blockquote>
+<p>(Note - Again, the point of this example is to illustrate what the output means, so don’t use these arguments when running <code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> on your own data)</p>
 <p>The first chunk of text details the network performance (for all 5 data folds) during the initial stage of hyperparameter optimization. This stage is used to gather an estimate of the noise (standard deviation across cross-val folds) for future optimization.</p>
-<blockquote>
-<div><div class="line-block">
-<div class="line">Primary optimization:</div>
-<div class="line">——————–</div>
-<div class="line"><br /></div>
-<div class="line">Learning rate   |   n_layers   |   hidden vector size</div>
-<div class="line">=====================================================</div>
-<div class="line-block">
-<div class="line">0.000630     |      3       |         30</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>Primary optimization:
+--------------------
+
+Learning rate   <span class="p">|</span>   n_layers   <span class="p">|</span>   hidden vector size <span class="p">|</span>  avg CV <span class="nv">loss</span>
+<span class="o">======================================================================</span>
+  <span class="m">0</span>.024945      <span class="p">|</span>      <span class="m">1</span>       <span class="p">|</span>         <span class="m">20</span>           <span class="p">|</span>    <span class="m">62</span>.607
+  <span class="m">1</span>.000000      <span class="p">|</span>      <span class="m">1</span>       <span class="p">|</span>         <span class="m">20</span>           <span class="p">|</span>    <span class="m">3353</span>.206
+  <span class="m">0</span>.002081      <span class="p">|</span>      <span class="m">2</span>       <span class="p">|</span>         <span class="m">20</span>           <span class="p">|</span>    <span class="m">482</span>.241
+  <span class="m">0</span>.007263      <span class="p">|</span>      <span class="m">1</span>       <span class="p">|</span>         <span class="m">20</span>           <span class="p">|</span>    <span class="m">105</span>.067
+  <span class="m">0</span>.014636      <span class="p">|</span>      <span class="m">2</span>       <span class="p">|</span>         <span class="m">20</span>           <span class="p">|</span>    <span class="m">72</span>.831
+  <span class="m">0</span>.012282      <span class="p">|</span>      <span class="m">1</span>       <span class="p">|</span>         <span class="m">19</span>           <span class="p">|</span>    <span class="m">82</span>.591
+  <span class="m">0</span>.009382      <span class="p">|</span>      <span class="m">2</span>       <span class="p">|</span>         <span class="m">19</span>           <span class="p">|</span>    <span class="m">95</span>.740
+  <span class="m">0</span>.001636      <span class="p">|</span>      <span class="m">1</span>       <span class="p">|</span>         <span class="m">17</span>           <span class="p">|</span>    <span class="m">1410</span>.856
+  <span class="m">0</span>.007436      <span class="p">|</span>     <span class="m">10</span>       <span class="p">|</span>         <span class="m">20</span>           <span class="p">|</span>    <span class="m">2156</span>.534
+  <span class="m">0</span>.026683      <span class="p">|</span>      <span class="m">4</span>       <span class="p">|</span>         <span class="m">18</span>           <span class="p">|</span>    <span class="m">72</span>.345
+  <span class="m">0</span>.035740      <span class="p">|</span>      <span class="m">5</span>       <span class="p">|</span>         <span class="m">17</span>           <span class="p">|</span>    <span class="m">82</span>.965
+  <span class="m">0</span>.187629      <span class="p">|</span>      <span class="m">5</span>       <span class="p">|</span>         <span class="m">18</span>           <span class="p">|</span>    <span class="m">3384</span>.214
+  <span class="m">0</span>.009266      <span class="p">|</span>      <span class="m">4</span>       <span class="p">|</span>         <span class="m">17</span>           <span class="p">|</span>    <span class="m">176</span>.211
+  <span class="m">0</span>.009710      <span class="p">|</span>      <span class="m">5</span>       <span class="p">|</span>         <span class="m">17</span>           <span class="p">|</span>    <span class="m">265</span>.559
+  <span class="m">0</span>.010624      <span class="p">|</span>      <span class="m">3</span>       <span class="p">|</span>         <span class="m">18</span>           <span class="p">|</span>    <span class="m">90</span>.701
+  <span class="m">0</span>.042102      <span class="p">|</span>      <span class="m">5</span>       <span class="p">|</span>         <span class="m">16</span>           <span class="p">|</span>    <span class="m">787</span>.841
+  <span class="m">0</span>.005893      <span class="p">|</span>      <span class="m">4</span>       <span class="p">|</span>         <span class="m">18</span>           <span class="p">|</span>    <span class="m">238</span>.663
+  <span class="m">0</span>.030018      <span class="p">|</span>      <span class="m">4</span>       <span class="p">|</span>         <span class="m">18</span>           <span class="p">|</span>    <span class="m">59</span>.166
+  <span class="m">0</span>.057247      <span class="p">|</span>      <span class="m">3</span>       <span class="p">|</span>         <span class="m">18</span>           <span class="p">|</span>    <span class="m">248</span>.621
+  <span class="m">1</span>.000000      <span class="p">|</span>      <span class="m">1</span>       <span class="p">|</span>          <span class="m">1</span>           <span class="p">|</span>    <span class="m">2693</span>.920
+
+The optimal hyperparameters are:
+<span class="nv">lr</span> <span class="o">=</span> <span class="m">0</span>.030018
+<span class="nv">nl</span> <span class="o">=</span> <span class="m">4</span>
+<span class="nv">hs</span> <span class="o">=</span> <span class="m">18</span>
+</pre></div>
 </div>
-<div class="line">[1/5] Loss: 1.881410</div>
-<div class="line">[2/5] Loss: 2.010539</div>
-<div class="line">[3/5] Loss: 1.651101</div>
-<div class="line">[4/5] Loss: 1.631336</div>
-<div class="line">[5/5] Loss: 3.060484</div>
-<div class="line">…</div>
-<div class="line"><br /></div>
-<div class="line">The optimal hyperparameters are:</div>
-<div class="line">lr = 0.004901</div>
-<div class="line">nl = 1</div>
-<div class="line">hs = 29</div>
+<p>This long block of text is the main process of optimization. The algorithm automatically selects the learning rate, number of layers and hidden vector size for each iteration. Finally, after the algorithm converges in 20 iterations (default: 75 iterations), the optimal hyperparameters are determined. These hyperparameters are also saved to a text file called ‘optimal_hyperparams.txt’ in the output directory. You might notice that the optimization procedure doesn’t appear to sample the entire hyperparameter space, but this is due to the fact that we specified to use fewer iterations than normally recommended.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>Training with optimal hyperparams:
+Epoch <span class="m">0</span> Loss <span class="m">3080</span>.3005
+Epoch <span class="m">1</span> Loss <span class="m">3035</span>.0461
+Epoch <span class="m">2</span> Loss <span class="m">2195</span>.9470
+Epoch <span class="m">3</span> Loss <span class="m">1330</span>.2010
+Epoch <span class="m">4</span> Loss <span class="m">1054</span>.5094
+Epoch <span class="m">5</span> Loss <span class="m">583</span>.2585
+Epoch <span class="m">6</span> Loss <span class="m">537</span>.2802
+Epoch <span class="m">7</span> Loss <span class="m">462</span>.4870
+Epoch <span class="m">8</span> Loss <span class="m">428</span>.7861
+Epoch <span class="m">9</span> Loss <span class="m">329</span>.6138
+Epoch <span class="m">10</span>        Loss <span class="m">343</span>.9399
+.
+.
+.
+Epoch <span class="m">48</span>        Loss <span class="m">12</span>.0531
+Epoch <span class="m">49</span>        Loss <span class="m">13</span>.2082
+Epoch <span class="m">50</span>        Loss <span class="m">15</span>.0165
+Epoch <span class="m">51</span>        Loss <span class="m">17</span>.4953
+Epoch <span class="m">52</span>        Loss <span class="m">21</span>.7618
+Epoch <span class="m">53</span>        Loss <span class="m">21</span>.9459
+Epoch <span class="m">54</span>        Loss <span class="m">18</span>.0915
+Epoch <span class="m">55</span>        Loss <span class="m">13</span>.4374
+Epoch <span class="m">56</span>        Loss <span class="m">8</span>.7067
+Epoch <span class="m">57</span>        Loss <span class="m">7</span>.3803
+Epoch <span class="m">58</span>        Loss <span class="m">9</span>.3223
+Epoch <span class="m">59</span>        Loss <span class="m">9</span>.8348
+
+Test Loss: <span class="m">0</span>.5138
+</pre></div>
 </div>
-</div></blockquote>
-<p>This long block of text is the main process of optimization. The algorithm automatically selects the learning rate, number of layers and hidden vector size for each iteration. Finally, after the algorithm converges (max 75 iterations), the optimal hyperparameters are determined. These hyperparameters are also saved to a text file called ‘optimal_hyperparams.txt’ in the output directory.</p>
-<blockquote>
-<div><div class="line-block">
-<div class="line">Training with optimal hyperparams:</div>
-<div class="line">Epoch 0       Loss 56.9641</div>
-<div class="line">…</div>
-<div class="line"><br /></div>
-<div class="line">Test Loss: 0.7732</div>
-</div>
-</div></blockquote>
 <p>Lastly, a network is trained on all the data using the optimal hyperparameters. Like in <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> two PNGs are saved to the output directory describing training and performance on the held-out test set.</p>
 </div>
 <div class="section" id="parrot-predict">
 <h2>parrot-predict<a class="headerlink" href="#parrot-predict" title="Permalink to this headline">¶</a></h2>
-<p>Use the trained network from optimize and predict on an list of sequences (example provided in /data folder). In this case we will make residue regression prediction using the network trained from <code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> above. The most important thing to keep in mind when using <code class="docutils literal notranslate"><span class="pre">parrot-predict</span></code> is that your <code class="docutils literal notranslate"><span class="pre">-nl</span></code> and <code class="docutils literal notranslate"><span class="pre">-hs</span></code> hyperparameters (and encoding scheme) must exactly match those used for network training, or else you will get an error.</p>
-<p>Using the example input file:</p>
-<blockquote>
-<div><div class="line-block">
-<div class="line">a1 EADDGLYWQQN</div>
-<div class="line">b2 RRLKHEEDSTSTSTSTSTQ</div>
-<div class="line">c3 YYYGGAFAFAGRM</div>
-<div class="line">d4 GGIL</div>
-<div class="line">e5 GREPCCMLLYILILAAAQRDESSSSST</div>
-<div class="line">f6 PGDEADLGHRSLVWADD</div>
+<p>You can use a trained network from <code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> or <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> to predict the values of new, unseen sequences (example provided in /data folder). The most important thing to keep in mind when using <code class="docutils literal notranslate"><span class="pre">parrot-predict</span></code> is that your <code class="docutils literal notranslate"><span class="pre">-nl</span></code> and <code class="docutils literal notranslate"><span class="pre">-hs</span></code> hyperparameters (and encoding scheme) must exactly match those used for network training, or else you will get an error.</p>
+<p>seqfile.txt</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>a1 EADDGLYWQQN
+b2 RRLKHEEDSTSTSTSTSTQ
+c3 YYYGGAFAFAGRM
+d4 GGIL
+e5 GREPCCMLLYILILAAAQRDESSSSST
+f6 PGDEADLGHRSLVWADD
+</pre></div>
 </div>
-</div></blockquote>
+<p>Running <code class="docutils literal notranslate"><span class="pre">parrot-predict</span></code> on the example input file above:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>parrot-predict datasets/seqfile.txt output_dir/cv_example.pt output_dir/seq_predictions.txt --datatype residues --classes <span class="m">1</span> -nl <span class="m">1</span> -hs <span class="m">29</span>
 </pre></div>
 </div>
 <p>Running this command produces an output file with predictions:</p>
-<blockquote>
-<div><div class="line-block">
-<div class="line">a1 EADDGLYWQQN -1.220267 -1.7227852 -1.6810288 -2.4043236 -0.09417024 0.64092124 0.5456871 -1.8928833 -2.7887173 -3.6044078 -2.4574862</div>
-<div class="line">b2 RRLKHEEDSTSTSTSTSTQ -3.7224112 -1.8503121 -1.5983793 -1.2008493 -3.5577574 -3.4514222 -3.5511665 -2.6457114 -1.7057183 -0.78130686 -0.7216715 -0.7898313 -0.70238614 -0.7789676 -0.7124919 -0.7318907 -0.7426094 -1.5785892 -1.572853</div>
-<div class="line">c3 YYYGGAFAFAGRM -0.9441874 -1.3341192 -0.9653273 -0.69102514 0.32323557 1.4534209 2.1537614 2.429162 2.2840738 1.4165663 -0.881636 -1.2768524 -0.95433706</div>
-<div class="line">d4 GGIL -0.5195379 1.1197864 2.240749 2.7807207</div>
-<div class="line">e5 GREPCCMLLYILILAAAQRDESSSSST -2.0686545 -2.7998338 -3.2005563 -0.89753973 1.1320789 2.3304148 2.7493396 3.2426906 2.1906257 2.5232615 2.4606586 4.522563 4.0591545 3.4521952 2.415197 1.8450507 0.0069223046 -2.052992 -3.8073626 -3.8168678 -2.6170073 -1.7135364 -0.8026675 -0.7848917 -0.76005983 -0.73561 -0.6911867</div>
-<div class="line">f6 PGDEADLGHRSLVWADD -1.0060852 -1.9269344 -2.5225387 -1.6895776 -1.7939533 0.6811078 0.026133358 -0.08126199 -2.7815032 -2.8138366 -0.3407705 2.483284 2.4456654 1.9606701 -0.705072 -1.9476694 -2.6707811</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>a1 EADDGLYWQQN -1.220267 -1.7227852 -1.6810288 -2.4043236 -0.09417024 <span class="m">0</span>.64092124 <span class="m">0</span>.5456871 -1.8928833 -2.7887173 -3.6044078 -2.4574862
+b2 RRLKHEEDSTSTSTSTSTQ -3.7224112 -1.8503121 -1.5983793 -1.2008493 -3.5577574 -3.4514222 -3.5511665 -2.6457114 -1.7057183 -0.78130686 -0.7216715 -0.7898313 -0.70238614 -0.7789676 -0.7124919 -0.7318907 -0.7426094 -1.5785892 -1.572853
+c3 YYYGGAFAFAGRM -0.9441874 -1.3341192 -0.9653273 -0.69102514 <span class="m">0</span>.32323557 <span class="m">1</span>.4534209 <span class="m">2</span>.1537614 <span class="m">2</span>.429162 <span class="m">2</span>.2840738 <span class="m">1</span>.4165663 -0.881636 -1.2768524 -0.95433706
+d4 GGIL -0.5195379 <span class="m">1</span>.1197864 <span class="m">2</span>.240749 <span class="m">2</span>.7807207
+e5 GREPCCMLLYILILAAAQRDESSSSST -2.0686545 -2.7998338 -3.2005563 -0.89753973 <span class="m">1</span>.1320789 <span class="m">2</span>.3304148 <span class="m">2</span>.7493396 <span class="m">3</span>.2426906 <span class="m">2</span>.1906257 <span class="m">2</span>.5232615 <span class="m">2</span>.4606586 <span class="m">4</span>.522563 <span class="m">4</span>.0591545 <span class="m">3</span>.4521952 <span class="m">2</span>.415197 <span class="m">1</span>.8450507 <span class="m">0</span>.0069223046 -2.052992 -3.8073626 -3.8168678 -2.6170073 -1.7135364 -0.8026675 -0.7848917 -0.76005983 -0.73561 -0.6911867
+f6 PGDEADLGHRSLVWADD -1.0060852 -1.9269344 -2.5225387 -1.6895776 -1.7939533 <span class="m">0</span>.6811078 <span class="m">0</span>.026133358 -0.08126199 -2.7815032 -2.8138366 -0.3407705 <span class="m">2</span>.483284 <span class="m">2</span>.4456654 <span class="m">1</span>.9606701 -0.705072 -1.9476694 -2.6707811
+</pre></div>
 </div>
-</div></blockquote>
 </div>
 </div>
 

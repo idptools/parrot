@@ -112,8 +112,8 @@ class BayesianOptimizer(object):
 		self.verbosity = verbosity
 
 		self.bds = [{'name': 'log_learning_rate', 'type': 'continuous', 'domain': (-5, 0)}, # 0.00001-1
-					{'name': 'n_layers', 'type': 'discrete', 'domain': tuple(range(1, 16))}, # up to 15
-					{'name': 'hidden_size', 'type': 'discrete', 'domain': tuple(range(1, 31))}] # up to 30
+					{'name': 'n_layers', 'type': 'discrete', 'domain': tuple(range(1, 11))}, # up to 10
+					{'name': 'hidden_size', 'type': 'discrete', 'domain': tuple(range(1, 21))}] # up to 20
 
 	def compute_cv_loss(self, hyperparameters):
 		"""Compute the average cross-val loss for a given set of hyperparameters
@@ -244,7 +244,7 @@ class BayesianOptimizer(object):
 		"""
 
 		# Initial hyperparameter search -- used to get noise estimate
-		x_init = np.array([[-5.0, 5, 10], [-3.0, 5, 5], [0.0, 8, 20], [-2.0, 15, 5], [-3.0, 3, 30]])
+		x_init = np.array([[-5.0, 5, 10], [-3.0, 5, 5], [-1.0, 8, 10], [-2.0, 10, 5], [-3.0, 3, 20]])
 		y_init, noise = self.initial_search(x_init)
 
 		if self.verbosity > 0:
@@ -253,8 +253,7 @@ class BayesianOptimizer(object):
 			for i in range(5):
 				print("%.5f\t%2d\t%2d\t%.4f" % (10**x_init[i][0], x_init[i][1], x_init[i][2], y_init[i][0]))
 			print("Noise estimate:", noise)				
-			print('\n')	
-
+			print('\n')
 			print('Primary optimization:')
 			print('--------------------\n')
 			print('Learning rate   |   n_layers   |   hidden vector size |  avg CV loss  ')
@@ -263,11 +262,11 @@ class BayesianOptimizer(object):
 		optimizer = BayesianOptimization(f=self.compute_cv_loss, 
 										 domain=self.bds,
 										 model_type='GP',
-										 acquisition_type ='EI',
-										 acquisition_jitter = 0.05,
+										 acquisition_type='EI',
+										 acquisition_jitter=0.05,
 										 X=x_init,
 										 Y=y_init,
-										 noise_var = noise,
+										 noise_var=noise,
 										 maximize=False)
 		
 		optimizer.run_optimization(max_iter=self.max_iterations)

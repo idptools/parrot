@@ -44,7 +44,7 @@ parser.add_argument('-nl', '--num-layers', default=1, type=int, metavar='num_lay
 						help='number of layers per direction (def=1)')
 parser.add_argument('--encode', default='onehot', type=str, metavar='encoding_scheme',
 					help="'onehot' (default), 'biophysics', or specify a path to a user-created scheme")
-parser.add_argument('--excludeSeqID', action='store_true',
+parser.add_argument('--exclude-seq-id', dest='excludeSeqID', action='store_true',
 	help='use if data_file lacks sequence IDs in the first column of each line')
 
 args = parser.parse_args()
