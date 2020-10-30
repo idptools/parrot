@@ -21,7 +21,7 @@ from torch.utils.data import Dataset
 
 from parrot import encode_sequence
 
-def parse_file(tsvfile, datatype, problem_type, excludeSeqID=False):
+def parse_file(tsvfile, datatype, problem_type, num_classes, excludeSeqID=False):
 	"""Parse a datafile containing sequences and values.
 
 	Each line of of the input tsv file contains a sequence of amino acids, a value
@@ -65,26 +65,40 @@ def parse_file(tsvfile, datatype, problem_type, excludeSeqID=False):
 	with open(tsvfile) as f:
 		lines = [line.rstrip().split() for line in f]
 
-		# Add a dummy seqID if none are provided
-		if excludeSeqID:
-			for line in lines:
-				line.insert(0, '')
+	# Add a dummy seqID if none are provided
+	if excludeSeqID:
+		for line in lines:
+			line.insert(0, '')
 
+	try:
 		if datatype == 'residues':		# A value for each residue in a sequence
 			data = [[x[0], x[1], np.array( x[2:], dtype=np.float)] for x in lines]
 		elif datatype == 'sequence':	# A single value per sequence
 			data = [[x[0], x[1], float(x[2])] for x in lines]
 		else:
-			print('Invalid datatype.')
+			raise ValueError('Invalid datatype. Must be "residues" or "sequence".')
+	except:
+		raise Exception("Input data is not correctly formatted for datatype '%s'" % datatype)
 
 	if problem_type == 'classification':
 		if datatype == 'sequence':
 			for sample in data:
 				sample[2] = int(sample[2])
 
+				# Validate that all of the class labels are valid
+				if sample[2] >= num_classes or sample[2] < 0:
+					raise ValueError("Invalid class label: %s" % sample[0])
+
 		else:
 			for sample in data:
 				sample[2] = list(map(int, sample[2]))
+				test = np.array(sample[2])
+
+				if np.any(test < 0) or np.any(test >= num_classes):
+					raise ValueError("Invalid class label: %s" % sample[0])
+				elif len(test) != len(sample[1]):
+					raise Exception(
+					'Input not properly formatted. Number of values must be equal to sequence length: %s' % sample[0])
 	return data
 
 class SequenceDataset(Dataset):
@@ -381,9 +395,9 @@ def read_split_file(split_file):
 		test_samples = np.array([int(i) for i in lines[2]])
 	return training_samples, val_samples, test_samples
 
-def split_data(data_file, datatype, problem_type, excludeSeqID=False, 
-			split_file=None, encoding_scheme='onehot', encoder=None,
-			percent_val=0.15, percent_test=0.15):
+def split_data(data_file, datatype, problem_type, num_classes, 
+			excludeSeqID=False, split_file=None, encoding_scheme='onehot', 
+			encoder=None, percent_val=0.15, percent_test=0.15):
 	"""Divide a datafile into training, validation, and test datasets
 
 	Takes in a datafile and specification of the data format and the machine
@@ -444,7 +458,7 @@ def split_data(data_file, datatype, problem_type, excludeSeqID=False,
 		a dataset containing the test set sequences and values
 	"""
 
-	data = parse_file(data_file, datatype, problem_type, excludeSeqID=excludeSeqID)
+	data = parse_file(data_file, datatype, problem_type, num_classes, excludeSeqID=excludeSeqID)
 	num_samples = len(data)
 
 	if split_file == None:
@@ -478,7 +492,7 @@ def split_data(data_file, datatype, problem_type, excludeSeqID=False,
 
 	return train_set, val_set, test_set
 
-def split_data_cv(data_file, datatype, problem_type, excludeSeqID=False, 
+def split_data_cv(data_file, datatype, problem_type, num_classes, excludeSeqID=False, 
 					split_file=None, encoding_scheme='onehot', encoder=None,
 					percent_val=0.15, percent_test=0.15, n_folds=5):
 	"""Divide a datafile into training, val, test and 5 cross-val datasets.
@@ -547,7 +561,7 @@ def split_data_cv(data_file, datatype, problem_type, excludeSeqID=False,
 		a dataset containing the test set sequences and values
 	"""
 
-	data = parse_file(data_file, datatype, problem_type, excludeSeqID=excludeSeqID)
+	data = parse_file(data_file, datatype, problem_type, num_classes, excludeSeqID=excludeSeqID)
 	n_samples = len(data)
 
 	# Initial step: split into training, val, and test sets

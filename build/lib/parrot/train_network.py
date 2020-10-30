@@ -96,12 +96,9 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 		if datatype == 'residues':
 			criterion = nn.MSELoss(reduction='sum')
 		elif datatype == 'sequence':
-			criterion = nn.L1Loss()
+			criterion = nn.L1Loss(reduction='sum')
 	elif problem_type == 'classification':
-		if datatype == 'residues':
-			criterion = nn.CrossEntropyLoss(reduction='sum') 
-		elif datatype == 'sequence':
-			criterion = nn.CrossEntropyLoss()
+		criterion = nn.CrossEntropyLoss(reduction='sum') 
 
 	network = network.float()
 	total_step = len(train_loader)
@@ -145,7 +142,7 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 			loss.backward()
 			optimizer.step()
 
-		for names, vectors, targets in val_loader:		# CHANGEME
+		for names, vectors, targets in val_loader:
 			vectors = vectors.to(device)
 			targets = targets.to(device)
 
@@ -158,7 +155,7 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 					outputs = outputs.permute(0, 2, 1)
 				loss = criterion(outputs, targets.long())
 
-			# Increment test loss
+			# Increment val loss
 			val_loss += loss.data.item()
 
 		# Avg loss:
@@ -254,7 +251,7 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 		if datatype == 'residues':
 			criterion = nn.MSELoss(reduction='sum')
 		elif datatype == 'sequence':
-			criterion = nn.L1Loss()
+			criterion = nn.L1Loss(reduction='sum')
 	elif problem_type == 'classification':
 		if datatype == 'residues':
 			criterion = nn.CrossEntropyLoss(reduction='sum')
