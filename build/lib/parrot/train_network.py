@@ -121,7 +121,7 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 		val_loss = 0
 
 		# Iterate over batches
-		for i, (names, vectors, targets) in enumerate(train_loader):		# CHANGEME
+		for i, (names, vectors, targets) in enumerate(train_loader):
 			vectors = vectors.to(device)
 			targets = targets.to(device)
 		
@@ -199,8 +199,9 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 	return avg_train_losses, avg_val_losses
 
 
-def test_labeled_data(network, test_loader, datatype, problem_type, 
-						weights_file, num_classes, device):
+def test_labeled_data(network, test_loader, datatype, 
+					problem_type, weights_file, num_classes, 
+					proportional_classification, include_figs, device):
 	"""Test a trained BRNN on labeled sequences
 
 	Using the saved weights of a trained network, run a set of sequences through
@@ -225,6 +226,11 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 		A path to the location of the best_performing network weights
 	num_classes: int
 		Number of data classes. If regression task, put 1.
+	proportional_classification: bool
+		Whether output should be binary labels, or "weights" of each label type.
+		This field is only implemented for binary, sequence classification tasks.
+	include_figs: bool
+		Whether or not matplotlib figures should be generated.
 	device : str
 		Location of where testing will take place--should be either 'cpu' or
 		'cuda' (GPU). If available, training on GPU is typically much faster.
@@ -286,7 +292,8 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 	# Plot 'accuracy' depending on the problem type and datatype
 	if problem_type == 'regression':
 		if datatype == 'residues':
-			brnn_plot.residue_regression_scatterplot(all_targets, all_outputs, output_dir=output_dir)
+			if include_figs:
+				brnn_plot.residue_regression_scatterplot(all_targets, all_outputs, output_dir=output_dir)
 
 			# Format predictions
 			for i in range(len(predictions)):
@@ -294,7 +301,8 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 				predictions[i][1] = predictions[i][1].flatten()
 
 		elif datatype == 'sequence':
-			brnn_plot.sequence_regression_scatterplot(all_targets, all_outputs, output_dir=output_dir)
+			if include_figs:
+				brnn_plot.sequence_regression_scatterplot(all_targets, all_outputs, output_dir=output_dir)
 
 			# Format predictions
 			for i in range(len(predictions)):
@@ -304,7 +312,8 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 	elif problem_type == 'classification':
 
 		if datatype == 'residues':
-			brnn_plot.res_confusion_matrix(all_targets, all_outputs, num_classes, output_dir=output_dir)
+			if include_figs:
+				brnn_plot.res_confusion_matrix(all_targets, all_outputs, num_classes, output_dir=output_dir)
 
 			# Format predictions and assign class predictions
 			for i in range(len(predictions)):
@@ -314,13 +323,23 @@ def test_labeled_data(network, test_loader, datatype, problem_type,
 				predictions[i][2] = np.array(pred_values, dtype=np.int)
 
 		elif datatype == 'sequence':
-			brnn_plot.confusion_matrix(all_targets, all_outputs, num_classes, output_dir=output_dir)
+			if include_figs:
+				brnn_plot.confusion_matrix(all_targets, all_outputs, num_classes, output_dir=output_dir)
+			
+			if proportional_classification:
+				# Proportional assignment of class predictions
+				# Optional implementation for binary classification task
+				# e.g. every sequence a real number in [0,1] corresponding to 
+				# its relative assignment into class 0 or 1
+				softmax = np.exp(predictions[i][2][0])
+				predictions[i][2] = (softmax / np.sum(softmax))[1]
 
-			# Format predictions and assign class predictions
-			for i in range(len(predictions)):
-				pred_value = np.argmax(predictions[i][2])
-				predictions[i][2] = int(pred_value)
-				predictions[i][1] = predictions[i][1]
+			else:
+				# Absolute assignment of class predictions
+				# e.g. every sequence receives an integer class label
+				for i in range(len(predictions)):
+					pred_value = np.argmax(predictions[i][2])
+					predictions[i][2] = int(pred_value)
 
 	return test_loss / len(test_loader.dataset), predictions
 

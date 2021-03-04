@@ -254,8 +254,7 @@
 	<span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Predicted&#39;</span><span class="p">)</span>
 	<span class="n">slope</span><span class="p">,</span> <span class="n">intercept</span><span class="p">,</span> <span class="n">r_value</span><span class="p">,</span> <span class="n">p_value</span><span class="p">,</span> <span class="n">std_err</span> <span class="o">=</span> <span class="n">linregress</span><span class="p">(</span><span class="n">true_list</span><span class="p">,</span> <span class="n">pred_list</span><span class="p">)</span>
 	<span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Testing accuracy: R^2=</span><span class="si">%.3f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">r_value</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
-	<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">+</span> <span class="s1">&#39;seq_scatter.png&#39;</span><span class="p">)</span>
-	<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
+	<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">+</span> <span class="s1">&#39;seq_scatter.png&#39;</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="residue_regression_scatterplot"><a class="viewcode-back" href="../../api.html#parrot.brnn_plot.residue_regression_scatterplot">[docs]</a><span class="k">def</span> <span class="nf">residue_regression_scatterplot</span><span class="p">(</span><span class="n">true</span><span class="p">,</span> <span class="n">predicted</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
@@ -306,8 +305,7 @@
 	<span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Predicted&#39;</span><span class="p">)</span>
 	<span class="n">slope</span><span class="p">,</span> <span class="n">intercept</span><span class="p">,</span> <span class="n">r_value</span><span class="p">,</span> <span class="n">p_value</span><span class="p">,</span> <span class="n">std_err</span> <span class="o">=</span> <span class="n">linregress</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">true_list</span><span class="p">,</span> <span class="p">[]),</span> <span class="nb">sum</span><span class="p">(</span><span class="n">pred_list</span><span class="p">,</span> <span class="p">[]))</span>
 	<span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Testing accuracy: R^2=</span><span class="si">%.3f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">r_value</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
-	<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">+</span> <span class="s1">&#39;res_scatter.png&#39;</span><span class="p">)</span>
-	<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
+	<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">+</span> <span class="s1">&#39;res_scatter.png&#39;</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="confusion_matrix"><a class="viewcode-back" href="../../api.html#parrot.brnn_plot.confusion_matrix">[docs]</a><span class="k">def</span> <span class="nf">confusion_matrix</span><span class="p">(</span><span class="n">true_classes</span><span class="p">,</span> <span class="n">predicted_classes</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
@@ -341,8 +339,7 @@
 	<span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Predicted labels&#39;</span><span class="p">)</span>
 	<span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Test set confusion matrix&#39;</span><span class="p">)</span>
 	<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
-	<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">+</span> <span class="s1">&#39;seq_CM.png&#39;</span><span class="p">)</span>
-	<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
+	<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">+</span> <span class="s1">&#39;seq_CM.png&#39;</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="res_confusion_matrix"><a class="viewcode-back" href="../../api.html#parrot.brnn_plot.res_confusion_matrix">[docs]</a><span class="k">def</span> <span class="nf">res_confusion_matrix</span><span class="p">(</span><span class="n">true_classes</span><span class="p">,</span> <span class="n">predicted_classes</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
@@ -390,8 +387,7 @@
 	<span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Predicted labels&#39;</span><span class="p">)</span>
 	<span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Test set confusion matrix&#39;</span><span class="p">)</span>
 	<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
-	<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">+</span> <span class="s1">&#39;res_CM.png&#39;</span><span class="p">)</span>
-	<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
+	<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">+</span> <span class="s1">&#39;res_CM.png&#39;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="output_predictions_to_file"><a class="viewcode-back" href="../../api.html#parrot.brnn_plot.output_predictions_to_file">[docs]</a><span class="k">def</span> <span class="nf">output_predictions_to_file</span><span class="p">(</span><span class="n">sequence_data</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="p">,</span> <span class="n">encoder</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 																			<span class="n">output_dir</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>

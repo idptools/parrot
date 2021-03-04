@@ -173,7 +173,7 @@
 
 <span class="kn">from</span> <span class="nn">parrot</span> <span class="kn">import</span> <span class="n">encode_sequence</span>
 
-<div class="viewcode-block" id="parse_file"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.parse_file">[docs]</a><span class="k">def</span> <span class="nf">parse_file</span><span class="p">(</span><span class="n">tsvfile</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<div class="viewcode-block" id="parse_file"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.parse_file">[docs]</a><span class="k">def</span> <span class="nf">parse_file</span><span class="p">(</span><span class="n">tsvfile</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 	<span class="sd">&quot;&quot;&quot;Parse a datafile containing sequences and values.</span>
 
 <span class="sd">	Each line of of the input tsv file contains a sequence of amino acids, a value</span>
@@ -217,26 +217,40 @@
 	<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">tsvfile</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
 		<span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="n">line</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="p">]</span>
 
-		<span class="c1"># Add a dummy seqID if none are provided</span>
-		<span class="k">if</span> <span class="n">excludeSeqID</span><span class="p">:</span>
-			<span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">:</span>
-				<span class="n">line</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+	<span class="c1"># Add a dummy seqID if none are provided</span>
+	<span class="k">if</span> <span class="n">excludeSeqID</span><span class="p">:</span>
+		<span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">:</span>
+			<span class="n">line</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
 
+	<span class="k">try</span><span class="p">:</span>
 		<span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>		<span class="c1"># A value for each residue in a sequence</span>
 			<span class="n">data</span> <span class="o">=</span> <span class="p">[[</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span> <span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float</span><span class="p">)]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">]</span>
 		<span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>	<span class="c1"># A single value per sequence</span>
 			<span class="n">data</span> <span class="o">=</span> <span class="p">[[</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">])]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">]</span>
 		<span class="k">else</span><span class="p">:</span>
-			<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Invalid datatype.&#39;</span><span class="p">)</span>
+			<span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Invalid datatype. Must be &quot;residues&quot; or &quot;sequence&quot;.&#39;</span><span class="p">)</span>
+	<span class="k">except</span><span class="p">:</span>
+		<span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Input data is not correctly formatted for datatype &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">datatype</span><span class="p">)</span>
 
 	<span class="k">if</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;classification&#39;</span><span class="p">:</span>
 		<span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
 			<span class="k">for</span> <span class="n">sample</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
 				<span class="n">sample</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sample</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
 
+				<span class="c1"># Validate that all of the class labels are valid</span>
+				<span class="k">if</span> <span class="n">sample</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">num_classes</span> <span class="ow">or</span> <span class="n">sample</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+					<span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid class label: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">sample</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
 		<span class="k">else</span><span class="p">:</span>
 			<span class="k">for</span> <span class="n">sample</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
 				<span class="n">sample</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">sample</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+				<span class="n">test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sample</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+
+				<span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">test</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">test</span> <span class="o">&gt;=</span> <span class="n">num_classes</span><span class="p">):</span>
+					<span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid class label: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">sample</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+				<span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">test</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">sample</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+					<span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span>
+					<span class="s1">&#39;Input not properly formatted. Number of values must be equal to sequence length: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">sample</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
 	<span class="k">return</span> <span class="n">data</span></div>
 
 <div class="viewcode-block" id="SequenceDataset"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.SequenceDataset">[docs]</a><span class="k">class</span> <span class="nc">SequenceDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
@@ -533,9 +547,9 @@
 		<span class="n">test_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">[</span><span class="mi">2</span><span class="p">]])</span>
 	<span class="k">return</span> <span class="n">training_samples</span><span class="p">,</span> <span class="n">val_samples</span><span class="p">,</span> <span class="n">test_samples</span></div>
 
-<div class="viewcode-block" id="split_data"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.split_data">[docs]</a><span class="k">def</span> <span class="nf">split_data</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
-			<span class="n">split_file</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="s1">&#39;onehot&#39;</span><span class="p">,</span> <span class="n">encoder</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-			<span class="n">percent_val</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">percent_test</span><span class="o">=</span><span class="mf">0.15</span><span class="p">):</span>
+<div class="viewcode-block" id="split_data"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.split_data">[docs]</a><span class="k">def</span> <span class="nf">split_data</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> 
+			<span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">split_file</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="s1">&#39;onehot&#39;</span><span class="p">,</span> 
+			<span class="n">encoder</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">percent_val</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">percent_test</span><span class="o">=</span><span class="mf">0.15</span><span class="p">):</span>
 	<span class="sd">&quot;&quot;&quot;Divide a datafile into training, validation, and test datasets</span>
 
 <span class="sd">	Takes in a datafile and specification of the data format and the machine</span>
@@ -596,7 +610,7 @@
 <span class="sd">		a dataset containing the test set sequences and values</span>
 <span class="sd">	&quot;&quot;&quot;</span>
 
-	<span class="n">data</span> <span class="o">=</span> <span class="n">parse_file</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="n">excludeSeqID</span><span class="p">)</span>
+	<span class="n">data</span> <span class="o">=</span> <span class="n">parse_file</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="n">excludeSeqID</span><span class="p">)</span>
 	<span class="n">num_samples</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
 
 	<span class="k">if</span> <span class="n">split_file</span> <span class="o">==</span> <span class="kc">None</span><span class="p">:</span>
@@ -630,7 +644,7 @@
 
 	<span class="k">return</span> <span class="n">train_set</span><span class="p">,</span> <span class="n">val_set</span><span class="p">,</span> <span class="n">test_set</span></div>
 
-<div class="viewcode-block" id="split_data_cv"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.split_data_cv">[docs]</a><span class="k">def</span> <span class="nf">split_data_cv</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+<div class="viewcode-block" id="split_data_cv"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.split_data_cv">[docs]</a><span class="k">def</span> <span class="nf">split_data_cv</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
 					<span class="n">split_file</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="s1">&#39;onehot&#39;</span><span class="p">,</span> <span class="n">encoder</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 					<span class="n">percent_val</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">percent_test</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">n_folds</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
 	<span class="sd">&quot;&quot;&quot;Divide a datafile into training, val, test and 5 cross-val datasets.</span>
@@ -699,7 +713,7 @@
 <span class="sd">		a dataset containing the test set sequences and values</span>
 <span class="sd">	&quot;&quot;&quot;</span>
 
-	<span class="n">data</span> <span class="o">=</span> <span class="n">parse_file</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="n">excludeSeqID</span><span class="p">)</span>
+	<span class="n">data</span> <span class="o">=</span> <span class="n">parse_file</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="n">excludeSeqID</span><span class="p">)</span>
 	<span class="n">n_samples</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
 
 	<span class="c1"># Initial step: split into training, val, and test sets</span>

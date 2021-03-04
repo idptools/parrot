@@ -35,7 +35,7 @@ from parrot import encode_sequence
 # Parse the command line arguments
 parser = argparse.ArgumentParser(description='Train and test a bi-directional RNN using entire sequence.')
 parser.add_argument('data_file', help='path to tsv file with format: <idx> <sequence> <data>')
-parser.add_argument('output_network', help='path for the returned trained network')
+parser.add_argument('output_network', help='location to save the trained network')
 parser.add_argument('-d', '--datatype', metavar='dtype', default='sequence', type=str, required=True,
 					help="Required. Format of the input data file, must be 'sequence' or 'residues'")
 parser.add_argument('-c', '--classes', default=1, type=int, metavar='num_classes', required=True,
@@ -55,6 +55,10 @@ parser.add_argument('--encode', default='onehot', type=str, metavar='encoding_sc
 					help="'onehot' (default), 'biophysics', or specify a path to a user-created scheme")
 parser.add_argument('--exclude-seq-id', dest='excludeSeqID', action='store_true', 
 		help='use if data_file lacks sequence IDs in the first column of each line')
+parser.add_argument('--proportional-classification', dest='proportional_classification', 
+		action='store_true', help='Optional implementation for binary sequence classificaion')
+parser.add_argument('--include-figs', dest='include_figs', action='store_true',
+		help='Generate figures from training results and save to same location as network')
 parser.add_argument('--force-cpu', dest='forceCPU', action='store_true', 
 		help='force network to train on CPU, even if GPU is available')
 parser.add_argument('--verbose', '-v', action='count', default=0, 
@@ -79,6 +83,8 @@ verbosity = args.verbose
 forceCPU = args.forceCPU
 setFractions = args.setFractions
 excludeSeqID = args.excludeSeqID
+proportional_classification = args.proportional_classification
+include_figs = args.include_figs
 
 # Device configuration
 if forceCPU:
@@ -161,6 +167,12 @@ for frac in setFractions:
 if sum(setFractions) != 1.0:
 	raise ValueError('Set fractions must sum to 1.')
 
+# Ensure that task is binary sequence classification if 
+# proportional_classfication is set
+if proportional_classfication:
+	if dtype != 'sequence' or num_classes != 2:
+		raise ValueError('Proportional classification only implemented for binary sequence classification')
+
 ###############################################################################
 
 # Split data
@@ -235,13 +247,16 @@ if verbosity > 0:
 train_loss, val_loss = train_network.train(brnn_network, train_loader, val_loader, datatype=dtype, 
 						problem_type=problem_type, weights_file=saved_weights, stop_condition='iter',
 						device=device, learn_rate=lr, n_epochs=num_epochs*2, verbosity=verbosity) 
-brnn_plot.training_loss(train_loss, val_loss)
+
+if include_figs: # Plot training & validation loss per epoch
+	brnn_plot.training_loss(train_loss, val_loss, output_dir=output_dir)
 
 # Test network
 test_loss, test_set_predictions = train_network.test_labeled_data(brnn_network, test_loader, 
 									datatype=dtype, problem_type=problem_type, 
-									weights_file=saved_weights, num_classes=num_classes, 
-									device=device)
+									weights_file=saved_weights, num_classes=num_classes,
+									proportional_classification=proportional_classification,
+									include_figs=include_figs, device=device)
 if verbosity > 0:
 	print('\nTest Loss: %.4f' % test_loss)
 

@@ -103,7 +103,6 @@ def sequence_regression_scatterplot(true, predicted, output_dir=''):
 	slope, intercept, r_value, p_value, std_err = linregress(true_list, pred_list)
 	plt.title('Testing accuracy: R^2=%.3f' % (r_value**2))
 	plt.savefig(output_dir + 'seq_scatter.png')
-	plt.show()
 
 
 def residue_regression_scatterplot(true, predicted, output_dir=''):
@@ -155,7 +154,6 @@ def residue_regression_scatterplot(true, predicted, output_dir=''):
 	slope, intercept, r_value, p_value, std_err = linregress(sum(true_list, []), sum(pred_list, []))
 	plt.title('Testing accuracy: R^2=%.3f' % (r_value**2))
 	plt.savefig(output_dir + 'res_scatter.png')
-	plt.show()
 
 
 def confusion_matrix(true_classes, predicted_classes, num_classes, output_dir=''):
@@ -190,7 +188,6 @@ def confusion_matrix(true_classes, predicted_classes, num_classes, output_dir=''
 	plt.title('Test set confusion matrix')
 	plt.tight_layout()
 	plt.savefig(output_dir + 'seq_CM.png')
-	plt.show()
 
 
 def res_confusion_matrix(true_classes, predicted_classes, num_classes, output_dir=''):
@@ -239,7 +236,6 @@ def res_confusion_matrix(true_classes, predicted_classes, num_classes, output_di
 	plt.title('Test set confusion matrix')
 	plt.tight_layout()
 	plt.savefig(output_dir + 'res_CM.png')
-	plt.show()
 
 def output_predictions_to_file(sequence_data, excludeSeqID, encoding_scheme, encoder=None,
 																			output_dir=''):
