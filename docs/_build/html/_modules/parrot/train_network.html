@@ -353,7 +353,7 @@
 
 <div class="viewcode-block" id="test_labeled_data"><a class="viewcode-back" href="../../api.html#parrot.train_network.test_labeled_data">[docs]</a><span class="k">def</span> <span class="nf">test_labeled_data</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">test_loader</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> 
 					<span class="n">problem_type</span><span class="p">,</span> <span class="n">weights_file</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> 
-					<span class="n">proportional_classification</span><span class="p">,</span> <span class="n">include_figs</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
+					<span class="n">probabilistic_classification</span><span class="p">,</span> <span class="n">include_figs</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
 	<span class="sd">&quot;&quot;&quot;Test a trained BRNN on labeled sequences</span>
 
 <span class="sd">	Using the saved weights of a trained network, run a set of sequences through</span>
@@ -378,7 +378,7 @@
 <span class="sd">		A path to the location of the best_performing network weights</span>
 <span class="sd">	num_classes: int</span>
 <span class="sd">		Number of data classes. If regression task, put 1.</span>
-<span class="sd">	proportional_classification: bool</span>
+<span class="sd">	probabilistic_classification: bool</span>
 <span class="sd">		Whether output should be binary labels, or &quot;weights&quot; of each label type.</span>
 <span class="sd">		This field is only implemented for binary, sequence classification tasks.</span>
 <span class="sd">	include_figs: bool</span>
@@ -478,7 +478,7 @@
 			<span class="k">if</span> <span class="n">include_figs</span><span class="p">:</span>
 				<span class="n">brnn_plot</span><span class="o">.</span><span class="n">confusion_matrix</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">all_outputs</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="n">output_dir</span><span class="p">)</span>
 			
-			<span class="k">if</span> <span class="n">proportional_classification</span><span class="p">:</span>
+			<span class="k">if</span> <span class="n">probabilistic_classification</span><span class="p">:</span>
 				<span class="c1"># Proportional assignment of class predictions</span>
 				<span class="c1"># Optional implementation for binary classification task</span>
 				<span class="c1"># e.g. every sequence a real number in [0,1] corresponding to </span>

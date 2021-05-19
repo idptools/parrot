@@ -19,14 +19,14 @@ Where `data_file` specifies the path to the whitespace-separated datafile and `o
 **Optional flags:**
 
 	*  ``--help`` / ``-h`` : Display a help message.
-	*  ``--batch`` / ``-b`` : Training batch size (default is 32). Must be a positive integer, and ideally should be in the range of 50-500. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance.
-	*  ``--epochs`` / ``-e`` : Number of epochs to train for during each iteration of optimization on each data fold (default is 200).
+	*  ``--batch`` / ``-b`` : Training batch size (default is 32). Must be a positive integer, and ideally should be in the range of 30-500. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance.
+	*  ``--epochs`` / ``-e`` : Number of epochs to train for during each iteration of optimization on each data fold (default is 100).
 	*  ``--max-iter`` : Maximum number of iterations the optimization algorithm should run for. Default is 75.
 	*  ``--split`` : Path to split_file for manually dividing dataset into training, validation and test sets. The file should contain three lines, corresponding to training, validation and test sets respectively. Each line should have integers separated by whitespace, with the integers specify which sequences/lines in the `datafile` (0-indexed) will belong to which dataset. The cross-validation folds will be divided from the training and validation data.
 	*  ``--set-fractions`` : Include this flag to manually set the proportions of the data belonging to the training, validation and test sets. This option must be followed by three floats (representing train, validation, and test) between 0 and 1 that cumulatively sum to 1.
 	*  ``--encode`` : Include this flag to specify the numeric encoding scheme for each amino acid. Available options are 'onehot' (default), 'biophysics' or user-specified. If you wish to manually specify an encoding scheme, provide a path to a text file describing the amino acid to vector mapping.
 	*  ``--exclude-seq-id`` : Include this flag if the `data_file` is formatted such that it does not have sequence IDs as the first column in each row.
-	*  ``--proportional-classification`` : Include this flag to output class predictions as continuous values [0-1], based on the proportion to which the network perceive the input sample as belonging to class 0 vs class 1. Only implemented for sequence binary classification.
+	*  ``--probabilistic-classification`` : Include this flag to output class predictions as continuous values [0-1], based on the proportion to which the network perceive the input sample as belonging to class 0 vs class 1. Only implemented for sequence binary classification.
 	*  ``--include-figs`` : Include this flag to generate default images based on network training and performance on test set. Figures will be saved to same directory as specified by ``output-network``.
 	*  ``--force-cpu`` : Include this flag to force network training on the CPU, even if a GPU is available. Use if your machine has a GPU, but the GPU has insufficient memory.
 	*  ``--verbose`` / ``-v`` : The level of information that should be printed to console during training. There will be no output if this flag is not included, and maximum output if this flag is included twice or more.

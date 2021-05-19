@@ -19,11 +19,11 @@ Once PARROT is installed, the user can run ``parrot-predict`` from the command l
 **Optional flags:**
 
 	*  ``--help`` / ``-h`` : Display a help message.
-	*  ``--num-layers`` / ``-nl`` : Number of hidden layers in the BRNN (default is 1). Must be a positive integer and must be identical to the number of layers used when the network was trained.
-	*  ``--hidden-size`` / ``-hs`` : Size of hidden vectors within the BRNN (default is 5). Must be a positive integer and must be identical to the hidden size used when the network was trained.
+	*  ``--num-layers`` / ``-nl`` : Number of hidden layers in the network (default is 1). Must be a positive integer and must be identical to the number of layers used when the network was trained.
+	*  ``--hidden-size`` / ``-hs`` : Size of hidden vectors within the network (default is 10). Must be a positive integer and must be identical to the hidden size used when the network was trained.
 	*  ``--encode`` : Include this flag to specify the numeric encoding scheme for each amino acid. Available options are 'onehot' (default), 'biophysics' or user-specified. If you wish to manually specify an encoding scheme, provide a path to a text file describing the amino acid to vector mapping. The encoding scheme used for sequence prediction must be identical to that used for network training.
 	*  ``--exclude-seq-id`` : Include this flag if the `seq_file` is formatted such that it does not have sequence IDs as the first column in each row.
-	*  ``--proportional-classification`` : Include this flag to output class predictions as continuous values [0-1], based on the proportion to which the network perceive the input sample as belonging to class 0 vs class 1. Only implemented for sequence binary classification.
+	*  ``--probabilistic-classification`` : Include this flag to output class predictions as continuous values [0-1], based on the proportion to which the network perceive the input sample as belonging to class 0 vs class 1. Only implemented for sequence binary classification.
 
 **Output:**
 

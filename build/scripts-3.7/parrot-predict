@@ -34,19 +34,19 @@ parser = argparse.ArgumentParser(description='Make predictions with a bi-directi
 parser.add_argument('seq_file', help='path to tsv file with format: <idx> <sequence>')
 parser.add_argument('saved_network', help='path to the trained network weights file')
 parser.add_argument('output_file', help='file with sequences and their predicted values')
-parser.add_argument('-d', '--datatype', metavar='dtype', default='sequence', type=str, required=True,
+parser.add_argument('-d', '--datatype', metavar='dtype', type=str, required=True,
 					help="Required. Format of the input data file, must be 'sequence' or 'residues'")
-parser.add_argument('-c', '--classes', default=1, type=int, metavar='num_classes', required=True,
+parser.add_argument('-c', '--classes', type=int, metavar='num_classes', required=True,
 					help='Required. Number of output classes, for regression put 1')
-parser.add_argument('-hs', '--hidden-size', default=5, type=int, metavar='hidden_size', 
-						help='hidden vector size (def=5)')
+parser.add_argument('-hs', '--hidden-size', default=10, type=int, metavar='hidden_size', 
+						help='hidden vector size (def=10)')
 parser.add_argument('-nl', '--num-layers', default=1, type=int, metavar='num_layers', 
 						help='number of layers per direction (def=1)')
 parser.add_argument('--encode', default='onehot', type=str, metavar='encoding_scheme',
 					help="'onehot' (default), 'biophysics', or specify a path to a user-created scheme")
 parser.add_argument('--exclude-seq-id', dest='excludeSeqID', action='store_true',
 	help='use if data_file lacks sequence IDs in the first column of each line')
-parser.add_argument('--proportional-classification', dest='proportional_classification', 
+parser.add_argument('--probabilistic-classification', dest='probabilistic_classification', 
 		action='store_true', help='Optional implementation for binary sequence classificaion')
 
 args = parser.parse_args()
@@ -63,7 +63,7 @@ num_classes = args.classes
 # Other flags
 encode = args.encode
 excludeSeqID = args.excludeSeqID
-proportional_classification = args.proportional_classification
+probabilistic_classification = args.probabilistic_classification
 
 ###############################################################################
 ################    Validate arguments and initialize:      ###################
@@ -114,8 +114,8 @@ if num_layers < 1:
 	raise ValueError('Number of layers must be a positive integer.')
 
 # Ensure that task is binary sequence classification if 
-# proportional_classfication is set
-if proportional_classification:
+# probabilistic_classfication is set
+if probabilistic_classification:
 	if dtype != 'sequence' or num_classes != 2:
 		raise ValueError('Proportional classification only implemented for binary sequence classification')
 
@@ -155,8 +155,8 @@ pred_dict = train_network.test_unlabeled_data(brnn_network, sequences, device,
 
 if problem_type == 'classification':
 	if dtype == 'sequence':
-		# proportional_classification
-		if proportional_classification:
+		# probabilistic_classification
+		if probabilistic_classification:
 			softmax = np.exp(values[0])
 			pred_dict[seq] = [(softmax / np.sum(softmax))[1]]
 		else:

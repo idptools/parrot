@@ -744,7 +744,7 @@ vectors. The proportions of the two vectors will be <cite>fraction</cite> and
 <p>Licensed under the MIT license.</p>
 <dl class="py function">
 <dt id="parrot.train_network.test_labeled_data">
-<code class="sig-prename descclassname">parrot.train_network.</code><code class="sig-name descname">test_labeled_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">network</span></em>, <em class="sig-param"><span class="n">test_loader</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">proportional_classification</span></em>, <em class="sig-param"><span class="n">include_figs</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/train_network.html#test_labeled_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.train_network.test_labeled_data" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">parrot.train_network.</code><code class="sig-name descname">test_labeled_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">network</span></em>, <em class="sig-param"><span class="n">test_loader</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">probabilistic_classification</span></em>, <em class="sig-param"><span class="n">include_figs</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/train_network.html#test_labeled_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.train_network.test_labeled_data" title="Permalink to this definition">¶</a></dt>
 <dd><p>Test a trained BRNN on labeled sequences</p>
 <p>Using the saved weights of a trained network, run a set of sequences through
 the network and evaluate the performancd. Return the average loss per
@@ -762,7 +762,7 @@ datasets with values (or class labels) for every residue in a sequence.</p></li>
 ‘classification’.</p></li>
 <li><p><strong>weights_file</strong> (<em>str</em>) – A path to the location of the best_performing network weights</p></li>
 <li><p><strong>num_classes</strong> (<em>int</em>) – Number of data classes. If regression task, put 1.</p></li>
-<li><p><strong>proportional_classification</strong> (<em>bool</em>) – Whether output should be binary labels, or “weights” of each label type.
+<li><p><strong>probabilistic_classification</strong> (<em>bool</em>) – Whether output should be binary labels, or “weights” of each label type.
 This field is only implemented for binary, sequence classification tasks.</p></li>
 <li><p><strong>include_figs</strong> (<em>bool</em>) – Whether or not matplotlib figures should be generated.</p></li>
 <li><p><strong>device</strong> (<em>str</em>) – Location of where testing will take place–should be either ‘cpu’ or

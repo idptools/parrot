@@ -201,7 +201,7 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 
 def test_labeled_data(network, test_loader, datatype, 
 					problem_type, weights_file, num_classes, 
-					proportional_classification, include_figs, device):
+					probabilistic_classification, include_figs, device):
 	"""Test a trained BRNN on labeled sequences
 
 	Using the saved weights of a trained network, run a set of sequences through
@@ -226,7 +226,7 @@ def test_labeled_data(network, test_loader, datatype,
 		A path to the location of the best_performing network weights
 	num_classes: int
 		Number of data classes. If regression task, put 1.
-	proportional_classification: bool
+	probabilistic_classification: bool
 		Whether output should be binary labels, or "weights" of each label type.
 		This field is only implemented for binary, sequence classification tasks.
 	include_figs: bool
@@ -326,7 +326,7 @@ def test_labeled_data(network, test_loader, datatype,
 			if include_figs:
 				brnn_plot.confusion_matrix(all_targets, all_outputs, num_classes, output_dir=output_dir)
 			
-			if proportional_classification:
+			if probabilistic_classification:
 				# Proportional assignment of class predictions
 				# Optional implementation for binary classification task
 				# e.g. every sequence a real number in [0,1] corresponding to 

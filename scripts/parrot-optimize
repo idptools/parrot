@@ -36,16 +36,16 @@ from parrot import encode_sequence
 parser = argparse.ArgumentParser(description='Train and test a bi-directional RNN using entire sequence.')
 parser.add_argument('data_file', help='path to tsv file with format: <idx> <sequence> <data>')
 parser.add_argument('output_network', help='location to save the trained network')
-parser.add_argument('-d', '--datatype', metavar='dtype', default='sequence', type=str, required=True,
+parser.add_argument('-d', '--datatype', metavar='dtype', type=str, required=True,
 					help="Required. Format of the input data file, must be 'sequence' or 'residues'")
-parser.add_argument('-c', '--classes', default=1, type=int, metavar='num_classes', required=True,
+parser.add_argument('-c', '--classes', type=int, metavar='num_classes', required=True,
 					help='Required. Number of output classes, for regression put 1')
 parser.add_argument('-b', '--batch', default=32, type=int, metavar='batch_size', 
 						help='size of training batch (def=32)')
-parser.add_argument('-e', '--epochs', default=50, type=int, metavar='num_epochs', 
-						help='number of training epochs (def=50)')
-parser.add_argument('--max-iter', default=75, type=int, metavar='max_iter',
-					help='Maximum number of iterations for the optimization procedure (def=75)')
+parser.add_argument('-e', '--epochs', default=100, type=int, metavar='num_epochs', 
+						help='number of training epochs (def=100)')
+parser.add_argument('--max-iter', default=50, type=int, metavar='max_iter',
+					help='Maximum number of iterations for the optimization procedure (def=50)')
 parser.add_argument('--split', default='', metavar='split_file', type=str, 
 		help="file indicating how to split datafile into training, validation, and testing sets")
 parser.add_argument('--set-fractions', nargs=3, default=[0.7, 0.15, 0.15], type=float, 
@@ -55,7 +55,7 @@ parser.add_argument('--encode', default='onehot', type=str, metavar='encoding_sc
 					help="'onehot' (default), 'biophysics', or specify a path to a user-created scheme")
 parser.add_argument('--exclude-seq-id', dest='excludeSeqID', action='store_true', 
 		help='use if data_file lacks sequence IDs in the first column of each line')
-parser.add_argument('--proportional-classification', dest='proportional_classification', 
+parser.add_argument('--probabilistic-classification', dest='probabilistic_classification', 
 		action='store_true', help='Optional implementation for binary sequence classificaion')
 parser.add_argument('--include-figs', dest='include_figs', action='store_true',
 		help='Generate figures from training results and save to same location as network')
@@ -83,7 +83,7 @@ verbosity = args.verbose
 forceCPU = args.forceCPU
 setFractions = args.setFractions
 excludeSeqID = args.excludeSeqID
-proportional_classification = args.proportional_classification
+probabilistic_classification = args.probabilistic_classification
 include_figs = args.include_figs
 
 # Device configuration
@@ -168,8 +168,8 @@ if sum(setFractions) != 1.0:
 	raise ValueError('Set fractions must sum to 1.')
 
 # Ensure that task is binary sequence classification if 
-# proportional_classfication is set
-if proportional_classfication:
+# probabilistic_classfication is set
+if probabilistic_classfication:
 	if dtype != 'sequence' or num_classes != 2:
 		raise ValueError('Proportional classification only implemented for binary sequence classification')
 
@@ -255,7 +255,7 @@ if include_figs: # Plot training & validation loss per epoch
 test_loss, test_set_predictions = train_network.test_labeled_data(brnn_network, test_loader, 
 									datatype=dtype, problem_type=problem_type, 
 									weights_file=saved_weights, num_classes=num_classes,
-									proportional_classification=proportional_classification,
+									probabilistic_classification=probabilistic_classification,
 									include_figs=include_figs, device=device)
 if verbosity > 0:
 	print('\nTest Loss: %.4f' % test_loss)
