@@ -11,8 +11,9 @@ https://github.com/idptools/parrot
 Licensed under the MIT license. 
 """
 
-import torch 
+import torch
 import torch.nn as nn
+
 
 class BRNN_MtM(nn.Module):
     """A PyTorch many-to-many bidirectional recurrent neural network
@@ -78,11 +79,11 @@ class BRNN_MtM(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.num_classes = num_classes
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, 
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers,
                             batch_first=True, bidirectional=True)
         self.fc = nn.Linear(in_features=hidden_size*2,  # *2 for bidirection
-                            out_features=num_classes) 
-    
+                            out_features=num_classes)
+
     def forward(self, x):
         """Propogate input sequences through the network to produce outputs
 
@@ -104,16 +105,17 @@ class BRNN_MtM(nn.Module):
         # h0 and c0 dimensions: [num_layers*2 X batch_size X hidden_size]
         h0 = torch.zeros(self.num_layers*2,     # *2 for bidirection
                          x.size(0), self.hidden_size).to(self.device)
-        c0 = torch.zeros(self.num_layers*2, 
+        c0 = torch.zeros(self.num_layers*2,
                          x.size(0), self.hidden_size).to(self.device)
-        
+
         # Forward propagate LSTM
         # out: tensor of shape: [batch_size, seq_length, hidden_size*2]
         out, (h_n, c_n) = self.lstm(x, (h0, c0))
-        
+
         # Decode the hidden state for each time step
-        fc_out = self.fc(out)    
+        fc_out = self.fc(out)
         return fc_out
+
 
 class BRNN_MtO(nn.Module):
     """A PyTorch many-to-one bidirectional recurrent neural network
@@ -178,11 +180,11 @@ class BRNN_MtO(nn.Module):
         self.device = device
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, 
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers,
                             batch_first=True, bidirectional=True)
         self.fc = nn.Linear(in_features=hidden_size*2,  # *2 for bidirection
-                            out_features=num_classes) 
-    
+                            out_features=num_classes)
+
     def forward(self, x):
         """Propogate input sequences through the network to produce outputs
 
@@ -204,9 +206,9 @@ class BRNN_MtO(nn.Module):
         # h0 and c0 dimensions: [num_layers*2 X batch_size X hidden_size]
         h0 = torch.zeros(self.num_layers*2,     # *2 for bidirection
                          x.size(0), self.hidden_size).to(self.device)
-        c0 = torch.zeros(self.num_layers*2, 
+        c0 = torch.zeros(self.num_layers*2,
                          x.size(0), self.hidden_size).to(self.device)
-        
+
         # Forward propagate LSTM
         # out: tensor of shape: [batch_size, seq_length, hidden_size*2]
         out, (h_n, c_n) = self.lstm(x, (h0, c0))
@@ -214,7 +216,7 @@ class BRNN_MtO(nn.Module):
         # Retain the outputs of the last time step in the sequence for both directions
         # (i.e. output of seq[n] in forward direction, seq[0] in reverse direction)
         final_outs = torch.cat((h_n[:, :, :][-2, :], h_n[:, :, :][-1, :]), -1)
-        
+
         # Decode the hidden state of the last time step
         fc_out = self.fc(final_outs)
         return fc_out
