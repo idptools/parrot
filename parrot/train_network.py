@@ -346,7 +346,7 @@ def test_labeled_data(network, test_loader, datatype,
     return test_loss / len(test_loader.dataset), predictions
 
 
-def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot', encoder=None):
+def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot', encoder=None, print_frequency=None):
     """Test a trained BRNN on unlabeled sequences
 
     Use a trained network to make predictions on previously-unseen data.
@@ -370,6 +370,10 @@ def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot', en
             If encoding_scheme is 'user', encoder should be a UserEncoder object
             that can convert amino acid sequences to numeric vectors. If
             encoding_scheme is not 'user', use None.
+    print_frequency : int
+            If provided defines at what sequence interval an update is printed.
+            Default = None.
+    
 
     Returns
     -------
@@ -378,7 +382,17 @@ def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot', en
     """
 
     pred_dict = {}
+
+    local_count = -1
+    total_count = len(sequences)
+
     for seq in sequences:
+
+        local_count = local_count + 1
+        if print_frequency is not None:
+            if local_count % print_frequency == 0:
+                print(f'On {local_count} of {total_count}')
+
         if encoding_scheme == 'onehot':
             seq_vector = encode_sequence.one_hot(seq)
         elif encoding_scheme == 'biophysics':
