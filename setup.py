@@ -62,7 +62,7 @@ setup(
             'matplotlib',
             'seaborn',
             'pandas',
-            'GPy==1.9.9',
+            'GPy<=1.9.9',
             'GPyOpt'
         ],              # Required packages, pulls from pip if needed; do not use for Conda deployment
     # platforms=['Linux',

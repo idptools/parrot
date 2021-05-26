@@ -24,7 +24,9 @@ Once PARROT is installed, the user can run ``parrot-predict`` from the command l
 	*  ``--encode`` : Include this flag to specify the numeric encoding scheme for each amino acid. Available options are 'onehot' (default), 'biophysics' or user-specified. If you wish to manually specify an encoding scheme, provide a path to a text file describing the amino acid to vector mapping. The encoding scheme used for sequence prediction must be identical to that used for network training.
 	*  ``--exclude-seq-id`` : Include this flag if the `seq_file` is formatted such that it does not have sequence IDs as the first column in each row.
 	*  ``--probabilistic-classification`` : Include this flag to output class predictions as continuous values [0-1], based on the proportion to which the network perceive the input sample as belonging to class 0 vs class 1. Only implemented for sequence binary classification.
+	*  ``--silent`` : Flag which, if provided, ensures no output is generated to the terminal.
+	*  ``--print-frequency`` : Value that defines how often status updates should be printed (in number of sequences predicted. Default=1000
 
 **Output:**
 
-``parrot-predict`` will produce a single text file as output. This file will be formatted similarly to the original datafiles used for network training: each row contains a sequence ID (exluded if the flag ``--exclude-seq-id`` is given), an amino acid sequence, and the prediction values for that sequence.
+``parrot-predict`` will produce a single text file as output, as well as status updates to the console (if --silent is not specified). This file will be formatted similarly to the original datafiles used for network training: each row contains a sequence ID (exluded if the flag ``--exclude-seq-id`` is given), an amino acid sequence, and the prediction values for that sequence.

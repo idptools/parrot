@@ -27,29 +27,51 @@ from parrot import brnn_architecture
 from parrot import process_input_data as pid
 from parrot import train_network
 from parrot import encode_sequence
+from parrot.tools import cli
 
 
 # Parse the command line arguments
 parser = argparse.ArgumentParser(description='Make predictions with a bi-directional RNN.')
+
 parser.add_argument('seq_file', help='path to tsv file with format: <idx> <sequence>')
+
 parser.add_argument('saved_network', help='path to the trained network weights file')
+
 parser.add_argument('output_file', help='file with sequences and their predicted values')
+
 parser.add_argument('-d', '--datatype', metavar='dtype', type=str, required=True,
                     help="Required. Format of the input data file, must be 'sequence' or 'residues'")
+
 parser.add_argument('-c', '--classes', type=int, metavar='num_classes', required=True,
                     help='Required. Number of output classes, for regression put 1')
+
 parser.add_argument('-hs', '--hidden-size', default=10, type=int, metavar='hidden_size',
                     help='hidden vector size (def=10)')
+
 parser.add_argument('-nl', '--num-layers', default=1, type=int, metavar='num_layers',
                     help='number of layers per direction (def=1)')
+
 parser.add_argument('--encode', default='onehot', type=str, metavar='encoding_scheme',
                                         help="'onehot' (default), 'biophysics', or specify a path to a user-created scheme")
+
 parser.add_argument('--exclude-seq-id', dest='excludeSeqID', action='store_true',
                     help='use if data_file lacks sequence IDs in the first column of each line')
+
 parser.add_argument('--probabilistic-classification', dest='probabilistic_classification',
                     action='store_true', help='Optional implementation for binary sequence classificaion')
 
+parser.add_argument('--silent', action='store_true',
+                    help="Flag which, if provided, ensures no output is generated to the terminal")
+
+parser.add_argument('--print-frequency', default=10000, type=int, 
+                    help="Value that defines how often status updates should be printed (in number of sequences predicted. Default=10000")
+
+
+
 args = parser.parse_args()
+
+# print startup 
+cli.print_startup('parrot-predict', args.silent)
 device = 'cpu'
 
 # Hyper-parameters
@@ -64,6 +86,14 @@ num_classes = args.classes
 encode = args.encode
 excludeSeqID = args.excludeSeqID
 probabilistic_classification = args.probabilistic_classification
+
+
+if args.silent:
+    print_frequency = None
+else:
+    print_frequency = args.print_frequency
+
+
 
 ###############################################################################
 ################    Validate arguments and initialize:      ###################
@@ -131,6 +161,23 @@ elif dtype == 'residues':
 else:
     raise ValueError('Invalid argument `--datatype`: must be "residues" or "sequence".')
 
+
+# print info on the setup
+cli.print_settings(args.silent, 
+                   sequence_file=seq_file,
+                   weights_file=saved_weights,
+                   output_file=output_file,
+                   hidden_size=hidden_size,
+                   num_layers=num_layers,
+                   dtype=dtype,
+                   num_classes=num_classes,
+                   problem_type=problem_type,
+                   encode=encode,
+                   excludeSeqID=excludeSeqID,
+                   probabilistic_classification=probabilistic_classification)
+
+
+
 ###############################################################################
 
 brnn_network.load_state_dict(torch.load(saved_weights,
@@ -150,8 +197,15 @@ else:
         sequences.append(line[1])
         seq_id_dict[line[1]] = line[0]
 
+if args.silent is False:
+    print('\n---> Starting predictions...\n')
+
 pred_dict = train_network.test_unlabeled_data(brnn_network, sequences, device,
-                                              encoding_scheme=encoding_scheme, encoder=encoder)
+                                              encoding_scheme=encoding_scheme, encoder=encoder, 
+                                              print_frequency=print_frequency)
+
+if args.silent is False:
+    print('\n---> Prediction complete!')
 
 if problem_type == 'classification':
     if dtype == 'sequence':
@@ -161,8 +215,6 @@ if problem_type == 'classification':
             pred_dict[seq] = [(softmax / np.sum(softmax))[1]]
         else:
             for seq, values in pred_dict.items():
-                print(values[0])
-                print(np.argmax(values[0]))
                 pred_dict[seq] = [np.argmax(values[0])]
     else:
         for seq, values in pred_dict.items():

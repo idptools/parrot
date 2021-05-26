@@ -6,5 +6,5 @@ scipy
 matplotlib
 seaborn
 pandas
-GPy
+GPy<=1.9.9
 GPyOpt
