@@ -10,6 +10,8 @@ __pycache__/
 
 # ignore test output
 idptools_parrot.egg-info/
+idptools_parrot.egg-info/*
+idptools_parrot.egg-info/PKG-INFO
 
 
 
