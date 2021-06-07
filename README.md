@@ -10,7 +10,14 @@ PARROT is available through GitHub or the Python Package Index (PyPI). To instal
 
 	$ pip install idptools-parrot
 
-To clone the GitHub repository and gain the ability to modify a local copy of the code, run
+It is possible that you may experience errors depending on what Python packages are already installed on your machine. If you encounter this, try installing PARROT in a "clean" virtual environment using conda:
+
+	$ conda create --name <env_name> python=3.7
+	$ conda activate <env_name>
+
+Then install PARROT with pip.
+
+Alternatively, to clone the GitHub repository and gain the ability to modify a local copy of the code, run:
 
 	$ git clone https://github.com/idptools/parrot.git
 	$ cd parrot
