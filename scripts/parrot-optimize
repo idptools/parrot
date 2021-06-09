@@ -169,9 +169,9 @@ if sum(setFractions) != 1.0:
 
 # Ensure that task is binary sequence classification if
 # probabilistic_classfication is set
-if probabilistic_classfication:
+if probabilistic_classification:
     if dtype != 'sequence' or num_classes != 2:
-        raise ValueError('Proportional classification only implemented for binary sequence classification')
+        raise ValueError('Probabilistic classification only implemented for binary sequence classification')
 
 ###############################################################################
 

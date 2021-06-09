@@ -783,7 +783,7 @@ true_value, predicted_value, sequence_ID]</p></li>
 
 <dl class="py function">
 <dt id="parrot.train_network.test_unlabeled_data">
-<code class="sig-prename descclassname">parrot.train_network.</code><code class="sig-name descname">test_unlabeled_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">network</span></em>, <em class="sig-param"><span class="n">sequences</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span><span class="o">=</span><span class="default_value">'onehot'</span></em>, <em class="sig-param"><span class="n">encoder</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/train_network.html#test_unlabeled_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.train_network.test_unlabeled_data" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">parrot.train_network.</code><code class="sig-name descname">test_unlabeled_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">network</span></em>, <em class="sig-param"><span class="n">sequences</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span><span class="o">=</span><span class="default_value">'onehot'</span></em>, <em class="sig-param"><span class="n">encoder</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">print_frequency</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/train_network.html#test_unlabeled_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.train_network.test_unlabeled_data" title="Permalink to this definition">¶</a></dt>
 <dd><p>Test a trained BRNN on unlabeled sequences</p>
 <p>Use a trained network to make predictions on previously-unseen data.</p>
 <p>** Note: Unlike the previous functions, <cite>network</cite> here must have pre-loaded
@@ -800,6 +800,8 @@ weights. **</p>
 <li><p><strong>encoder</strong> (<em>UserEncoder object, optional</em>) – If encoding_scheme is ‘user’, encoder should be a UserEncoder object
 that can convert amino acid sequences to numeric vectors. If
 encoding_scheme is not ‘user’, use None.</p></li>
+<li><p><strong>print_frequency</strong> (<em>int</em>) – If provided defines at what sequence interval an update is printed.
+Default = None.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>

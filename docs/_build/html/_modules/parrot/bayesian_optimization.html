@@ -173,267 +173,266 @@
 <span class="kn">from</span> <span class="nn">parrot</span> <span class="kn">import</span> <span class="n">train_network</span>
 <span class="kn">from</span> <span class="nn">parrot</span> <span class="kn">import</span> <span class="n">brnn_architecture</span>
 
+
 <div class="viewcode-block" id="BayesianOptimizer"><a class="viewcode-back" href="../../api.html#parrot.bayesian_optimization.BayesianOptimizer">[docs]</a><span class="k">class</span> <span class="nc">BayesianOptimizer</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
-	<span class="sd">&quot;&quot;&quot;A class for conducting Bayesian Optimization on a PyTorch RNN</span>
+    <span class="sd">&quot;&quot;&quot;A class for conducting Bayesian Optimization on a PyTorch RNN</span>
 
-<span class="sd">	Sets up and runs GPy Bayesian Optimization in order to choose the best-</span>
-<span class="sd">	performing hyperparameters for a RNN for a given machine learning task. </span>
-<span class="sd">	Iteratively change learning rate, hidden vector size, and the number of layers</span>
-<span class="sd">	in the network, then train and validating using 5-fold cross validation.</span>
+<span class="sd">    Sets up and runs GPy Bayesian Optimization in order to choose the best-</span>
+<span class="sd">    performing hyperparameters for a RNN for a given machine learning task. </span>
+<span class="sd">    Iteratively change learning rate, hidden vector size, and the number of layers</span>
+<span class="sd">    in the network, then train and validating using 5-fold cross validation.</span>
 
-<span class="sd">	Attributes</span>
-<span class="sd">	----------</span>
-<span class="sd">	cv_dataloaders : list of tuples of PyTorch DataLoader objects</span>
-<span class="sd">		For each of the cross-val folds, a tuple containing a training set</span>
-<span class="sd">		DataLoader and a validation set DataLoader.</span>
-<span class="sd">	input_size : int</span>
-<span class="sd">		Length of the amino acid encoding vectors</span>
-<span class="sd">	n_epochs : int</span>
-<span class="sd">		Number of epochs to train for each iteration of the algorithm</span>
-<span class="sd">	n_classes : int</span>
-<span class="sd">		Number of classes</span>
-<span class="sd">	n_folds : int</span>
-<span class="sd">		Number of cross-validation folds</span>
-<span class="sd">	problem_type : str</span>
-<span class="sd">		&#39;classification&#39; or &#39;regression&#39;</span>
-<span class="sd">	dtype : str</span>
-<span class="sd">		&#39;sequence&#39; or &#39;residues&#39;</span>
-<span class="sd">	weights_file : str</span>
-<span class="sd">		Path to which the network weights will be saved during training</span>
-<span class="sd">	device : str</span>
-<span class="sd">		&#39;cpu&#39; or &#39;cuda&#39; depending on system hardware</span>
-<span class="sd">	max_iterations : int</span>
-<span class="sd">		Maximum number of iterations to perform the optimization procedure</span>
-<span class="sd">	verbosity : int</span>
-<span class="sd">		level of how descriptive the output to console message will be</span>
-<span class="sd">	bds : list of dicts</span>
-<span class="sd">		GPy-compatible bounds for each of the hyperparameters to be optimized</span>
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    cv_dataloaders : list of tuples of PyTorch DataLoader objects</span>
+<span class="sd">            For each of the cross-val folds, a tuple containing a training set</span>
+<span class="sd">            DataLoader and a validation set DataLoader.</span>
+<span class="sd">    input_size : int</span>
+<span class="sd">            Length of the amino acid encoding vectors</span>
+<span class="sd">    n_epochs : int</span>
+<span class="sd">            Number of epochs to train for each iteration of the algorithm</span>
+<span class="sd">    n_classes : int</span>
+<span class="sd">            Number of classes</span>
+<span class="sd">    n_folds : int</span>
+<span class="sd">            Number of cross-validation folds</span>
+<span class="sd">    problem_type : str</span>
+<span class="sd">            &#39;classification&#39; or &#39;regression&#39;</span>
+<span class="sd">    dtype : str</span>
+<span class="sd">            &#39;sequence&#39; or &#39;residues&#39;</span>
+<span class="sd">    weights_file : str</span>
+<span class="sd">            Path to which the network weights will be saved during training</span>
+<span class="sd">    device : str</span>
+<span class="sd">            &#39;cpu&#39; or &#39;cuda&#39; depending on system hardware</span>
+<span class="sd">    max_iterations : int</span>
+<span class="sd">            Maximum number of iterations to perform the optimization procedure</span>
+<span class="sd">    verbosity : int</span>
+<span class="sd">            level of how descriptive the output to console message will be</span>
+<span class="sd">    bds : list of dicts</span>
+<span class="sd">            GPy-compatible bounds for each of the hyperparameters to be optimized</span>
 
-<span class="sd">	Methods</span>
-<span class="sd">	-------</span>
-<span class="sd">	compute_cv_loss(hyperparameters)</span>
-<span class="sd">		Compute the average cross-val loss for a given set of hyperparameters</span>
-<span class="sd">	eval_cv_brnns(lr, nl, hs)</span>
-<span class="sd">		Train and test a network with given parameters across all cross-val folds</span>
-<span class="sd">	initial_search(x)</span>
-<span class="sd">		Calculate loss and estimate noise for an initial set of hyperparameters</span>
-<span class="sd">	optimize()</span>
-<span class="sd">		Set up and run Bayesian Optimization on the BRNN using GPy</span>
-<span class="sd">	&quot;&quot;&quot;</span>
+<span class="sd">    Methods</span>
+<span class="sd">    -------</span>
+<span class="sd">    compute_cv_loss(hyperparameters)</span>
+<span class="sd">            Compute the average cross-val loss for a given set of hyperparameters</span>
+<span class="sd">    eval_cv_brnns(lr, nl, hs)</span>
+<span class="sd">            Train and test a network with given parameters across all cross-val folds</span>
+<span class="sd">    initial_search(x)</span>
+<span class="sd">            Calculate loss and estimate noise for an initial set of hyperparameters</span>
+<span class="sd">    optimize()</span>
+<span class="sd">            Set up and run Bayesian Optimization on the BRNN using GPy</span>
+<span class="sd">    &quot;&quot;&quot;</span>
 
-	<span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cv_dataloaders</span><span class="p">,</span> <span class="n">input_size</span><span class="p">,</span> <span class="n">n_epochs</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> 
-				<span class="n">dtype</span><span class="p">,</span> <span class="n">weights_file</span><span class="p">,</span> <span class="n">max_iterations</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">verbosity</span><span class="p">):</span>
-		<span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">		Parameters</span>
-<span class="sd">		----------</span>
-<span class="sd">		cv_dataloaders : list of tuples of PyTorch DataLoader objects</span>
-<span class="sd">			For each of the cross-val folds, a tuple containing a training set</span>
-<span class="sd">			DataLoader and a validation set DataLoader.</span>
-<span class="sd">		input_size : int</span>
-<span class="sd">			Length of the amino acid encoding vectors</span>
-<span class="sd">		n_epochs : int</span>
-<span class="sd">			Number of epochs to train for each iteration of the algorithm</span>
-<span class="sd">		n_classes : int</span>
-<span class="sd">			Number of classes</span>
-<span class="sd">		dtype : str</span>
-<span class="sd">			&#39;sequence&#39; or &#39;residues&#39;</span>
-<span class="sd">		weights_file : str</span>
-<span class="sd">			Path to which the network weights will be saved during training</span>
-<span class="sd">		device : str</span>
-<span class="sd">			&#39;cpu&#39; or &#39;cuda&#39; depending on system hardware</span>
-<span class="sd">		max_iterations : int</span>
-<span class="sd">			Maximum number of iterations to perform the optimization procedure</span>
-<span class="sd">		verbosity : int</span>
-<span class="sd">			level of how descriptive the output to console message will be</span>
-<span class="sd">		&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cv_dataloaders</span><span class="p">,</span> <span class="n">input_size</span><span class="p">,</span> <span class="n">n_epochs</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span>
+                 <span class="n">dtype</span><span class="p">,</span> <span class="n">weights_file</span><span class="p">,</span> <span class="n">max_iterations</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">verbosity</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        cv_dataloaders : list of tuples of PyTorch DataLoader objects</span>
+<span class="sd">                For each of the cross-val folds, a tuple containing a training set</span>
+<span class="sd">                DataLoader and a validation set DataLoader.</span>
+<span class="sd">        input_size : int</span>
+<span class="sd">                Length of the amino acid encoding vectors</span>
+<span class="sd">        n_epochs : int</span>
+<span class="sd">                Number of epochs to train for each iteration of the algorithm</span>
+<span class="sd">        n_classes : int</span>
+<span class="sd">                Number of classes</span>
+<span class="sd">        dtype : str</span>
+<span class="sd">                &#39;sequence&#39; or &#39;residues&#39;</span>
+<span class="sd">        weights_file : str</span>
+<span class="sd">                Path to which the network weights will be saved during training</span>
+<span class="sd">        device : str</span>
+<span class="sd">                &#39;cpu&#39; or &#39;cuda&#39; depending on system hardware</span>
+<span class="sd">        max_iterations : int</span>
+<span class="sd">                Maximum number of iterations to perform the optimization procedure</span>
+<span class="sd">        verbosity : int</span>
+<span class="sd">                level of how descriptive the output to console message will be</span>
+<span class="sd">        &quot;&quot;&quot;</span>
 
-		<span class="bp">self</span><span class="o">.</span><span class="n">cv_loaders</span> <span class="o">=</span> <span class="n">cv_dataloaders</span>
-		<span class="bp">self</span><span class="o">.</span><span class="n">input_size</span> <span class="o">=</span> <span class="n">input_size</span>
-		<span class="bp">self</span><span class="o">.</span><span class="n">n_epochs</span> <span class="o">=</span> <span class="n">n_epochs</span>
-		<span class="bp">self</span><span class="o">.</span><span class="n">n_folds</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">cv_dataloaders</span><span class="p">)</span>
-		<span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span> <span class="o">=</span> <span class="n">n_classes</span>
-		<span class="k">if</span> <span class="n">n_classes</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-			<span class="bp">self</span><span class="o">.</span><span class="n">problem_type</span> <span class="o">=</span> <span class="s1">&#39;classification&#39;</span>
-		<span class="k">else</span><span class="p">:</span>
-			<span class="bp">self</span><span class="o">.</span><span class="n">problem_type</span> <span class="o">=</span> <span class="s1">&#39;regression&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cv_loaders</span> <span class="o">=</span> <span class="n">cv_dataloaders</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">input_size</span> <span class="o">=</span> <span class="n">input_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_epochs</span> <span class="o">=</span> <span class="n">n_epochs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_folds</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">cv_dataloaders</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span> <span class="o">=</span> <span class="n">n_classes</span>
+        <span class="k">if</span> <span class="n">n_classes</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">problem_type</span> <span class="o">=</span> <span class="s1">&#39;classification&#39;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">problem_type</span> <span class="o">=</span> <span class="s1">&#39;regression&#39;</span>
 
-		<span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span>
-		<span class="bp">self</span><span class="o">.</span><span class="n">weights_file</span> <span class="o">=</span> <span class="n">weights_file</span>
-		<span class="bp">self</span><span class="o">.</span><span class="n">max_iterations</span> <span class="o">=</span> <span class="n">max_iterations</span>
-		<span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
-		<span class="bp">self</span><span class="o">.</span><span class="n">verbosity</span> <span class="o">=</span> <span class="n">verbosity</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">weights_file</span> <span class="o">=</span> <span class="n">weights_file</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_iterations</span> <span class="o">=</span> <span class="n">max_iterations</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">verbosity</span> <span class="o">=</span> <span class="n">verbosity</span>
 
-		<span class="bp">self</span><span class="o">.</span><span class="n">bds</span> <span class="o">=</span> <span class="p">[{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;log_learning_rate&#39;</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;continuous&#39;</span><span class="p">,</span> <span class="s1">&#39;domain&#39;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mi">5</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">)},</span> <span class="c1"># 0.00001-0.01</span>
-					<span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;n_layers&#39;</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;discrete&#39;</span><span class="p">,</span> <span class="s1">&#39;domain&#39;</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">6</span><span class="p">))},</span> <span class="c1"># 1-5</span>
-					<span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;hidden_size&#39;</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;discrete&#39;</span><span class="p">,</span> <span class="s1">&#39;domain&#39;</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">51</span><span class="p">))}]</span> <span class="c1"># 5-50</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bds</span> <span class="o">=</span> <span class="p">[{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;log_learning_rate&#39;</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;continuous&#39;</span><span class="p">,</span> <span class="s1">&#39;domain&#39;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mi">5</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">)},</span>  <span class="c1"># 0.00001-0.01</span>
+                    <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;n_layers&#39;</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;discrete&#39;</span><span class="p">,</span> <span class="s1">&#39;domain&#39;</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">6</span><span class="p">))},</span>  <span class="c1"># 1-5</span>
+                    <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;hidden_size&#39;</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;discrete&#39;</span><span class="p">,</span> <span class="s1">&#39;domain&#39;</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">51</span><span class="p">))}]</span>  <span class="c1"># 5-50</span>
 
-<div class="viewcode-block" id="BayesianOptimizer.compute_cv_loss"><a class="viewcode-back" href="../../api.html#parrot.bayesian_optimization.BayesianOptimizer.compute_cv_loss">[docs]</a>	<span class="k">def</span> <span class="nf">compute_cv_loss</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hyperparameters</span><span class="p">):</span>
-		<span class="sd">&quot;&quot;&quot;Compute the average cross-val loss for a given set of hyperparameters</span>
+<div class="viewcode-block" id="BayesianOptimizer.compute_cv_loss"><a class="viewcode-back" href="../../api.html#parrot.bayesian_optimization.BayesianOptimizer.compute_cv_loss">[docs]</a>    <span class="k">def</span> <span class="nf">compute_cv_loss</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hyperparameters</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Compute the average cross-val loss for a given set of hyperparameters</span>
 
-<span class="sd">		Given N sets of hyperparameters, determine the average cross-validation loss</span>
-<span class="sd">		for BRNNs trained with these parameters.</span>
+<span class="sd">        Given N sets of hyperparameters, determine the average cross-validation loss</span>
+<span class="sd">        for BRNNs trained with these parameters.</span>
 
-<span class="sd">		Parameters</span>
-<span class="sd">		----------</span>
-<span class="sd">		hyperparameters : numpy float array</span>
-<span class="sd">			Each row corresponds to a set of hyperparameters, in the order:</span>
-<span class="sd">			[log_learining_rate, n_layers, hidden_size]</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        hyperparameters : numpy float array</span>
+<span class="sd">                Each row corresponds to a set of hyperparameters, in the order:</span>
+<span class="sd">                [log_learining_rate, n_layers, hidden_size]</span>
 
-<span class="sd">		Returns</span>
-<span class="sd">		-------</span>
-<span class="sd">		numpy float array</span>
-<span class="sd">			a Nx1 numpy array of the average cross-val loss </span>
-<span class="sd">			per set of input hyperparameters</span>
-<span class="sd">		&quot;&quot;&quot;</span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        numpy float array</span>
+<span class="sd">                a Nx1 numpy array of the average cross-val loss </span>
+<span class="sd">                per set of input hyperparameters</span>
+<span class="sd">        &quot;&quot;&quot;</span>
 
-		<span class="n">cv_outputs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">hyperparameters</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_folds</span><span class="p">))</span>
+        <span class="n">cv_outputs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">hyperparameters</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_folds</span><span class="p">))</span>
 
-		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">hyperparameters</span><span class="p">)):</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">hyperparameters</span><span class="p">)):</span>
 
-			<span class="n">log_lr</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span> <span class="n">hs</span> <span class="o">=</span> <span class="n">hyperparameters</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-			<span class="n">lr</span> <span class="o">=</span> <span class="mi">10</span><span class="o">**</span><span class="nb">float</span><span class="p">(</span><span class="n">log_lr</span><span class="p">)</span>
-			<span class="n">nl</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">nl</span><span class="p">)</span>
-			<span class="n">hs</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hs</span><span class="p">)</span>
+            <span class="n">log_lr</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span> <span class="n">hs</span> <span class="o">=</span> <span class="n">hyperparameters</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">lr</span> <span class="o">=</span> <span class="mi">10</span><span class="o">**</span><span class="nb">float</span><span class="p">(</span><span class="n">log_lr</span><span class="p">)</span>
+            <span class="n">nl</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">nl</span><span class="p">)</span>
+            <span class="n">hs</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hs</span><span class="p">)</span>
 
-			<span class="c1"># Train and validate network with these hyperparams using k-fold CV</span>
-			<span class="n">cv_outputs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">eval_cv_brnns</span><span class="p">(</span><span class="n">lr</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span> <span class="n">hs</span><span class="p">)</span>
-			<span class="n">avg</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">cv_outputs</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            <span class="c1"># Train and validate network with these hyperparams using k-fold CV</span>
+            <span class="n">cv_outputs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">eval_cv_brnns</span><span class="p">(</span><span class="n">lr</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span> <span class="n">hs</span><span class="p">)</span>
+            <span class="n">avg</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">cv_outputs</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
 
-			<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbosity</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-				<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;  </span><span class="si">%.6f</span><span class="s1">	|     </span><span class="si">%2d</span><span class="s1">       |         </span><span class="si">%2d</span><span class="s1">           |    </span><span class="si">%.3f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">lr</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span> <span class="n">hs</span><span class="p">,</span> <span class="n">avg</span><span class="p">))</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbosity</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;  </span><span class="si">%.6f</span><span class="s1">	|     </span><span class="si">%2d</span><span class="s1">       |         </span><span class="si">%2d</span><span class="s1">           |    </span><span class="si">%.3f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">lr</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span> <span class="n">hs</span><span class="p">,</span> <span class="n">avg</span><span class="p">))</span>
 
-		<span class="n">outputs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">cv_outputs</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-		<span class="k">return</span> <span class="n">outputs</span></div>
+        <span class="n">outputs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">cv_outputs</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">outputs</span></div>
 
+<div class="viewcode-block" id="BayesianOptimizer.eval_cv_brnns"><a class="viewcode-back" href="../../api.html#parrot.bayesian_optimization.BayesianOptimizer.eval_cv_brnns">[docs]</a>    <span class="k">def</span> <span class="nf">eval_cv_brnns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lr</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span> <span class="n">hs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Train and test a network with given parameters across all cross-val folds</span>
 
-<div class="viewcode-block" id="BayesianOptimizer.eval_cv_brnns"><a class="viewcode-back" href="../../api.html#parrot.bayesian_optimization.BayesianOptimizer.eval_cv_brnns">[docs]</a>	<span class="k">def</span> <span class="nf">eval_cv_brnns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lr</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span> <span class="n">hs</span><span class="p">):</span>
-		<span class="sd">&quot;&quot;&quot;Train and test a network with given parameters across all cross-val folds</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        lr : float</span>
+<span class="sd">                Learning rate of the network</span>
+<span class="sd">        nl : int</span>
+<span class="sd">                Number of hidden layers (for each direction) in the network</span>
+<span class="sd">        hs : int</span>
+<span class="sd">                Size of hidden vectors in the network</span>
 
-<span class="sd">		Parameters</span>
-<span class="sd">		----------</span>
-<span class="sd">		lr : float</span>
-<span class="sd">			Learning rate of the network</span>
-<span class="sd">		nl : int</span>
-<span class="sd">			Number of hidden layers (for each direction) in the network</span>
-<span class="sd">		hs : int</span>
-<span class="sd">			Size of hidden vectors in the network</span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        numpy float array</span>
+<span class="sd">                the best validation loss from each fold of cross validation</span>
+<span class="sd">        &quot;&quot;&quot;</span>
 
-<span class="sd">		Returns</span>
-<span class="sd">		-------</span>
-<span class="sd">		numpy float array</span>
-<span class="sd">			the best validation loss from each fold of cross validation</span>
-<span class="sd">		&quot;&quot;&quot;</span>
+        <span class="n">cv_losses</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_folds</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>  <span class="c1"># -1 so that it&#39;s obvious if something goes wrong</span>
 
-		<span class="n">cv_losses</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_folds</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="c1"># -1 so that it&#39;s obvious if something goes wrong</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_folds</span><span class="p">):</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
+                <span class="c1"># Use a many-to-one architecture</span>
+                <span class="n">brnn_network</span> <span class="o">=</span> <span class="n">brnn_architecture</span><span class="o">.</span><span class="n">BRNN_MtO</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input_size</span><span class="p">,</span> <span class="n">hs</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span>
+                                                          <span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Use a many-to-many architecture</span>
+                <span class="n">brnn_network</span> <span class="o">=</span> <span class="n">brnn_architecture</span><span class="o">.</span><span class="n">BRNN_MtM</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input_size</span><span class="p">,</span> <span class="n">hs</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span>
+                                                          <span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
 
-		<span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_folds</span><span class="p">):</span>
-			<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
-				<span class="c1"># Use a many-to-one architecture</span>
-				<span class="n">brnn_network</span> <span class="o">=</span> <span class="n">brnn_architecture</span><span class="o">.</span><span class="n">BRNN_MtO</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input_size</span><span class="p">,</span> <span class="n">hs</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span>
-										<span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-			<span class="k">else</span><span class="p">:</span>
-				<span class="c1"># Use a many-to-many architecture</span>
-				<span class="n">brnn_network</span> <span class="o">=</span> <span class="n">brnn_architecture</span><span class="o">.</span><span class="n">BRNN_MtM</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input_size</span><span class="p">,</span> <span class="n">hs</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span>
-										<span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>	
+            <span class="c1"># Train network with this set of hyperparameters</span>
+            <span class="n">train_losses</span><span class="p">,</span> <span class="n">val_losses</span> <span class="o">=</span> <span class="n">train_network</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">brnn_network</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cv_loaders</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span>
+                                                           <span class="bp">self</span><span class="o">.</span><span class="n">cv_loaders</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">problem_type</span><span class="p">,</span>
+                                                           <span class="bp">self</span><span class="o">.</span><span class="n">weights_file</span><span class="p">,</span> <span class="n">stop_condition</span><span class="o">=</span><span class="s1">&#39;iter&#39;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+                                                           <span class="n">learn_rate</span><span class="o">=</span><span class="n">lr</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">n_epochs</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="c1"># Take best val loss</span>
+            <span class="n">best_val_loss</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">val_losses</span><span class="p">)</span>
+            <span class="n">cv_losses</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">best_val_loss</span>
 
-			<span class="c1"># Train network with this set of hyperparameters</span>
-			<span class="n">train_losses</span><span class="p">,</span> <span class="n">val_losses</span> <span class="o">=</span> <span class="n">train_network</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">brnn_network</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cv_loaders</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span>
-										<span class="bp">self</span><span class="o">.</span><span class="n">cv_loaders</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">problem_type</span><span class="p">,</span>
-										<span class="bp">self</span><span class="o">.</span><span class="n">weights_file</span><span class="p">,</span> <span class="n">stop_condition</span><span class="o">=</span><span class="s1">&#39;iter&#39;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
-										<span class="n">learn_rate</span><span class="o">=</span><span class="n">lr</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">n_epochs</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-			<span class="c1"># Take best val loss</span>
-			<span class="n">best_val_loss</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">val_losses</span><span class="p">)</span>
-			<span class="n">cv_losses</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">best_val_loss</span>
+        <span class="k">return</span> <span class="n">cv_losses</span></div>
 
-		<span class="k">return</span> <span class="n">cv_losses</span></div>
+<div class="viewcode-block" id="BayesianOptimizer.initial_search"><a class="viewcode-back" href="../../api.html#parrot.bayesian_optimization.BayesianOptimizer.initial_search">[docs]</a>    <span class="k">def</span> <span class="nf">initial_search</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Calculate loss and estimate noise for an initial set of hyperparameters</span>
 
-<div class="viewcode-block" id="BayesianOptimizer.initial_search"><a class="viewcode-back" href="../../api.html#parrot.bayesian_optimization.BayesianOptimizer.initial_search">[docs]</a>	<span class="k">def</span> <span class="nf">initial_search</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-		<span class="sd">&quot;&quot;&quot;Calculate loss and estimate noise for an initial set of hyperparameters</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        x : numpy array</span>
+<span class="sd">                Array containing initial hyperparameters to test</span>
 
-<span class="sd">		Parameters</span>
-<span class="sd">		----------</span>
-<span class="sd">		x : numpy array</span>
-<span class="sd">			Array containing initial hyperparameters to test</span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        numpy array</span>
+<span class="sd">                Array containing the average losses of the input hyperparameters</span>
+<span class="sd">        float</span>
+<span class="sd">                The standard deviation of loss across cross-val folds for the</span>
+<span class="sd">                input hyperparameters; an estimation of the training noise</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">cv_outputs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_folds</span><span class="p">))</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="mi">1</span><span class="p">))</span>
 
-<span class="sd">		Returns</span>
-<span class="sd">		-------</span>
-<span class="sd">		numpy array</span>
-<span class="sd">			Array containing the average losses of the input hyperparameters</span>
-<span class="sd">		float</span>
-<span class="sd">			The standard deviation of loss across cross-val folds for the</span>
-<span class="sd">			input hyperparameters; an estimation of the training noise</span>
-<span class="sd">		&quot;&quot;&quot;</span>
-		<span class="n">cv_outputs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_folds</span><span class="p">))</span>
-		<span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)):</span>
 
-		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)):</span>
+            <span class="n">log_lr</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span> <span class="n">hs</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">lr</span> <span class="o">=</span> <span class="mi">10</span><span class="o">**</span><span class="nb">float</span><span class="p">(</span><span class="n">log_lr</span><span class="p">)</span>
+            <span class="n">nl</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">nl</span><span class="p">)</span>
+            <span class="n">hs</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hs</span><span class="p">)</span>
 
-			<span class="n">log_lr</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span> <span class="n">hs</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-			<span class="n">lr</span> <span class="o">=</span> <span class="mi">10</span><span class="o">**</span><span class="nb">float</span><span class="p">(</span><span class="n">log_lr</span><span class="p">)</span>
-			<span class="n">nl</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">nl</span><span class="p">)</span>
-			<span class="n">hs</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hs</span><span class="p">)</span>
+            <span class="c1"># Train and validate network with these hyperparams using k-fold CV</span>
+            <span class="n">cv_outputs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">eval_cv_brnns</span><span class="p">(</span><span class="n">lr</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span> <span class="n">hs</span><span class="p">)</span>
 
-			<span class="c1"># Train and validate network with these hyperparams using k-fold CV</span>
-			<span class="n">cv_outputs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">eval_cv_brnns</span><span class="p">(</span><span class="n">lr</span><span class="p">,</span> <span class="n">nl</span><span class="p">,</span> <span class="n">hs</span><span class="p">)</span>
+        <span class="c1"># Calculate the avg and standard deviation of the losses</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">cv_outputs</span><span class="p">)):</span>
+            <span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">cv_outputs</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">stddevs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">cv_outputs</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">avg_stddev</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">stddevs</span><span class="p">)</span>
 
-		<span class="c1"># Calculate the avg and standard deviation of the losses</span>
-		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">cv_outputs</span><span class="p">)):</span>
-			<span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">cv_outputs</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
-		<span class="n">stddevs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">cv_outputs</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-		<span class="n">avg_stddev</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">stddevs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">y</span><span class="p">,</span> <span class="n">avg_stddev</span></div>
 
-		<span class="k">return</span> <span class="n">y</span><span class="p">,</span> <span class="n">avg_stddev</span></div>
+<div class="viewcode-block" id="BayesianOptimizer.optimize"><a class="viewcode-back" href="../../api.html#parrot.bayesian_optimization.BayesianOptimizer.optimize">[docs]</a>    <span class="k">def</span> <span class="nf">optimize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Set up and run Bayesian Optimization on the BRNN using GPy</span>
 
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        list</span>
+<span class="sd">                the best hyperparameters are chosen by Bayesian Optimization. Returned</span>
+<span class="sd">                in the order: [lr, nl, hs]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
 
-<div class="viewcode-block" id="BayesianOptimizer.optimize"><a class="viewcode-back" href="../../api.html#parrot.bayesian_optimization.BayesianOptimizer.optimize">[docs]</a>	<span class="k">def</span> <span class="nf">optimize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-		<span class="sd">&quot;&quot;&quot;Set up and run Bayesian Optimization on the BRNN using GPy</span>
+        <span class="c1"># Initial hyperparameter search -- used to get noise estimate</span>
+        <span class="n">x_init</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span>
+                           <span class="p">[</span><span class="o">-</span><span class="mf">2.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">4.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">5.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span>
+                           <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">],</span>  <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">15</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">35</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">50</span><span class="p">]])</span>
+        <span class="n">y_init</span><span class="p">,</span> <span class="n">noise</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">initial_search</span><span class="p">(</span><span class="n">x_init</span><span class="p">)</span>
 
-<span class="sd">		Returns</span>
-<span class="sd">		-------</span>
-<span class="sd">		list</span>
-<span class="sd">			the best hyperparameters are chosen by Bayesian Optimization. Returned</span>
-<span class="sd">			in the order: [lr, nl, hs]</span>
-<span class="sd">		&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbosity</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Initial search results:&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;lr</span><span class="se">\t</span><span class="s2">nl</span><span class="se">\t</span><span class="s2">hs</span><span class="se">\t</span><span class="s2">output&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%.5f</span><span class="se">\t</span><span class="si">%2d</span><span class="se">\t</span><span class="si">%2d</span><span class="se">\t</span><span class="si">%.4f</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="mi">10</span><span class="o">**</span><span class="n">x_init</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">x_init</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="n">x_init</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">],</span> <span class="n">y_init</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Noise estimate:&quot;</span><span class="p">,</span> <span class="n">noise</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Primary optimization:&#39;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;--------------------</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Learning rate   |   n_layers   |   hidden vector size |  avg CV loss  &#39;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;======================================================================&#39;</span><span class="p">)</span>
 
-		<span class="c1"># Initial hyperparameter search -- used to get noise estimate</span>
-		<span class="n">x_init</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span>
-						   <span class="p">[</span><span class="o">-</span><span class="mf">2.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">4.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">5.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span>
-						   <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">],</span>  <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">15</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">35</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">50</span><span class="p">]])</span>
-		<span class="n">y_init</span><span class="p">,</span> <span class="n">noise</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">initial_search</span><span class="p">(</span><span class="n">x_init</span><span class="p">)</span>
+        <span class="n">optimizer</span> <span class="o">=</span> <span class="n">BayesianOptimization</span><span class="p">(</span><span class="n">f</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">compute_cv_loss</span><span class="p">,</span>
+                                         <span class="n">domain</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bds</span><span class="p">,</span>
+                                         <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;GP&#39;</span><span class="p">,</span>
+                                         <span class="n">acquisition_type</span><span class="o">=</span><span class="s1">&#39;EI&#39;</span><span class="p">,</span>
+                                         <span class="n">acquisition_jitter</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+                                         <span class="n">X</span><span class="o">=</span><span class="n">x_init</span><span class="p">,</span>
+                                         <span class="n">Y</span><span class="o">=</span><span class="n">y_init</span><span class="p">,</span>
+                                         <span class="n">noise_var</span><span class="o">=</span><span class="n">noise</span><span class="p">,</span>
+                                         <span class="n">maximize</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 
-		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbosity</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-			<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Initial search results:&quot;</span><span class="p">)</span>
-			<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;lr</span><span class="se">\t</span><span class="s2">nl</span><span class="se">\t</span><span class="s2">hs</span><span class="se">\t</span><span class="s2">output&quot;</span><span class="p">)</span>
-			<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
-				<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%.5f</span><span class="se">\t</span><span class="si">%2d</span><span class="se">\t</span><span class="si">%2d</span><span class="se">\t</span><span class="si">%.4f</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="mi">10</span><span class="o">**</span><span class="n">x_init</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">x_init</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="n">x_init</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">],</span> <span class="n">y_init</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
-			<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Noise estimate:&quot;</span><span class="p">,</span> <span class="n">noise</span><span class="p">)</span>				
-			<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
-			<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Primary optimization:&#39;</span><span class="p">)</span>
-			<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;--------------------</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
-			<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Learning rate   |   n_layers   |   hidden vector size |  avg CV loss  &#39;</span><span class="p">)</span>
-			<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;======================================================================&#39;</span><span class="p">)</span>	
+        <span class="n">optimizer</span><span class="o">.</span><span class="n">run_optimization</span><span class="p">(</span><span class="n">max_iter</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_iterations</span><span class="p">)</span>
 
-		<span class="n">optimizer</span> <span class="o">=</span> <span class="n">BayesianOptimization</span><span class="p">(</span><span class="n">f</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">compute_cv_loss</span><span class="p">,</span> 
-										 <span class="n">domain</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bds</span><span class="p">,</span>
-										 <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;GP&#39;</span><span class="p">,</span>
-										 <span class="n">acquisition_type</span><span class="o">=</span><span class="s1">&#39;EI&#39;</span><span class="p">,</span>
-										 <span class="n">acquisition_jitter</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
-										 <span class="n">X</span><span class="o">=</span><span class="n">x_init</span><span class="p">,</span>
-										 <span class="n">Y</span><span class="o">=</span><span class="n">y_init</span><span class="p">,</span>
-										 <span class="n">noise_var</span><span class="o">=</span><span class="n">noise</span><span class="p">,</span>
-										 <span class="n">maximize</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-		
-		<span class="n">optimizer</span><span class="o">.</span><span class="n">run_optimization</span><span class="p">(</span><span class="n">max_iter</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_iterations</span><span class="p">)</span>
+        <span class="n">ins</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">get_evaluations</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">outs</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">get_evaluations</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
 
-		<span class="n">ins</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">get_evaluations</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
-		<span class="n">outs</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">get_evaluations</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbosity</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">The optimal hyperparameters are:</span><span class="se">\n</span><span class="s2">lr = </span><span class="si">%.5f</span><span class="se">\n</span><span class="s2">nl = </span><span class="si">%d</span><span class="se">\n</span><span class="s2">hs = </span><span class="si">%d</span><span class="s2">&quot;</span> <span class="o">%</span>
+                  <span class="p">(</span><span class="mi">10</span><span class="o">**</span><span class="n">optimizer</span><span class="o">.</span><span class="n">x_opt</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">x_opt</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">x_opt</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+            <span class="nb">print</span><span class="p">()</span>
 
-		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbosity</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-			<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">The optimal hyperparameters are:</span><span class="se">\n</span><span class="s2">lr = </span><span class="si">%.5f</span><span class="se">\n</span><span class="s2">nl = </span><span class="si">%d</span><span class="se">\n</span><span class="s2">hs = </span><span class="si">%d</span><span class="s2">&quot;</span> <span class="o">%</span> 
-						<span class="p">(</span><span class="mi">10</span><span class="o">**</span><span class="n">optimizer</span><span class="o">.</span><span class="n">x_opt</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">x_opt</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">x_opt</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
-			<span class="nb">print</span><span class="p">()</span>
-
-		<span class="k">return</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">x_opt</span></div></div>
+        <span class="k">return</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">x_opt</span></div></div>
 </pre></div>
 
            </div>

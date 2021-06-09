@@ -63,8 +63,8 @@ parser.add_argument('--probabilistic-classification', dest='probabilistic_classi
 parser.add_argument('--silent', action='store_true',
                     help="Flag which, if provided, ensures no output is generated to the terminal")
 
-parser.add_argument('--print-frequency', default=10000, type=int, 
-                    help="Value that defines how often status updates should be printed (in number of sequences predicted. Default=10000")
+parser.add_argument('--print-frequency', default=1000, type=int, 
+                    help="Value that defines how often status updates should be printed (in number of sequences predicted. Default=1000")
 
 
 

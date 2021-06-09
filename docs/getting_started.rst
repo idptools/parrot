@@ -23,7 +23,13 @@ This will install PARROT locally. If you modify the source code in the local rep
 Testing
 -------
 
-To see if your installation of PARROT is working properly, you can run the unit test included in the package by navigating to the parrot/tests folder within the installation directory and running:
+To see if your installation of PARROT is working properly, first install the "pytest" package:
+
+.. code-block:: bash
+	
+	$ pip install pytest
+
+Then, you can run the unit test included in the package by navigating to the parrot/tests folder within the installation directory and running:
 
 .. code-block:: bash
 

@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: idptools-parrot
-Version: 1.4.2+1.gfe1f9ef.dirty
+Version: 1.4.4+0.g12168db.dirty
 Summary: UNKNOWN
 Home-page: UNKNOWN
 Author: Holehouse Lab
@@ -19,7 +19,14 @@ Description: # PARROT: Protein Analysis using RecuRrent neural networks On Train
         
         	$ pip install idptools-parrot
         
-        To clone the GitHub repository and gain the ability to modify a local copy of the code, run
+        It is possible that you may experience errors depending on what Python packages are already installed on your machine. If you encounter this, try installing PARROT in a "clean" virtual environment using conda:
+        
+        	$ conda create --name <env_name> python=3.7
+        	$ conda activate <env_name>
+        
+        Then install PARROT with pip.
+        
+        Alternatively, to clone the GitHub repository and gain the ability to modify a local copy of the code, run:
         
         	$ git clone https://github.com/idptools/parrot.git
         	$ cd parrot

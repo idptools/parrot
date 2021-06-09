@@ -56,7 +56,7 @@ def test_train_invalid_numclasses():
     sys.argv = ["parrot-train", "../data/seq_class_dataset.tsv",
                 "../data/output_network.pt", "-d", "sequence", "-c", "2"]
 
-    with pytest.raises(IndexError):
+    with pytest.raises(ValueError):
         exec(script)
 
     script_descriptor.close()
@@ -115,7 +115,7 @@ def test_optimize_invalid_numclasses():
     sys.argv = ["parrot-optimize", "../data/seq_class_dataset.tsv",
                 "../data/output_network.pt", "-d", "sequence", "-c", "2"]
 
-    with pytest.raises(IndexError):
+    with pytest.raises(ValueError):
         exec(script)
 
     script_descriptor.close()
@@ -127,7 +127,7 @@ def test_split_data():
 
     data_file = os.path.abspath("../data/seq_class_dataset.tsv")
     train, val, test = pid.split_data(data_file, datatype='sequence',
-                                      problem_type='classification')
+                                  problem_type='classification', num_classes=3)
 
     assert (len(train) == 210) and (len(val) == 45) and (len(test) == 45) and (len(train[0]) == 3)
 
@@ -138,7 +138,7 @@ def test_split_data_cv():
 
     data_file = os.path.abspath("../data/seq_class_dataset.tsv")
     cvs, train, val, test = pid.split_data_cv(data_file, datatype='sequence',
-                                              problem_type='classification')
+                                  problem_type='classification', num_classes=3)
 
     assert (len(train) == 210) and (len(val) == 45) and (len(test) == 45) and (
         len(train[0]) == 3) and (len(cvs) == 5) and (len(cvs[0]) == 2)
