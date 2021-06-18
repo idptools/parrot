@@ -1,3 +1,5 @@
+![PARROT_logo_full](https://user-images.githubusercontent.com/54642153/122615183-b274f280-d04d-11eb-88bf-1530d18d310c.png)
+
 # PARROT: Protein Analysis using RecuRrent neural networks On Training data
 
 **PARROT** encodes a computationally-robust bidirectional recurrent neural network (BRNN) behind an easy-to-use commandline interface. PARROT is well-suited for a variety of protein bioinformatics tasks. With only an input datafile containing sequences and mapped values, the user can automatically train a BRNN for whatever purpose. This trained network can then be applied to new, unlabeled data to generate predictions and generate biological hypotheses.
