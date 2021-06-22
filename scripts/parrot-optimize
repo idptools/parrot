@@ -30,7 +30,6 @@ from parrot import brnn_architecture
 from parrot import train_network
 from parrot import brnn_plot
 from parrot import bayesian_optimization
-from parrot import encode_sequence
 from parrot.tools import validate_args
 
 # Parse the command line arguments

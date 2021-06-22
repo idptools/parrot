@@ -251,7 +251,7 @@ class BayesianOptimizer(object):
         if self.silent is False:
             print("\nInitial search results:")
             print("lr\tnl\ths\toutput")
-            for i in range(5):
+            for i in range(len(x_init)):
                 print("%.5f\t%2d\t%2d\t%.4f" % (10**x_init[i][0], x_init[i][1], x_init[i][2], y_init[i][0]))
             print("Noise estimate:", noise)
             print('\n')

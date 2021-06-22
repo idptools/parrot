@@ -13,6 +13,7 @@ Licensed under the MIT license.
 
 import os
 from parrot import process_input_data as pid
+from parrot import encode_sequence
 
 # Ensure that provided file is valid
 def check_file_exists(f, name):
@@ -45,7 +46,7 @@ def set_encoding_scheme(encode_str):
         encoder = None
     else:
         encoding_scheme = 'user'
-        encode_file = encode
+        encode_file = encode_str
         check_file_exists(encode_file, "Encoding file")
         encoder = encode_sequence.UserEncoder(encode_file)
         input_size = len(encoder)
