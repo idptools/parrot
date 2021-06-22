@@ -31,39 +31,57 @@ from parrot import train_network
 from parrot import brnn_plot
 from parrot import bayesian_optimization
 from parrot import encode_sequence
+from parrot.tools import validate_args
 
 # Parse the command line arguments
 parser = argparse.ArgumentParser(description='Train and test a bi-directional RNN using entire sequence.')
+
 parser.add_argument('data_file', help='path to tsv file with format: <idx> <sequence> <data>')
+
 parser.add_argument('output_network', help='location to save the trained network')
+
 parser.add_argument('-d', '--datatype', metavar='dtype', type=str, required=True,
-                    help="Required. Format of the input data file, must be 'sequence' or 'residues'")
+                    help="REQUIRED. Format of the input data file, must be 'sequence' or 'residues'")
+
 parser.add_argument('-c', '--classes', type=int, metavar='num_classes', required=True,
-                    help='Required. Number of output classes, for regression put 1')
+                    help='REQUIRED. Number of output classes, for regression put 1')
+
 parser.add_argument('-b', '--batch', default=32, type=int, metavar='batch_size',
                     help='size of training batch (def=32)')
+
 parser.add_argument('-e', '--epochs', default=100, type=int, metavar='num_epochs',
                     help='number of training epochs (def=100)')
+
 parser.add_argument('--max-iter', default=50, type=int, metavar='max_iter',
                     help='Maximum number of iterations for the optimization procedure (def=50)')
+
 parser.add_argument('--split', default='', metavar='split_file', type=str,
                     help="file indicating how to split datafile into training, validation, and testing sets")
+
 parser.add_argument('--set-fractions', nargs=3, default=[0.7, 0.15, 0.15], type=float,
                     dest='setFractions', metavar=('train', 'val', 'test'),
                     help='Proportion of dataset that should be divided into training, validation, and test sets')
+
 parser.add_argument('--encode', default='onehot', type=str, metavar='encoding_scheme',
-                                        help="'onehot' (default), 'biophysics', or specify a path to a user-created scheme")
+                    help="'onehot' (default), 'biophysics', or specify a path to a user-created scheme")
+
 parser.add_argument('--exclude-seq-id', dest='excludeSeqID', action='store_true',
                     help='use if data_file lacks sequence IDs in the first column of each line')
+
 parser.add_argument('--probabilistic-classification', dest='probabilistic_classification',
-                    action='store_true', help='Optional implementation for binary sequence classificaion')
+                    action='store_true', help='Optional implementation for sequence classificaion')
+
 parser.add_argument('--include-figs', dest='include_figs', action='store_true',
                     help='Generate figures from training results and save to same location as network')
+
 parser.add_argument('--force-cpu', dest='forceCPU', action='store_true',
                     help='force network to train on CPU, even if GPU is available')
-parser.add_argument('--verbose', '-v', action='count', default=0,
-                    help='''how descriptive output to console should be. Excluding this flag will 
-			cause no output, using this flag two or more times will cause maximum output''')
+
+parser.add_argument('--verbose', '-v', action='store_true',
+                    help='Flag which, if provided, causes output to terminal to be more descriptive')
+
+parser.add_argument('--silent', action='store_true',
+                    help="Flag which, if provided, ensures no output is generated to the terminal")
 
 args = parser.parse_args()
 
@@ -79,7 +97,8 @@ num_classes = args.classes
 # Other flags
 split_file = args.split
 encode = args.encode
-verbosity = args.verbose
+verbose = args.verbose
+silent = args.silent
 forceCPU = args.forceCPU
 setFractions = args.setFractions
 excludeSeqID = args.excludeSeqID
@@ -95,83 +114,41 @@ else:
 ###############################################################################
 ################    Validate arguments and initialize:      ###################
 
-# Ensure that provided data_file exists
-data_file = os.path.abspath(args.data_file)
-if not os.path.isfile(data_file):
-    raise FileNotFoundError('Datafile does not exist.')
+# Ensure that provided data file exists
+datafile = validate_args.check_file_exists(args.data_file, 'Datafile')
 
 # Ensure that output network location is valid
 saved_weights = os.path.abspath(args.output_network)
-network_filename = saved_weights.split('/')[-1]
-output_dir = saved_weights[:-len(network_filename)]
-if not os.path.exists(output_dir):
-    raise FileNotFoundError('Output network directory does not exist.')
+network_filename, output_dir = validate_args.split_file_and_directory(saved_weights)
+validate_args.check_directory(output_dir, "Output directory")
 
 # If provided, check that split_file exists
 if split_file != '':
-    split_file = os.path.abspath(split_file)
-    if not os.path.isfile(split_file):
-        raise FileNotFoundError('Split-file does not exist.')
+    split_file = validate_args.check_file_exists(split_file, 'Split-file')
 else:
     split_file = None
 
 # Set encoding scheme and/or validate user scheme
-if encode == 'onehot':
-    encoding_scheme = 'onehot'
-    input_size = 20
-    encoder = None
-elif encode == 'biophysics':
-    encoding_scheme = 'biophysics'
-    input_size = 9
-    encoder = None
-else:
-    encoding_scheme = 'user'
-    encode_file = encode
-    encoder = encode_sequence.UserEncoder(encode_file)
-    input_size = len(encoder)
+encoding_scheme, encoder, input_size = validate_args.set_encoding_scheme(encode)
 
 # Initialize network as classifier or regressor
-if num_classes > 1:
-    problem_type = 'classification'
-elif num_classes == 1:
-    problem_type = 'regression'
-else:
-    raise ValueError('Number of classes must be a positive integer.')
+problem_type, collate_function = validate_args.set_ml_task(num_classes, dtype)
 
-# Initialize network architecture depending on data format
-if dtype == 'sequence':
-    # Set collate function
-    if problem_type == 'classification':
-        collate_function = pid.seq_class_collate
-    else:
-        collate_function = pid.seq_regress_collate
-elif dtype == 'residues':
-    # Set collate function
-    if problem_type == 'classification':
-        collate_function = pid.res_class_collate
-    else:
-        collate_function = pid.res_regress_collate
-else:
-    raise ValueError('Invalid argument `--datatype`: must be "residues" or "sequence".')
-
-# Ensure that  batch size and num epochs are both positive ints
-if num_epochs < 1:
-    raise ValueError('Number of epochs must be a positive integer.')
-if batch_size < 1:
-    raise ValueError('Batch size must be a positive integer.')
+# Ensure that network hyperparams (not being optimized) are valid
+validate_args.check_positive(num_epochs, 'Number of epochs')
+validate_args.check_positive(batch_size, 'Batch size')
 
 # Ensure that the sum of setFractions adds up to 1
 for frac in setFractions:
-    if 0 >= frac or frac >= 1:
-        raise ValueError('All set fractions must be between 0 and 1.')
+    validate_args.check_between_zero_and_one(frac, 'Set fractions')
 if sum(setFractions) != 1.0:
     raise ValueError('Set fractions must sum to 1.')
 
 # Ensure that task is binary sequence classification if
 # probabilistic_classfication is set
 if probabilistic_classification:
-    if dtype != 'sequence' or num_classes != 2:
-        raise ValueError('Probabilistic classification only implemented for binary sequence classification')
+    if dtype != 'sequence':
+        raise ValueError('Probabilistic classification only implemented for sequence classification')
 
 ###############################################################################
 
@@ -192,10 +169,10 @@ for cv_train, cv_val in cvs:
     cv_loaders.append((cv_train_loader, cv_val_loader))
 
 # Output to std out
-if verbosity > 0:
+if silent is False:
     print("PARROT with hyperparameter optimization")
     print("---------------------------------------")
-    if verbosity > 1:
+    if verbose:
         print('Train on:\t%s' % device)
         print("Datatype:\t%s" % dtype)
         print("ML Task:\t%s" % problem_type)
@@ -206,7 +183,7 @@ if verbosity > 0:
 # Optimization procedure
 optimizer = bayesian_optimization.BayesianOptimizer(cv_loaders, input_size, num_epochs,
                                                     num_classes, dtype, saved_weights,
-                                                    max_iterations, device, verbosity)
+                                                    max_iterations, device, silent)
 
 best_hyperparams = optimizer.optimize()
 lr = 10**best_hyperparams[0]
@@ -242,24 +219,25 @@ else:  # dtype == 'residues'
     brnn_network = brnn_architecture.BRNN_MtM(input_size, hs, nl, num_classes, device).to(device)
 
 # Train network
-if verbosity > 0:
+if silent is False:
     print('Training with optimal hyperparams:')
 train_loss, val_loss = train_network.train(brnn_network, train_loader, val_loader, datatype=dtype,
-                                           problem_type=problem_type, weights_file=saved_weights, stop_condition='iter',
-                                           device=device, learn_rate=lr, n_epochs=num_epochs*2, verbosity=verbosity)
+                                           problem_type=problem_type, weights_file=saved_weights, 
+                                           stop_condition='iter', device=device, learn_rate=lr, 
+                                           n_epochs=num_epochs*2, verbose=verbose, silent=silent)
 
 if include_figs:  # Plot training & validation loss per epoch
     brnn_plot.training_loss(train_loss, val_loss, output_dir=output_dir)
 
 # Test network
 test_loss, test_set_predictions = train_network.test_labeled_data(brnn_network, test_loader,
-                                                                  datatype=dtype, problem_type=problem_type,
-                                                                  weights_file=saved_weights, num_classes=num_classes,
-                                                                  probabilistic_classification=probabilistic_classification,
-                                                                  include_figs=include_figs, device=device)
-if verbosity > 0:
+                                                datatype=dtype, problem_type=problem_type,
+                                                weights_file=saved_weights, num_classes=num_classes,
+                                                probabilistic_classification=probabilistic_classification,
+                                                include_figs=include_figs, device=device)
+if silent is False:
     print('\nTest Loss: %.4f' % test_loss)
 
 # Output the test set predictions to a text file
 brnn_plot.output_predictions_to_file(test_set_predictions, excludeSeqID, encoding_scheme,
-                                     encoder, output_dir=output_dir)
+                                    probabilistic_classification, encoder, output_dir=output_dir)

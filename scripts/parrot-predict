@@ -40,10 +40,10 @@ parser.add_argument('saved_network', help='path to the trained network weights f
 parser.add_argument('output_file', help='file with sequences and their predicted values')
 
 parser.add_argument('-d', '--datatype', metavar='dtype', type=str, required=True,
-                    help="Required. Format of the input data file, must be 'sequence' or 'residues'")
+                    help="REQUIRED. Format of the input data file, must be 'sequence' or 'residues'")
 
 parser.add_argument('-c', '--classes', type=int, metavar='num_classes', required=True,
-                    help='Required. Number of output classes, for regression put 1')
+                    help='REQUIRED. Number of output classes, for regression put 1')
 
 parser.add_argument('-hs', '--hidden-size', default=10, type=int, metavar='hidden_size',
                     help='hidden vector size (def=10)')
@@ -58,15 +58,13 @@ parser.add_argument('--exclude-seq-id', dest='excludeSeqID', action='store_true'
                     help='use if data_file lacks sequence IDs in the first column of each line')
 
 parser.add_argument('--probabilistic-classification', dest='probabilistic_classification',
-                    action='store_true', help='Optional implementation for binary sequence classificaion')
+                    action='store_true', help='Optional implementation for sequence classificaion')
 
 parser.add_argument('--silent', action='store_true',
                     help="Flag which, if provided, ensures no output is generated to the terminal")
 
 parser.add_argument('--print-frequency', default=1000, type=int, 
                     help="Value that defines how often status updates should be printed (in number of sequences predicted. Default=1000")
-
-
 
 args = parser.parse_args()
 
@@ -94,40 +92,22 @@ else:
     print_frequency = args.print_frequency
 
 
-
 ###############################################################################
 ################    Validate arguments and initialize:      ###################
 
-# Ensure that provided data_file exists
-seq_file = os.path.abspath(args.seq_file)
-if not os.path.isfile(seq_file):
-    raise FileNotFoundError('Sequence file does not exist.')
+# Ensure that provided sequence file exists
+seq_file = validate_args.check_file_exists(args.seq_file, 'Sequence file')
 
 # Ensure that the saved weights file exists
-saved_weights = os.path.abspath(args.saved_network)
-if not os.path.isfile(saved_weights):
-    raise FileNotFoundError('Saved network does not exist.')
+saved_weights = validate_args.check_file_exists(args.saved_network, 'Saved network')
 
 # Ensure that output file location is valid
 output_file = os.path.abspath(args.output_file)
-output_filename = output_file.split('/')[-1]
-if not os.path.exists(output_file[:-len(output_filename)]):
-    raise FileNotFoundError('Output directory does not exist.')
+output_filename, output_dir = validate_args.split_file_and_directory(output_file)
+validate_args.check_directory(output_dir, "Output directory")
 
 # Set encoding scheme and/or validate user scheme
-if encode == 'onehot':
-    encoding_scheme = 'onehot'
-    input_size = 20
-    encoder = None
-elif encode == 'biophysics':
-    encoding_scheme = 'biophysics'
-    input_size = 9
-    encoder = None
-else:
-    encoding_scheme = 'user'
-    encode_file = encode
-    encoder = encode_sequence.UserEncoder(encode_file)
-    input_size = len(encoder)
+encoding_scheme, encoder, input_size = validate_args.set_encoding_scheme(encode)
 
 # Initialize network as classifier or regressor
 if num_classes > 1:
@@ -138,16 +118,14 @@ else:
     raise ValueError('Number of classes must be a positive integer.')
 
 # Ensure that hidden size and num layers are both positive ints
-if hidden_size < 1:
-    raise ValueError('Hidden vector size must be a positive integer.')
-if num_layers < 1:
-    raise ValueError('Number of layers must be a positive integer.')
+validate_args.check_positive(hidden_size, 'Hidden vector size')
+validate_args.check_positive(num_layers, 'Number of layers')
 
 # Ensure that task is binary sequence classification if
 # probabilistic_classfication is set
 if probabilistic_classification:
-    if dtype != 'sequence' or num_classes != 2:
-        raise ValueError('Proportional classification only implemented for binary sequence classification')
+    if dtype != 'sequence':
+        raise ValueError('Proportional classification only implemented for sequence classification')
 
 # Initialize network architecture depending on data format
 if dtype == 'sequence':
@@ -159,7 +137,7 @@ elif dtype == 'residues':
     brnn_network = brnn_architecture.BRNN_MtM(input_size, hidden_size,
                                               num_layers, num_classes, device).to(device)
 else:
-    raise ValueError('Invalid argument `--datatype`: must be "residues" or "sequence".')
+    raise ValueError('Invalid argument `--datatype`: must be "residues" or "sequence"')
 
 
 # print info on the setup
@@ -211,8 +189,9 @@ if problem_type == 'classification':
     if dtype == 'sequence':
         # probabilistic_classification
         if probabilistic_classification:
-            softmax = np.exp(values[0])
-            pred_dict[seq] = [(softmax / np.sum(softmax))[1]]
+            for seq, values in pred_dict.items():
+                softmax = np.exp(values[0])
+                pred_dict[seq] = list(np.around(softmax / np.sum(softmax), decimals=4))
         else:
             for seq, values in pred_dict.items():
                 pred_dict[seq] = [np.argmax(values[0])]

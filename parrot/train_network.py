@@ -21,7 +21,7 @@ from parrot import encode_sequence
 
 
 def train(network, train_loader, val_loader, datatype, problem_type, weights_file,
-          stop_condition, device, learn_rate, n_epochs, verbosity=1):
+          stop_condition, device, learn_rate, n_epochs, verbose=False, silent=False):
     """Train a BRNN and save the best performing network weights
 
     Train the network on a training set, and every epoch evaluate its performance on
@@ -73,9 +73,11 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
     n_epochs : int
             Number of epochs to train for, or required to have stagnated performance
             for, depending on `stop_condition`.
-    verbosity : int, optional
-            The degree to which training updates are written to standard out (default
-            is 1).
+    verbose : bool, optional
+            If true, causes training updates to be written every epoch, rather than
+            every 5 epochs.
+    silent : bool, optional
+            If true, causes not training updates to be written to standard out.
 
     Returns
     -------
@@ -84,10 +86,6 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
     list
             A list of the average validation set losses achieved at each epoch
     """
-
-    # Max verbosity level is 2:
-    if verbosity > 2:
-        verbosity = 2
 
     # Set optimizer
     optimizer = torch.optim.Adam(network.parameters(), lr=learn_rate)
@@ -186,9 +184,9 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
         avg_train_losses.append(train_loss)
         avg_val_losses.append(val_loss)
 
-        if verbosity == 2:
+        if verbose:
             print('Epoch %d\tLoss %.4f' % (epoch, val_loss))
-        elif epoch % 5 == 0 and verbosity == 1:
+        elif epoch % 5 == 0 and silent is False:
             print('Epoch %d\tLoss %.4f' % (epoch, val_loss))
 
         # This is placed here to ensure that the best network, even if the performance
@@ -329,12 +327,13 @@ def test_labeled_data(network, test_loader, datatype,
                 brnn_plot.confusion_matrix(all_targets, all_outputs, num_classes, output_dir=output_dir)
 
             if probabilistic_classification:
-                # Proportional assignment of class predictions
-                # Optional implementation for binary classification task
-                # e.g. every sequence a real number in [0,1] corresponding to
-                # its relative assignment into class 0 or 1
-                softmax = np.exp(predictions[i][2][0])
-                predictions[i][2] = (softmax / np.sum(softmax))[1]
+                # Probabilistic assignment of class predictions
+                # Optional implementation for classification tasks
+                # e.g. every sequence is assigned probabilities
+                # corresponding to each possible class
+                for i in range(len(predictions)):
+                    softmax = np.exp(predictions[i][2][0])
+                    predictions[i][2] = softmax / np.sum(softmax)
 
             else:
                 # Absolute assignment of class predictions

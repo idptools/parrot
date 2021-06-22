@@ -22,6 +22,7 @@ parrot/tests/__init__.py
 parrot/tests/test_parrot.py
 parrot/tools/__init__.py
 parrot/tools/cli.py
+parrot/tools/validate_args.py
 scripts/parrot-optimize
 scripts/parrot-predict
 scripts/parrot-train

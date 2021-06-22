@@ -53,8 +53,8 @@ class BayesianOptimizer(object):
             'cpu' or 'cuda' depending on system hardware
     max_iterations : int
             Maximum number of iterations to perform the optimization procedure
-    verbosity : int
-            level of how descriptive the output to console message will be
+    silent : bool
+            If true, do not print updates to console
     bds : list of dicts
             GPy-compatible bounds for each of the hyperparameters to be optimized
 
@@ -71,7 +71,7 @@ class BayesianOptimizer(object):
     """
 
     def __init__(self, cv_dataloaders, input_size, n_epochs, n_classes,
-                 dtype, weights_file, max_iterations, device, verbosity):
+                 dtype, weights_file, max_iterations, device, silent):
         """
         Parameters
         ----------
@@ -92,8 +92,8 @@ class BayesianOptimizer(object):
                 'cpu' or 'cuda' depending on system hardware
         max_iterations : int
                 Maximum number of iterations to perform the optimization procedure
-        verbosity : int
-                level of how descriptive the output to console message will be
+        silent : bool
+                If true, do not print updates to console
         """
 
         self.cv_loaders = cv_dataloaders
@@ -110,7 +110,7 @@ class BayesianOptimizer(object):
         self.weights_file = weights_file
         self.max_iterations = max_iterations
         self.device = device
-        self.verbosity = verbosity
+        self.silent = silent
 
         self.bds = [{'name': 'log_learning_rate', 'type': 'continuous', 'domain': (-5, -2)},  # 0.00001-0.01
                     {'name': 'n_layers', 'type': 'discrete', 'domain': tuple(range(1, 6))},  # 1-5
@@ -148,7 +148,7 @@ class BayesianOptimizer(object):
             cv_outputs[i] = self.eval_cv_brnns(lr, nl, hs)
             avg = np.average(cv_outputs[i])
 
-            if self.verbosity > 0:
+            if self.silent is False:
                 print('  %.6f	|     %2d       |         %2d           |    %.3f' % (lr, nl, hs, avg))
 
         outputs = np.average(cv_outputs, axis=1)
@@ -188,7 +188,7 @@ class BayesianOptimizer(object):
             train_losses, val_losses = train_network.train(brnn_network, self.cv_loaders[k][0],
                                                            self.cv_loaders[k][1], self.dtype, self.problem_type,
                                                            self.weights_file, stop_condition='iter', device=self.device,
-                                                           learn_rate=lr, n_epochs=self.n_epochs, verbosity=0)
+                                                           learn_rate=lr, n_epochs=self.n_epochs, silent=True)
             # Take best val loss
             best_val_loss = np.min(val_losses)
             cv_losses[k] = best_val_loss
@@ -248,7 +248,7 @@ class BayesianOptimizer(object):
                            [-3.0, 2, 5],  [-3.0, 2, 15], [-3.0, 2, 35], [-3.0, 2, 50]])
         y_init, noise = self.initial_search(x_init)
 
-        if self.verbosity > 0:
+        if self.silent is False:
             print("\nInitial search results:")
             print("lr\tnl\ths\toutput")
             for i in range(5):
@@ -275,7 +275,7 @@ class BayesianOptimizer(object):
         ins = optimizer.get_evaluations()[0]
         outs = optimizer.get_evaluations()[1].flatten()
 
-        if self.verbosity > 0:
+        if self.silent is False:
             print("\nThe optimal hyperparameters are:\nlr = %.5f\nnl = %d\nhs = %d" %
                   (10**optimizer.x_opt[0], optimizer.x_opt[1], optimizer.x_opt[2]))
             print()

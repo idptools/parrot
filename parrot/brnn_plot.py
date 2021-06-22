@@ -238,8 +238,8 @@ def res_confusion_matrix(true_classes, predicted_classes, num_classes, output_di
     plt.savefig(output_dir + 'res_CM.png')
 
 
-def output_predictions_to_file(sequence_data, excludeSeqID, encoding_scheme, encoder=None,
-                               output_dir=''):
+def output_predictions_to_file(sequence_data, excludeSeqID, encoding_scheme,
+                            probabilistic_class, encoder=None, output_dir=''):
     """Output sequences, their true values, and their predicted values to a file
 
     Used on the output of the test_unlabeled_data() function in the train_network module in
@@ -261,10 +261,15 @@ def output_predictions_to_file(sequence_data, excludeSeqID, encoding_scheme, enc
             Description of how an amino acid sequence should be encoded as a numeric 
             vector. Providing a string other than 'onehot', 'biophysics', or 'user' 
             will produce unintended consequences.
+    probabilistic_class : bool
+            Flag indicating if probabilistic classification was specified by the user. If True,
+            instead of class labels, predictions will be output as probabilities of each class.
     encoder: UserEncoder object, optional
             If encoding_scheme is 'user', encoder should be a UserEncoder object
             that can convert amino acid sequences to numeric vectors. If
             encoding_scheme is not 'user', use None.
+    output_dir : str
+            Directory where test set predictions file should be output.
     """
 
     seq_vectors = []
@@ -302,6 +307,9 @@ def output_predictions_to_file(sequence_data, excludeSeqID, encoding_scheme, enc
             if isinstance(true_vals[i], np.ndarray):
                 true_vals_format = ' '.join(true_vals[i].astype(str))
                 pred_vals_format = ' '.join(pred_vals[i].astype(str))
+            elif probabilistic_class:
+                true_vals_format = true_vals[i]
+                pred_vals_format = ' '.join(np.around(pred_vals[i], decimals=4).astype(str))
             else:
                 true_vals_format = true_vals[i]
                 pred_vals_format = pred_vals[i]
