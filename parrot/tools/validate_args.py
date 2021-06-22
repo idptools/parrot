@@ -87,9 +87,9 @@ def check_between_zero_and_one(val, name):
     if val >= 1 or val <= 0:
         raise ValueError(f'{name} must be between 0 and 1.')
 
-def check_stop_condition(stop_cond):
+def check_stop_condition(stop_cond, n_epochs):
     if stop_cond == 'auto':
-        if num_epochs > 10:
+        if n_epochs > 10:
             print("Warning: Stop condition is set to 'auto' and num_epochs > 10." +
                    " Network training may take a long time.\n")
     elif stop_cond != 'iter':

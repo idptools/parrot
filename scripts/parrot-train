@@ -144,15 +144,15 @@ encoding_scheme, encoder, input_size = validate_args.set_encoding_scheme(encode)
 # Initialize network as classifier or regressor
 problem_type, collate_function = validate_args.set_ml_task(num_classes, dtype)
 
-# Ensure that stop condition is 'iter' or 'auto'
-validate_args.check_stop_condition(stop_cond)
-
 # Ensure that network hyperparams are valid
 validate_args.check_between_zero_and_one(learning_rate, 'Learning rate')
 validate_args.check_positive(hidden_size, 'Hidden vector size')
 validate_args.check_positive(num_layers, 'Number of layers')
 validate_args.check_positive(num_epochs, 'Number of epochs')
 validate_args.check_positive(batch_size, 'Batch size')
+
+# Ensure that stop condition is 'iter' or 'auto'
+validate_args.check_stop_condition(stop_cond, num_epochs)
 
 # Ensure that the sum of setFractions adds up to 1
 for frac in setFractions:
