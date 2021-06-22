@@ -115,7 +115,7 @@ else:
 ################    Validate arguments and initialize:      ###################
 
 # Ensure that provided data file exists
-datafile = validate_args.check_file_exists(args.data_file, 'Datafile')
+data_file = validate_args.check_file_exists(args.data_file, 'Datafile')
 
 # Ensure that output network location is valid
 saved_weights = os.path.abspath(args.output_network)
