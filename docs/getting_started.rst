@@ -23,19 +23,21 @@ This will install PARROT locally. If you modify the source code in the local rep
 Testing
 -------
 
-To see if your installation of PARROT is working properly, first install the "pytest" package:
+To see if your local installation of PARROT is working properly, first install the "pytest" package:
 
 .. code-block:: bash
 	
 	$ pip install pytest
 
-Then, you can run the unit test included in the package by navigating to the parrot/tests folder within the installation directory and running:
+Then, you can run the unit test included in the package by navigating to the /tests folder within the installation directory and running:
 
 .. code-block:: bash
 
 	$ pytest -v
 
+Note that this only works if the package is installed as a repository via GitHub. Installation through PyPI does not include the necessary datafiles to run the tests.
+
 Example datasets
 ----------------
 
-Example data that can be used with PARROT can be found in the parrot/data folder on GitHub. Examples of usage with these datasets can be found on the Examples page of the documentation.
+Example data that can be used with PARROT can be found in the **/data** folder on GitHub. Examples of usage with these datasets can be found in the documentation.

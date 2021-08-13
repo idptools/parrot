@@ -48,11 +48,6 @@ class BRNN_MtM(nn.Module):
         the length of the input sequence, this layer aggregates the output of the
         LSTM nodes from the deepest forward layer and deepest reverse layer and
         returns the output for that residue in the sequence.
-
-    Methods
-    -------
-    forward(x)
-        Propogate input sequences through the network to produce outputs
     """
 
     def __init__(self, input_size, hidden_size, num_layers, num_classes, device):
@@ -150,11 +145,6 @@ class BRNN_MtO(nn.Module):
         the length of the input sequence, this layer aggregates the output of the
         LSTM nodes from the deepest forward layer and deepest reverse layer and
         returns the output for that residue in the sequence.
-
-    Methods
-    -------
-    forward(x)
-        Propogate input sequences through the network to produce outputs
     """
 
     def __init__(self, input_size, hidden_size, num_layers, num_classes, device):

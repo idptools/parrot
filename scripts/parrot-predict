@@ -153,8 +153,6 @@ cli.print_settings(args.silent,
                    excludeSeqID=excludeSeqID,
                    probabilistic_classification=probabilistic_classification)
 
-
-
 ###############################################################################
 
 brnn_network.load_state_dict(torch.load(saved_weights,

@@ -15,7 +15,10 @@ Licensed under the MIT license.
 import numpy as np
 import torch
 import itertools
-from scipy.stats import linregress
+from scipy.stats import linregress, pearsonr, spearmanr
+from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import precision_recall_curve, average_precision_score
+from sklearn.metrics import f1_score, matthews_corrcoef, accuracy_score
 import matplotlib.pyplot as plt
 import seaborn as sn
 import pandas as pd
@@ -23,11 +26,10 @@ import pandas as pd
 from parrot import encode_sequence
 
 
-def training_loss(train_loss, val_loss, output_dir=''):
+def training_loss(train_loss, val_loss, output_file_prefix=''):
     """Plot training and validation loss per epoch
 
-    Figure is not displayed, but saved to file in current directory with the name
-    'train_test.png'.
+    Figure is saved to file at "<output_file_prefix>_train_val_loss.png".
 
     Parameters
     ----------
@@ -35,8 +37,8 @@ def training_loss(train_loss, val_loss, output_dir=''):
             training loss across each epoch
     val_loss : list
             validation loss across each epoch
-    output_dir : str, optional
-            directory to which the plot will be saved (default is current directory)
+    output_file_prefix : str, optional
+            File to which the plot will be saved as "<output_file_prefix>_train_val_loss.png"
     """
 
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 6))
@@ -62,15 +64,14 @@ def training_loss(train_loss, val_loss, output_dir=''):
     else:
         ax.set_xticks(np.arange(50, num_epochs+1, 50))
 
-    plt.savefig(output_dir + 'train_test.png')
+    plt.savefig(output_file_prefix + '_train_val_loss.png')
     plt.clf()
 
 
-def sequence_regression_scatterplot(true, predicted, output_dir=''):
+def sequence_regression_scatterplot(true, predicted, output_file_prefix=''):
     """Create a scatterplot for a sequence-mapped values regression problem
 
-    Figure is displayed to console if possible and saved to file in current 
-    directory with the name 'seq_scatter.png'.
+    Figure is saved to file at "<output_file_prefix>_seq_scatterplot.png".
 
     Parameters
     ----------
@@ -80,8 +81,8 @@ def sequence_regression_scatterplot(true, predicted, output_dir=''):
     predicted : list of PyTorch FloatTensors
             A list where each item is a [1 x 1] tensor with the regression prediction
             for a particular sequence
-    output_dir : str, optional
-            directory to which the plot will be saved (default is current directory)
+    output_file_prefix : str, optional
+            File to which the plot will be saved as "<output_file_prefix>_seq_scatterplot.png"
     """
 
     true_list = []
@@ -102,17 +103,16 @@ def sequence_regression_scatterplot(true, predicted, output_dir=''):
     plt.ylabel('Predicted')
     slope, intercept, r_value, p_value, std_err = linregress(true_list, pred_list)
     plt.title('Testing accuracy: R^2=%.3f' % (r_value**2))
-    plt.savefig(output_dir + 'seq_scatter.png')
+    plt.savefig(output_file_prefix + '_seq_scatterplot.png')
 
 
-def residue_regression_scatterplot(true, predicted, output_dir=''):
+def residue_regression_scatterplot(true, predicted, output_file_prefix=''):
     """Create a scatterplot for a residue-mapped values regression problem
 
     Each sequence is plotted with a unique marker-color combination, up to 70
     different sequences.
 
-    Figure is displayed to console if possible and saved to file in current 
-    directory with the name 'res_scatter.png'.
+    Figure is saved to file at "<output_file_prefix>_res_scatterplot.png".
 
     Parameters
     ----------
@@ -122,8 +122,8 @@ def residue_regression_scatterplot(true, predicted, output_dir=''):
     predicted : list of PyTorch FloatTensors
             A list where each item is a [1 x len(sequence)] tensor with the 
             regression predictions for each residue in a sequence
-    output_dir : str, optional
-            directory to which the plot will be saved (default is current directory)
+    output_file_prefix : str, optional
+            File to which the plot will be saved as "<output_file_prefix>_res_scatterplot.png"
     """
 
     true_list = []
@@ -153,14 +153,137 @@ def residue_regression_scatterplot(true, predicted, output_dir=''):
     plt.ylabel('Predicted')
     slope, intercept, r_value, p_value, std_err = linregress(sum(true_list, []), sum(pred_list, []))
     plt.title('Testing accuracy: R^2=%.3f' % (r_value**2))
-    plt.savefig(output_dir + 'res_scatter.png')
+    plt.savefig(output_file_prefix + '_res_scatterplot.png')
+
+def plot_roc_curve(true_classes, predicted_class_probs, num_classes, output_file_prefix=''):
+    """Create an ROC curve for a sequence classification problem
+
+    Figure is saved to file at "<output_file_prefix>_ROC_curve.png".
+
+    Parameters
+    ----------
+    true_classes : list of PyTorch IntTensors
+            A list where each item is a [1 x 1] tensor with the true class label of a
+            particular sequence
+    predicted_class_probs : list of PyTorch FloatTensors
+            A list where each item is a [1 x num_classes] tensor of the probabilities
+            of assignment to each class
+    num_classes : int
+            Number of distinct data classes
+    output_file_prefix : str, optional
+            File to which the plot will be saved as "<output_file_prefix>_ROC_curve.png"
+    """
+
+    y_test = np.zeros((len(true_classes), num_classes), dtype=int)
+    for i in range(len(true_classes)):
+        label = true_classes[i].numpy()[0]
+        y_test[i, label] = 1
+    y_score = np.vstack(predicted_class_probs)
+
+    # Compute ROC curve and ROC area for each class
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
+    for c in range(num_classes):
+        fpr[c], tpr[c], _ = roc_curve(y_test[:, c], y_score[:, c])
+        roc_auc[c] = auc(fpr[c], tpr[c])
+
+    plt.figure()
+    if num_classes > 2:
+        # Compute micro-average ROC curve and ROC area (if multiclass)
+        fpr["micro"], tpr["micro"], _ = roc_curve(y_test.ravel(), y_score.ravel())
+        roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+
+        # Plot all ROC curves
+        plt.plot(fpr["micro"], tpr["micro"],
+                 label='Average (area = {0:0.2f})'
+                       ''.format(roc_auc["micro"]),
+                 color='deeppink', linestyle=':', linewidth=4)
+
+        for c in range(num_classes):
+            plt.plot(fpr[c], tpr[c], lw=2,
+                     label='Class {0} (area = {1:0.2f})'
+                     ''.format(c, roc_auc[c]))
+
+    elif num_classes == 2: # If binary classification
+        # Plot only one curve (doesn't matter which one, they are symmetric)
+        plt.plot(fpr[1], tpr[1], lw=2,
+                     label='Binary class (area = {0:0.2f})'
+                     ''.format(roc_auc[1]))
+
+    plt.plot([0, 1], [0, 1], 'k--', lw=2)
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver operating characteristic')
+    plt.legend(loc="lower right", fontsize=8)
+    plt.savefig(output_file_prefix + '_ROC_curve.png')
+
+def plot_precision_recall_curve(true_classes, predicted_class_probs, 
+                                num_classes, output_file_prefix=''):
+    """Create an PR curve for a sequence classification problem
+
+    Figure is saved to file at "<output_file_prefix>_PR_curve.png".
+
+    Parameters
+    ----------
+    true_classes : list of PyTorch IntTensors
+            A list where each item is a [1 x 1] tensor with the true class label of a
+            particular sequence
+    predicted_class_probs : list of PyTorch FloatTensors
+            A list where each item is a [1 x num_classes] tensor of the probabilities
+            of assignment to each class
+    num_classes : int
+            Number of distinct data classes
+    output_file_prefix : str, optional
+            File to which the plot will be saved as "<output_file_prefix>_PR_curve.png"
+    """
+
+    y_test = np.zeros((len(true_classes), num_classes), dtype=int)
+    for i in range(len(true_classes)):
+        label = true_classes[i].numpy()[0]
+        y_test[i, label] = 1
+    y_score = np.vstack(predicted_class_probs)
+
+    # For each class
+    precision = dict()
+    recall = dict()
+    average_precision = dict()
+    for i in range(num_classes):
+        precision[i], recall[i], _ = precision_recall_curve(y_test[:, i],
+                                                            y_score[:, i])
+        average_precision[i] = average_precision_score(y_test[:, i], y_score[:, i])
+
+    # A "micro-average": quantifying score on all classes jointly
+    precision["micro"], recall["micro"], _ = precision_recall_curve(y_test.ravel(),
+        y_score.ravel())
+    average_precision["micro"] = average_precision_score(y_test, y_score,
+                                                        average="micro")
+
+    # Plot
+    plt.figure()
+    plt.plot(recall["micro"], precision["micro"], color='deeppink', linestyle=':', 
+        linewidth=4, label='Average (area = {0:0.2f})'
+              ''.format(average_precision["micro"]))
+    for c in range(num_classes):
+        plt.plot(recall[c], precision[c], lw=2, 
+            label='Class {0} (area = {1:0.2f})'
+                  ''.format(c, average_precision[c]))
+
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title('Precision-Recall')
+    plt.legend()
+    plt.savefig(output_file_prefix + '_PR_curve.png')
 
 
-def confusion_matrix(true_classes, predicted_classes, num_classes, output_dir=''):
+def confusion_matrix(true_classes, predicted_classes, num_classes, output_file_prefix=''):
     """Create a confusion matrix for a sequence classification problem
 
-    Figure is displayed to console if possible and saved to file in current 
-    directory with the name 'seq_CM.png'.
+    Figure is saved to file at "<output_file_prefix>_seq_CM.png".
 
     Parameters
     ----------
@@ -172,29 +295,28 @@ def confusion_matrix(true_classes, predicted_classes, num_classes, output_dir=''
             class label for a particular sequence
     num_classes : int
             Number of distinct data classes
-    output_dir : str, optional
-            directory to which the plot will be saved (default is current directory)
+    output_file_prefix : str, optional
+            File to which the plot will be saved as "<output_file_prefix>_seq_CM.png"
     """
 
     cm = np.zeros((num_classes, num_classes))
     for i in range(len(true_classes)):
-        cm[true_classes[i][0], np.argmax(predicted_classes[i][0].cpu().numpy())] += 1
+        cm[np.argmax(predicted_classes[i][0].cpu().numpy()), true_classes[i][0]] += 1
 
     df_cm = pd.DataFrame(cm, range(num_classes), range(num_classes))
     sn.set(font_scale=1.4)  # for label size
     sn.heatmap(df_cm, cmap='Blues', annot=True, annot_kws={"size": 16})  # font size
-    plt.ylabel('True labels')
-    plt.xlabel('Predicted labels')
+    plt.xlabel('True labels')
+    plt.ylabel('Predicted labels')
     plt.title('Test set confusion matrix')
     plt.tight_layout()
-    plt.savefig(output_dir + 'seq_CM.png')
+    plt.savefig(output_file_prefix + '_seq_CM.png')
 
 
-def res_confusion_matrix(true_classes, predicted_classes, num_classes, output_dir=''):
+def res_confusion_matrix(true_classes, predicted_classes, num_classes, output_file_prefix=''):
     """Create a confusion matrix for a residue classification problem
 
-    Figure is displayed to console if possible and saved to file in current 
-    directory with the name 'res_CM.png'.
+    Figure is saved to file at "<output_file_prefix>_res_CM.png".
 
     Parameters
     ----------
@@ -207,8 +329,8 @@ def res_confusion_matrix(true_classes, predicted_classes, num_classes, output_di
             sequence
     num_classes : int
             Number of distinct data classes
-    output_dir : str, optional
-            directory to which the plot will be saved (default is current directory)
+    output_file_prefix : str, optional
+            File to which the plot will be saved as "<output_file_prefix>_res_CM.png"
     """
 
     true_list = []
@@ -226,20 +348,97 @@ def res_confusion_matrix(true_classes, predicted_classes, num_classes, output_di
 
     cm = np.zeros((num_classes, num_classes))
     for i in range(len(true_list)):
-        cm[true_list[i], pred_list[i]] += 1
+        cm[pred_list[i], true_list[i]] += 1
 
     df_cm = pd.DataFrame(cm, range(num_classes), range(num_classes))
     sn.set(font_scale=1.4)  # for label size
     sn.heatmap(df_cm, cmap='Blues', annot=True, annot_kws={"size": 16})  # font size
-    plt.ylabel('True labels')
-    plt.xlabel('Predicted labels')
+    plt.xlabel('True labels')
+    plt.ylabel('Predicted labels')
     plt.title('Test set confusion matrix')
     plt.tight_layout()
-    plt.savefig(output_dir + 'res_CM.png')
+    plt.savefig(output_file_prefix + '_res_CM.png')
+
+
+def write_performance_metrics(sequence_data, dtype, problem_type,
+                                prob_class, output_file_prefix=''):
+    """Writes a short text file describing performance on a variety of metrics
+
+    Writes different output depending on whether a classification or regression task
+    is specified. Also produces unique output if in probabilistic classification mode.
+    File is saved to "<output_file_prefix>_performance_stats.txt".
+
+    Parameters
+    ----------
+    sequence_data : list of lists
+            Details of the output predictions for each of the sequences in the test set. Each
+            inner list represents a sample in the test set, with the format: [sequence_vector,
+            true_value, predicted_value, sequence_ID]
+    dtype : str
+            The format of values in the dataset. Should be 'sequence' for datasets
+            with a single value (or class label) per sequence, or 'residues' for
+            datasets with values (or class labels) for every residue in a sequence.
+    problem_type : str
+            The machine learning task--should be either 'regression' or 'classification'.
+    prob_class : bool
+            Flag indicating if probabilistic classification was specified by the user.
+    output_file_prefix : str
+            Path and filename prefix to which the test set predictions will be saved. Final
+            file path is "<output_file_prefix>_performance_stats.txt"
+    """
+
+    true_vals = [l[1] for l in sequence_data]
+    pred_vals = [l[2] for l in sequence_data]
+
+    perform_metrics = {}
+
+    if dtype == 'residues':
+        true_vals = np.hstack(true_vals)
+        pred_vals = np.hstack(pred_vals)
+
+    if problem_type == 'classification':
+        # Take care of probabilistic-classification case first
+        if prob_class:
+            # Reformat
+            pred_vals = np.vstack(pred_vals)
+            true_vals_array = np.zeros((len(true_vals), len(pred_vals[0])), dtype=int)
+            for i in range(len(true_vals)):
+                true_vals_array[i, true_vals[i]] = 1
+
+            # AUROC, AUPRC
+            perform_metrics['Area under Precision-Recall curve'] = round(
+                                        average_precision_score(true_vals_array, 
+                                        pred_vals, average="micro"), 3)
+            fpr, tpr, _ = roc_curve(true_vals_array.ravel(), pred_vals.ravel())
+            perform_metrics["Area under ROC"] = round(auc(fpr, tpr), 3)
+
+            # Change probs to discrete classes
+            pred_vals = np.argmax(pred_vals, axis=1)
+
+        # Then take care of general classification stats: accuracy, F1, MCC
+        perform_metrics['Matthews Correlation Coef'] = round(
+                            matthews_corrcoef(true_vals, pred_vals), 3)
+        perform_metrics['F1 Score'] = round(
+                            f1_score(true_vals, pred_vals, average='weighted'), 3)
+        perform_metrics['Accuracy'] = round(accuracy_score(true_vals, pred_vals), 3)
+
+
+    elif problem_type == 'regression':
+        # Pearson R, Spearman R
+        pears_r, p_val = pearsonr(true_vals, pred_vals)
+        perform_metrics['Pearson R'] = round(pears_r, 3)
+        spearman_r, p_val = spearmanr(true_vals, pred_vals)
+        perform_metrics['Spearman R'] = round(spearman_r, 3)     
+
+    # Write performance metrics to file
+    with open(output_file_prefix + '_performance_stats.txt', 'w') as f:
+        for key, value in perform_metrics.items():
+            outstr = '%s : %.3f\n' % (key, value)
+            f.write(outstr)
 
 
 def output_predictions_to_file(sequence_data, excludeSeqID, encoding_scheme,
-                            probabilistic_class, encoder=None, output_dir=''):
+                            probabilistic_class, encoder=None, output_file_prefix=''):
     """Output sequences, their true values, and their predicted values to a file
 
     Used on the output of the test_unlabeled_data() function in the train_network module in
@@ -268,8 +467,9 @@ def output_predictions_to_file(sequence_data, excludeSeqID, encoding_scheme,
             If encoding_scheme is 'user', encoder should be a UserEncoder object
             that can convert amino acid sequences to numeric vectors. If
             encoding_scheme is not 'user', use None.
-    output_dir : str
-            Directory where test set predictions file should be output.
+    output_file_prefix : str
+            Path and filename prefix to which the test set predictions will be saved. Final
+            file path is "<output_file_prefix>_predictions.tsv"
     """
 
     seq_vectors = []
@@ -298,9 +498,7 @@ def output_predictions_to_file(sequence_data, excludeSeqID, encoding_scheme,
         sequences = encoder.decode(seq_vectors)
 
     # Write to file
-    filename = 'test_set_predictions.tsv'
-
-    with open(output_dir + filename, 'w') as tsvfile:
+    with open(output_file_prefix + '_predictions.tsv', 'w') as tsvfile:
         for i in range(len(names)):
 
             # Adjust formatting for residues or sequence data

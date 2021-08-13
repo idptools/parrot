@@ -1,9 +1,11 @@
-Machine Learning Resources:
-===========================
+=============================
+ Machine Learning Resources:
+=============================
 
 To many of those within the biological sciences that lack a computational or mathematical background, "machine learning" exists as a confusing and daunting topic. While some of the specific concepts in machine learning can certainly be complex and involved, on a practical level, the underlying principles of machine learning are rather intuitive and approachable. One of the motivating forces behind PARROT is to bridge this divide between complexity and accessibility. With PARROT, our lab aims to provide users with a robust machine learning framework that is easily-useable, even for those with little-to-no exposure to machine learning.
 
 This document provides a high-level background on some of the pertinent machine learning concepts present in PARROT. Additionally, I hope to point out common pitfalls to avoid when using PARROT, or any other machine learning tool. Wherever possible, relevant papers, articles, and blog posts will be linked in order to provide a more thorough description of these concepts.
+
 
 First things first, what is 'Machine Learning'?
 -----------------------------------------------
@@ -11,19 +13,21 @@ Broadly speaking, machine learning describes a class of computer algorithms that
 
 **Helpful resources:**
 
-- What is machine learning? (https://www.technologyreview.com/2018/11/17/103781/what-is-machine-learning-we-drew-you-another-flowchart/)
-- A gentle introduction to machine learning concepts (https://medium.com/machine-learning-in-practice/a-gentle-introduction-to-machine-learning-concepts-cfe710910eb)
-- Deep Learning for Biology (https://www.nature.com/articles/d41586-018-02174-z)
+- `What is machine learning <https://www.technologyreview.com/2018/11/17/103781/what-is-machine-learning-we-drew-you-another-flowchart/>`_
+- `A gentle introduction to machine learning concepts <https://medium.com/machine-learning-in-practice/a-gentle-introduction-to-machine-learning-concepts-cfe710910eb>`_
+- `Deep Learning for Biology <https://www.nature.com/articles/d41586-018-02174-z>`_
+
 
 When can I use machine learning for my research?
 ------------------------------------------------
-Machine learning approaches like PARROT are great for **data exploration** and **hypothesis generation**. When facing a large set of biological data, ML can help you identify patterns in your data and allow you to design testable predictions based on those patterns. However, it is important to note that ML cannot validate a result on its own, but rather it is most effective when combined with follow-up experimental validation.
+Machine learning approaches like PARROT are great for **data exploration** and **hypothesis generation**. When facing a large set of biological data, ML can help you identify patterns in your data and allow you to design testable predictions based on those patterns. However, it is important to note that ML generally cannot validate a result on its own, and is most effective when combined with follow-up experimental validation.
 
-There are two primary types of problems that machine learning is designed to address: **classification** and **regression**. As the name implies, classification is the process of assigning new datapoints to particular, pre-defined classes. For protein data, questions involving things like cellular localization, presence of PTMs, presence of a molecular interaction, etc., can be framed as classification problems. In contrast, regression problems involve assigning each data point a continuous real number value. For example, proteins can be assigned values corresponding to their expression levels, disorder, binding affinities, etc.
+There are two primary types of problems that machine learning is designed to address: **classification** and **regression**. As the name implies, classification is the process of assigning new datapoints to particular, discrete classes. For protein data, questions involving things like cellular localization, presence of PTMs, presence of a molecular interaction, etc., can be framed as classification problems. In contrast, regression problems involve assigning each data point a continuous real number value. For example, proteins can be assigned values corresponding to their expression levels, disorder, binding affinities, etc.
 
 **Helpful resources:**
 
-- Regression vs. Classification in machine learning (https://www.javatpoint.com/regression-vs-classification-in-machine-learning)
+- `Regression vs Classification in machine learning <https://www.javatpoint.com/regression-vs-classification-in-machine-learning>`_
+
 
 What is a recurrent neural network (RNN)?
 -----------------------------------------
@@ -35,12 +39,13 @@ There are a few variations of RNN architecture that PARROT utilizes to achieve o
 
 **Helpful resources:**
 
-- Recurrent Neural Networks cheatsheet (https://stanford.edu/~shervine/teaching/cs-230/cheatsheet-recurrent-neural-networks)
-- Understanding LSTM Networks (https://colah.github.io/posts/2015-08-Understanding-LSTMs/)
+- `Recurrent Neural Networks cheatsheet <https://stanford.edu/~shervine/teaching/cs-230/cheatsheet-recurrent-neural-networks>`_
+- `Understanding LSTM Networks <https://colah.github.io/posts/2015-08-Understanding-LSTMs/>`_
+
 
 What are the hyperparameters of the networks used by PARROT? What should I set them as?
 ---------------------------------------------------------------------------------------
-'Hyperparameters' in machine learning are parameters governing the architecture or learning ability of a neural network that can be tuned to impact overall performance. The RNN used in PARROT has a few hyperparameters that the user can specify, or can be optimized automatically. These hyperparameters are:
+'Hyperparameters' in machine learning are parameters governing the architecture or learning ability of a neural network that can be tuned to impact overall performance. The networks used in PARROT have a few hyperparameters that the user can specify, or can be optimized automatically. These hyperparameters are:
 
 .. image:: ../images/brnn_diagram.png
   :width: 700
@@ -68,10 +73,11 @@ In machine learning, an epoch is a round of training. Each epoch the network wil
 
 **Helpful resources:**
 
-- Reducing Loss: Learning Rate (https://developers.google.com/machine-learning/crash-course/reducing-loss/learning-rate)
-- Adam (https://machinelearningmastery.com/adam-optimization-algorithm-for-deep-learning/)
-- Batch size (https://machinelearningmastery.com/how-to-control-the-speed-and-stability-of-training-neural-networks-with-gradient-descent-batch-size/)
-- Using learning curves to determine number of epochs (https://machinelearningmastery.com/learning-curves-for-diagnosing-machine-learning-model-performance/)
+- `Reducing Loss and Learning Rate <https://developers.google.com/machine-learning/crash-course/reducing-loss/learning-rate>`_
+- `Adam optimizer <https://machinelearningmastery.com/adam-optimization-algorithm-for-deep-learning/>`_
+- `Batch size <https://machinelearningmastery.com/how-to-control-the-speed-and-stability-of-training-neural-networks-with-gradient-descent-batch-size/>`_
+- `Using learning curves to determine number of epochs <https://machinelearningmastery.com/learning-curves-for-diagnosing-machine-learning-model-performance/>`_
+
 
 What is 'encoding'?
 -------------------
@@ -79,7 +85,8 @@ Encoding is the process of converting input data into a format that neural netwo
 
 **Helpful resources:**
 
-- Raimondi et al. (https://www.nature.com/articles/s41598-019-53324-w)
+- `Raimondi et al <https://www.nature.com/articles/s41598-019-53324-w>`_
+
 
 What are over-fitting and under-fitting?
 ----------------------------------------
@@ -93,7 +100,8 @@ So far I have described over-fitting, but under-fitting can also be a problem in
 
 **Helpful resources:**
 
-- Overfitting and Underfitting (https://machinelearningmastery.com/overfitting-and-underfitting-with-machine-learning-algorithms/)
+- `Overfitting and underfitting <https://machinelearningmastery.com/overfitting-and-underfitting-with-machine-learning-algorithms/>`_
+
 
 How should I set up my dataset?
 -------------------------------
@@ -105,32 +113,70 @@ There are two important considerations in ML regarding your data:
 
 You are working with a dataset in which you have 1000 labeled protein sequences that all belong to either 'Class A' or 'Class B', as well as another group of proteins for which you would like to predict what class they belong to using ML. In the extreme case, if every sequence in your dataset belong to Class A, then your ML approach will "learn" that every single sequence should be assigned Class A. After all, the strategy of "predict everything as A" has worked well for your network during training, so this will not be a very generalizable predictor. Even if the dataset is skewed 80%-20% in favor of Class A, the network is likely to predict Class A when facing any uncertainty, since statistically this is a good strategy to minimize loss.
 
+By default, PARROT will output warnings in cases where a dataset is obviously imbalance (both for classification and regression).
+
 2. **Limit similarity between samples in your dataset**. The issue with having similar samples arises when the similar samples are split between the training set and the validation set or test set. If this happens, your network will have artificially inflated performance and a tendency to overfit your data.
 
-For example, imagine you have a protein dataset where half of the proteins come from the human proteome and the other half are orthologous proteins from the mouse proteome. If the network is trained on human protein A, if it encounters mouse protein A in the validation set, it will probably have an accurate prediction since these sequences are similar and orthologous. Thus the network will be incentivized to overfit the training data, rather than develop generalizable predictive power. Likewise, if the data is split such that human protein B is in the training set and mouse protein B is in the test set, the network will perform better on the test data and give an inflated view of how accurate the network truly is on unseen data.
+For example, imagine you have a protein dataset where half of the proteins come from the human proteome and the other half are orthologous proteins from the mouse proteome. If the network is trained on human protein A, if it encounters mouse protein A in the validation set, it will probably have an accurate prediction since these proteins (in most cases) will have highly similar sequences and will be functional orthologs. Thus the network will be incentivized to overfit the training data, rather than develop a generalizable predictive model. Likewise, if the data is split such that human protein B is in the training set and mouse protein B is in the test set, the network will perform better on the test data and give an inflated view of how accurate the network truly is on unseen data.
 
-Fortunately, this problem is fairly easy to correct for with protein data by removing samples that display similarity above a certain threshold. If for some reason highly similar sequences can't be removed, then care should be taken so that similar sequences are grouped together in the training set, validation set, or test set.
+Fortunately, this problem is fairly easy to correct for with protein data by removing samples that display similarity above a certain threshold. If for some reason highly similar sequences can't be removed, then care should be taken so that similar sequences are grouped together in the training set, validation set, or test set. As a basic check, PARROT will warn users if there are duplicate sequences in their dataset.
 
 **Helpful resources:**
 
-- Imbalanced classification (https://machinelearningmastery.com/what-is-imbalanced-classification/)
+- `Imbalanced classification <https://machinelearningmastery.com/what-is-imbalanced-classification/>`_
 
 
 How should I tackle a huge dataset?
 -----------------------------------
 Although larger datasets tend to yield more accurate ML networks, it also makes training a network much more time consuming. With PARROT, trying to optimize hyperparameters an a large dataset can take an unreasonably long time. There are a few possible ways to speed up this process.
 
-1. **Train on a computer with a GPU**. PARROT is optimized to train on machines with GPUs, so if available, this can speed up training up to 10- or 20-fold.
+1. **Train on a computer with GPUs**. PARROT is optimized to train in parallel on machines with GPUs, so if available, this can speed up training up to 10- or 20-fold.
 
 2. **Optimize hyperparameters on smaller, representative subset of the data**. Although ideally you would optimize hyperparameters on the entirety of the data, this is not feasible on sufficiently large dataset. Instead, you extract a subset of the data (still considering the points about dataset structure from the preceding section) on which you can tune the hyperparameters. Once the best hyperparameters are determined, you can train on the entire network.
 
+
 How can I validate that my trained network is performing well?
 --------------------------------------------------------------
-Once your dataset is properly set up, PARROT is capable of training on the data to learn its inherent patterns. Regardless of the effectiveness of training, both the "train" and "optimize" procedures in PARROT will output the best performing network so that it can be applied to make predictions on new data. It is crucial to be able to assess how well this trained network performs. There are a few features implemented in PARROT that allow you to evaluate their network's performance, but there are other approaches you can take as well.
+Since machine learning approaches tend to function as "black boxes" that cryptically make predictions given a set of input data, a critical challenge for users is being able to validate that their network is making **generalizeable** and **accurate** predictions. In general, there are two ways one can validate their trained networks:
 
-The easiest way to assess performance of the network in PARROT is to analyze the two output files that describe the network's accuracy on the test set. Firstly, PARROT produces a PNG image that compares predictions made by the network to the "ground truth" labels of the data. For classification tasks it produces a confusion matrix, and for regression tasks it produces a scatterplot. The second output file is a text file ("test_set_predictions.txt") that contains each of the sequences in the test set, its true label, and the prediction of the network on the sequence. This file is more comprehensive then the image, as it allows one to see which sequences are being predicted well, and which ones are being predicted poorly. Careful analysis of this file can reveal potential biases in your network.
+1. **Validate on external, independent data** 
 
-Beyond PARROT's built-in tools, its also possible to validate your trained network on separate datasets using the "predict" procedure. Using orthogonal datasets or experimentally validating its predictions are the most effective way to ensure that your network is not overfitting on the training dataset.
+This is the best-case scenario. In an ideal world, you should evaluate your network on data that was collected in a manner completely independent from the dataset you used to train the network, either via different techniques or different underlying sources. By comparing the predictions made by a network to this independent "ground truth", you can ensure that your network is not overfitting to  particular features/biases inherent in your training dataset.
+
+2. **Intra-dataset validation using cross-validation** 
+
+Unfortunately, in many cases there aren't any independent datasets that you can use to validate your network! The solution developed by the machine learning community in these cases is to approximate an independent dataset by "holding-out" a subset of your data during training and evaluating how your network performs on this data. As described above, PARROT employs this sort of a test set by default, and even produces an output "_predictions.tsv" file that compare the test set predictions to the true scores. Careful analysis of this file can reveal potential biases in your network.
+
+Extending this idea of a held-out test set, a commonly-used practice called *cross-validation* enables using an entire dataset as test data for validation. The first step of the cross-validation procedure entails dividing a dataset into K (typically K=5 or K=10) even sized chunks (termed "folds"). The network is then trained K different times, with a different fold being used as the test set in each iteration while the remainder are used to train the network. At the end, the predictions for each test set (i.e., the full dataset) are combined or averaged to produce a more robust estimate of network performance. Finally, the entire undivided dataset can be used to train a final network which should have similar (or better) performance than what is estimated by the combined cross-validation test sets. 
+
+PARROT includes several tools which facilitate cross-validation training, and a comprehensive example is provided on the "Evaluating a Network with Cross-Validation" page.
+
+NOTE: Cross-validation is also often used to select the best hyperparameters for machine learning networks (it's used by ``parrot-optimize``). This is a nearly identical procedure to what's described above, but hyperparameter tuning and network validation are NOT the same thing. Estimates produced by hyperparameter tuning can be overly optimistic compared to how your network would actually perform on data it's never encountered before.
+
+**Helpful resources:**
+
+- `Why to use CV in your projects <https://towardsdatascience.com/5-reasons-why-you-should-use-cross-validation-in-your-data-science-project-8163311a1e79>`_
+- `Nested cross validation for hyperparameter tuning <https://machinelearningmastery.com/nested-cross-validation-for-machine-learning-with-python/>`_
+
+
+What are the different performance metrics for evaluating ML networks?
+----------------------------------------------------------------------
+
+PARROT outputs a number of figures and performance stats to let user's know how accurate their trained networks are on held-out test data. These performance metrics can be useful snapshots for comparing different network architectures and training strategies, and as a result, many are widely used within the field of ML. While our intention in designing PARROT was to make this output information convienent and helpful, users should still carry our more comprehensive analysis directly on the predictions file ("_predictions.tsv").
+
+The performance metrics used for assessing classification performance and regression performance are quite different. In classification tasks, it's common to make a `confusion matrix <https://en.wikipedia.org/wiki/Confusion_matrix>`_ for comparing predictions to ground truth class labels. The classification metrics used in PARROT are all derived from these matrices. 
+
+The most simple of these metrics is Accuracy, which simply denotes the fraction of correctly classified samples. Accuracy is practical and easy-to-understand, but is not as useful of a metric for imbalanced datasets. For example, if your dataset is 80% Class A and 20% Class B, a network that predicts all samples to be Class A would have an accuracy of 80%, even though it completely fails to discriminate between classes. This sort of network is obviously less useful than a different network that is 80% accurate, but with a more even distribution of incorrect classifications. `F1 score <https://en.wikipedia.org/wiki/F-score>`_ and `Matthews Correlation Coefficient <https://en.wikipedia.org/wiki/Matthews_correlation_coefficient>`_ (MCC) are two metrics that take into account the balance between false positives and false negatives. F1 score is more widely used, but MCC is generally viewed as a more comprehensive metric (see link below). These three metrics tend to be correlated, and collectively they effectively describe how well a classifier is performing.
+
+Training a PARROT network in probabilistic-classification mode will also produce a `Receiver Operating Characteristic <https://en.wikipedia.org/wiki/Receiver_operating_characteristic>`_ (ROC) curve and a Precision-Recall curve, with their corresponding areas. For these metrics, an area under the curve of '1' denotes a perfect predictor. These curves are generated by varying the prediction threshold and seeing how the relative false positive and true positive rates vary (ROC) or how precision and recall vary at these different prediction thresholds. ROC curves are more common, but for imbalanced datasets, area under the PR curve is a more useful metric.
+
+The standard way of evaluating regression networks is to make a scatterplot comparing the correlation of predictions to ground truth values. Two ways of measuring correlation are with Pearsons correlation and Spearmans correlation. These metrics are similar, but have a few subtle differences. Pearsons correlation, or Pearsons R, directly measures linear correlation (i.e., how well does a line fit the data). Spearmans correlation measures *rank order correlation*. As a nonparametric method, Spearmans correlation can detect correlations that are monotonic, but nonlinear. Spearmans correlation is more robust to outliers, and does not make assumptions that the underlying data is normally or uniformly distributed. Like the classificaiton metrics, these two metrics are quite similar in most realistic cases.
+
+**Helpful resources:**
+
+- `Advantages of MCC over F1 score and accuracy <https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-019-6413-7>`_
+- `ROC vs PR curves <https://acutecaretesting.org/en/articles/precision-recall-curves-what-are-they-and-how-are-they-used>`_
+- `Pearson vs Spearman correlation <https://towardsdatascience.com/clearly-explained-pearson-v-s-spearman-correlation-coefficient-ada2f473b8>`_
 
 How does PARROT choose the optimal hyperparameters?
 ---------------------------------------------------
@@ -138,10 +184,10 @@ As described above, there are several different RNN hyperparameters that affect 
 
 The most simple optimization algorithms are *grid search* and *random search*. These are iterative approaches that sample many points in hyperparameter space either systematically or randomly, respectively. As you can imagine, searching many combinations of hyperparameters is likely to find the best-performing set. Unfortunately, these approaches can be **very** time consuming and are not often used for more complex machine learning problems.
 
-Rather, PARROT implements a technique called *Bayesian Optimization* to select the optimal hyperparameters for a given dataset. The details of this method are more involved than I will describe here, but below are several resources that do a good job explaining the algorithm. Briefly, instead of performing an iterative search over the hyperparameter search-space, Bayesian Optimization relies upon the mathematical concept of a Gaussian process (GP). GPs can estimate the loss function across all of hyperparameter search-space. Initially, this estimate is not very accurate, but as you train and test more sets of hyperparameters, the estimate becomes more accurate. The upshot is that Bayesian Optimization can generally identify the optimal hyperparameters *in much fewer iterations than grid or random search*.
+Instead, PARROT implements a technique called *Bayesian Optimization* to select the optimal hyperparameters for a given dataset. The details of this method are more involved than I will describe here, but below are several resources that do a good job explaining the algorithm. Briefly, instead of performing an iterative search over the hyperparameter search-space, Bayesian Optimization relies upon the mathematical concept of a Gaussian process (GP). GPs can estimate the loss function across all of hyperparameter search-space. Initially, this estimate is not very accurate, but as you train and test more sets of hyperparameters, the estimate becomes more accurate. The upshot is that Bayesian Optimization can generally identify the optimal hyperparameters *in much fewer iterations than grid or random search*.
 
 **Helpful resources:**
 
-- Hyperparameter optimization (https://nanonets.com/blog/hyperparameter-optimization/)
-- Gaussian processes (http://krasserm.github.io/2018/03/19/gaussian-processes/)
-- Bayesian optimization (http://krasserm.github.io/2018/03/21/bayesian-optimization/)
+- `Hyperparameter optimization <https://nanonets.com/blog/hyperparameter-optimization/>`_
+- `Gaussian processes <http://krasserm.github.io/2018/03/19/gaussian-processes/>`_
+- `Bayesian optimization <http://krasserm.github.io/2018/03/21/bayesian-optimization/>`_

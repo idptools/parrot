@@ -85,9 +85,12 @@
 <li class="toctree-l1"><a class="reference internal" href="usage/parrot-train.html">parrot-train</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/parrot-optimize.html">parrot-optimize</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/parrot-predict.html">parrot-predict</a></li>
-<li class="toctree-l1"><a class="reference internal" href="usage/examples.html">Examples</a></li>
-<li class="toctree-l1"><a class="reference internal" href="api.html">Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/parrot-cvsplit.html">parrot-cvsplit</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/basic_examples.html">Basic Examples:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/advanced_examples.html">Advanced Examples:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/cross_validation.html">Evaluating a Network with Cross-Validation:</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/ml_faqs.html">Machine Learning Resources:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">Module Documentation</a></li>
 </ul>
 
             
@@ -158,6 +161,8 @@
  | <a href="#C"><strong>C</strong></a>
  | <a href="#D"><strong>D</strong></a>
  | <a href="#E"><strong>E</strong></a>
+ | <a href="#F"><strong>F</strong></a>
+ | <a href="#I"><strong>I</strong></a>
  | <a href="#M"><strong>M</strong></a>
  | <a href="#O"><strong>O</strong></a>
  | <a href="#P"><strong>P</strong></a>
@@ -166,18 +171,31 @@
  | <a href="#T"><strong>T</strong></a>
  | <a href="#U"><strong>U</strong></a>
  | <a href="#V"><strong>V</strong></a>
+ | <a href="#W"><strong>W</strong></a>
  
 </div>
 <h2 id="B">B</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#parrot.bayesian_optimization.BayesianOptimizer">BayesianOptimizer (class in parrot.bayesian_optimization)</a>
+</li>
       <li><a href="api.html#parrot.encode_sequence.biophysics">biophysics() (in module parrot.encode_sequence)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#parrot.brnn_architecture.BRNN_MtM">BRNN_MtM (class in parrot.brnn_architecture)</a>
+</li>
+      <li><a href="api.html#parrot.brnn_architecture.BRNN_MtO">BRNN_MtO (class in parrot.brnn_architecture)</a>
 </li>
   </ul></td>
 </tr></table>
 
 <h2 id="C">C</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#parrot.bayesian_optimization.BayesianOptimizer.compute_cv_loss">compute_cv_loss() (parrot.bayesian_optimization.BayesianOptimizer method)</a>
+</li>
+  </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api.html#parrot.brnn_plot.confusion_matrix">confusion_matrix() (in module parrot.brnn_plot)</a>
 </li>
@@ -198,6 +216,30 @@
       <li><a href="api.html#parrot.encode_sequence.UserEncoder.encode">encode() (parrot.encode_sequence.UserEncoder method)</a>
 </li>
   </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#parrot.bayesian_optimization.BayesianOptimizer.eval_cv_brnns">eval_cv_brnns() (parrot.bayesian_optimization.BayesianOptimizer method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="F">F</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#parrot.brnn_architecture.BRNN_MtM.forward">forward() (parrot.brnn_architecture.BRNN_MtM method)</a>
+
+      <ul>
+        <li><a href="api.html#parrot.brnn_architecture.BRNN_MtO.forward">(parrot.brnn_architecture.BRNN_MtO method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="I">I</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#parrot.bayesian_optimization.BayesianOptimizer.initial_search">initial_search() (parrot.bayesian_optimization.BayesianOptimizer method)</a>
+</li>
+  </ul></td>
 </tr></table>
 
 <h2 id="M">M</h2>
@@ -207,11 +249,17 @@
     module
 
       <ul>
+        <li><a href="api.html#module-parrot.bayesian_optimization">parrot.bayesian_optimization</a>
+</li>
+        <li><a href="api.html#module-parrot.brnn_architecture">parrot.brnn_architecture</a>
+</li>
         <li><a href="api.html#module-parrot.brnn_plot">parrot.brnn_plot</a>
 </li>
         <li><a href="api.html#module-parrot.encode_sequence">parrot.encode_sequence</a>
 </li>
         <li><a href="api.html#module-parrot.process_input_data">parrot.process_input_data</a>
+</li>
+        <li><a href="api.html#module-parrot.py_predictor">parrot.py_predictor</a>
 </li>
         <li><a href="api.html#module-parrot.train_network">parrot.train_network</a>
 </li>
@@ -226,6 +274,8 @@
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#parrot.bayesian_optimization.BayesianOptimizer.optimize">optimize() (parrot.bayesian_optimization.BayesianOptimizer method)</a>
+</li>
       <li><a href="api.html#parrot.brnn_plot.output_predictions_to_file">output_predictions_to_file() (in module parrot.brnn_plot)</a>
 </li>
   </ul></td>
@@ -234,6 +284,20 @@
 <h2 id="P">P</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li>
+    parrot.bayesian_optimization
+
+      <ul>
+        <li><a href="api.html#module-parrot.bayesian_optimization">module</a>
+</li>
+      </ul></li>
+      <li>
+    parrot.brnn_architecture
+
+      <ul>
+        <li><a href="api.html#module-parrot.brnn_architecture">module</a>
+</li>
+      </ul></li>
       <li>
     parrot.brnn_plot
 
@@ -258,6 +322,13 @@
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li>
+    parrot.py_predictor
+
+      <ul>
+        <li><a href="api.html#module-parrot.py_predictor">module</a>
+</li>
+      </ul></li>
+      <li>
     parrot.train_network
 
       <ul>
@@ -267,6 +338,14 @@
       <li><a href="api.html#parrot.encode_sequence.parse_encode_file">parse_encode_file() (in module parrot.encode_sequence)</a>
 </li>
       <li><a href="api.html#parrot.process_input_data.parse_file">parse_file() (in module parrot.process_input_data)</a>
+</li>
+      <li><a href="api.html#parrot.brnn_plot.plot_precision_recall_curve">plot_precision_recall_curve() (in module parrot.brnn_plot)</a>
+</li>
+      <li><a href="api.html#parrot.brnn_plot.plot_roc_curve">plot_roc_curve() (in module parrot.brnn_plot)</a>
+</li>
+      <li><a href="api.html#parrot.py_predictor.Predictor.predict">predict() (parrot.py_predictor.Predictor method)</a>
+</li>
+      <li><a href="api.html#parrot.py_predictor.Predictor">Predictor (class in parrot.py_predictor)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -341,6 +420,14 @@
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api.html#parrot.process_input_data.vector_split">vector_split() (in module parrot.process_input_data)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="W">W</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#parrot.brnn_plot.write_performance_metrics">write_performance_metrics() (in module parrot.brnn_plot)</a>
 </li>
   </ul></td>
 </tr></table>

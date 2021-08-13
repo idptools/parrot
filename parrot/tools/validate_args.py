@@ -28,12 +28,14 @@ def check_directory(dir, name):
     if not os.path.exists(dir):
         raise FileNotFoundError(f'{name} does not exist.')
 
-# Returns the filename and the directory it is located in 
+# Returns the base filename prefix and the directory it is located in 
 # from the absolute path
 def split_file_and_directory(path):
     filename = path.split('/')[-1]
     directory = path[:-len(filename)]
-    return filename, directory
+    check_directory(directory, directory)
+    base_filename = directory + filename.split('.')[0]
+    return base_filename, directory
 
 def set_encoding_scheme(encode_str):
     if encode_str == 'onehot':

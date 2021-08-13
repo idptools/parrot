@@ -84,9 +84,12 @@
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-train.html">parrot-train</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-optimize.html">parrot-optimize</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-predict.html">parrot-predict</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../usage/examples.html">Examples</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../api.html">Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-cvsplit.html">parrot-cvsplit</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/basic_examples.html">Basic Examples:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/advanced_examples.html">Advanced Examples:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/cross_validation.html">Evaluating a Network with Cross-Validation:</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/ml_faqs.html">Machine Learning Resources:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">Module Documentation</a></li>
 </ul>
 
             
@@ -173,7 +176,7 @@
 
 
 <div class="viewcode-block" id="train"><a class="viewcode-back" href="../../api.html#parrot.train_network.train">[docs]</a><span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">train_loader</span><span class="p">,</span> <span class="n">val_loader</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">weights_file</span><span class="p">,</span>
-          <span class="n">stop_condition</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">learn_rate</span><span class="p">,</span> <span class="n">n_epochs</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+          <span class="n">stop_condition</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">learn_rate</span><span class="p">,</span> <span class="n">n_epochs</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">silent</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Train a BRNN and save the best performing network weights</span>
 
 <span class="sd">    Train the network on a training set, and every epoch evaluate its performance on</span>
@@ -225,9 +228,11 @@
 <span class="sd">    n_epochs : int</span>
 <span class="sd">            Number of epochs to train for, or required to have stagnated performance</span>
 <span class="sd">            for, depending on `stop_condition`.</span>
-<span class="sd">    verbosity : int, optional</span>
-<span class="sd">            The degree to which training updates are written to standard out (default</span>
-<span class="sd">            is 1).</span>
+<span class="sd">    verbose : bool, optional</span>
+<span class="sd">            If true, causes training updates to be written every epoch, rather than</span>
+<span class="sd">            every 5 epochs.</span>
+<span class="sd">    silent : bool, optional</span>
+<span class="sd">            If true, causes not training updates to be written to standard out.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -236,10 +241,6 @@
 <span class="sd">    list</span>
 <span class="sd">            A list of the average validation set losses achieved at each epoch</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="c1"># Max verbosity level is 2:</span>
-    <span class="k">if</span> <span class="n">verbosity</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
-        <span class="n">verbosity</span> <span class="o">=</span> <span class="mi">2</span>
 
     <span class="c1"># Set optimizer</span>
     <span class="n">optimizer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">network</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="n">learn_rate</span><span class="p">)</span>
@@ -338,9 +339,9 @@
         <span class="n">avg_train_losses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">train_loss</span><span class="p">)</span>
         <span class="n">avg_val_losses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">val_loss</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">verbosity</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
             <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Epoch </span><span class="si">%d</span><span class="se">\t</span><span class="s1">Loss </span><span class="si">%.4f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">epoch</span><span class="p">,</span> <span class="n">val_loss</span><span class="p">))</span>
-        <span class="k">elif</span> <span class="n">epoch</span> <span class="o">%</span> <span class="mi">5</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">verbosity</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">epoch</span> <span class="o">%</span> <span class="mi">5</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">silent</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
             <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Epoch </span><span class="si">%d</span><span class="se">\t</span><span class="s1">Loss </span><span class="si">%.4f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">epoch</span><span class="p">,</span> <span class="n">val_loss</span><span class="p">))</span>
 
         <span class="c1"># This is placed here to ensure that the best network, even if the performance</span>
@@ -354,7 +355,8 @@
 
 <div class="viewcode-block" id="test_labeled_data"><a class="viewcode-back" href="../../api.html#parrot.train_network.test_labeled_data">[docs]</a><span class="k">def</span> <span class="nf">test_labeled_data</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">test_loader</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span>
                       <span class="n">problem_type</span><span class="p">,</span> <span class="n">weights_file</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span>
-                      <span class="n">probabilistic_classification</span><span class="p">,</span> <span class="n">include_figs</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
+                      <span class="n">probabilistic_classification</span><span class="p">,</span> <span class="n">include_figs</span><span class="p">,</span> 
+                      <span class="n">device</span><span class="p">,</span> <span class="n">output_file_prefix</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Test a trained BRNN on labeled sequences</span>
 
 <span class="sd">    Using the saved weights of a trained network, run a set of sequences through</span>
@@ -387,6 +389,8 @@
 <span class="sd">    device : str</span>
 <span class="sd">            Location of where testing will take place--should be either &#39;cpu&#39; or</span>
 <span class="sd">            &#39;cuda&#39; (GPU). If available, training on GPU is typically much faster.</span>
+<span class="sd">    output_file_prefix : str</span>
+<span class="sd">            Path and filename prefix to which the test set predictions and plots will be saved. </span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -407,15 +411,9 @@
 
     <span class="c1"># Set loss criteria</span>
     <span class="k">if</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;regression&#39;</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
-            <span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MSELoss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
-            <span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">L1Loss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">)</span>
+        <span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MSELoss</span><span class="p">()</span>
     <span class="k">elif</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;classification&#39;</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
-            <span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
-            <span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">()</span>
+        <span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">()</span>
 
     <span class="n">test_loss</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">all_targets</span> <span class="o">=</span> <span class="p">[]</span>
@@ -447,7 +445,8 @@
     <span class="k">if</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;regression&#39;</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">include_figs</span><span class="p">:</span>
-                <span class="n">brnn_plot</span><span class="o">.</span><span class="n">residue_regression_scatterplot</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">all_outputs</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="n">output_dir</span><span class="p">)</span>
+                <span class="n">brnn_plot</span><span class="o">.</span><span class="n">residue_regression_scatterplot</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">all_outputs</span><span class="p">,</span> 
+                                            <span class="n">output_file_prefix</span><span class="o">=</span><span class="n">output_file_prefix</span><span class="p">)</span>
 
             <span class="c1"># Format predictions</span>
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">predictions</span><span class="p">)):</span>
@@ -456,7 +455,8 @@
 
         <span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">include_figs</span><span class="p">:</span>
-                <span class="n">brnn_plot</span><span class="o">.</span><span class="n">sequence_regression_scatterplot</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">all_outputs</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="n">output_dir</span><span class="p">)</span>
+                <span class="n">brnn_plot</span><span class="o">.</span><span class="n">sequence_regression_scatterplot</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">all_outputs</span><span class="p">,</span> 
+                                            <span class="n">output_file_prefix</span><span class="o">=</span><span class="n">output_file_prefix</span><span class="p">)</span>
 
             <span class="c1"># Format predictions</span>
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">predictions</span><span class="p">)):</span>
@@ -467,7 +467,8 @@
 
         <span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">include_figs</span><span class="p">:</span>
-                <span class="n">brnn_plot</span><span class="o">.</span><span class="n">res_confusion_matrix</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">all_outputs</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="n">output_dir</span><span class="p">)</span>
+                <span class="n">brnn_plot</span><span class="o">.</span><span class="n">res_confusion_matrix</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">all_outputs</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> 
+                                            <span class="n">output_file_prefix</span><span class="o">=</span><span class="n">output_file_prefix</span><span class="p">)</span>
 
             <span class="c1"># Format predictions and assign class predictions</span>
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">predictions</span><span class="p">)):</span>
@@ -477,16 +478,24 @@
                 <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">pred_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int</span><span class="p">)</span>
 
         <span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">include_figs</span><span class="p">:</span>
-                <span class="n">brnn_plot</span><span class="o">.</span><span class="n">confusion_matrix</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">all_outputs</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="n">output_dir</span><span class="p">)</span>
-
             <span class="k">if</span> <span class="n">probabilistic_classification</span><span class="p">:</span>
-                <span class="c1"># Proportional assignment of class predictions</span>
-                <span class="c1"># Optional implementation for binary classification task</span>
-                <span class="c1"># e.g. every sequence a real number in [0,1] corresponding to</span>
-                <span class="c1"># its relative assignment into class 0 or 1</span>
-                <span class="n">softmax</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
-                <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">softmax</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">softmax</span><span class="p">))[</span><span class="mi">1</span><span class="p">]</span>
+                <span class="c1"># Probabilistic assignment of class predictions</span>
+                <span class="c1"># Optional implementation for classification tasks</span>
+                <span class="c1"># e.g. every sequence is assigned probabilities</span>
+                <span class="c1"># corresponding to each possible class</span>
+                <span class="n">pred_probabilities</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">predictions</span><span class="p">)):</span>
+                    <span class="n">softmax</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+                    <span class="n">probs</span> <span class="o">=</span> <span class="n">softmax</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">softmax</span><span class="p">)</span>
+                    <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">probs</span>
+                    <span class="n">pred_probabilities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">probs</span><span class="p">)</span>
+
+                <span class="c1"># Plot ROC and PR curves</span>
+                <span class="k">if</span> <span class="n">include_figs</span><span class="p">:</span>
+                    <span class="n">brnn_plot</span><span class="o">.</span><span class="n">plot_roc_curve</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">pred_probabilities</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> 
+                                            <span class="n">output_file_prefix</span><span class="o">=</span><span class="n">output_file_prefix</span><span class="p">)</span>
+                    <span class="n">brnn_plot</span><span class="o">.</span><span class="n">plot_precision_recall_curve</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">pred_probabilities</span><span class="p">,</span> 
+                                            <span class="n">num_classes</span><span class="p">,</span> <span class="n">output_file_prefix</span><span class="o">=</span><span class="n">output_file_prefix</span><span class="p">)</span>
 
             <span class="k">else</span><span class="p">:</span>
                 <span class="c1"># Absolute assignment of class predictions</span>
@@ -494,6 +503,11 @@
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">predictions</span><span class="p">)):</span>
                     <span class="n">pred_value</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">])</span>
                     <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">pred_value</span><span class="p">)</span>
+
+                <span class="c1"># Plot confusion matrix (if not in probabilistic classification mode)</span>
+                <span class="k">if</span> <span class="n">include_figs</span><span class="p">:</span>
+                    <span class="n">brnn_plot</span><span class="o">.</span><span class="n">confusion_matrix</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">all_outputs</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> 
+                                                <span class="n">output_file_prefix</span><span class="o">=</span><span class="n">output_file_prefix</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">test_loss</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">test_loader</span><span class="o">.</span><span class="n">dataset</span><span class="p">),</span> <span class="n">predictions</span></div>
 
@@ -503,8 +517,10 @@
 
 <span class="sd">    Use a trained network to make predictions on previously-unseen data.</span>
 
-<span class="sd">    ** Note: Unlike the previous functions, `network` here must have pre-loaded</span>
-<span class="sd">    weights. **</span>
+<span class="sd">    ** </span>
+<span class="sd">    Note: Unlike the previous functions, `network` here must have pre-loaded</span>
+<span class="sd">    weights. </span>
+<span class="sd">    **</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -526,7 +542,6 @@
 <span class="sd">            If provided defines at what sequence interval an update is printed.</span>
 <span class="sd">            Default = None.</span>
 <span class="sd">    </span>
-
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    dict</span>

@@ -85,9 +85,12 @@
 <li class="toctree-l1"><a class="reference internal" href="usage/parrot-train.html">parrot-train</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/parrot-optimize.html">parrot-optimize</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/parrot-predict.html">parrot-predict</a></li>
-<li class="toctree-l1"><a class="reference internal" href="usage/examples.html">Examples</a></li>
-<li class="toctree-l1"><a class="reference internal" href="api.html">Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/parrot-cvsplit.html">parrot-cvsplit</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/basic_examples.html">Basic Examples:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/advanced_examples.html">Advanced Examples:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/cross_validation.html">Evaluating a Network with Cross-Validation:</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/ml_faqs.html">Machine Learning Resources:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">Module Documentation</a></li>
 </ul>
 
             
@@ -166,21 +169,19 @@
 <li class="toctree-l1"><a class="reference internal" href="usage/parrot-train.html">parrot-train</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/parrot-optimize.html">parrot-optimize</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/parrot-predict.html">parrot-predict</a></li>
-<li class="toctree-l1"><a class="reference internal" href="usage/examples.html">Examples</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="usage/examples.html#parrot-train">parrot-train</a></li>
-<li class="toctree-l2"><a class="reference internal" href="usage/examples.html#parrot-optimize">parrot-optimize</a></li>
-<li class="toctree-l2"><a class="reference internal" href="usage/examples.html#parrot-predict">parrot-predict</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/parrot-cvsplit.html">parrot-cvsplit</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/basic_examples.html">Basic Examples:</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="usage/basic_examples.html#parrot-train">parrot-train</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage/basic_examples.html#parrot-predict">parrot-predict</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="api.html">Module Documentation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="api.html#brnn-architecture-py">brnn_architecture.py</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api.html#module-parrot.encode_sequence">encode_sequence.py</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api.html#module-parrot.process_input_data">process_input_data.py</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api.html#module-parrot.train_network">train_network.py</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api.html#bayesian-optimization-py">bayesian_optimization.py</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api.html#module-parrot.brnn_plot">brnn_plot.py</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/advanced_examples.html">Advanced Examples:</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="usage/advanced_examples.html#advanced-parrot-train-options">Advanced <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> options:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage/advanced_examples.html#hyperparameter-tuning-with-parrot-optimize">Hyperparameter tuning with <code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code>:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage/advanced_examples.html#integrating-trained-parrot-networks-into-python-workflows">Integrating trained PARROT networks into Python workflows:</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="usage/cross_validation.html">Evaluating a Network with Cross-Validation:</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/ml_faqs.html">Machine Learning Resources:</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="usage/ml_faqs.html#first-things-first-what-is-machine-learning">First things first, what is ‘Machine Learning’?</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage/ml_faqs.html#when-can-i-use-machine-learning-for-my-research">When can I use machine learning for my research?</a></li>
@@ -191,7 +192,18 @@
 <li class="toctree-l2"><a class="reference internal" href="usage/ml_faqs.html#how-should-i-set-up-my-dataset">How should I set up my dataset?</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage/ml_faqs.html#how-should-i-tackle-a-huge-dataset">How should I tackle a huge dataset?</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage/ml_faqs.html#how-can-i-validate-that-my-trained-network-is-performing-well">How can I validate that my trained network is performing well?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage/ml_faqs.html#what-are-the-different-performance-metrics-for-evaluating-ml-networks">What are the different performance metrics for evaluating ML networks?</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage/ml_faqs.html#how-does-parrot-choose-the-optimal-hyperparameters">How does PARROT choose the optimal hyperparameters?</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">Module Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api.html#module-parrot.brnn_architecture">brnn_architecture.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#module-parrot.encode_sequence">encode_sequence.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#module-parrot.process_input_data">process_input_data.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#module-parrot.train_network">train_network.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#module-parrot.bayesian_optimization">bayesian_optimization.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#module-parrot.brnn_plot">brnn_plot.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#module-parrot.py_predictor">py_predictor.py</a></li>
 </ul>
 </li>
 </ul>

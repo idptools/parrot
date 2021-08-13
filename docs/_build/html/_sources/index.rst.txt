@@ -9,6 +9,9 @@ Welcome to PARROT's documentation!
    usage/parrot-train
    usage/parrot-optimize
    usage/parrot-predict
-   usage/examples
-   api
+   usage/parrot-cvsplit
+   usage/basic_examples
+   usage/advanced_examples
+   usage/cross_validation
    usage/ml_faqs
+   api

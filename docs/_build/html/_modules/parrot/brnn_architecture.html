@@ -84,9 +84,12 @@
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-train.html">parrot-train</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-optimize.html">parrot-optimize</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-predict.html">parrot-predict</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../usage/examples.html">Examples</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../api.html">Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-cvsplit.html">parrot-cvsplit</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/basic_examples.html">Basic Examples:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/advanced_examples.html">Advanced Examples:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/cross_validation.html">Evaluating a Network with Cross-Validation:</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/ml_faqs.html">Machine Learning Resources:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">Module Documentation</a></li>
 </ul>
 
             
@@ -200,11 +203,6 @@
 <span class="sd">        the length of the input sequence, this layer aggregates the output of the</span>
 <span class="sd">        LSTM nodes from the deepest forward layer and deepest reverse layer and</span>
 <span class="sd">        returns the output for that residue in the sequence.</span>
-
-<span class="sd">    Methods</span>
-<span class="sd">    -------</span>
-<span class="sd">    forward(x)</span>
-<span class="sd">        Propogate input sequences through the network to produce outputs</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_size</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">,</span> <span class="n">num_layers</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
@@ -302,11 +300,6 @@
 <span class="sd">        the length of the input sequence, this layer aggregates the output of the</span>
 <span class="sd">        LSTM nodes from the deepest forward layer and deepest reverse layer and</span>
 <span class="sd">        returns the output for that residue in the sequence.</span>
-
-<span class="sd">    Methods</span>
-<span class="sd">    -------</span>
-<span class="sd">    forward(x)</span>
-<span class="sd">        Propogate input sequences through the network to produce outputs</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_size</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">,</span> <span class="n">num_layers</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>

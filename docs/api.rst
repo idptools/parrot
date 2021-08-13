@@ -5,7 +5,6 @@ brnn_architecture.py
 --------------------
 
 .. automodule:: parrot.brnn_architecture
-   :noindex:
    :members:
 
 encode_sequence.py
@@ -30,11 +29,16 @@ bayesian_optimization.py
 ------------------------
 
 .. automodule:: parrot.bayesian_optimization
-   :noindex:
    :members:
 
 brnn_plot.py
 ------------
 
 .. automodule:: parrot.brnn_plot
+   :members:
+
+py_predictor.py
+---------------
+
+.. automodule:: parrot.py_predictor
    :members:

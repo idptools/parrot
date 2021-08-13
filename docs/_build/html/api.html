@@ -35,8 +35,7 @@
   <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Machine Learning Resources:" href="usage/ml_faqs.html" />
-    <link rel="prev" title="Examples" href="usage/examples.html" /> 
+    <link rel="prev" title="Machine Learning Resources:" href="usage/ml_faqs.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -86,17 +85,21 @@
 <li class="toctree-l1"><a class="reference internal" href="usage/parrot-train.html">parrot-train</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/parrot-optimize.html">parrot-optimize</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/parrot-predict.html">parrot-predict</a></li>
-<li class="toctree-l1"><a class="reference internal" href="usage/examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/parrot-cvsplit.html">parrot-cvsplit</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/basic_examples.html">Basic Examples:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/advanced_examples.html">Advanced Examples:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/cross_validation.html">Evaluating a Network with Cross-Validation:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/ml_faqs.html">Machine Learning Resources:</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Module Documentation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#brnn-architecture-py">brnn_architecture.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-parrot.brnn_architecture">brnn_architecture.py</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#module-parrot.encode_sequence">encode_sequence.py</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#module-parrot.process_input_data">process_input_data.py</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#module-parrot.train_network">train_network.py</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#bayesian-optimization-py">bayesian_optimization.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-parrot.bayesian_optimization">bayesian_optimization.py</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#module-parrot.brnn_plot">brnn_plot.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-parrot.py_predictor">py_predictor.py</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="usage/ml_faqs.html">Machine Learning Resources:</a></li>
 </ul>
 
             
@@ -163,15 +166,15 @@
             
   <div class="section" id="module-documentation">
 <h1>Module Documentation<a class="headerlink" href="#module-documentation" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="brnn-architecture-py">
-<h2>brnn_architecture.py<a class="headerlink" href="#brnn-architecture-py" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="module-parrot.brnn_architecture">
+<span id="brnn-architecture-py"></span><h2>brnn_architecture.py<a class="headerlink" href="#module-parrot.brnn_architecture" title="Permalink to this headline">¶</a></h2>
 <p>The underlying architecture of the bidirectional LSTM network used in PARROT</p>
 <p>Question/comments/concerns? Raise an issue on github:
 <a class="reference external" href="https://github.com/idptools/parrot">https://github.com/idptools/parrot</a></p>
 <p>Licensed under the MIT license.</p>
 <dl class="py class">
-<dt>
-<em class="property">class </em><code class="sig-prename descclassname">parrot.brnn_architecture.</code><code class="sig-name descname">BRNN_MtM</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">hidden_size</span></em>, <em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_architecture.html#BRNN_MtM"><span class="viewcode-link">[source]</span></a></dt>
+<dt id="parrot.brnn_architecture.BRNN_MtM">
+<em class="property">class </em><code class="sig-prename descclassname">parrot.brnn_architecture.</code><code class="sig-name descname">BRNN_MtM</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">hidden_size</span></em>, <em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_architecture.html#BRNN_MtM"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_architecture.BRNN_MtM" title="Permalink to this definition">¶</a></dt>
 <dd><p>A PyTorch many-to-many bidirectional recurrent neural network</p>
 <p>A class containing the PyTorch implementation of a BRNN. The network consists
 of repeating LSTM units in the hidden layers that propogate sequence information
@@ -200,14 +203,8 @@ returns the output for that residue in the sequence.</p></li>
 </dd>
 </dl>
 <dl class="py method">
-<dt>
-<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_architecture.html#BRNN_MtM.forward"><span class="viewcode-link">[source]</span></a></dt>
-<dd><p>Propogate input sequences through the network to produce outputs</p>
-</dd></dl>
-
-<dl class="py method">
-<dt>
-<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_architecture.html#BRNN_MtM.forward"><span class="viewcode-link">[source]</span></a></dt>
+<dt id="parrot.brnn_architecture.BRNN_MtM.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_architecture.html#BRNN_MtM.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_architecture.BRNN_MtM.forward" title="Permalink to this definition">¶</a></dt>
 <dd><p>Propogate input sequences through the network to produce outputs</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -228,8 +225,8 @@ be in the format:
 </dd></dl>
 
 <dl class="py class">
-<dt>
-<em class="property">class </em><code class="sig-prename descclassname">parrot.brnn_architecture.</code><code class="sig-name descname">BRNN_MtO</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">hidden_size</span></em>, <em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_architecture.html#BRNN_MtO"><span class="viewcode-link">[source]</span></a></dt>
+<dt id="parrot.brnn_architecture.BRNN_MtO">
+<em class="property">class </em><code class="sig-prename descclassname">parrot.brnn_architecture.</code><code class="sig-name descname">BRNN_MtO</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">hidden_size</span></em>, <em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_architecture.html#BRNN_MtO"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_architecture.BRNN_MtO" title="Permalink to this definition">¶</a></dt>
 <dd><p>A PyTorch many-to-one bidirectional recurrent neural network</p>
 <p>A class containing the PyTorch implementation of a BRNN. The network consists
 of repeating LSTM units in the hidden layers that propogate sequence information
@@ -258,14 +255,8 @@ returns the output for that residue in the sequence.</p></li>
 </dd>
 </dl>
 <dl class="py method">
-<dt>
-<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_architecture.html#BRNN_MtO.forward"><span class="viewcode-link">[source]</span></a></dt>
-<dd><p>Propogate input sequences through the network to produce outputs</p>
-</dd></dl>
-
-<dl class="py method">
-<dt>
-<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_architecture.html#BRNN_MtO.forward"><span class="viewcode-link">[source]</span></a></dt>
+<dt id="parrot.brnn_architecture.BRNN_MtO.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_architecture.html#BRNN_MtO.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_architecture.BRNN_MtO.forward" title="Permalink to this definition">¶</a></dt>
 <dd><p>Propogate input sequences through the network to produce outputs</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -430,7 +421,7 @@ cause the program to exit.</p>
 <div class="section" id="module-parrot.process_input_data">
 <span id="process-input-data-py"></span><h2>process_input_data.py<a class="headerlink" href="#module-parrot.process_input_data" title="Permalink to this headline">¶</a></h2>
 <p>Module with functions for processing an input datafile into a PyTorch-compatible
-format</p>
+format.</p>
 <p>Question/comments/concerns? Raise an issue on github:
 <a class="reference external" href="https://github.com/idptools/parrot">https://github.com/idptools/parrot</a></p>
 <p>Licensed under the MIT license.</p>
@@ -458,7 +449,7 @@ encoding_scheme is not ‘user’, use None.</p></li>
 
 <dl class="py function">
 <dt id="parrot.process_input_data.parse_file">
-<code class="sig-prename descclassname">parrot.process_input_data.</code><code class="sig-name descname">parse_file</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tsvfile</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">excludeSeqID</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/process_input_data.html#parse_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.process_input_data.parse_file" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">parrot.process_input_data.</code><code class="sig-name descname">parse_file</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tsvfile</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">excludeSeqID</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">ignoreWarnings</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/process_input_data.html#parse_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.process_input_data.parse_file" title="Permalink to this definition">¶</a></dt>
 <dd><p>Parse a datafile containing sequences and values.</p>
 <p>Each line of of the input tsv file contains a sequence of amino acids, a value
 (or values) corresponding to that sequence, and an optional sequence ID. This
@@ -482,6 +473,8 @@ other than ‘sequence’ or ‘residues’ will produce unintended behavior.</p
 ‘regression’ or ‘classification’ will produce unintended behavior.</p></li>
 <li><p><strong>excludeSeqID</strong> (<em>bool, optional</em>) – Boolean indicating whether or not each line in <cite>tsvfile</cite> has a sequence ID
 (default is False)</p></li>
+<li><p><strong>ignoreWarnings</strong> (<em>bool, optional</em>) – If False, assess the structure and balance of the provided dataset with
+basic heuristics and display warnings for common issues.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -599,7 +592,7 @@ specifically designed for regression problems with sequence-mapped data.</p>
 
 <dl class="py function">
 <dt id="parrot.process_input_data.split_data">
-<code class="sig-prename descclassname">parrot.process_input_data.</code><code class="sig-name descname">split_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_file</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">excludeSeqID</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">split_file</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span><span class="o">=</span><span class="default_value">'onehot'</span></em>, <em class="sig-param"><span class="n">encoder</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">percent_val</span><span class="o">=</span><span class="default_value">0.15</span></em>, <em class="sig-param"><span class="n">percent_test</span><span class="o">=</span><span class="default_value">0.15</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/process_input_data.html#split_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.process_input_data.split_data" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">parrot.process_input_data.</code><code class="sig-name descname">split_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_file</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">excludeSeqID</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">split_file</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span><span class="o">=</span><span class="default_value">'onehot'</span></em>, <em class="sig-param"><span class="n">encoder</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">percent_val</span><span class="o">=</span><span class="default_value">0.15</span></em>, <em class="sig-param"><span class="n">percent_test</span><span class="o">=</span><span class="default_value">0.15</span></em>, <em class="sig-param"><span class="n">ignoreWarnings</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">save_splits_output</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/process_input_data.html#split_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.process_input_data.split_data" title="Permalink to this definition">¶</a></dt>
 <dd><p>Divide a datafile into training, validation, and test datasets</p>
 <p>Takes in a datafile and specification of the data format and the machine
 learning problem, and returns PyTorch-compatible Dataset objects for
@@ -639,6 +632,9 @@ randomly assigned to the test set. Should be in the range [0-1] (default
 is 0.15). The proportion of the training set will be calculated by the
 difference between 1 and the sum of <cite>percent_val</cite> and <cite>percent_train</cite>, so
 these should not sum to be greater than 1.</p></li>
+<li><p><strong>ignoreWarnings</strong> (<em>bool, optional</em>) – If False, assess the structure and balance of the provided dataset with
+basic heuristics and display warnings for common issues.</p></li>
+<li><p><strong>save_splits_output</strong> (<em>str, optional</em>) – Location where the train / val / test splits for this run should be saved</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -654,7 +650,7 @@ these should not sum to be greater than 1.</p></li>
 
 <dl class="py function">
 <dt id="parrot.process_input_data.split_data_cv">
-<code class="sig-prename descclassname">parrot.process_input_data.</code><code class="sig-name descname">split_data_cv</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_file</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">excludeSeqID</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">split_file</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span><span class="o">=</span><span class="default_value">'onehot'</span></em>, <em class="sig-param"><span class="n">encoder</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">percent_val</span><span class="o">=</span><span class="default_value">0.15</span></em>, <em class="sig-param"><span class="n">percent_test</span><span class="o">=</span><span class="default_value">0.15</span></em>, <em class="sig-param"><span class="n">n_folds</span><span class="o">=</span><span class="default_value">5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/process_input_data.html#split_data_cv"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.process_input_data.split_data_cv" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">parrot.process_input_data.</code><code class="sig-name descname">split_data_cv</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_file</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">excludeSeqID</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">split_file</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span><span class="o">=</span><span class="default_value">'onehot'</span></em>, <em class="sig-param"><span class="n">encoder</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">percent_val</span><span class="o">=</span><span class="default_value">0.15</span></em>, <em class="sig-param"><span class="n">percent_test</span><span class="o">=</span><span class="default_value">0.15</span></em>, <em class="sig-param"><span class="n">n_folds</span><span class="o">=</span><span class="default_value">5</span></em>, <em class="sig-param"><span class="n">ignoreWarnings</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">save_splits_output</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/process_input_data.html#split_data_cv"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.process_input_data.split_data_cv" title="Permalink to this definition">¶</a></dt>
 <dd><p>Divide a datafile into training, val, test and 5 cross-val datasets.</p>
 <p>Takes in a datafile and specification of the data format and the machine
 learning problem, and returns PyTorch-compatible Dataset objects for
@@ -696,6 +692,9 @@ is 0.15). The proportion of the training set will be calculated by the
 difference between 1 and the sum of <cite>percent_val</cite> and <cite>percent_train</cite>, so
 these should not sum to be greater than 1.</p></li>
 <li><p><strong>n_folds</strong> (<em>int, optional</em>) – Number of folds for cross-validation (default is 5).</p></li>
+<li><p><strong>ignoreWarnings</strong> (<em>bool, optional</em>) – If False, assess the structure and balance of the provided dataset with
+basic heuristics and display warnings for common issues.</p></li>
+<li><p><strong>save_splits_output</strong> (<em>str, optional</em>) – Location where the train / val / test splits for this run should be saved</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -744,7 +743,7 @@ vectors. The proportions of the two vectors will be <cite>fraction</cite> and
 <p>Licensed under the MIT license.</p>
 <dl class="py function">
 <dt id="parrot.train_network.test_labeled_data">
-<code class="sig-prename descclassname">parrot.train_network.</code><code class="sig-name descname">test_labeled_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">network</span></em>, <em class="sig-param"><span class="n">test_loader</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">probabilistic_classification</span></em>, <em class="sig-param"><span class="n">include_figs</span></em>, <em class="sig-param"><span class="n">device</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/train_network.html#test_labeled_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.train_network.test_labeled_data" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">parrot.train_network.</code><code class="sig-name descname">test_labeled_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">network</span></em>, <em class="sig-param"><span class="n">test_loader</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">probabilistic_classification</span></em>, <em class="sig-param"><span class="n">include_figs</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">output_file_prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/train_network.html#test_labeled_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.train_network.test_labeled_data" title="Permalink to this definition">¶</a></dt>
 <dd><p>Test a trained BRNN on labeled sequences</p>
 <p>Using the saved weights of a trained network, run a set of sequences through
 the network and evaluate the performancd. Return the average loss per
@@ -767,6 +766,7 @@ This field is only implemented for binary, sequence classification tasks.</p></l
 <li><p><strong>include_figs</strong> (<em>bool</em>) – Whether or not matplotlib figures should be generated.</p></li>
 <li><p><strong>device</strong> (<em>str</em>) – Location of where testing will take place–should be either ‘cpu’ or
 ‘cuda’ (GPU). If available, training on GPU is typically much faster.</p></li>
+<li><p><strong>output_file_prefix</strong> (<em>str</em>) – Path and filename prefix to which the test set predictions and plots will be saved.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -786,8 +786,10 @@ true_value, predicted_value, sequence_ID]</p></li>
 <code class="sig-prename descclassname">parrot.train_network.</code><code class="sig-name descname">test_unlabeled_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">network</span></em>, <em class="sig-param"><span class="n">sequences</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span><span class="o">=</span><span class="default_value">'onehot'</span></em>, <em class="sig-param"><span class="n">encoder</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">print_frequency</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/train_network.html#test_unlabeled_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.train_network.test_unlabeled_data" title="Permalink to this definition">¶</a></dt>
 <dd><p>Test a trained BRNN on unlabeled sequences</p>
 <p>Use a trained network to make predictions on previously-unseen data.</p>
-<p>** Note: Unlike the previous functions, <cite>network</cite> here must have pre-loaded
-weights. **</p>
+<p>**
+Note: Unlike the previous functions, <cite>network</cite> here must have pre-loaded
+weights.
+**</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -815,7 +817,7 @@ Default = None.</p></li>
 
 <dl class="py function">
 <dt id="parrot.train_network.train">
-<code class="sig-prename descclassname">parrot.train_network.</code><code class="sig-name descname">train</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">network</span></em>, <em class="sig-param"><span class="n">train_loader</span></em>, <em class="sig-param"><span class="n">val_loader</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">stop_condition</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">learn_rate</span></em>, <em class="sig-param"><span class="n">n_epochs</span></em>, <em class="sig-param"><span class="n">verbosity</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/train_network.html#train"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.train_network.train" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">parrot.train_network.</code><code class="sig-name descname">train</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">network</span></em>, <em class="sig-param"><span class="n">train_loader</span></em>, <em class="sig-param"><span class="n">val_loader</span></em>, <em class="sig-param"><span class="n">datatype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">stop_condition</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">learn_rate</span></em>, <em class="sig-param"><span class="n">n_epochs</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">silent</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/train_network.html#train"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.train_network.train" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train a BRNN and save the best performing network weights</p>
 <p>Train the network on a training set, and every epoch evaluate its performance on
 a validation set. Save the network weights that acheive the best performance on
@@ -854,8 +856,9 @@ controlled by the Adam optimization algorithm, so this learning rate
 will tend to decrease as training progresses.</p></li>
 <li><p><strong>n_epochs</strong> (<em>int</em>) – Number of epochs to train for, or required to have stagnated performance
 for, depending on <cite>stop_condition</cite>.</p></li>
-<li><p><strong>verbosity</strong> (<em>int, optional</em>) – The degree to which training updates are written to standard out (default
-is 1).</p></li>
+<li><p><strong>verbose</strong> (<em>bool, optional</em>) – If true, causes training updates to be written every epoch, rather than
+every 5 epochs.</p></li>
+<li><p><strong>silent</strong> (<em>bool, optional</em>) – If true, causes not training updates to be written to standard out.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -869,15 +872,15 @@ is 1).</p></li>
 </dd></dl>
 
 </div>
-<div class="section" id="bayesian-optimization-py">
-<h2>bayesian_optimization.py<a class="headerlink" href="#bayesian-optimization-py" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="module-parrot.bayesian_optimization">
+<span id="bayesian-optimization-py"></span><h2>bayesian_optimization.py<a class="headerlink" href="#module-parrot.bayesian_optimization" title="Permalink to this headline">¶</a></h2>
 <p>This file contains code for conducting Bayesian optimization.</p>
 <p>Question/comments/concerns? Raise an issue on github:
 <a class="reference external" href="https://github.com/idptools/parrot">https://github.com/idptools/parrot</a></p>
 <p>Licensed under the MIT license.</p>
 <dl class="py class">
-<dt>
-<em class="property">class </em><code class="sig-prename descclassname">parrot.bayesian_optimization.</code><code class="sig-name descname">BayesianOptimizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">cv_dataloaders</span></em>, <em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">n_epochs</span></em>, <em class="sig-param"><span class="n">n_classes</span></em>, <em class="sig-param"><span class="n">dtype</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">max_iterations</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">verbosity</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer"><span class="viewcode-link">[source]</span></a></dt>
+<dt id="parrot.bayesian_optimization.BayesianOptimizer">
+<em class="property">class </em><code class="sig-prename descclassname">parrot.bayesian_optimization.</code><code class="sig-name descname">BayesianOptimizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">cv_dataloaders</span></em>, <em class="sig-param"><span class="n">input_size</span></em>, <em class="sig-param"><span class="n">n_epochs</span></em>, <em class="sig-param"><span class="n">n_classes</span></em>, <em class="sig-param"><span class="n">dtype</span></em>, <em class="sig-param"><span class="n">weights_file</span></em>, <em class="sig-param"><span class="n">max_iterations</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">silent</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.bayesian_optimization.BayesianOptimizer" title="Permalink to this definition">¶</a></dt>
 <dd><p>A class for conducting Bayesian Optimization on a PyTorch RNN</p>
 <p>Sets up and runs GPy Bayesian Optimization in order to choose the best-
 performing hyperparameters for a RNN for a given machine learning task.
@@ -897,38 +900,14 @@ DataLoader and a validation set DataLoader.</p></li>
 <li><p><strong>weights_file</strong> (<em>str</em>) – Path to which the network weights will be saved during training</p></li>
 <li><p><strong>device</strong> (<em>str</em>) – ‘cpu’ or ‘cuda’ depending on system hardware</p></li>
 <li><p><strong>max_iterations</strong> (<em>int</em>) – Maximum number of iterations to perform the optimization procedure</p></li>
-<li><p><strong>verbosity</strong> (<em>int</em>) – level of how descriptive the output to console message will be</p></li>
+<li><p><strong>silent</strong> (<em>bool</em>) – If true, do not print updates to console</p></li>
 <li><p><strong>bds</strong> (<em>list of dicts</em>) – GPy-compatible bounds for each of the hyperparameters to be optimized</p></li>
 </ul>
 </dd>
 </dl>
 <dl class="py method">
-<dt>
-<code class="sig-name descname">compute_cv_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hyperparameters</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer.compute_cv_loss"><span class="viewcode-link">[source]</span></a></dt>
-<dd><p>Compute the average cross-val loss for a given set of hyperparameters</p>
-</dd></dl>
-
-<dl class="py method">
-<dt>
-<code class="sig-name descname">eval_cv_brnns</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">lr</span></em>, <em class="sig-param"><span class="n">nl</span></em>, <em class="sig-param"><span class="n">hs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer.eval_cv_brnns"><span class="viewcode-link">[source]</span></a></dt>
-<dd><p>Train and test a network with given parameters across all cross-val folds</p>
-</dd></dl>
-
-<dl class="py method">
-<dt>
-<code class="sig-name descname">initial_search</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer.initial_search"><span class="viewcode-link">[source]</span></a></dt>
-<dd><p>Calculate loss and estimate noise for an initial set of hyperparameters</p>
-</dd></dl>
-
-<dl class="py method">
-<dt>
-<code class="sig-name descname">optimize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer.optimize"><span class="viewcode-link">[source]</span></a></dt>
-<dd><p>Set up and run Bayesian Optimization on the BRNN using GPy</p>
-</dd></dl>
-
-<dl class="py method">
-<dt>
-<code class="sig-name descname">compute_cv_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hyperparameters</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer.compute_cv_loss"><span class="viewcode-link">[source]</span></a></dt>
+<dt id="parrot.bayesian_optimization.BayesianOptimizer.compute_cv_loss">
+<code class="sig-name descname">compute_cv_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hyperparameters</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer.compute_cv_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.bayesian_optimization.BayesianOptimizer.compute_cv_loss" title="Permalink to this definition">¶</a></dt>
 <dd><p>Compute the average cross-val loss for a given set of hyperparameters</p>
 <p>Given N sets of hyperparameters, determine the average cross-validation loss
 for BRNNs trained with these parameters.</p>
@@ -948,8 +927,8 @@ per set of input hyperparameters</p>
 </dd></dl>
 
 <dl class="py method">
-<dt>
-<code class="sig-name descname">eval_cv_brnns</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">lr</span></em>, <em class="sig-param"><span class="n">nl</span></em>, <em class="sig-param"><span class="n">hs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer.eval_cv_brnns"><span class="viewcode-link">[source]</span></a></dt>
+<dt id="parrot.bayesian_optimization.BayesianOptimizer.eval_cv_brnns">
+<code class="sig-name descname">eval_cv_brnns</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">lr</span></em>, <em class="sig-param"><span class="n">nl</span></em>, <em class="sig-param"><span class="n">hs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer.eval_cv_brnns"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.bayesian_optimization.BayesianOptimizer.eval_cv_brnns" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train and test a network with given parameters across all cross-val folds</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -969,8 +948,8 @@ per set of input hyperparameters</p>
 </dd></dl>
 
 <dl class="py method">
-<dt>
-<code class="sig-name descname">initial_search</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer.initial_search"><span class="viewcode-link">[source]</span></a></dt>
+<dt id="parrot.bayesian_optimization.BayesianOptimizer.initial_search">
+<code class="sig-name descname">initial_search</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer.initial_search"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.bayesian_optimization.BayesianOptimizer.initial_search" title="Permalink to this definition">¶</a></dt>
 <dd><p>Calculate loss and estimate noise for an initial set of hyperparameters</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -988,8 +967,8 @@ input hyperparameters; an estimation of the training noise</p></li>
 </dd></dl>
 
 <dl class="py method">
-<dt>
-<code class="sig-name descname">optimize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer.optimize"><span class="viewcode-link">[source]</span></a></dt>
+<dt id="parrot.bayesian_optimization.BayesianOptimizer.optimize">
+<code class="sig-name descname">optimize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/bayesian_optimization.html#BayesianOptimizer.optimize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.bayesian_optimization.BayesianOptimizer.optimize" title="Permalink to this definition">¶</a></dt>
 <dd><p>Set up and run Bayesian Optimization on the BRNN using GPy</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns</dt>
@@ -1014,10 +993,9 @@ sequence-mapped and residue-mapped data.</p>
 <p>Licensed under the MIT license.</p>
 <dl class="py function">
 <dt id="parrot.brnn_plot.confusion_matrix">
-<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">confusion_matrix</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true_classes</span></em>, <em class="sig-param"><span class="n">predicted_classes</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#confusion_matrix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.confusion_matrix" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">confusion_matrix</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true_classes</span></em>, <em class="sig-param"><span class="n">predicted_classes</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">output_file_prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#confusion_matrix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.confusion_matrix" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a confusion matrix for a sequence classification problem</p>
-<p>Figure is displayed to console if possible and saved to file in current
-directory with the name ‘seq_CM.png’.</p>
+<p>Figure is saved to file at “&lt;output_file_prefix&gt;_seq_CM.png”.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -1026,7 +1004,7 @@ particular sequence</p></li>
 <li><p><strong>predicted_classes</strong> (<em>list of PyTorch FloatTensors</em>) – A list where each item is a [1 x num_classes] tensor prediction of the
 class label for a particular sequence</p></li>
 <li><p><strong>num_classes</strong> (<em>int</em>) – Number of distinct data classes</p></li>
-<li><p><strong>output_dir</strong> (<em>str, optional</em>) – directory to which the plot will be saved (default is current directory)</p></li>
+<li><p><strong>output_file_prefix</strong> (<em>str, optional</em>) – File to which the plot will be saved as “&lt;output_file_prefix&gt;_seq_CM.png”</p></li>
 </ul>
 </dd>
 </dl>
@@ -1034,7 +1012,7 @@ class label for a particular sequence</p></li>
 
 <dl class="py function">
 <dt id="parrot.brnn_plot.output_predictions_to_file">
-<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">output_predictions_to_file</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">sequence_data</span></em>, <em class="sig-param"><span class="n">excludeSeqID</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span></em>, <em class="sig-param"><span class="n">encoder</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#output_predictions_to_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.output_predictions_to_file" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">output_predictions_to_file</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">sequence_data</span></em>, <em class="sig-param"><span class="n">excludeSeqID</span></em>, <em class="sig-param"><span class="n">encoding_scheme</span></em>, <em class="sig-param"><span class="n">probabilistic_class</span></em>, <em class="sig-param"><span class="n">encoder</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">output_file_prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#output_predictions_to_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.output_predictions_to_file" title="Permalink to this definition">¶</a></dt>
 <dd><p>Output sequences, their true values, and their predicted values to a file</p>
 <p>Used on the output of the test_unlabeled_data() function in the train_network module in
 order to detail the performance of the trained network on the test set. Produces the
@@ -1052,9 +1030,51 @@ true_value, predicted_value, sequence_ID]</p></li>
 <li><p><strong>encoding_scheme</strong> (<em>str</em>) – Description of how an amino acid sequence should be encoded as a numeric
 vector. Providing a string other than ‘onehot’, ‘biophysics’, or ‘user’
 will produce unintended consequences.</p></li>
+<li><p><strong>probabilistic_class</strong> (<em>bool</em>) – Flag indicating if probabilistic classification was specified by the user. If True,
+instead of class labels, predictions will be output as probabilities of each class.</p></li>
 <li><p><strong>encoder</strong> (<em>UserEncoder object, optional</em>) – If encoding_scheme is ‘user’, encoder should be a UserEncoder object
 that can convert amino acid sequences to numeric vectors. If
 encoding_scheme is not ‘user’, use None.</p></li>
+<li><p><strong>output_file_prefix</strong> (<em>str</em>) – Path and filename prefix to which the test set predictions will be saved. Final
+file path is “&lt;output_file_prefix&gt;_predictions.tsv”</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="parrot.brnn_plot.plot_precision_recall_curve">
+<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">plot_precision_recall_curve</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true_classes</span></em>, <em class="sig-param"><span class="n">predicted_class_probs</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">output_file_prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#plot_precision_recall_curve"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.plot_precision_recall_curve" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an PR curve for a sequence classification problem</p>
+<p>Figure is saved to file at “&lt;output_file_prefix&gt;_PR_curve.png”.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>true_classes</strong> (<em>list of PyTorch IntTensors</em>) – A list where each item is a [1 x 1] tensor with the true class label of a
+particular sequence</p></li>
+<li><p><strong>predicted_class_probs</strong> (<em>list of PyTorch FloatTensors</em>) – A list where each item is a [1 x num_classes] tensor of the probabilities
+of assignment to each class</p></li>
+<li><p><strong>num_classes</strong> (<em>int</em>) – Number of distinct data classes</p></li>
+<li><p><strong>output_file_prefix</strong> (<em>str, optional</em>) – File to which the plot will be saved as “&lt;output_file_prefix&gt;_PR_curve.png”</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="parrot.brnn_plot.plot_roc_curve">
+<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">plot_roc_curve</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true_classes</span></em>, <em class="sig-param"><span class="n">predicted_class_probs</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">output_file_prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#plot_roc_curve"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.plot_roc_curve" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an ROC curve for a sequence classification problem</p>
+<p>Figure is saved to file at “&lt;output_file_prefix&gt;_ROC_curve.png”.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>true_classes</strong> (<em>list of PyTorch IntTensors</em>) – A list where each item is a [1 x 1] tensor with the true class label of a
+particular sequence</p></li>
+<li><p><strong>predicted_class_probs</strong> (<em>list of PyTorch FloatTensors</em>) – A list where each item is a [1 x num_classes] tensor of the probabilities
+of assignment to each class</p></li>
+<li><p><strong>num_classes</strong> (<em>int</em>) – Number of distinct data classes</p></li>
+<li><p><strong>output_file_prefix</strong> (<em>str, optional</em>) – File to which the plot will be saved as “&lt;output_file_prefix&gt;_ROC_curve.png”</p></li>
 </ul>
 </dd>
 </dl>
@@ -1062,10 +1082,9 @@ encoding_scheme is not ‘user’, use None.</p></li>
 
 <dl class="py function">
 <dt id="parrot.brnn_plot.res_confusion_matrix">
-<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">res_confusion_matrix</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true_classes</span></em>, <em class="sig-param"><span class="n">predicted_classes</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#res_confusion_matrix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.res_confusion_matrix" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">res_confusion_matrix</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true_classes</span></em>, <em class="sig-param"><span class="n">predicted_classes</span></em>, <em class="sig-param"><span class="n">num_classes</span></em>, <em class="sig-param"><span class="n">output_file_prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#res_confusion_matrix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.res_confusion_matrix" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a confusion matrix for a residue classification problem</p>
-<p>Figure is displayed to console if possible and saved to file in current
-directory with the name ‘res_CM.png’.</p>
+<p>Figure is saved to file at “&lt;output_file_prefix&gt;_res_CM.png”.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -1075,7 +1094,7 @@ label of the residues in a particular sequence</p></li>
 with predictions of the class label for each residue in a particular
 sequence</p></li>
 <li><p><strong>num_classes</strong> (<em>int</em>) – Number of distinct data classes</p></li>
-<li><p><strong>output_dir</strong> (<em>str, optional</em>) – directory to which the plot will be saved (default is current directory)</p></li>
+<li><p><strong>output_file_prefix</strong> (<em>str, optional</em>) – File to which the plot will be saved as “&lt;output_file_prefix&gt;_res_CM.png”</p></li>
 </ul>
 </dd>
 </dl>
@@ -1083,12 +1102,11 @@ sequence</p></li>
 
 <dl class="py function">
 <dt id="parrot.brnn_plot.residue_regression_scatterplot">
-<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">residue_regression_scatterplot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true</span></em>, <em class="sig-param"><span class="n">predicted</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#residue_regression_scatterplot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.residue_regression_scatterplot" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">residue_regression_scatterplot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true</span></em>, <em class="sig-param"><span class="n">predicted</span></em>, <em class="sig-param"><span class="n">output_file_prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#residue_regression_scatterplot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.residue_regression_scatterplot" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a scatterplot for a residue-mapped values regression problem</p>
 <p>Each sequence is plotted with a unique marker-color combination, up to 70
 different sequences.</p>
-<p>Figure is displayed to console if possible and saved to file in current
-directory with the name ‘res_scatter.png’.</p>
+<p>Figure is saved to file at “&lt;output_file_prefix&gt;_res_scatterplot.png”.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -1096,7 +1114,7 @@ directory with the name ‘res_scatter.png’.</p>
 regression values of each residue in a sequence</p></li>
 <li><p><strong>predicted</strong> (<em>list of PyTorch FloatTensors</em>) – A list where each item is a [1 x len(sequence)] tensor with the
 regression predictions for each residue in a sequence</p></li>
-<li><p><strong>output_dir</strong> (<em>str, optional</em>) – directory to which the plot will be saved (default is current directory)</p></li>
+<li><p><strong>output_file_prefix</strong> (<em>str, optional</em>) – File to which the plot will be saved as “&lt;output_file_prefix&gt;_res_scatterplot.png”</p></li>
 </ul>
 </dd>
 </dl>
@@ -1104,10 +1122,9 @@ regression predictions for each residue in a sequence</p></li>
 
 <dl class="py function">
 <dt id="parrot.brnn_plot.sequence_regression_scatterplot">
-<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">sequence_regression_scatterplot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true</span></em>, <em class="sig-param"><span class="n">predicted</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#sequence_regression_scatterplot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.sequence_regression_scatterplot" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">sequence_regression_scatterplot</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">true</span></em>, <em class="sig-param"><span class="n">predicted</span></em>, <em class="sig-param"><span class="n">output_file_prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#sequence_regression_scatterplot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.sequence_regression_scatterplot" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a scatterplot for a sequence-mapped values regression problem</p>
-<p>Figure is displayed to console if possible and saved to file in current
-directory with the name ‘seq_scatter.png’.</p>
+<p>Figure is saved to file at “&lt;output_file_prefix&gt;_seq_scatterplot.png”.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -1115,7 +1132,7 @@ directory with the name ‘seq_scatter.png’.</p>
 of a particular sequence</p></li>
 <li><p><strong>predicted</strong> (<em>list of PyTorch FloatTensors</em>) – A list where each item is a [1 x 1] tensor with the regression prediction
 for a particular sequence</p></li>
-<li><p><strong>output_dir</strong> (<em>str, optional</em>) – directory to which the plot will be saved (default is current directory)</p></li>
+<li><p><strong>output_file_prefix</strong> (<em>str, optional</em>) – File to which the plot will be saved as “&lt;output_file_prefix&gt;_seq_scatterplot.png”</p></li>
 </ul>
 </dd>
 </dl>
@@ -1123,19 +1140,104 @@ for a particular sequence</p></li>
 
 <dl class="py function">
 <dt id="parrot.brnn_plot.training_loss">
-<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">training_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">train_loss</span></em>, <em class="sig-param"><span class="n">val_loss</span></em>, <em class="sig-param"><span class="n">output_dir</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#training_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.training_loss" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">training_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">train_loss</span></em>, <em class="sig-param"><span class="n">val_loss</span></em>, <em class="sig-param"><span class="n">output_file_prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#training_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.training_loss" title="Permalink to this definition">¶</a></dt>
 <dd><p>Plot training and validation loss per epoch</p>
-<p>Figure is not displayed, but saved to file in current directory with the name
-‘train_test.png’.</p>
+<p>Figure is saved to file at “&lt;output_file_prefix&gt;_train_val_loss.png”.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>train_loss</strong> (<em>list</em>) – training loss across each epoch</p></li>
 <li><p><strong>val_loss</strong> (<em>list</em>) – validation loss across each epoch</p></li>
-<li><p><strong>output_dir</strong> (<em>str, optional</em>) – directory to which the plot will be saved (default is current directory)</p></li>
+<li><p><strong>output_file_prefix</strong> (<em>str, optional</em>) – File to which the plot will be saved as “&lt;output_file_prefix&gt;_train_val_loss.png”</p></li>
 </ul>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="parrot.brnn_plot.write_performance_metrics">
+<code class="sig-prename descclassname">parrot.brnn_plot.</code><code class="sig-name descname">write_performance_metrics</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">sequence_data</span></em>, <em class="sig-param"><span class="n">dtype</span></em>, <em class="sig-param"><span class="n">problem_type</span></em>, <em class="sig-param"><span class="n">prob_class</span></em>, <em class="sig-param"><span class="n">output_file_prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/brnn_plot.html#write_performance_metrics"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.brnn_plot.write_performance_metrics" title="Permalink to this definition">¶</a></dt>
+<dd><p>Writes a short text file describing performance on a variety of metrics</p>
+<p>Writes different output depending on whether a classification or regression task
+is specified. Also produces unique output if in probabilistic classification mode.
+File is saved to “&lt;output_file_prefix&gt;_performance_stats.txt”.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sequence_data</strong> (<em>list of lists</em>) – Details of the output predictions for each of the sequences in the test set. Each
+inner list represents a sample in the test set, with the format: [sequence_vector,
+true_value, predicted_value, sequence_ID]</p></li>
+<li><p><strong>dtype</strong> (<em>str</em>) – The format of values in the dataset. Should be ‘sequence’ for datasets
+with a single value (or class label) per sequence, or ‘residues’ for
+datasets with values (or class labels) for every residue in a sequence.</p></li>
+<li><p><strong>problem_type</strong> (<em>str</em>) – The machine learning task–should be either ‘regression’ or ‘classification’.</p></li>
+<li><p><strong>prob_class</strong> (<em>bool</em>) – Flag indicating if probabilistic classification was specified by the user.</p></li>
+<li><p><strong>output_file_prefix</strong> (<em>str</em>) – Path and filename prefix to which the test set predictions will be saved. Final
+file path is “&lt;output_file_prefix&gt;_performance_stats.txt”</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-parrot.py_predictor">
+<span id="py-predictor-py"></span><h2>py_predictor.py<a class="headerlink" href="#module-parrot.py_predictor" title="Permalink to this headline">¶</a></h2>
+<p>Python module for integrating a trained network directly into a Python workflow.</p>
+<p>Question/comments/concerns? Raise an issue on github:
+<a class="reference external" href="https://github.com/idptools/parrot">https://github.com/idptools/parrot</a></p>
+<p>Licensed under the MIT license.</p>
+<dl class="py class">
+<dt id="parrot.py_predictor.Predictor">
+<em class="property">class </em><code class="sig-prename descclassname">parrot.py_predictor.</code><code class="sig-name descname">Predictor</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">saved_weights</span></em>, <em class="sig-param"><span class="n">dtype</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/py_predictor.html#Predictor"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.py_predictor.Predictor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Class that for integrating a trained PARROT network into a Python workflow</p>
+<p>Usage:
+&gt;&gt;&gt; from parrot import py_predictor
+&gt;&gt;&gt; my_predictor = py_predictor.Predictor(&lt;/path/to/saved_network.pt&gt;,</p>
+<blockquote>
+<div><p>dtype={“sequence” or “residues”})</p>
+</div></blockquote>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">value</span> <span class="o">=</span> <span class="n">my_predictor</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">AA_sequence</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><a href="#id1"><span class="problematic" id="id2">**</span></a>*
+NOTE:   Assumes all sequences are composed of canonical amino acids and</p>
+<blockquote>
+<div><p>that all networks were implemented using one-hot encoding.</p>
+</div></blockquote>
+<p><a href="#id3"><span class="problematic" id="id4">**</span></a><a href="#id5"><span class="problematic" id="id6">*</span></a></p>
+<dl class="field-list simple">
+<dt class="field-odd">Variables</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dtype</strong> (<em>str</em>) – Data format that the network was trained for. Either “sequence” or
+“residues”.</p></li>
+<li><p><strong>num_layers</strong> (<em>int</em>) – Number of hidden layers in the trained network.</p></li>
+<li><p><strong>hidden_vector_size</strong> (<em>int</em>) – Size of hidden vectoer in the trained network.</p></li>
+<li><p><strong>n_classes</strong> (<em>int</em>) – Number of data classes that the network was trained for. If 1, then
+network is designed for regression task. If &gt;1, then classification
+task with n_classes.</p></li>
+<li><p><strong>task</strong> (<em>str</em>) – Designates if network is designed for “classification” or “regression”.</p></li>
+<li><p><strong>network</strong> (<em>PyTorch object</em>) – Initialized PARROT network with loaded weights.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="parrot.py_predictor.Predictor.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/parrot/py_predictor.html#Predictor.predict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#parrot.py_predictor.Predictor.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Use the network to predict values for a single sequence of valid amino acids</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>seq</strong> (<em>str</em>) – Valid amino acid sequence</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Returns a 1D np.ndarray the length of the sequence where each position
+is the prediction at that position.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
 </dd></dl>
 
 </div>
@@ -1149,10 +1251,8 @@ for a particular sequence</p></li>
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="usage/ml_faqs.html" class="btn btn-neutral float-right" title="Machine Learning Resources:" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
-      
-        <a href="usage/examples.html" class="btn btn-neutral float-left" title="Examples" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="usage/ml_faqs.html" class="btn btn-neutral float-left" title="Machine Learning Resources:" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

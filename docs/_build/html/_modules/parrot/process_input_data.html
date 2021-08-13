@@ -84,9 +84,12 @@
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-train.html">parrot-train</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-optimize.html">parrot-optimize</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-predict.html">parrot-predict</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../usage/examples.html">Examples</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../api.html">Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-cvsplit.html">parrot-cvsplit</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/basic_examples.html">Basic Examples:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/advanced_examples.html">Advanced Examples:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/cross_validation.html">Evaluating a Network with Cross-Validation:</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/ml_faqs.html">Machine Learning Resources:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">Module Documentation</a></li>
 </ul>
 
             
@@ -152,7 +155,7 @@
   <h1>Source code for parrot.process_input_data</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">Module with functions for processing an input datafile into a PyTorch-compatible</span>
-<span class="sd">format</span>
+<span class="sd">format.</span>
 
 <span class="sd">.............................................................................</span>
 <span class="sd">idptools-parrot was developed by the Holehouse lab</span>
@@ -172,9 +175,10 @@
 <span class="kn">from</span> <span class="nn">torch.utils.data</span> <span class="kn">import</span> <span class="n">Dataset</span>
 
 <span class="kn">from</span> <span class="nn">parrot</span> <span class="kn">import</span> <span class="n">encode_sequence</span>
+<span class="kn">from</span> <span class="nn">parrot.tools</span> <span class="kn">import</span> <span class="n">dataset_warnings</span>
 
 
-<div class="viewcode-block" id="parse_file"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.parse_file">[docs]</a><span class="k">def</span> <span class="nf">parse_file</span><span class="p">(</span><span class="n">tsvfile</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<div class="viewcode-block" id="parse_file"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.parse_file">[docs]</a><span class="k">def</span> <span class="nf">parse_file</span><span class="p">(</span><span class="n">tsvfile</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ignoreWarnings</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Parse a datafile containing sequences and values.</span>
 
 <span class="sd">    Each line of of the input tsv file contains a sequence of amino acids, a value</span>
@@ -207,6 +211,9 @@
 <span class="sd">    excludeSeqID : bool, optional</span>
 <span class="sd">            Boolean indicating whether or not each line in `tsvfile` has a sequence ID</span>
 <span class="sd">            (default is False)</span>
+<span class="sd">    ignoreWarnings : bool, optional</span>
+<span class="sd">            If False, assess the structure and balance of the provided dataset with </span>
+<span class="sd">            basic heuristics and display warnings for common issues.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -231,7 +238,20 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Invalid datatype. Must be &quot;residues&quot; or &quot;sequence&quot;.&#39;</span><span class="p">)</span>
     <span class="k">except</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Input data is not correctly formatted for datatype &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">datatype</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;Input data is not correctly formatted for datatype &#39;</span><span class="si">{</span><span class="n">datatype</span><span class="si">}</span><span class="s2">&#39;. </span>
+<span class="s2">                Make sure your datafile does not have empty lines at the end of the file.&quot;&quot;&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ignoreWarnings</span><span class="p">:</span>
+        <span class="c1"># Check for identical sequences</span>
+        <span class="n">dataset_warnings</span><span class="o">.</span><span class="n">check_duplicate_sequences</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+        <span class="c1"># Check for class imbalance</span>
+        <span class="k">if</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;classification&#39;</span><span class="p">:</span>
+            <span class="n">dataset_warnings</span><span class="o">.</span><span class="n">check_class_imbalance</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+        <span class="c1"># Check for data distribution imbalance</span>
+        <span class="k">elif</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;regression&#39;</span><span class="p">:</span>
+            <span class="n">dataset_warnings</span><span class="o">.</span><span class="n">check_regression_imbalance</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;classification&#39;</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
@@ -293,7 +313,7 @@
 <span class="sd">                Description of how an amino acid sequence should be encoded as a numeric </span>
 <span class="sd">                vector. Providing a string other than &#39;onehot&#39;, &#39;biophysics&#39;, or &#39;user&#39; </span>
 <span class="sd">                will produce unintended consequences.</span>
-<span class="sd">        encoder: UserEncoder object, optional</span>
+<span class="sd">        encoder : UserEncoder object, optional</span>
 <span class="sd">                If encoding_scheme is &#39;user&#39;, encoder should be a UserEncoder object</span>
 <span class="sd">                that can convert amino acid sequences to numeric vectors. If</span>
 <span class="sd">                encoding_scheme is not &#39;user&#39;, use None.</span>
@@ -553,9 +573,10 @@
     <span class="k">return</span> <span class="n">training_samples</span><span class="p">,</span> <span class="n">val_samples</span><span class="p">,</span> <span class="n">test_samples</span></div>
 
 
-<div class="viewcode-block" id="split_data"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.split_data">[docs]</a><span class="k">def</span> <span class="nf">split_data</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span>
-               <span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">split_file</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="s1">&#39;onehot&#39;</span><span class="p">,</span>
-               <span class="n">encoder</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">percent_val</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">percent_test</span><span class="o">=</span><span class="mf">0.15</span><span class="p">):</span>
+<div class="viewcode-block" id="split_data"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.split_data">[docs]</a><span class="k">def</span> <span class="nf">split_data</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+                <span class="n">split_file</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="s1">&#39;onehot&#39;</span><span class="p">,</span> <span class="n">encoder</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+                <span class="n">percent_val</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">percent_test</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">ignoreWarnings</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="n">save_splits_output</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Divide a datafile into training, validation, and test datasets</span>
 
 <span class="sd">    Takes in a datafile and specification of the data format and the machine</span>
@@ -605,6 +626,11 @@
 <span class="sd">            is 0.15). The proportion of the training set will be calculated by the</span>
 <span class="sd">            difference between 1 and the sum of `percent_val` and `percent_train`, so</span>
 <span class="sd">            these should not sum to be greater than 1.</span>
+<span class="sd">    ignoreWarnings : bool, optional</span>
+<span class="sd">            If False, assess the structure and balance of the provided dataset with </span>
+<span class="sd">            basic heuristics and display warnings for common issues.</span>
+<span class="sd">    save_splits_output : str, optional</span>
+<span class="sd">            Location where the train / val / test splits for this run should be saved</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -616,7 +642,8 @@
 <span class="sd">            a dataset containing the test set sequences and values</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="n">data</span> <span class="o">=</span> <span class="n">parse_file</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="n">excludeSeqID</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">parse_file</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> 
+                    <span class="n">excludeSeqID</span><span class="o">=</span><span class="n">excludeSeqID</span><span class="p">,</span> <span class="n">ignoreWarnings</span><span class="o">=</span><span class="n">ignoreWarnings</span><span class="p">)</span>
     <span class="n">num_samples</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">split_file</span> <span class="o">==</span> <span class="kc">None</span><span class="p">:</span>
@@ -637,6 +664,16 @@
         <span class="n">test_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">test_samples</span><span class="p">,</span>
                                    <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">,</span> <span class="n">encoder</span><span class="o">=</span><span class="n">encoder</span><span class="p">)</span>
 
+        <span class="k">if</span> <span class="n">save_splits_output</span> <span class="o">!=</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># Save train/val/test splits</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">save_splits_output</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">out</span><span class="p">:</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">training_samples</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;str&#39;</span><span class="p">)))</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">val_samples</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;str&#39;</span><span class="p">)))</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">test_samples</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;str&#39;</span><span class="p">)))</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
     <span class="k">else</span><span class="p">:</span>
         <span class="n">training_samples</span><span class="p">,</span> <span class="n">val_samples</span><span class="p">,</span> <span class="n">test_samples</span> <span class="o">=</span> <span class="n">read_split_file</span><span class="p">(</span><span class="n">split_file</span><span class="p">)</span>
 
@@ -653,7 +690,8 @@
 
 <div class="viewcode-block" id="split_data_cv"><a class="viewcode-back" href="../../api.html#parrot.process_input_data.split_data_cv">[docs]</a><span class="k">def</span> <span class="nf">split_data_cv</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                   <span class="n">split_file</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="s1">&#39;onehot&#39;</span><span class="p">,</span> <span class="n">encoder</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-                  <span class="n">percent_val</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">percent_test</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">n_folds</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+                  <span class="n">percent_val</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">percent_test</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">n_folds</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">ignoreWarnings</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                  <span class="n">save_splits_output</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Divide a datafile into training, val, test and 5 cross-val datasets.</span>
 
 <span class="sd">    Takes in a datafile and specification of the data format and the machine</span>
@@ -706,6 +744,11 @@
 <span class="sd">            these should not sum to be greater than 1.</span>
 <span class="sd">    n_folds : int, optional</span>
 <span class="sd">            Number of folds for cross-validation (default is 5).</span>
+<span class="sd">    ignoreWarnings : bool, optional</span>
+<span class="sd">            If False, assess the structure and balance of the provided dataset with </span>
+<span class="sd">            basic heuristics and display warnings for common issues.</span>
+<span class="sd">    save_splits_output : str, optional</span>
+<span class="sd">            Location where the train / val / test splits for this run should be saved</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -720,7 +763,8 @@
 <span class="sd">            a dataset containing the test set sequences and values</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="n">data</span> <span class="o">=</span> <span class="n">parse_file</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">excludeSeqID</span><span class="o">=</span><span class="n">excludeSeqID</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">parse_file</span><span class="p">(</span><span class="n">data_file</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> 
+                    <span class="n">excludeSeqID</span><span class="o">=</span><span class="n">excludeSeqID</span><span class="p">,</span> <span class="n">ignoreWarnings</span><span class="o">=</span><span class="n">ignoreWarnings</span><span class="p">)</span>
     <span class="n">n_samples</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
 
     <span class="c1"># Initial step: split into training, val, and test sets</span>
@@ -741,6 +785,16 @@
                                   <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">,</span> <span class="n">encoder</span><span class="o">=</span><span class="n">encoder</span><span class="p">)</span>
         <span class="n">test_set</span> <span class="o">=</span> <span class="n">SequenceDataset</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">test_samples</span><span class="p">,</span>
                                    <span class="n">encoding_scheme</span><span class="o">=</span><span class="n">encoding_scheme</span><span class="p">,</span> <span class="n">encoder</span><span class="o">=</span><span class="n">encoder</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">save_splits_output</span> <span class="o">!=</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># Save train/val/test splits</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">save_splits_output</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">out</span><span class="p">:</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">training_samples</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;str&#39;</span><span class="p">)))</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">val_samples</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;str&#39;</span><span class="p">)))</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">test_samples</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;str&#39;</span><span class="p">)))</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
 
     <span class="c1"># If provided, split datasets according to split_file</span>
     <span class="k">else</span><span class="p">:</span>

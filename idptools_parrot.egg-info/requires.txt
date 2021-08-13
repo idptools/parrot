@@ -3,6 +3,7 @@ numpy
 argparse
 more-itertools
 scipy
+sklearn
 matplotlib
 seaborn
 pandas

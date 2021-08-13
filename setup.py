@@ -39,26 +39,28 @@ setup(
     # Optional include package data to ship with your package
     # Customize MANIFEST.in if the general case does not suit your needs
     # Comment out this line to prevent the files from being packaged with your software
-    include_package_data=True,
+    # include_package_data=True,
 
     # Include data files
-    package_data={'parrot': ['data/*']},
+    # package_data={},
 
     # Allows `setup.py test` to work correctly with pytest
     setup_requires=[] + pytest_runner,
     scripts=['scripts/parrot-train',
              'scripts/parrot-predict',
-             'scripts/parrot-optimize'],
+             'scripts/parrot-optimize',
+             'scripts/parrot-cvsplit'],
 
     # Additional entries you may want simply uncomment the lines you want and fill in the data
     # url='http://www.my_package.com',  # Website
-    download_url = 'https://github.com/idptools/parrot/archive/v0.1-alpha.tar.gz',
+    # download_url = 'https://github.com/idptools/parrot/archive/v0.1-alpha.tar.gz',
     install_requires=[
             'torch',
             'numpy',
             'argparse',
             'more-itertools',
             'scipy',
+            'sklearn',
             'matplotlib',
             'seaborn',
             'pandas',

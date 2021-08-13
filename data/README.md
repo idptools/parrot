@@ -25,3 +25,11 @@ These files are example sequence files for use in ``parrot-predict``. `seqfile.t
 ## splitfile.txt
 
 This file is an example splitfile that can be provided with the ``--split`` flag. Each of the three lines contain the integers that assign sequences from the datafile into the training, validation and test sets respectively. This particular file only has integers from 0-299, for intended use with the example datafiles provided here.
+
+## encoding_example.txt
+
+This is an example encoding file that can be used with the `--encode` flag.
+
+## nucleotide_dataset.tsv & nucleotide_encoding.txt
+
+An encoding scheme and example dataset that modifies PARROT to work on nucleotide sequences rather than amino acid sequences.

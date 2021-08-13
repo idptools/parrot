@@ -1,12 +1,11 @@
 Metadata-Version: 2.1
 Name: idptools-parrot
-Version: 1.4.5+1.gd2a66f9.dirty
+Version: 1.5.0+0.g6a1faa1.dirty
 Summary: UNKNOWN
 Home-page: UNKNOWN
 Author: Holehouse Lab
 Author-email: degriffith@wustl.edu
 License: MIT
-Download-URL: https://github.com/idptools/parrot/archive/v0.1-alpha.tar.gz
 Description: ![PARROT_logo_full](https://user-images.githubusercontent.com/54642153/122615183-b274f280-d04d-11eb-88bf-1530d18d310c.png)
         
         # PARROT: Protein Analysis using RecuRrent neural networks On Training data

@@ -200,7 +200,8 @@ def train(network, train_loader, val_loader, datatype, problem_type, weights_fil
 
 def test_labeled_data(network, test_loader, datatype,
                       problem_type, weights_file, num_classes,
-                      probabilistic_classification, include_figs, device):
+                      probabilistic_classification, include_figs, 
+                      device, output_file_prefix=''):
     """Test a trained BRNN on labeled sequences
 
     Using the saved weights of a trained network, run a set of sequences through
@@ -233,6 +234,8 @@ def test_labeled_data(network, test_loader, datatype,
     device : str
             Location of where testing will take place--should be either 'cpu' or
             'cuda' (GPU). If available, training on GPU is typically much faster.
+    output_file_prefix : str
+            Path and filename prefix to which the test set predictions and plots will be saved. 
 
     Returns
     -------
@@ -253,15 +256,9 @@ def test_labeled_data(network, test_loader, datatype,
 
     # Set loss criteria
     if problem_type == 'regression':
-        if datatype == 'residues':
-            criterion = nn.MSELoss(reduction='sum')
-        elif datatype == 'sequence':
-            criterion = nn.L1Loss(reduction='sum')
+        criterion = nn.MSELoss()
     elif problem_type == 'classification':
-        if datatype == 'residues':
-            criterion = nn.CrossEntropyLoss(reduction='sum')
-        elif datatype == 'sequence':
-            criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss()
 
     test_loss = 0
     all_targets = []
@@ -293,7 +290,8 @@ def test_labeled_data(network, test_loader, datatype,
     if problem_type == 'regression':
         if datatype == 'residues':
             if include_figs:
-                brnn_plot.residue_regression_scatterplot(all_targets, all_outputs, output_dir=output_dir)
+                brnn_plot.residue_regression_scatterplot(all_targets, all_outputs, 
+                                            output_file_prefix=output_file_prefix)
 
             # Format predictions
             for i in range(len(predictions)):
@@ -302,7 +300,8 @@ def test_labeled_data(network, test_loader, datatype,
 
         elif datatype == 'sequence':
             if include_figs:
-                brnn_plot.sequence_regression_scatterplot(all_targets, all_outputs, output_dir=output_dir)
+                brnn_plot.sequence_regression_scatterplot(all_targets, all_outputs, 
+                                            output_file_prefix=output_file_prefix)
 
             # Format predictions
             for i in range(len(predictions)):
@@ -313,7 +312,8 @@ def test_labeled_data(network, test_loader, datatype,
 
         if datatype == 'residues':
             if include_figs:
-                brnn_plot.res_confusion_matrix(all_targets, all_outputs, num_classes, output_dir=output_dir)
+                brnn_plot.res_confusion_matrix(all_targets, all_outputs, num_classes, 
+                                            output_file_prefix=output_file_prefix)
 
             # Format predictions and assign class predictions
             for i in range(len(predictions)):
@@ -323,17 +323,24 @@ def test_labeled_data(network, test_loader, datatype,
                 predictions[i][2] = np.array(pred_values, dtype=np.int)
 
         elif datatype == 'sequence':
-            if include_figs:
-                brnn_plot.confusion_matrix(all_targets, all_outputs, num_classes, output_dir=output_dir)
-
             if probabilistic_classification:
                 # Probabilistic assignment of class predictions
                 # Optional implementation for classification tasks
                 # e.g. every sequence is assigned probabilities
                 # corresponding to each possible class
+                pred_probabilities = []
                 for i in range(len(predictions)):
                     softmax = np.exp(predictions[i][2][0])
-                    predictions[i][2] = softmax / np.sum(softmax)
+                    probs = softmax / np.sum(softmax)
+                    predictions[i][2] = probs
+                    pred_probabilities.append(probs)
+
+                # Plot ROC and PR curves
+                if include_figs:
+                    brnn_plot.plot_roc_curve(all_targets, pred_probabilities, num_classes, 
+                                            output_file_prefix=output_file_prefix)
+                    brnn_plot.plot_precision_recall_curve(all_targets, pred_probabilities, 
+                                            num_classes, output_file_prefix=output_file_prefix)
 
             else:
                 # Absolute assignment of class predictions
@@ -341,6 +348,11 @@ def test_labeled_data(network, test_loader, datatype,
                 for i in range(len(predictions)):
                     pred_value = np.argmax(predictions[i][2])
                     predictions[i][2] = int(pred_value)
+
+                # Plot confusion matrix (if not in probabilistic classification mode)
+                if include_figs:
+                    brnn_plot.confusion_matrix(all_targets, all_outputs, num_classes, 
+                                                output_file_prefix=output_file_prefix)
 
     return test_loss / len(test_loader.dataset), predictions
 
@@ -350,8 +362,10 @@ def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot', en
 
     Use a trained network to make predictions on previously-unseen data.
 
-    ** Note: Unlike the previous functions, `network` here must have pre-loaded
-    weights. **
+    ** 
+    Note: Unlike the previous functions, `network` here must have pre-loaded
+    weights. 
+    **
 
     Parameters
     ----------
@@ -373,7 +387,6 @@ def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot', en
             If provided defines at what sequence interval an update is printed.
             Default = None.
     
-
     Returns
     -------
     dict

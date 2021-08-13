@@ -1,6 +1,6 @@
 """
 Module with functions for processing an input datafile into a PyTorch-compatible
-format
+format.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -20,9 +20,10 @@ import torch.nn as nn
 from torch.utils.data import Dataset
 
 from parrot import encode_sequence
+from parrot.tools import dataset_warnings
 
 
-def parse_file(tsvfile, datatype, problem_type, num_classes, excludeSeqID=False):
+def parse_file(tsvfile, datatype, problem_type, num_classes, excludeSeqID=False, ignoreWarnings=False):
     """Parse a datafile containing sequences and values.
 
     Each line of of the input tsv file contains a sequence of amino acids, a value
@@ -55,6 +56,9 @@ def parse_file(tsvfile, datatype, problem_type, num_classes, excludeSeqID=False)
     excludeSeqID : bool, optional
             Boolean indicating whether or not each line in `tsvfile` has a sequence ID
             (default is False)
+    ignoreWarnings : bool, optional
+            If False, assess the structure and balance of the provided dataset with 
+            basic heuristics and display warnings for common issues.
 
     Returns
     -------
@@ -79,7 +83,20 @@ def parse_file(tsvfile, datatype, problem_type, num_classes, excludeSeqID=False)
         else:
             raise ValueError('Invalid datatype. Must be "residues" or "sequence".')
     except:
-        raise Exception("Input data is not correctly formatted for datatype '%s'" % datatype)
+        raise Exception(f"""Input data is not correctly formatted for datatype '{datatype}'. 
+                Make sure your datafile does not have empty lines at the end of the file.""")
+
+    if not ignoreWarnings:
+        # Check for identical sequences
+        dataset_warnings.check_duplicate_sequences(data)
+
+        # Check for class imbalance
+        if problem_type == 'classification':
+            dataset_warnings.check_class_imbalance(data)
+
+        # Check for data distribution imbalance
+        elif problem_type == 'regression':
+            dataset_warnings.check_regression_imbalance(data)
 
     if problem_type == 'classification':
         if datatype == 'sequence':
@@ -141,7 +158,7 @@ class SequenceDataset(Dataset):
                 Description of how an amino acid sequence should be encoded as a numeric 
                 vector. Providing a string other than 'onehot', 'biophysics', or 'user' 
                 will produce unintended consequences.
-        encoder: UserEncoder object, optional
+        encoder : UserEncoder object, optional
                 If encoding_scheme is 'user', encoder should be a UserEncoder object
                 that can convert amino acid sequences to numeric vectors. If
                 encoding_scheme is not 'user', use None.
@@ -401,9 +418,10 @@ def read_split_file(split_file):
     return training_samples, val_samples, test_samples
 
 
-def split_data(data_file, datatype, problem_type, num_classes,
-               excludeSeqID=False, split_file=None, encoding_scheme='onehot',
-               encoder=None, percent_val=0.15, percent_test=0.15):
+def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=False, 
+                split_file=None, encoding_scheme='onehot', encoder=None, 
+                percent_val=0.15, percent_test=0.15, ignoreWarnings=False,
+                save_splits_output=None):
     """Divide a datafile into training, validation, and test datasets
 
     Takes in a datafile and specification of the data format and the machine
@@ -453,6 +471,11 @@ def split_data(data_file, datatype, problem_type, num_classes,
             is 0.15). The proportion of the training set will be calculated by the
             difference between 1 and the sum of `percent_val` and `percent_train`, so
             these should not sum to be greater than 1.
+    ignoreWarnings : bool, optional
+            If False, assess the structure and balance of the provided dataset with 
+            basic heuristics and display warnings for common issues.
+    save_splits_output : str, optional
+            Location where the train / val / test splits for this run should be saved
 
     Returns
     -------
@@ -464,7 +487,8 @@ def split_data(data_file, datatype, problem_type, num_classes,
             a dataset containing the test set sequences and values
     """
 
-    data = parse_file(data_file, datatype, problem_type, num_classes, excludeSeqID=excludeSeqID)
+    data = parse_file(data_file, datatype, problem_type, num_classes, 
+                    excludeSeqID=excludeSeqID, ignoreWarnings=ignoreWarnings)
     num_samples = len(data)
 
     if split_file == None:
@@ -485,6 +509,16 @@ def split_data(data_file, datatype, problem_type, num_classes,
         test_set = SequenceDataset(data=data, subset=test_samples,
                                    encoding_scheme=encoding_scheme, encoder=encoder)
 
+        if save_splits_output != None:
+            # Save train/val/test splits
+            with open(save_splits_output, 'w') as out:
+                out.write(" ".join(np.sort(training_samples).astype('str')))
+                out.write("\n")
+                out.write(" ".join(np.sort(val_samples).astype('str')))
+                out.write("\n")
+                out.write(" ".join(np.sort(test_samples).astype('str')))
+                out.write("\n")
+
     else:
         training_samples, val_samples, test_samples = read_split_file(split_file)
 
@@ -501,7 +535,8 @@ def split_data(data_file, datatype, problem_type, num_classes,
 
 def split_data_cv(data_file, datatype, problem_type, num_classes, excludeSeqID=False,
                   split_file=None, encoding_scheme='onehot', encoder=None,
-                  percent_val=0.15, percent_test=0.15, n_folds=5):
+                  percent_val=0.15, percent_test=0.15, n_folds=5, ignoreWarnings=False,
+                  save_splits_output=None):
     """Divide a datafile into training, val, test and 5 cross-val datasets.
 
     Takes in a datafile and specification of the data format and the machine
@@ -554,6 +589,11 @@ def split_data_cv(data_file, datatype, problem_type, num_classes, excludeSeqID=F
             these should not sum to be greater than 1.
     n_folds : int, optional
             Number of folds for cross-validation (default is 5).
+    ignoreWarnings : bool, optional
+            If False, assess the structure and balance of the provided dataset with 
+            basic heuristics and display warnings for common issues.
+    save_splits_output : str, optional
+            Location where the train / val / test splits for this run should be saved
 
     Returns
     -------
@@ -568,7 +608,8 @@ def split_data_cv(data_file, datatype, problem_type, num_classes, excludeSeqID=F
             a dataset containing the test set sequences and values
     """
 
-    data = parse_file(data_file, datatype, problem_type, num_classes, excludeSeqID=excludeSeqID)
+    data = parse_file(data_file, datatype, problem_type, num_classes, 
+                    excludeSeqID=excludeSeqID, ignoreWarnings=ignoreWarnings)
     n_samples = len(data)
 
     # Initial step: split into training, val, and test sets
@@ -589,6 +630,16 @@ def split_data_cv(data_file, datatype, problem_type, num_classes, excludeSeqID=F
                                   encoding_scheme=encoding_scheme, encoder=encoder)
         test_set = SequenceDataset(data=data, subset=test_samples,
                                    encoding_scheme=encoding_scheme, encoder=encoder)
+
+        if save_splits_output != None:
+            # Save train/val/test splits
+            with open(save_splits_output, 'w') as out:
+                out.write(" ".join(np.sort(training_samples).astype('str')))
+                out.write("\n")
+                out.write(" ".join(np.sort(val_samples).astype('str')))
+                out.write("\n")
+                out.write(" ".join(np.sort(test_samples).astype('str')))
+                out.write("\n")
 
     # If provided, split datasets according to split_file
     else:

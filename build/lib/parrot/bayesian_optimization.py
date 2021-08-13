@@ -57,17 +57,6 @@ class BayesianOptimizer(object):
             If true, do not print updates to console
     bds : list of dicts
             GPy-compatible bounds for each of the hyperparameters to be optimized
-
-    Methods
-    -------
-    compute_cv_loss(hyperparameters)
-            Compute the average cross-val loss for a given set of hyperparameters
-    eval_cv_brnns(lr, nl, hs)
-            Train and test a network with given parameters across all cross-val folds
-    initial_search(x)
-            Calculate loss and estimate noise for an initial set of hyperparameters
-    optimize()
-            Set up and run Bayesian Optimization on the BRNN using GPy
     """
 
     def __init__(self, cv_dataloaders, input_size, n_epochs, n_classes,
@@ -251,7 +240,7 @@ class BayesianOptimizer(object):
         if self.silent is False:
             print("\nInitial search results:")
             print("lr\tnl\ths\toutput")
-            for i in range(5):
+            for i in range(len(x_init)):
                 print("%.5f\t%2d\t%2d\t%.4f" % (10**x_init[i][0], x_init[i][1], x_init[i][2], y_init[i][0]))
             print("Noise estimate:", noise)
             print('\n')
