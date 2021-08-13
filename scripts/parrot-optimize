@@ -164,7 +164,7 @@ if sum(setFractions) != 1.0:
 # Ensure that task is binary sequence classification if
 # probabilistic_classfication is set
 if probabilistic_classification:
-    if dtype != 'sequence':
+    if dtype != 'sequence' or num_classes < 2:
         raise ValueError('Probabilistic classification only implemented for sequence classification')
 
 # Set ignore_warnings to True if --silent is provided
