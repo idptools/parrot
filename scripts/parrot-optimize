@@ -184,7 +184,7 @@ cvs, train, val, test = pid.split_data_cv(data_file, datatype=dtype, problem_typ
 
 # Assess batch size compared to training set size
 if not ignore_warnings:
-    dataset_warnings.eval_batch_size(batch_size, len(cv_train[0]))
+    dataset_warnings.eval_batch_size(batch_size, len(cvs[0][0]))
 
 # Convert CV datasets to dataloaders
 cv_loaders = []
@@ -257,7 +257,7 @@ train_loss, val_loss = train_network.train(brnn_network, train_loader, val_loade
                                            n_epochs=num_epochs*2, verbose=verbose, silent=silent)
 
 if include_figs:  # Plot training & validation loss per epoch
-    brnn_plot.training_loss(train_loss, val_loss, output_dir=output_dir)
+    brnn_plot.training_loss(train_loss, val_loss, output_file_prefix=filename_prefix)
 
 # Test network
 test_loss, test_set_predictions = train_network.test_labeled_data(brnn_network, test_loader,
