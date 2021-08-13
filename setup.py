@@ -60,7 +60,7 @@ setup(
             'argparse',
             'more-itertools',
             'scipy',
-            'sklearn',
+            'scikit-learn',
             'matplotlib',
             'seaborn',
             'pandas',

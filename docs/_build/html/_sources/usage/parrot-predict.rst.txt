@@ -26,7 +26,7 @@ Where `seq_file` specifies a file containing a list of sequences. Each line of `
 	*  ``--exclude-seq-id`` : Include this flag if the `seq_file` is formatted without sequence IDs as the first column in each row.
 	*  ``--probabilistic-classification`` : Include this flag to output class predictions as continuous values [0-1], based on the probability that the input sample belongs to each class. Currently only implemented for sequence classification. (NOTE: This is a new feature, let us know if you run into any issues!)
 	*  ``--silent`` : Flag which, if provided, ensures no output is generated to the terminal.
-	*  ``--print-frequency`` : Value that defines how often status updates should be printed (in number of sequences predicted. Default=1000
+	*  ``--print-frequency`` : Value that defines how often status updates should be printed (in number of sequences predicted). Default=1000
 
 **Output:**
 
