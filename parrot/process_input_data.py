@@ -28,9 +28,9 @@ from parrot.tools import dataset_warnings
 #
 def __read_tsv(tsvfile, delimiter=None):
     """
-    Internal function for parsing a tsv file that includes a validation
-    step that the number of columns is the same on every line.
-
+    Internal function for parsing a tsv file. Ignores empty lines and
+    allows for comment lines (lines that start with a # symbol). Does not
+    do any other sanity checking, however. 
     Parameters
     ----------
 
@@ -41,20 +41,12 @@ def __read_tsv(tsvfile, delimiter=None):
         Allows you to define the string to split columns in the file. Default
         is any whitespace character. Default = None (any whitespace).
 
-    validate : bool
-        Flag which, if provided, checks that after splitting on the delimiter
-        every line has the same number of elements. Default = True.
 
     Returns
     -----------
     list
         Returns a list of strings where each element in the list 
 
-    Raises
-    ---------
-    Exception
-        If validate is True and the number of columns is not the same in 
-        every line then an exception is thrown.
     
     """
 
