@@ -94,3 +94,65 @@ def print_settings(silent, buffer_length=14, **kwargs):
     for name in kwargs:
         name_buffered = strbuffer(name)
         print(f"{name_buffered}: {kwargs[name]}")
+
+
+
+# .................................................................
+#
+#
+def write_datafile(filename, outdata):
+    """
+    Function that writes out a parrot datafile, where outdata must
+    be a list of lists and each sub-element is joined on a whitespace
+
+    Parameters
+    --------------
+    filename : str
+        The name of the file to be written to
+
+    outdata : list
+        A list of lists (e.g. lines in parrot-preprocess)
+
+    Returns
+    ---------
+    None
+        No returns but the outdata is written to the current file
+
+    """
+    with open(filename,'w') as fh:
+        for line in outdata:
+            fh.write(" ".join(line)+"\n")
+
+
+# .................................................................
+#
+#
+def validate_args(passed, valid, error_message=''):
+    """
+    General function that validates a specific string against a list of strings
+    and raises an exception if the string ($passed) is not found in the list (valid).
+    Good for validating passed options.
+
+    Parameters
+    -----------
+    passed : str
+        String of interest.
+
+    valid : list
+        List of strings
+
+    Returns
+    ----------
+    None
+
+    Raises
+    -----------
+    Exception
+        If passed is not in valid, raise an exception
+    
+    """
+    if passed not in valid:
+        raise Exception(f'ERROR: Invalid option passed {passed}.\n{error_message}')
+
+
+        
