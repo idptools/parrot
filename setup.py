@@ -56,7 +56,7 @@ setup(
     # url='http://www.my_package.com',  # Website
     # download_url = 'https://github.com/idptools/parrot/archive/v0.1-alpha.tar.gz',
     install_requires=[
-            'torch=1.8.1',
+            'torch==1.8.1',
             'numpy',
             'argparse',
             'more-itertools',
