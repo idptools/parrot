@@ -49,7 +49,8 @@ setup(
     scripts=['scripts/parrot-train',
              'scripts/parrot-predict',
              'scripts/parrot-optimize',
-             'scripts/parrot-cvsplit'],
+             'scripts/parrot-cvsplit',
+             'scripts/parrot-preprocess'],
 
     # Additional entries you may want simply uncomment the lines you want and fill in the data
     # url='http://www.my_package.com',  # Website

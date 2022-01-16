@@ -91,7 +91,7 @@ the saved network, and a file is outputted with the predictions.
 
 ### Copyright
 
-Copyright (c) 2020, Holehouse Lab
+Copyright (c) 2020-2022, Holehouse Lab
 
 #### Acknowledgements
  

@@ -17,9 +17,28 @@ from scipy.stats import skew
 
 # Duplicate sequences:
 def check_duplicate_sequences(d):
+    """
+    Function that checks for duplicate sequences in the dataset.
+
+    Parameters
+    ------------
+    d : list
+        d is the parsed data from parrot.process_input_data.parse_file(). It is a 
+
+    Returns
+    -----------
+    None
+        No return but prints a warning if duplicate sequences are found
+
+
+    """
     seen = set()
     nonuniq = set()
+
+    # cycle over every sequence in the file
     for x in d:
+
+        # x[1] is the actual amino acid sequence
         if x[1] not in seen:
             seen.add(x[1])
         else:
@@ -31,10 +50,12 @@ def check_duplicate_sequences(d):
         print("WARNING: Duplicate sequences detected in dataset.\n")
         print("Duplicated sequences:")
         for seq in nonuniq:
-            print(seq)
+            print(f'Duplicate found: {seq}')
         print()
         print("This may cause overfitting or overestimation of performance.\n")
         print("#############################################\n")
+
+
 
 # Imbalanced classification dataset:
 def check_class_imbalance(d):
