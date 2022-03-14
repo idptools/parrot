@@ -56,6 +56,7 @@ setup(
     # url='http://www.my_package.com',  # Website
     # download_url = 'https://github.com/idptools/parrot/archive/v0.1-alpha.tar.gz',
     install_requires=[
+            'cython',
             'torch>=1.8.0,<=1.10.1',
             'numpy',
             'argparse',
@@ -72,7 +73,7 @@ setup(
     #            'Mac OS-X',
     #            'Unix',
     #            'Windows'],            # Valid platforms your code works on, adjust to your flavor
-    python_requires=">=3.7,<=3.8.11",          # Python version restrictions
+    python_requires=">=3.7,<=3.8.21",          # Python version restrictions
 
     # Manual control if final package is compressible or not, set False to prevent the .egg from being made
     zip_safe=False,
