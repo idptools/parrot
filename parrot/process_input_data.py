@@ -23,10 +23,11 @@ from parrot import encode_sequence, parrot_exceptions
 from parrot.tools import dataset_warnings
 
 
+
 # .................................................................
 #
 #
-def __read_tsv(tsvfile, delimiter=None):
+def read_tsv_raw(tsvfile, delimiter=None):
     """
     Internal function for parsing a tsv file. Ignores empty lines and
     allows for comment lines (lines that start with a # symbol). Does not
@@ -84,7 +85,7 @@ def __parse_lines(lines, datatype, validate=True):
     ----------
     lines : list
         A list of lists, where the sublists reflect the columns in a tsvfile. Should be the output
-        from the __read_tsv() file
+        from the read_tsv_raw() function.
 
     datatype : str
         Identifier that defines the type of data being passed in. Must be either 'residues', 'sequence'
@@ -202,7 +203,7 @@ def parse_file(tsvfile, datatype, problem_type, num_classes, excludeSeqID=False,
     """
 
     # read in and parse the TSV file. 
-    lines  = __read_tsv(tsvfile)
+    lines  = read_tsv_raw(tsvfile)
 
     # Add a dummy seqID if none are provided
     if excludeSeqID:

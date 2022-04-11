@@ -69,7 +69,7 @@ if __name__=="__main__":
     
     # read in and parse the TSV file. Note that if no args.delimiter is passed, this passes 'None' which
     # is the default value and splits on any whitespace.
-    lines  = process_input_data.__read_tsv(args.input_data_file, delimiter=args.delimiter)
+    lines  = process_input_data.read_tsv_raw(args.input_data_file, delimiter=args.delimiter)
 
     if args.verbose:
         print(f'Found {len(lines)} datapoints in the original input file')
