@@ -24,4 +24,4 @@ These files are example sequence files for use in ``parrot-predict``. `seqfile.t
 
 ## splitfile.txt
 
-This file is an example splitfile that can be provided with the ``--split`` flag. Each of the three lines contain the integers that assign sequences from the datafile into the training, validation and test sets respectively. This particular file only has integers from 0-299, for intended use with the example datafiles provided here.
+This file is an example splitfile that can be provided with the ``--split`` flag. Each of the three lines contain the integers that assign sequences from the datafile into the training, validation and test sets respectively. This particular file only has integers from 0-299, for intended use with the example datafiles provided here. Note that while this split file is divided evenly 0-99, 100-199, 200-299, this is by no means required, datasets can be split any way the user desires.
