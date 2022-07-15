@@ -19,10 +19,144 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 
-from parrot import encode_sequence
+from parrot import encode_sequence, parrot_exceptions
 from parrot.tools import dataset_warnings
 
 
+# .................................................................
+#
+#
+def __read_tsv(tsvfile, delimiter=None):
+    """
+    Internal function for parsing a tsv file. Ignores empty lines and
+    allows for comment lines (lines that start with a # symbol). Does not
+    do any other sanity checking, however. 
+    Parameters
+    ----------
+
+    tsvfile : str
+        Path to a whitespace-separated datafile
+
+    delimiter : str or None
+        Allows you to define the string to split columns in the file. Default
+        is any whitespace character. Default = None (any whitespace).
+
+
+    Returns
+    -----------
+    list
+        Returns a list of strings where each element in the list 
+
+    
+    """
+
+    # read in file
+    with open(tsvfile) as fh:
+        content = fh.readlines()
+
+    # parse through based on delimiter. Note if delimiter=None then
+    # this uses the default 
+    lines = []    
+    for line in content:     
+
+        # skip empty lines
+        if len(line.strip()) == 0:
+            continue
+
+        # skip comment lines
+        if line.strip()[0] == '#':
+            continue
+        
+        lines.append(line.strip().split(delimiter))
+
+    return lines
+
+
+
+# .................................................................
+#
+#
+def __parse_lines(lines, datatype, validate=True):
+    """
+    Internal function for parsing a set of lines
+
+    Parameters
+    ----------
+    lines : list
+        A list of lists, where the sublists reflect the columns in a tsvfile. Should be the output
+        from the __read_tsv() file
+
+    datatype : str
+        Identifier that defines the type of data being passed in. Must be either 'residues', 'sequence'
+
+    validate : bool
+        If set to true, ensures the number of residue values equals the number of residues
+ 
+    Returns
+    -----------
+    list
+        Returns a parsed list of lists, where each sublist contains the structure
+        [id, sequence, <data>]
+        where <data> is either a single float (mode=sequence) or a set of floats 
+
+    Raises
+    ---------
+    Exception
+        If an error occurs while parsing the file, the linenumber of the file is printed as well as the
+        idenity of the offending line.
+
+    """
+
+    
+    # check the datatype is valid
+    if datatype not in ['residues','sequence']:
+        raise ValueError('Invalid datatype. Must be "residues" or "sequence".')
+        
+    # parse the lines
+    try:
+
+        data = []
+        lc = 0
+
+        # A value for each residue in a sequence
+        if datatype == 'residues':	
+            for x in lines:
+                lc = lc + 1
+                
+                residue_data = np.array(x[2:], dtype=float)
+
+                data.append([x[0], x[1], residue_data])
+
+        # A single value per sequence
+        elif datatype == 'sequence':  
+            for x in lines:
+                lc = lc + 1
+                data.append([x[0], x[1], float(x[2])])
+
+    except Exception as e:        
+        print('Excecption raised on parsing input file...')
+        print(e)
+        print('')
+        raise parrot_exceptions.IOExceptionParrot(f"Input data is not correctly formatted for datatype '{datatype}'.\nMake sure your datafile does not have empty lines at the end of the file.\nError on line {lc}:\n{x}")
+
+
+    # if we want to validate each line 
+    if validate:
+        if datatype == 'residues':
+            lc = 0
+            for x in data:
+                lc = lc + 1
+                if len(x[1]) != len(x[2]):
+                    raise parrot_exceptions.IOExceptionParrot(f"Input data is not correctly formatted for datatype '{datatype}'.\nInconsistent number of residue values and residues. Error on line {lc}:\n{x}")
+                
+        
+
+    return data
+    
+    
+# .................................................................
+#
+#
 def parse_file(tsvfile, datatype, problem_type, num_classes, excludeSeqID=False, ignoreWarnings=False):
     """Parse a datafile containing sequences and values.
 
@@ -67,24 +201,16 @@ def parse_file(tsvfile, datatype, problem_type, num_classes, excludeSeqID=False,
             single line in the file and has the format [seqID, sequence, values].
     """
 
-    with open(tsvfile) as f:
-        lines = [line.rstrip().split() for line in f]
+    # read in and parse the TSV file. 
+    lines  = __read_tsv(tsvfile)
 
     # Add a dummy seqID if none are provided
     if excludeSeqID:
         for line in lines:
             line.insert(0, '')
 
-    try:
-        if datatype == 'residues':		# A value for each residue in a sequence
-            data = [[x[0], x[1], np.array(x[2:], dtype=np.float)] for x in lines]
-        elif datatype == 'sequence':  # A single value per sequence
-            data = [[x[0], x[1], float(x[2])] for x in lines]
-        else:
-            raise ValueError('Invalid datatype. Must be "residues" or "sequence".')
-    except:
-        raise Exception(f"""Input data is not correctly formatted for datatype '{datatype}'. 
-                Make sure your datafile does not have empty lines at the end of the file.""")
+    data =  __parse_lines(lines, datatype)
+
 
     if not ignoreWarnings:
         # Check for identical sequences
@@ -98,14 +224,19 @@ def parse_file(tsvfile, datatype, problem_type, num_classes, excludeSeqID=False,
         elif problem_type == 'regression':
             dataset_warnings.check_regression_imbalance(data)
 
+    # if we're doing a classification problem...
     if problem_type == 'classification':
+
+        # if a sequence classification
         if datatype == 'sequence':
+
+            
             for sample in data:
                 sample[2] = int(sample[2])
 
                 # Validate that all of the class labels are valid
                 if sample[2] >= num_classes or sample[2] < 0:
-                    raise ValueError("Invalid class label: %s" % sample[0])
+                    raise ValueError(f"Invalid class label on entry {sample[0]}.\nClass label was {sample[2]} but must be between 0 and {num_classes}")
 
         else:
             for sample in data:
@@ -113,10 +244,9 @@ def parse_file(tsvfile, datatype, problem_type, num_classes, excludeSeqID=False,
                 test = np.array(sample[2])
 
                 if np.any(test < 0) or np.any(test >= num_classes):
-                    raise ValueError("Invalid class label: %s" % sample[0])
-                elif len(test) != len(sample[1]):
-                    raise Exception(
-                        'Input not properly formatted. Number of values must be equal to sequence length: %s' % sample[0])
+                    raise ValueError(f"Invalid class label on entry {sample[0]}.\nClass labels must be between 0 and {num_classes}")
+
+
     return data
 
 

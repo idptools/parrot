@@ -14,9 +14,14 @@ Licensed under the MIT license.
 import math
 
 import numpy as np
-import GPy
-import GPyOpt
-from GPyOpt.methods import BayesianOptimization
+
+try:
+    import GPy
+    import GPyOpt
+    from GPyOpt.methods import BayesianOptimization
+except ImportError:
+    print('Error importing GPy.')
+    print(' If trying to run parrot-optimize, make sure to use `pip install idptools-parrot[optimize]`')
 
 from parrot import train_network
 from parrot import brnn_architecture

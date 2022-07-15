@@ -52,12 +52,10 @@ setup(
              'scripts/parrot-cvsplit',
              'scripts/parrot-preprocess'],
 
-    # Additional entries you may want simply uncomment the lines you want and fill in the data
-    # url='http://www.my_package.com',  # Website
-    # download_url = 'https://github.com/idptools/parrot/archive/v0.1-alpha.tar.gz',
+    # Required packages, pulls from pip if needed; do not use for Conda deployment
     install_requires=[
             'cython',
-            'torch>=1.8.0,<=1.10.1',
+            'torch>=1.8.0',
             'numpy',
             'argparse',
             'more-itertools',
@@ -65,15 +63,13 @@ setup(
             'scikit-learn',
             'matplotlib',
             'seaborn',
-            'pandas',
-            'GPy<=1.9.9',
-            'GPyOpt'
-        ],              # Required packages, pulls from pip if needed; do not use for Conda deployment
-    # platforms=['Linux',
-    #            'Mac OS-X',
-    #            'Unix',
-    #            'Windows'],            # Valid platforms your code works on, adjust to your flavor
-    python_requires=">=3.7,<=3.8.21",          # Python version restrictions
+            'pandas'],
+
+    extras_require={
+            'optimize': ['GPy', 'GPyOpt'] },
+
+
+    python_requires=">=3.9,<3.10.0",          # Python version restrictions
 
     # Manual control if final package is compressible or not, set False to prevent the .egg from being made
     zip_safe=False,

@@ -4,7 +4,7 @@
 
 ``parrot-optimize`` is a command for performing hyperparameter optimization on a given dataset and then training a PARROT network with the optimal hyperparameters. The dataset is divided 5-fold and iteratively retrained and validated using cross-validation to estimate the performance of the network using a given set of hyperparameters. Bayesian optimization ensures that in each iteration, hyperparameters are selected that better sample hyperparameter space and/or are expected to improve performance. After a specified number of iterations, the algorithm returns the best-performing hyperparameters and a new network will be trained on the cumulative cross-validation data, then tested on held out test data. Because of its iterative, cross-validation-based procedure, using ``parrot-optimize`` takes **significantly** longer to train a network than ``parrot-train``, and is not recommended for basic usage and for users running PARROT on computers lacking GPUs. The final trained network will be saved to to memory along with a file specifying the optimal hyperparameters and several estimates of network performance on a held-out test set (identically to ``parrot-train``).
 
-Once PARROT is installed, the user can run ``parrot-optimize`` from the command line:
+NOTE: there are slightly different instructions for installing optimize-compatible PARROT. See the "Getting Started with PARROT" page for more information. Once PARROT is installed, the user can run ``parrot-optimize`` from the command line:
 
 .. code-block:: bash
 	

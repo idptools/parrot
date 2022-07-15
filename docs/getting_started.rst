@@ -20,6 +20,31 @@ To clone the GitHub repository and gain the ability to modify a local copy of th
 
 This will install PARROT locally. If you modify the source code in the local repository, be sure to reinstall with pip.
 
+**JULY 2022 UPDATE**
+
+To mitigate package version dependency issues involving Python, GPy, and PyTorch, new releases of PARROT have separated 
+`parrot-optimize` as an optional add-on installation. All of the documentation for using `parrot-optimize` is unchanged.
+However, if you wish to use the hyperparameter optimization, there are now slight differences in how you install PARROT.
+
+To install the PARROT that is compatible with `parrot-optimize` install via pip using:
+
+.. code-block:: bash
+
+	$ pip install idptools-parrot[optimize]
+
+or
+
+.. code-block:: bash
+
+	$ pip install "idptools-parrot[optimize]"
+
+Alternatively if you have the PARROT repository cloned locally you can install using
+
+.. code-block:: bash
+
+	$ pip install ".[optimize]"
+
+
 Testing
 -------
 

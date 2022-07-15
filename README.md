@@ -8,13 +8,13 @@ This package can handle regression and classification ML problems, as well as se
 
 ## Installation:
 
-PARROT is available through GitHub or the Python Package Index (PyPI). To install through PyPI, run
+PARROT is available through GitHub or the Python Package Index (PyPI). To install the base version of PARROT through PyPI, run
 
 	$ pip install idptools-parrot
 
 It is possible that you may experience errors depending on what Python packages are already installed on your machine. If you encounter this, try installing PARROT in a "clean" virtual environment using conda:
 
-	$ conda create --name <env_name> python=3.7
+	$ conda create --name <env_name> python=3.9
 	$ conda activate <env_name>
 
 Then install PARROT with pip.
@@ -26,6 +26,25 @@ Alternatively, to clone the GitHub repository and gain the ability to modify a l
 	$ pip install .
 
 This will install PARROT locally. If you modify the source code in the local repository, be sure to reinstall with pip.
+
+**JULY 2022 UPDATE**
+
+To mitigate package version dependency issues involving Python, GPy, and PyTorch, new releases of PARROT have separated 
+`parrot-optimize` as an optional add-on installation. All of the documentation for using `parrot-optimize` is unchanged.
+However, if you wish to use the hyperparameter optimization, there are now slight differences in how you install PARROT.
+
+To install the PARROT that is compatible with `parrot-optimize` install via pip using:
+
+	$ pip install idptools-parrot[optimize]
+
+or
+
+	$ pip install "idptools-parrot[optimize]"
+
+Alternatively if you have the PARROT repository cloned locally you can install using
+
+	$ pip install ".[optimize]"
+
 
 ## Usage:
 
