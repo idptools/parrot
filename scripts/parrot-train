@@ -191,12 +191,16 @@ if silent:
 if dtype == 'sequence':
     # Use a many-to-one architecture
     brnn_network = brnn_architecture.BRNN_MtO(input_size, hidden_size,
-                                              num_layers, num_classes, device).to(device)
+                                              num_layers, num_classes, device)
+    brnn_network = nn.DataParallel(brnn_network)
+    brnn_network.to(device)
+
 elif dtype == 'residues':
     # Use a many-to-many architecture
     brnn_network = brnn_architecture.BRNN_MtM(input_size, hidden_size,
-                                              num_layers, num_classes, device).to(device)
-
+                                              num_layers, num_classes, device)
+    brnn_network = nn.DataParallel(brnn_network)
+    brnn_network.to(device)
 ###############################################################################
 ################################  Main code  ##################################
 
