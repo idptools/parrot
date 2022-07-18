@@ -87,6 +87,9 @@ parser.add_argument('--no-stats', dest='ignore_metrics', action='store_true',
 parser.add_argument('--force-cpu', dest='forceCPU', action='store_true',
                     help='force network to train on CPU, even if GPU is available')
 
+parser.add_argument('--gpu-ids', nargs='+', dest='gpu_ids',type=int,default=None,
+                    help='List of GPU IDs to train the network')
+
 parser.add_argument('--ignore-warnings', '-w', dest='ignore_warnings', action='store_true',
                     help='Do not display warnings for dataset structure')
 
@@ -98,6 +101,7 @@ parser.add_argument('--verbose', '-v', action='store_true',
 
 parser.add_argument('--silent', action='store_true',
                     help="Flag which, if provided, ensures no output is generated to the terminal")
+
 
 args = parser.parse_args()
 
@@ -126,12 +130,14 @@ include_figs = args.include_figs
 ignore_warnings = args.ignore_warnings
 ignore_metrics = args.ignore_metrics
 save_splits = args.save_splits
+gpu_ids = args.gpu_ids
 
 # Device configuration
 if forceCPU:
     device = 'cpu'
 else:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
 ###############################################################################
 #############    Validate arguments and initialize network:      ##############
@@ -189,18 +195,32 @@ if silent:
 
 # Initialize network architecture depending on data format
 if dtype == 'sequence':
-    # Use a many-to-one architecture
-    brnn_network = brnn_architecture.BRNN_MtO(input_size, hidden_size,
-                                              num_layers, num_classes, device)
-    brnn_network = nn.DataParallel(brnn_network)
-    brnn_network.to(device)
+    if gpu_ids:
+        # Use a many-to-one architecture
+        brnn_network = brnn_architecture.BRNN_MtO(input_size, hidden_size,
+                                                num_layers, num_classes, device)
+        brnn_network = nn.DataParallel(brnn_network,device_ids=gpu_ids)
+        brnn_network.to(device)
+    else: 
+        # Use a many-to-one architecture
+        brnn_network = brnn_architecture.BRNN_MtO(input_size, hidden_size,
+                                                num_layers, num_classes, device)
+        brnn_network = nn.DataParallel(brnn_network)
+        brnn_network.to(device)
 
 elif dtype == 'residues':
-    # Use a many-to-many architecture
-    brnn_network = brnn_architecture.BRNN_MtM(input_size, hidden_size,
-                                              num_layers, num_classes, device)
-    brnn_network = nn.DataParallel(brnn_network)
-    brnn_network.to(device)
+    if gpu_ids:
+        # Use a many-to-many architecture
+        brnn_network = brnn_architecture.BRNN_MtM(input_size, hidden_size,
+                                                num_layers, num_classes, device)
+        brnn_network = nn.DataParallel(brnn_network,device_ids=gpu_ids)
+        brnn_network.to(device)
+    else: 
+        # Use a many-to-many architecture
+        brnn_network = brnn_architecture.BRNN_MtM(input_size, hidden_size,
+                                                num_layers, num_classes, device)
+        brnn_network = nn.DataParallel(brnn_network,device_ids=gpu_ids)
+        brnn_network.to(device)
 ###############################################################################
 ################################  Main code  ##################################
 
