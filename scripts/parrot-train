@@ -82,10 +82,13 @@ parser.add_argument('--include-figs', dest='include_figs', action='store_true',
                     help='Generate figures from training results and save to same location as network')
 
 parser.add_argument('--no-stats', dest='ignore_metrics', action='store_true',
-                    help='If passed, do not output a perfomance stats file.')
+                    help='If passed, do not output a performance stats file.')
 
 parser.add_argument('--force-cpu', dest='forceCPU', action='store_true',
                     help='force network to train on CPU, even if GPU is available')
+
+parser.add_argument('--gpu-id', dest='gpu_id', type=int, 
+                    help='User defined control over which CUDA device will be used by parrot')
 
 parser.add_argument('--ignore-warnings', '-w', dest='ignore_warnings', action='store_true',
                     help='Do not display warnings for dataset structure')
@@ -100,6 +103,7 @@ parser.add_argument('--silent', action='store_true',
                     help="Flag which, if provided, ensures no output is generated to the terminal")
 
 args = parser.parse_args()
+print(args)
 
 # Hyper-parameters
 hidden_size = args.hidden_size
@@ -119,6 +123,7 @@ encode = args.encode
 verbose = args.verbose
 silent = args.silent
 forceCPU = args.forceCPU
+gpu_id = args.gpu_id
 setFractions = args.setFractions
 excludeSeqID = args.excludeSeqID
 probabilistic_classification = args.probabilistic_classification
@@ -130,6 +135,9 @@ save_splits = args.save_splits
 # Device configuration
 if forceCPU:
     device = 'cpu'
+elif gpu_id:
+    device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else 'cpu')
+    print(f"You've specified to run this network on cuda:{gpu_id}. Running on {device=}")
 else:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

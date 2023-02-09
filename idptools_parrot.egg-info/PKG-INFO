@@ -1,9 +1,11 @@
 Metadata-Version: 2.1
 Name: idptools-parrot
-Version: 1.6.2+0.gd17a873.dirty
+Version: 1.7.0+0.g755f11b.dirty
+Summary: UNKNOWN
 Author: Holehouse Lab
 Author-email: degriffith@wustl.edu
 License: MIT
+Platform: UNKNOWN
 Requires-Python: >=3.9,<3.10.0
 Description-Content-Type: text/markdown
 Provides-Extra: optimize
