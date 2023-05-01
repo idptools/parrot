@@ -98,7 +98,7 @@ Copyright (c) 2020-2023, Holehouse Lab
 
 ### Change log 
 
-* Version 1.7.1: Updated Python dependency so PARROT is compatible with Python 3.8, 3.9, and 3.10. 
+* Version 1.7.2: Updated Python dependency so PARROT is compatible with Python 3.8, 3.9, and 3.10. 
 
 #### Acknowledgements
  
