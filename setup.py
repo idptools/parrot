@@ -69,7 +69,7 @@ setup(
             'optimize': ['GPy', 'GPyOpt'] },
 
 
-    python_requires=">=3.8,<3.11.0",          # Python version restrictions
+    python_requires=">=3.7,<3.11.0",          # Python version restrictions
 
     # Manual control if final package is compressible or not, set False to prevent the .egg from being made
     zip_safe=False,
