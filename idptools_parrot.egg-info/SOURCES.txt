@@ -12,14 +12,15 @@ idptools_parrot.egg-info/requires.txt
 idptools_parrot.egg-info/top_level.txt
 parrot/__init__.py
 parrot/_version.py
-parrot/bayesian_optimization.py
 parrot/brnn_architecture.py
 parrot/brnn_plot.py
 parrot/encode_sequence.py
+parrot/layers.py
 parrot/optimize_params.py
 parrot/parrot_exceptions.py
 parrot/process_input_data.py
 parrot/py_predictor.py
+parrot/sophia_optimizer.py
 parrot/train_network.py
 parrot/tools/__init__.py
 parrot/tools/class_balancing.py

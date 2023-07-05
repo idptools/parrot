@@ -27,7 +27,7 @@ def check_file_exists(f, name):
 def check_directory(dir, name):
     if not os.path.exists(dir):
         raise FileNotFoundError(f'{name} does not exist.')
-
+    
 # Returns the base filename prefix and the directory it is located in 
 # from the absolute path
 def split_file_and_directory(path):

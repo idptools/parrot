@@ -9,7 +9,6 @@ from .process_input_data import *
 from .brnn_architecture import *
 from .brnn_plot import *
 from .train_network import *
-from .bayesian_optimization import *
 
 # Handle versioneer
 from ._version import get_versions

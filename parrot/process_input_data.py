@@ -13,6 +13,7 @@ Licensed under the MIT license.
 """
 
 import math
+import os
 
 import numpy as np
 import torch
@@ -360,9 +361,14 @@ def seq_class_collate(batch):
             a tuple with concatenated names, sequence_vectors and target_values
     """
 
-    names = [item[0] for item in batch]
-    orig_seq_vectors = [item[1] for item in batch]
-    orig_targets = [item[2] for item in batch]
+    names = []
+    orig_seq_vectors = []
+    orig_targets = []
+    
+    for item in batch:
+        names.append(item[0])
+        orig_seq_vectors.append(item[1])
+        orig_targets.append(item[2])
 
     longest_seq = len(max(orig_seq_vectors, key=lambda x: len(x)))
 
@@ -395,9 +401,14 @@ def seq_regress_collate(batch):
             a tuple with concatenated names, sequence_vectors and target_value
     """
 
-    names = [item[0] for item in batch]
-    orig_seq_vectors = [item[1] for item in batch]
-    orig_targets = [[item[2]]for item in batch]
+    names = []
+    orig_seq_vectors = []
+    orig_targets = []
+    
+    for item in batch:
+        names.append(item[0])
+        orig_seq_vectors.append(item[1])
+        orig_targets.append(item[2])
 
     longest_seq = len(max(orig_seq_vectors, key=lambda x: len(x)))
 
@@ -432,20 +443,29 @@ def res_class_collate(batch):
             a tuple with concatenated names, sequence_vectors and target_values
     """
 
-    names = [item[0] for item in batch]
-    orig_seq_vectors = [item[1] for item in batch]
-    orig_targets = [item[2] for item in batch]
+    names = []
+    orig_seq_vectors = []
+    orig_targets = []
+    
+    for item in batch:
+        names.append(item[0])
+        orig_seq_vectors.append(item[1])
+        orig_targets.append(item[2])
 
     longest_seq = len(max(orig_seq_vectors, key=lambda x: len(x)))
 
     padded_seq_vectors = np.zeros([len(orig_seq_vectors), longest_seq, len(orig_seq_vectors[0][0])])
     padded_targets = np.zeros([len(orig_targets), longest_seq])
 
-    for i, j in enumerate(orig_seq_vectors):
-        padded_seq_vectors[i][0:len(j)] = j
+    for i, (seq_vector, target) in enumerate(zip(orig_seq_vectors, orig_targets)):
+        padded_seq_vectors[i][:len(seq_vector)] = seq_vector
+        padded_targets[i][:len(target)] = target    
 
-    for i, j in enumerate(orig_targets):
-        padded_targets[i][0:len(j)] = j
+#     for i, j in enumerate(orig_seq_vectors):
+#         padded_seq_vectors[i][0:len(j)] = j
+
+#     for i, j in enumerate(orig_targets):
+#         padded_targets[i][0:len(j)] = j
 
     padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)
     padded_targets = torch.LongTensor(padded_targets)
@@ -473,20 +493,29 @@ def res_regress_collate(batch):
             a tuple with concatenated names, sequence_vectors and target_values
     """
 
-    names = [item[0] for item in batch]
-    orig_seq_vectors = [item[1] for item in batch]
-    orig_targets = [item[2] for item in batch]
+    names = []
+    orig_seq_vectors = []
+    orig_targets = []
+    
+    for item in batch:
+        names.append(item[0])
+        orig_seq_vectors.append(item[1])
+        orig_targets.append(item[2])
 
     longest_seq = len(max(orig_seq_vectors, key=lambda x: len(x)))
 
     padded_seq_vectors = np.zeros([len(orig_seq_vectors), longest_seq, len(orig_seq_vectors[0][0])])
     padded_targets = np.zeros([len(orig_targets), longest_seq])
 
-    for i, j in enumerate(orig_seq_vectors):
-        padded_seq_vectors[i][0:len(j)] = j
+    for i, (seq_vector, target) in enumerate(zip(orig_seq_vectors, orig_targets)):
+        padded_seq_vectors[i][:len(seq_vector)] = seq_vector
+        padded_targets[i][:len(target)] = target
 
-    for i, j in enumerate(orig_targets):
-        padded_targets[i][0:len(j)] = j
+#     for i, j in enumerate(orig_seq_vectors):
+#         padded_seq_vectors[i][0:len(j)] = j
+
+#     for i, j in enumerate(orig_targets):
+#         padded_targets[i][0:len(j)] = j
 
     padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)
     padded_targets = torch.FloatTensor(padded_targets).view(
@@ -540,19 +569,20 @@ def read_split_file(split_file):
     numpy int array
             an array of the indices for the testing set samples
     """
-
+    
     with open(split_file) as f:
-        lines = [line.rstrip().split() for line in f]
-        training_samples = np.array([int(i) for i in lines[0]])
-        val_samples = np.array([int(i) for i in lines[1]])
-        test_samples = np.array([int(i) for i in lines[2]])
+        lines = f.readlines()
+
+    training_samples = np.fromstring(lines[0], dtype=int, sep=' ')
+    val_samples = np.fromstring(lines[1], dtype=int, sep=' ')
+    test_samples = np.fromstring(lines[2], dtype=int, sep=' ')
+        
     return training_samples, val_samples, test_samples
 
 
 def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=False, 
                 split_file=None, encoding_scheme='onehot', encoder=None, 
-                percent_val=0.15, percent_test=0.15, ignoreWarnings=False,
-                save_splits_output=None):
+                percent_val=0.15, percent_test=0.15, ignoreWarnings=False,):
     """Divide a datafile into training, validation, and test datasets
 
     Takes in a datafile and specification of the data format and the machine
@@ -622,7 +652,7 @@ def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=Fals
                     excludeSeqID=excludeSeqID, ignoreWarnings=ignoreWarnings)
     num_samples = len(data)
 
-    if split_file == None:
+    if not os.path.exists(os.path.abspath(split_file)):
         percent_train = 1 - percent_val - percent_test
 
         all_samples = np.arange(num_samples)
@@ -640,15 +670,12 @@ def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=Fals
         test_set = SequenceDataset(data=data, subset=test_samples,
                                    encoding_scheme=encoding_scheme, encoder=encoder)
 
-        if save_splits_output != None:
-            # Save train/val/test splits
-            with open(save_splits_output, 'w') as out:
-                out.write(" ".join(np.sort(training_samples).astype('str')))
-                out.write("\n")
-                out.write(" ".join(np.sort(val_samples).astype('str')))
-                out.write("\n")
-                out.write(" ".join(np.sort(test_samples).astype('str')))
-                out.write("\n")
+        
+        # Save train/val/test splits
+        with open(split_file, 'w') as out:
+            np.savetxt(out, np.sort(training_samples), fmt='%d')
+            np.savetxt(out, np.sort(val_samples), fmt='%d')
+            np.savetxt(out, np.sort(test_samples), fmt='%d')
 
     else:
         training_samples, val_samples, test_samples = read_split_file(split_file)
