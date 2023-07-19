@@ -25,7 +25,6 @@ import IPython
 
 from parrot.sophia_optimizer import SophiaG
 from parrot import process_input_data as pid
-from parrot import brnn_architecture
 from parrot import train_network
 from parrot import brnn_plot
 from parrot.tools import validate_args
@@ -85,6 +84,13 @@ class ParrotDataModule(L.LightningDataModule):
         self.ignore_warnings = ignore_warnings
         self.save_splits = save_splits
 
+        num_cpus = os.cpu_count()
+        if num_cpus <= 32:
+            self.num_workers = num_cpus
+        else: 
+            self.num_workers = num_cpus/4
+
+    
         # if true and split file has not been provided
         if self.save_splits and not os.path.isfile(self.split_file):
             # take TSV file
@@ -125,14 +131,14 @@ class ParrotDataModule(L.LightningDataModule):
         # Create and return the training dataloader
         return DataLoader(self.train, batch_size=self.batch_size, 
                           collate_fn=self.collate_function,
-                          shuffle=True, num_workers=os.cpu_count())
+                          shuffle=True, num_workers=32)
 
     def val_dataloader(self):
         # Create and return the validation dataloader
         return DataLoader(self.val, batch_size=self.batch_size, 
                             collate_fn=self.collate_function,
                             shuffle=False,
-                            num_workers=os.cpu_count())
+                            num_workers=32)
     
     def test_dataloader(self):
         # Create and return the test dataloader
@@ -219,14 +225,14 @@ class BRNN_MtM(L.LightningModule):
 
         # Set loss criteria
         if self.problem_type == 'regression':
-            self.r2_score = R2Score()
+            self.r2_score = R2Score(compute_on_cpu=True)
             if self.datatype == 'residues':
                 # self.criterion = nn.MSELoss(reduction='mean')
                 self.criterion = nn.MSELoss(reduction='sum')
             elif self.datatype == 'sequence':
                 self.criterion = nn.L1Loss(reduction='sum')
         elif self.problem_type == 'classification':
-            self.accuracy = Accuracy()
+            self.accuracy = Accuracy(compute_on_cpu=True)
             self.criterion = nn.CrossEntropyLoss(reduction='sum')
         else:
             raise ValueError("Invalid problem type. Supported options: 'regression', 'classification'.")
@@ -238,7 +244,9 @@ class BRNN_MtM(L.LightningModule):
         # Model architecture!
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers,
                                 batch_first=True, bidirectional=True)
-
+        
+        self.layer_norm = nn.LayerNorm(hidden_size*2)
+            
         self.fc = nn.Linear(in_features=hidden_size*2,  # *2 for bidirection
                                 out_features=num_classes)
         
@@ -264,7 +272,7 @@ class BRNN_MtM(L.LightningModule):
         # Forward propagate LSTM
         # out: tensor of shape: [batch_size, seq_length, hidden_size*2]
         out, (h_n, c_n) = self.lstm(x)
-        
+        out = self.layer_norm(out)
         # Decode the hidden state for each time step
         fc_out = self.fc(out)
         return fc_out
@@ -287,7 +295,7 @@ class BRNN_MtM(L.LightningModule):
     def on_train_epoch_end(self):
         # do something with all training_step outputs, for example:
         epoch_mean = torch.stack(self.train_step_losses).mean()
-        self.log("average_epoch_train_loss", epoch_mean, prog_bar=True)
+        self.log("average_epoch_train_loss", epoch_mean, prog_bar=True,sync_dist=True)
         
         # free up the memory
         self.train_step_losses.clear()
@@ -315,7 +323,7 @@ class BRNN_MtM(L.LightningModule):
     def on_validation_epoch_end(self):
         # compute the average validation loss for the epoch
         mean_epoch_val_loss = torch.stack(self.val_step_losses).mean()
-        self.log("average_epoch_val_loss", mean_epoch_val_loss, prog_bar=True)
+        self.log("average_epoch_val_loss", mean_epoch_val_loss, prog_bar=True,sync_dist=True)
         
         # free up the memory
         self.val_step_losses.clear()
