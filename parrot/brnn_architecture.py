@@ -81,7 +81,13 @@ class ParrotDataModule(L.LightningDataModule):
         self.excludeSeqID = excludeSeqID
         self.ignore_warnings = ignore_warnings
         self.save_splits = save_splits
+        num_cpus = os.cpu_count()
+        if num_cpus <= 32:
+            self.num_workers = num_cpus
+        else: 
+            self.num_workers = num_cpus/4
 
+    
         # if true and split file has not been provided
         if self.save_splits and not os.path.isfile(self.split_file):
             # take TSV file
@@ -245,14 +251,14 @@ class BRNN_MtM(L.LightningModule):
 
         # Set loss criteria
         if self.problem_type == 'regression':
-            self.r2_score = R2Score()
+            self.r2_score = R2Score(compute_on_cpu=True)
             if self.datatype == 'residues':
                 # self.criterion = nn.MSELoss(reduction='mean')
                 self.criterion = nn.MSELoss(reduction='sum')
             elif self.datatype == 'sequence':
                 self.criterion = nn.L1Loss(reduction='sum')
         elif self.problem_type == 'classification':
-            self.accuracy = Accuracy()
+            self.accuracy = Accuracy(compute_on_cpu=True)
             self.criterion = nn.CrossEntropyLoss(reduction='sum')
         else:
             raise ValueError("Invalid problem type. Supported options: 'regression', 'classification'.")
@@ -282,17 +288,11 @@ class BRNN_MtM(L.LightningModule):
         # Forward propagate LSTM
         # out: tensor of shape: [batch_size, seq_length, lstm_hidden_size*2]
         out, (h_n, c_n) = self.lstm(x)
-        out = self.layer_norm(out)
-        if self.num_linear_layers > 1:
-            for layer in self.linear_layers:
-                out = layer(out)
-            out = self.output_layer(out)
-        else:
-            # Decode the hidden state for each time step
-            out = self.output_layer(out)
-    
-        return out
-    
+        
+        # Decode the hidden state for each time step
+        fc_out = self.fc(out)
+        return fc_out
+
     def training_step(self, batch, batch_idx):
         names, vectors, targets = batch
         outputs = self.forward(vectors)

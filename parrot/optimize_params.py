@@ -7,6 +7,7 @@ import torch
 from parrot.brnn_architecture import BRNN_MtM, BRNN_MtO, ParrotDataModule
 import optuna
 from optuna.integration import PyTorchLightningPruningCallback
+
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
 
@@ -35,6 +36,7 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
 
     # Define the hyperparameter search space using trial.suggest_*
     hparams = {
+<<<<<<< HEAD
         config.optimizer_name['name']: trial.suggest_categorical(config.optimizer_name['name'],
                                                                list(config.optimizer_name['choices'].values())
                                                                ), 
@@ -53,6 +55,21 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
                                                       log=config.learn_rate['log']
                                                       ),
 
+=======
+        'hidden_size': trial.suggest_int('hidden_size', 45, 50),        
+        #'learn_rate': trial.suggest_float('learn_rate', 1e-4, 1e-1,log=True),
+        #'hidden_size': 75,
+        'learn_rate': trial.suggest_float('learn_rate', 1e-3, 1e-2,log=True),
+        #'learn_rate': 0.00495508214936704,
+        # 'optimizer_name': trial.suggest_categorical('optimizer_name', ['Adam', 'AdamW']),
+        'optimizer_name': "SGD",
+        #'beta1': trial.suggest_float('beta1', 0.8, 0.99),
+        #'beta2': trial.suggest_float('beta2', 0.9, 0.999),
+        #'eps': trial.suggest_float('eps', 1e-8, 1e-1, log=True),
+        #'rho': trial.suggest_float('eps', 4e-3, 4e-1, log=True),
+        #'num_layers': trial.suggest_int('num_layers', 1, 2),        
+        'num_layers': 2,
+>>>>>>> 1c823d06dfc6fbcfe96f753a39f2a173f4bf828b
         'input_size': input_size,
         'num_classes': num_classes,
         'problem_type': problem_type,
@@ -76,7 +93,8 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
 
 
     if hparams['optimizer_name'] == 'SGD':
-        hparams['momentum'] = trial.suggest_float('momentum', 0.8, 1.0)
+        hparams['momentum'] = trial.suggest_float('momentum', 0.98, 1.0)
+        #hparams['momentum'] = 0.9972361251129012
         gradient_clip_val = 1.0
     elif hparams['optimizer_name'] == 'AdamW':
         hparams['weight_decay'] = trial.suggest_float('weight_decay', 0.0, 0.1)
@@ -88,11 +106,18 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
     print()
     # Print hyperparameters with default values if not defined
     print("learn_rate",hparams.get('learn_rate', 1e-3))
+<<<<<<< HEAD
     print("lstm_hidden_size",hparams.get('lstm_hidden_size'))
     print("num_lstm_layers",hparams.get('num_lstm_layers'))
     print("linear_hidden_size",hparams.get('linear_hidden_size'),0)
     print("num_linear_layers",hparams.get('num_linear_layers'),1)
     print("dropout",hparams.get('dropout'))
+=======
+    print("hidden_size",hparams.get('hidden_size'))
+    print("num_layers",hparams.get('num_layers'))
+
+    print("momentum",hparams.get('momentum', 0.9))
+>>>>>>> 1c823d06dfc6fbcfe96f753a39f2a173f4bf828b
     print("beta1",hparams.get('beta1', 0.9))
     print("beta2",hparams.get('beta2', 0.999))
     print("eps",hparams.get('eps', 1e-8))
@@ -104,18 +129,26 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
 
     early_stop_callback = EarlyStopping(
                                 monitor='average_epoch_val_loss',
-                                min_delta=0.000,
-                                patience=5,
+                                min_delta=0.00,
+                                patience=3,
                                 verbose=False,
                                 mode='min'
                                 )
 
+<<<<<<< HEAD
     pruning_callback = PyTorchLightningPruningCallback(trial, monitor="average_epoch_val_loss")
     
     swa_callback = StochasticWeightAveraging(swa_lrs=1e-2)
 
     wandb_logger = WandbLogger(name=f"run{trial.number}",
                                project='metapredict_b64_mlp')
+=======
+    # could play with the swa_lr as a tunable parameter too but :shrug: just fiddling with stuff for now
+    swa_callback = StochasticWeightAveraging(swa_lrs=1e-2)
+
+    wandb_logger = WandbLogger(name=f"run{trial.number}",
+                               project='metapredict_layer_norm_b256')
+>>>>>>> 1c823d06dfc6fbcfe96f753a39f2a173f4bf828b
     
     wandb_logger.watch(model)
 
@@ -125,12 +158,25 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
         precision="16-mixed",  
         logger=wandb_logger,
         enable_checkpointing=True,
+<<<<<<< HEAD
         # limit_train_batches=5,
         max_epochs=50,
         accelerator="auto",
         devices=[int(config.gpu_id)],
         callbacks = [pruning_callback,
                      early_stop_callback],
+=======
+        # limit_train_batches=0.3,
+        max_epochs=100,
+        accelerator="auto",
+        #devices="auto",
+        #devices=[0],
+        #devices=[1],
+        #devices=[2],
+        devices=[3],
+        callbacks = [PyTorchLightningPruningCallback(trial, monitor="average_epoch_val_loss"),early_stop_callback,swa_callback],
+        #callbacks = [PyTorchLightningPruningCallback(trial, monitor="average_epoch_val_loss"),early_stop_callback],
+>>>>>>> 1c823d06dfc6fbcfe96f753a39f2a173f4bf828b
     )
     trainer.logger.log_hyperparams(hparams)
 
@@ -155,6 +201,7 @@ def run_optimization(config,
     if determine_matmul_precision():
         torch.set_float32_matmul_precision("high")
 
+<<<<<<< HEAD
     datamodule = ParrotDataModule(f"{tsv_file}",
                                 num_classes=num_classes,
                                 datatype=f"{datatype}", 
@@ -167,10 +214,47 @@ def run_optimization(config,
     pruner = optuna.pruners.MedianPruner()
 
     sampler = optuna.samplers.TPESampler(n_startup_trials=50)
+=======
+datamodule = ParrotDataModule("meta.tsv",
+                              num_classes=1,
+                              datatype="residues", 
+                              split_file="meta_2023_06_28_split_file.txt",
+                              ignore_warnings=True,
+                              batch_size=256)
+
+# this can improve performance for tensor cores cards - should figure out how to do this more elegantly.
+torch.set_float32_matmul_precision("high")
+
+study_name = "metapredict_layer_norm_b256"
+storage = f"sqlite:///{study_name}.db"
+
+pruner = optuna.pruners.MedianPruner(n_warmup_steps=5)
+
+# quasi-random search is recommended by google because its more efficient at search than random
+# but isnt pigeon holed by adaptive sampling approach like TPE (e.g., if you want to rerank based
+# on another metric you can)
+
+# stage 1 of two stage optimization
+#sampler = optuna.samplers.QMCSampler(scramble=True,seed=42)
+#
+#study = optuna.create_study(sampler=sampler, study_name=study_name, storage=storage, 
+#                            direction='minimize', pruner=pruner,load_if_exists=True)
+#
+#study.optimize(lambda trial: objective(trial, datamodule), n_trials=350)
+
+# stage 2 of two stage optimization
+sampler = optuna.samplers.TPESampler(n_startup_trials=0)
+
+study = optuna.create_study(sampler=sampler, study_name=study_name, storage=storage, 
+                            direction='minimize', pruner=pruner,load_if_exists=True)
+study.optimize(lambda trial: objective(trial, datamodule), n_trials=10000)
+
+>>>>>>> 1c823d06dfc6fbcfe96f753a39f2a173f4bf828b
 
     study = optuna.create_study(sampler=sampler, study_name=study_name, storage=storage, 
                                 direction='minimize', pruner=pruner, load_if_exists=True)
 
+<<<<<<< HEAD
     study.optimize(lambda trial: objective(trial, datamodule, config), n_trials=n_trials)
 
 def parse_and_write_args_to_yaml():
@@ -247,3 +331,5 @@ if __name__ == "__main__":
     run_optimization(final_config)
 
     
+=======
+>>>>>>> 1c823d06dfc6fbcfe96f753a39f2a173f4bf828b

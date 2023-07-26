@@ -15,7 +15,6 @@ parrot/_version.py
 parrot/brnn_architecture.py
 parrot/brnn_plot.py
 parrot/encode_sequence.py
-parrot/layers.py
 parrot/optimize_params.py
 parrot/parrot_exceptions.py
 parrot/process_input_data.py
