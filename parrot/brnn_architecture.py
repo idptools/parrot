@@ -81,12 +81,6 @@ class ParrotDataModule(L.LightningDataModule):
         self.excludeSeqID = excludeSeqID
         self.ignore_warnings = ignore_warnings
         self.save_splits = save_splits
-        num_cpus = os.cpu_count()
-        if num_cpus <= 32:
-            self.num_workers = num_cpus
-        else: 
-            self.num_workers = num_cpus/4
-
     
         # if true and split file has not been provided
         if self.save_splits and not os.path.isfile(self.split_file):
@@ -192,7 +186,6 @@ class BRNN_MtM(L.LightningModule):
             problem, `num_classes` should be 1. If it is a classification problem,
             it should be the number of classes.
         """
-
         super(BRNN_MtM, self).__init__()
         self.lstm_hidden_size = lstm_hidden_size
         self.num_lstm_layers = num_lstm_layers
@@ -201,7 +194,7 @@ class BRNN_MtM(L.LightningModule):
         self.problem_type = problem_type
         
         self.num_linear_layers = kwargs.get("num_linear_layers", 1)
-        self.optimizer_name = kwargs.get('optimizer_name', 'Adam')
+        self.optimizer_name = kwargs.get('optimizer_name', 'SGD')
         self.linear_hidden_size = kwargs.get('linear_hidden_size', None)
         self.learn_rate = kwargs.get('learn_rate', 1e-3)
         self.dropout = kwargs.get('dropout', None)
@@ -229,6 +222,7 @@ class BRNN_MtM(L.LightningModule):
             # add layers 2 to n-1, this is only used if num_linear_layers > 2 because first and last layer is predefined
             for i in range(1, self.num_linear_layers-1):
                 self.linear_layers.append(nn.ReLU(nn.Linear(self.linear_hidden_size, self.linear_hidden_size)))
+                # only a little bit of dropouts 
                 if i % 2 == 1 and self.dropout:
                     self.linear_layers.append(nn.Dropout(self.dropout))
             
@@ -288,10 +282,17 @@ class BRNN_MtM(L.LightningModule):
         # Forward propagate LSTM
         # out: tensor of shape: [batch_size, seq_length, lstm_hidden_size*2]
         out, (h_n, c_n) = self.lstm(x)
-        
-        # Decode the hidden state for each time step
-        fc_out = self.fc(out)
-        return fc_out
+        out = self.layer_norm(out)
+
+        if self.num_linear_layers > 1:
+            for layer in self.linear_layers:
+                out = layer(out)
+            out = self.output_layer(out)
+        else:
+            # Decode the hidden state for each time step
+            out = self.output_layer(out)
+
+        return out
 
     def training_step(self, batch, batch_idx):
         names, vectors, targets = batch
@@ -305,7 +306,7 @@ class BRNN_MtM(L.LightningModule):
         
         self.train_step_losses.append(loss)
 
-        self.log('batch_train_loss', loss)
+        self.log('train_loss', loss)
         return loss
 
     def on_train_epoch_end(self):
@@ -333,7 +334,6 @@ class BRNN_MtM(L.LightningModule):
         self.log('epoch_val_loss', loss)
 
         return loss
-
 
     def configure_optimizers(self):
         if self.optimizer_name == "SGD":
