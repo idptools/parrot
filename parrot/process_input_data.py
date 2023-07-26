@@ -670,14 +670,18 @@ def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=Fals
         test_set = SequenceDataset(data=data, subset=test_samples,
                                    encoding_scheme=encoding_scheme, encoder=encoder)
 
-        
+        print("here")        
         # Save train/val/test splits
         with open(split_file, 'w') as out:
-            np.savetxt(out, np.sort(training_samples), fmt='%d')
-            np.savetxt(out, np.sort(val_samples), fmt='%d')
-            np.savetxt(out, np.sort(test_samples), fmt='%d')
+                out.write(" ".join(np.sort(training_samples).astype('str')))
+                out.write("\n")
+                out.write(" ".join(np.sort(val_samples).astype('str')))
+                out.write("\n")
+                out.write(" ".join(np.sort(test_samples).astype('str')))
+                out.write("\n")
 
     else:
+        print("no here")        
         training_samples, val_samples, test_samples = read_split_file(split_file)
 
         # Generate datasets using the provided partitions

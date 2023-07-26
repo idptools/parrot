@@ -20,4 +20,4 @@ del get_versions, versions
 # code that allows access to the data directory
 _ROOT = os.path.abspath(os.path.dirname(__file__))
 def get_directory(path='../data'):
-    return os.path.join(_ROOT, path)
+    return os.path.abspath(os.path.join(_ROOT, path))
