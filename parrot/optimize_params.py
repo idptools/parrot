@@ -12,10 +12,8 @@ from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAv
 
 from pytorch_lightning.loggers import WandbLogger
 import wandb
-import IPython
 
 import pytorch_lightning as pl
-# import lightning as L
 
 def determine_matmul_precision():
     if torch.cuda.is_available():
@@ -65,18 +63,37 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
         hparams[config.num_linear_layers['name']] = num_linear_layers
         
         hparams[config.linear_hidden_size['name']] = trial.suggest_int(config.linear_hidden_size['name'],
-                                                            config.linear_hidden_size['min'],
-                                                            config.linear_hidden_size['max'])
+                                                                        config.linear_hidden_size['min'],
+                                                                        config.linear_hidden_size['max'])
         
         hparams[config.dropout['name']] : trial.suggest_float(config.dropout['name'],
-                                                   config.dropout['min'],
-                                                   config.dropout['max'])
-
+                                                            config.dropout['min'],
+                                                            config.dropout['max'])
+        
     if hparams['optimizer_name'] == 'SGD':
-        hparams['momentum'] = trial.suggest_float('momentum', 0.9, 1.0)
+        # shrug - could probably tune gradient clip, but helped and worked so good enough
+        hparams['momentum'] = trial.suggest_int(config.momentum['name'],
+                                                config.momentum['min'],
+                                                config.momentum['max'])
+        
         gradient_clip_val = 1.0
+
     elif hparams['optimizer_name'] == 'AdamW':
-        hparams['weight_decay'] = trial.suggest_float('weight_decay', 0.0, 0.1)
+        hparams['beta1'] = trial.suggest_float(config.beta1['name'],       
+                                                 config.beta1['min'],                                       
+                                                config.beta1['max'])       
+        
+        hparams['beta2'] = trial.suggest_float(config.beta2['name'],      
+                                                 config.beta2['min'],  
+                                                config.beta2['max'])   
+        
+        hparams['eps'] = trial.suggest_int(config.eps['name'],
+                                                config.eps['min'],
+                                                config.eps['max'])
+             
+        hparams['weight_decay'] = trial.suggest_int(config.weight_decay['name'],
+                                        config.weight_decay['min'],
+                                        config.weight_decay['max'])
         gradient_clip_val = None
     else:
         hparams['momentum'] = None
@@ -123,7 +140,7 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
         enable_checkpointing = True,
         max_epochs = 50,
         accelerator = "auto",
-        devices = [int(config.gpu_id)],
+        devices = [int(gpu_id) for gpu_id in config.gpu_id],
         callbacks = [pruning_callback, early_stop_callback, swa_callback],
     )
     trainer.logger.log_hyperparams(hparams)
@@ -170,32 +187,56 @@ def run_optimization(config,
 
 def parse_and_write_args_to_yaml():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default=None, help='Path to the configuration file')
-    parser.add_argument('--study_name', default='parrot_study', help='Name of the study')
-    parser.add_argument('--tsv_file', default=None, help='Path to the tsv file')
-    parser.add_argument('--split_file', default=None, help='Path to the split file')
-    parser.add_argument('--num_classes', default=None, type=int, help='Number of classes')
-    parser.add_argument('--datatype', default=None, help='Type of data')
-    parser.add_argument('--batch_size', default=128, type=int, help='Batch size')
-    
-    parser.add_argument('--gpu_id', default=0, type=int, help='GPU device ID to use')
-    parser.add_argument('--optimizer_name', help='Optimizer to use')
-    parser.add_argument('--num_lstm_layers',nargs=2, type=int, help=f'The number of lstm layers to consider.'
-                                                            'The first index will be used as the min.' 
-                                                            'The second will be used as the max')
-    parser.add_argument('--lstm_hidden_size',nargs=2, type=int, help=f'The number of hidden units in the lstm layers.')
+    # required arguments
+    parser.add_argument('--config', required=True, default=None, help='Path to the configuration file.')
+    parser.add_argument('--num_classes', required=True, default=None, type=int, help='Number of classes.')
+    parser.add_argument('--datatype', required=True, default=None, help='Type of data. ')
+    parser.add_argument('--tsv_file', required=True,  default=None, help='Path to the tsv file.')
 
-    parser.add_argument('--dropout', nargs=2, type=float, help='The range of dropout rates on dense linear layers to test'
-                                                                'The first index will be used as the min.' 
-                                                                'The second will be used as the max')
+    parser.add_argument('--split_file', default=None, help='Path to the split file')
+    parser.add_argument('--study_name', default='parrot_study', help='Name of the study. ')
+    parser.add_argument('--batch_size', default=128, type=int, help='The batch size of the model.')
+    parser.add_argument('--gpu_id', nargs='+', default=[0], type=int, help='GPU device ID(s) to use.')
     
-    parser.add_argument('--eps', nargs=2, type=float, help='The range of eps values to add to denominator of adam optimizer'
-                                                                'The first index will be used as the min.' 
-                                                                'The second will be used as the max')
+    # optional overrides to default configs
+    parser.add_argument('--optimizer_name', nargs='+', help='List of optimizers to potentially use. ')
     
-    parser.add_argument('--learn_rate', nargs=2, type=float, help='The learning rate of the optimizer'
+    parser.add_argument('--learn_rate', nargs=2, type=float, help='The learning rate of the optimizer. '
+                                                                'The first index will be used as the min. ' 
+                                                                'The second will be used as the max.')    
+    
+    parser.add_argument('--num_lstm_layers', nargs=2, type=int, help=f'The number of lstm layers to consider. '
+                                                            'The first index will be used as the min. ' 
+                                                            'The second will be used as the max.')
+
+    parser.add_argument('--lstm_hidden_size', nargs=2, type=int, help=f'The number of hidden units in the lstm layers.')
+
+    parser.add_argument('--num_linear_layers', nargs=2, type=int, help=f'The number of linear layers to consider. '
+                                                            'The first index will be used as the min. ' 
+                                                            'The second will be used as the max.')
+    
+    parser.add_argument('--linear_hidden_size', nargs=2, type=int, help=f'The number of hidden units in the linear layers.'
+                                                            'The first index will be used as the min. ' 
+                                                            'The second will be used as the max.')
+    
+    parser.add_argument('--dropout', nargs=2, type=float, help='The range of dropout rates on dense linear layers to test. '
+                                                                'The first index will be used as the min. ' 
+                                                                'The second will be used as the max.')
+    
+    parser.add_argument('--beta1', nargs=2, type=float, help='Parameter only used if using an Adam-based optimizer. '
+                                                                'These will define range of beta1 values to add to denominator of adam optimizer. '
+                                                                'The first index will be used as the min. ' 
+                                                                'The second will be used as the max.')
+    
+    parser.add_argument('--beta2', nargs=2, type=float, help='Parameter only used if using an Adam-based optimizer. '
+                                                                'The range of beta2 values to add to denominator of adam optimizer. '
+                                                                'The first index will be used as the min. ' 
+                                                                'The second will be used as the max.')
+    
+    parser.add_argument('--eps', nargs=2, type=float, help='Parameter only used if using an Adam-based optimizer. '
+                                                                'The range of eps values to add to denominator of adam optimizer. '
                                                                 'The first index will be used as the min.' 
-                                                                'The second will be used as the max')    
+                                                                'The second will be used as the max.')
 
     args = parser.parse_args()
 
@@ -214,8 +255,8 @@ def parse_and_write_args_to_yaml():
         # Update the corresponding key in the configuration dictionary
         if isinstance(arg_value, list):
             # Handle list values
-            config[arg_name].update({"min":arg_value[0]})
-            config[arg_name].update({"max":arg_value[1]})
+            config[arg_name].update({"min" : arg_value[0]})
+            config[arg_name].update({"max" : arg_value[1]})
             if len(arg_value) > 2:
                 assert arg_value[2] in [True, False], f'log value must be True or False, not {arg_value[2]}'
                 config[arg_name].update({"log":arg_value[2]})
@@ -248,7 +289,7 @@ if __name__ == "__main__":
     print(args.config)
     with open(args.config) as config_file:
         final_config = yaml.safe_load(config_file)
-    print(final_config)
+
 
     run_optimization(final_config, study_name, tsv_file, split_file, num_classes, datatype, batch_size)
 

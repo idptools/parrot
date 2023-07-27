@@ -16,7 +16,7 @@ import pytorch_lightning as L
 # import lightning as L
 from torch import optim
 from torch.utils.data import DataLoader
-from torchmetrics import Accuracy, MeanSquaredError, R2Score
+from torchmetrics import Accuracy, MeanSquaredError, R2Score, AUROC, ConfusionMatrix, F1Score
 import numpy as np
 
 import os
@@ -225,18 +225,13 @@ class BRNN_MtM(L.LightningModule):
                 # only a little bit of dropouts 
                 if i % 2 == 1 and self.dropout:
                     self.linear_layers.append(nn.Dropout(self.dropout))
-            
+                                
             # add final output layer
             self.output_layer = nn.Linear(self.linear_hidden_size, num_classes)
 
         # set optimizer parameters
         if self.optimizer_name == "SGD":
             self.momentum = kwargs.get('momentum', 0.99)
-        elif self.optimizer_name == "Adam":
-            self.beta1 = kwargs.get('beta1', 0.9)
-            self.beta2 = kwargs.get('beta2', 0.999)
-            self.eps = kwargs.get('eps', 1e-8)
-            self.weight_decay = kwargs.get('weight_decay', 0)
         elif self.optimizer_name == "AdamW":
             self.beta1 = kwargs.get('beta1', 0.9)
             self.beta2 = kwargs.get('beta2', 0.999)
@@ -252,8 +247,18 @@ class BRNN_MtM(L.LightningModule):
             elif self.datatype == 'sequence':
                 self.criterion = nn.L1Loss(reduction='sum')
         elif self.problem_type == 'classification':
-            self.accuracy = Accuracy(compute_on_cpu=True)
-            self.criterion = nn.CrossEntropyLoss(reduction='sum')
+            if self.num_classes > 2:
+                self.task = 'multiclass'
+                self.criterion = nn.CrossEntropyLoss(reduction='sum')
+            else:
+                self.task = 'binary'
+                self.criterion = nn.BCEWithLogitLoss(reduction='sum')
+            
+            self.accuracy = Accuracy(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.auroc = AUROC(task=self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.f1_score = F1Score(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.confusion_matrix = ConfusionMatrix(task = self.task , num_classes=self.num_classes, compute_on_cpu=True)
+
         else:
             raise ValueError("Invalid problem type. Supported options: 'regression', 'classification'.")
 
@@ -329,7 +334,16 @@ class BRNN_MtM(L.LightningModule):
                 outputs = outputs.permute(0, 2, 1)
             loss = self.criterion(outputs, targets.long())   
             accuracy = self.accuracy(outputs, targets.long())
-            self.log('epoch_val_accuracy', accuracy,on_step=True)
+            self.log('epoch_val_accuracy', accuracy, on_step=True)
+            
+            f1score = self.f1_score(outputs, targets.long())
+            self.log('epoch_val_f1score', f1score, on_step=True)
+
+            auroc = self.auroc(outputs, targets.long())
+            self.log('epoch_val_auroc', auroc, on_step=True)
+
+            confusion_matrix = self.confusion_matrix(outputs, targets.long())
+            self.log('epoch_val_confusion_matrix', confusion_matrix, on_step=True)
 
         self.log('epoch_val_loss', loss)
 
@@ -337,16 +351,230 @@ class BRNN_MtM(L.LightningModule):
 
     def configure_optimizers(self):
         if self.optimizer_name == "SGD":
-            optimizer = optim.SGD(self.parameters(), lr=self.learn_rate, momentum=self.momentum, nesterov=True)
-        elif self.optimizer_name == "Adam":
-            optimizer = optim.Adam(self.parameters(), lr=self.learn_rate, betas=(self.beta1, self.beta2), eps=self.eps, weight_decay=self.weight_decay)
+            optimizer = optim.SGD(self.parameters(), lr=self.learn_rate, momentum=self.momentum, nesterov=True)            
+        # at some point fused=True in AdamW will be better but it LOOKS a little buggy right now - July 2023
         elif self.optimizer_name == "AdamW":
-            optimizer = optim.AdamW(self.parameters(), lr=self.learn_rate, betas=(self.beta1, self.beta2), eps=self.eps, weight_decay=self.weight_decay)
+            optimizer = optim.AdamW(self.parameters(), lr=self.learn_rate, betas=(self.beta1, self.beta2), 
+                                                        eps=self.eps, weight_decay=self.weight_decay)
         else:    
-            raise ValueError("Invalid optimizer name. Supported options: 'SGD', 'Adam', 'AdamW'.")
+            raise ValueError("Invalid optimizer name. Supported options: 'SGD', 'AdamW'.")
         
         return optimizer
 
+class BRNN_MtO(L.LightningModule):
+    """A PyTorch many-to-one bidirectional recurrent neural network
+
+    A class containing the PyTorch implementation of a BRNN. The network consists
+    of repeating LSTM units in the hidden layers that propogate sequence information
+    in both the foward and reverse directions. A final fully connected layer
+    aggregates the deepest hidden layers of both directions and produces the
+    output.
+
+    "Many-to-one" refers to the fact that the network will produce a single output 
+    for an entire input sequence. For example, an input sequence of length 10 will
+    produce only one output.
+
+    Attributes
+    ----------
+    lstm_hidden_size : int
+        Size of hidden vectors in the network
+    num_lstm_layers : int
+        Number of hidden layers (for each direction) in the network
+    num_classes : int
+        Number of classes for the machine learning task. If it is a regression
+        problem, `num_classes` should be 1. If it is a classification problem,
+        it should be the number of classes.
+    lstm : PyTorch LSTM object
+        The bidirectional LSTM layer(s) of the recurrent neural network.
+    fc : PyTorch Linear object  
+        The fully connected linear layer of the recurrent neural network. Across 
+        the length of the input sequence, this layer aggregates the output of the
+        LSTM nodes from the deepest forward layer and deepest reverse layer and
+        returns the output for that residue in the sequence.
+    """
+
+    def __init__(self, input_size, lstm_hidden_size,
+                  num_lstm_layers, num_classes, problem_type, datatype, **kwargs):
+        """
+        Parameters
+        ----------
+        input_size : int
+            Length of the input vectors at each timestep
+        lstm_hidden_size : int
+            Size of hidden vectors in the network
+        num_lstm_layers : int
+            Number of hidden layers (for each direction) in the network
+        num_classes : int
+            Number of classes for the machine learning task. If it is a regression
+            problem, `num_classes` should be 1. If it is a classification problem,
+            it should be the number of classes.
+        """
+
+        super(BRNN_MtO, self).__init__()
+        self.lstm_hidden_size = lstm_hidden_size
+        self.num_lstm_layers = num_lstm_layers
+        self.num_classes = num_classes
+        self.datatype = datatype
+        self.problem_type = problem_type
+        
+        self.num_linear_layers = kwargs.get("num_linear_layers", 1)
+        self.optimizer_name = kwargs.get('optimizer_name', 'SGD')
+        self.linear_hidden_size = kwargs.get('linear_hidden_size', None)
+        self.learn_rate = kwargs.get('learn_rate', 1e-3)
+        self.dropout = kwargs.get('dropout', None)
+
+        # Core Model architecture!
+        self.lstm = nn.LSTM(input_size, lstm_hidden_size, num_lstm_layers,
+                                batch_first=True, bidirectional=True)
+        
+        # improve generalization, stability, and model capacity
+        self.layer_norm = nn.LayerNorm(lstm_hidden_size*2)
+
+        if self.num_linear_layers == 1:
+            self.output_layer = nn.Linear(in_features=lstm_hidden_size*2,  # *2 for bidirection
+                                        out_features=num_classes)
+        elif self.num_linear_layers == 2:
+            self.linear_layers = nn.ModuleList()
+            self.linear_layers.append(nn.Linear(lstm_hidden_size*2, self.linear_hidden_size)) 
+            self.output_layer = nn.Linear(self.linear_hidden_size, num_classes)
+        else:
+            self.linear_layers = nn.ModuleList()
+            # increase LSTM embedding to linear hidden size dimension * 2 because bidirection-LSTM
+            # add first layer
+            self.linear_layers.append(nn.Linear(lstm_hidden_size*2, self.linear_hidden_size)) 
+            
+            # add layers 2 to n-1, this is only used if num_linear_layers > 2 because first and last layer is predefined
+            for i in range(1, self.num_linear_layers-1):
+                self.linear_layers.append(nn.ReLU(nn.Linear(self.linear_hidden_size, self.linear_hidden_size)))
+                # only a little bit of dropouts 
+                if i % 2 == 1 and self.dropout:
+                    self.linear_layers.append(nn.Dropout(self.dropout))
+                                
+            # add final output layer
+            self.output_layer = nn.Linear(self.linear_hidden_size, num_classes)
+
+        # set optimizer parameters
+        if self.optimizer_name == "SGD":
+            self.momentum = kwargs.get('momentum', 0.99)
+        elif self.optimizer_name == "AdamW":
+            self.beta1 = kwargs.get('beta1', 0.9)
+            self.beta2 = kwargs.get('beta2', 0.999)
+            self.eps = kwargs.get('eps', 1e-8)
+            self.weight_decay = kwargs.get('weight_decay',1e-2)
+
+        # Set loss criteria
+        if self.problem_type == 'regression':
+            self.r2_score = R2Score(compute_on_cpu=True)
+            if self.datatype == 'residues':
+                # self.criterion = nn.MSELoss(reduction='mean')
+                self.criterion = nn.MSELoss(reduction='sum')
+            elif self.datatype == 'sequence':
+                self.criterion = nn.L1Loss(reduction='sum')
+        elif self.problem_type == 'classification':
+            self.accuracy = Accuracy(compute_on_cpu=True)
+            self.criterion = nn.CrossEntropyLoss(reduction='sum')
+        else:
+            raise ValueError("Invalid problem type. Supported options: 'regression', 'classification'.")
+
+        # these are used to monitor the training losses for the *EPOCH*
+        self.train_step_losses = []
+
+        # save them sweet sweet hyperparameters 
+        self.save_hyperparameters()
+    
+    def forward(self, x):
+        """Propogate input sequences through the network to produce outputs
+
+        Parameters
+        ----------
+        x : 3-dimensional PyTorch IntTensor
+            Input sequence to the network. Should be in the format:
+            [batch_dim X sequence_length X input_size]
+
+        Returns
+        -------
+        3-dimensional PyTorch FloatTensor
+            Output after propogating the sequences through the network. Will
+            be in the format:
+            [batch_dim X 1 X num_classes]
+        """
+        # Forward propagate LSTM
+        # out: tensor of shape: [batch_size, seq_length, lstm_hidden_size*2]
+        out, (h_n, c_n) = self.lstm(x)
+    
+        # Retain the outputs of the last time step in the sequence for both directions
+        # (i.e. output of seq[n] in forward direction, seq[0] in reverse direction)
+        # forward_last_step = h_n[-2, :, :]
+        # reverse_last_step = h_n[-1, :, :]
+        out = torch.cat((h_n[:, :, :][-2, :], h_n[:, :, :][-1, :]), -1)
+
+        out = self.layer_norm(out)
+
+        if self.num_linear_layers > 1:
+            for layer in self.linear_layers:
+                out = layer(out)
+            out = self.output_layer(out)
+        else:
+            # Decode the hidden state for each time step
+            out = self.output_layer(out)
+    
+        return out
+
+    def training_step(self, batch, batch_idx):
+        names, vectors, targets = batch
+        outputs = self.forward(vectors)
+        if self.problem_type == 'regression':
+            loss = self.criterion(outputs, targets.float())
+        else:
+            if self.datatype == 'residues':
+                outputs = outputs.permute(0, 2, 1)
+            loss = self.criterion(outputs, targets.long())
+        
+        self.train_step_losses.append(loss)
+
+        self.log('train_loss', loss)
+        return loss
+
+    def on_train_epoch_end(self):
+        # do something with all training_step outputs, for example:
+        epoch_mean = torch.stack(self.train_step_losses).mean()
+        self.log("epoch_train_loss", epoch_mean, prog_bar=True)
+        
+        # free up the memory
+        self.train_step_losses.clear()
+
+    def validation_step(self, batch, batch_idx):
+        names, vectors, targets = batch
+        outputs = self.forward(vectors)
+        if self.problem_type == 'regression':
+            loss = self.criterion(outputs, targets.float())
+            self.r2_score(outputs.view(-1,1), targets.float().view(-1,1))
+            self.log('epoch_val_rsquare', self.r2_score)
+        else:
+            if self.datatype == 'residues':
+                outputs = outputs.permute(0, 2, 1)
+            loss = self.criterion(outputs, targets.long())   
+            accuracy = self.accuracy(outputs, targets.long())
+            self.log('epoch_val_accuracy', accuracy, on_step=True)
+
+        self.log('epoch_val_loss', loss)
+
+        return loss
+
+    def configure_optimizers(self):
+        if self.optimizer_name == "SGD":
+            optimizer = optim.SGD(self.parameters(), lr=self.learn_rate, momentum=self.momentum, nesterov=True)            
+        # at some point fused=True in AdamW will be better but it LOOKS a little buggy right now - July 2023
+        elif self.optimizer_name == "AdamW":
+            optimizer = optim.AdamW(self.parameters(), lr=self.learn_rate, betas=(self.beta1, self.beta2), 
+                                                        eps=self.eps, weight_decay=self.weight_decay)
+        else:    
+            raise ValueError("Invalid optimizer name. Supported options: 'SGD', 'AdamW'.")
+        
+        return optimizer
+
+
+#TODO continue fleshing out matrix functionality
 class BRNN_Matrix(L.LightningModule):
     """A PyTorch model to predict a matrix of values from sequence
 
@@ -489,7 +717,6 @@ class BRNN_Matrix(L.LightningModule):
             out = self.output_layer(out)
     
         return out
-    
 
     def training_step(self, batch, batch_idx):
         names, vectors, targets = batch
@@ -545,157 +772,15 @@ class BRNN_Matrix(L.LightningModule):
     def configure_optimizers(self):
         if self.optimizer_name == "SGD":
             optimizer = optim.SGD(self.parameters(), lr=self.learn_rate, momentum=self.momentum, nesterov=True)
-        elif self.optimizer_name == "Adam":
-            optimizer = optim.Adam(self.parameters(), lr=self.learn_rate, betas=(self.beta1, self.beta2), eps=self.eps, weight_decay=self.weight_decay)
+
         elif self.optimizer_name == "AdamW":
-            # me experimenting
+            # at some point this can be set to fused=True, but for now it looks a little buggy - July 2023
             optimizer = optim.AdamW(self.parameters(), lr=self.learn_rate,
-                                     betas=(self.beta1, self.beta2), eps=self.eps,
-                                     weight_decay=self.weight_decay, fused=True)
-        else:    
+                                     betas=(self.beta1, self.beta2), 
+                                     eps=self.eps,
+                                     weight_decay=self.weight_decay)
+        else:
             raise ValueError("Invalid optimizer name. Supported options: 'SGD', 'Adam', 'AdamW'.")
         return optimizer
 
 
-
-
-
-
-
-
-
-
-
-class BRNN_MtO(L.LightningModule):
-    """A PyTorch many-to-one bidirectional recurrent neural network
-
-    A class containing the PyTorch implementation of a BRNN. The network consists
-    of repeating LSTM units in the hidden layers that propogate sequence information
-    in both the foward and reverse directions. A final fully connected layer
-    aggregates the deepest hidden layers of both directions and produces the
-    output.
-
-    "Many-to-one" refers to the fact that the network will produce a single output 
-    for an entire input sequence. For example, an input sequence of length 10 will
-    produce only one output.
-
-    Attributes
-    ----------
-    lstm_hidden_size : int
-        Size of hidden vectors in the network
-    num_lstm_layers : int
-        Number of hidden layers (for each direction) in the network
-    num_classes : int
-        Number of classes for the machine learning task. If it is a regression
-        problem, `num_classes` should be 1. If it is a classification problem,
-        it should be the number of classes.
-    lstm : PyTorch LSTM object
-        The bidirectional LSTM layer(s) of the recurrent neural network.
-    fc : PyTorch Linear object  
-        The fully connected linear layer of the recurrent neural network. Across 
-        the length of the input sequence, this layer aggregates the output of the
-        LSTM nodes from the deepest forward layer and deepest reverse layer and
-        returns the output for that residue in the sequence.
-    """
-
-    def __init__(self, input_size, lstm_hidden_size, 
-                            num_lstm_layers, num_classes,
-                            problem_type, datatype, learn_rate):
-        """
-        Parameters
-        ----------
-        input_size : int
-            Length of the input vectors at each timestep
-        lstm_hidden_size : int
-            Size of hidden vectors in the network
-        num_lstm_layers : int
-            Number of hidden layers (for each direction) in the network
-        num_classes : int
-            Number of classes for the machine learning task. If it is a regression
-            problem, `num_classes` should be 1. If it is a classification problem,
-            it should be the number of classes.
-        """
-
-        super(BRNN_MtO, self).__init__()
-        self.lstm_hidden_size = lstm_hidden_size
-        self.num_lstm_layers = num_lstm_layers
-        self.learn_rate = learn_rate
-        self.datatype = datatype
-        self.problem_type = problem_type
-        
-        self.save_hyperparameters()
-        
-        self.lstm = nn.LSTM(input_size, lstm_hidden_size, num_lstm_layers,
-                            batch_first=True, bidirectional=True)
-        self.fc = nn.Linear(in_features=lstm_hidden_size*2,  # *2 for bidirection
-                            out_features=num_classes)
-        # Set loss criteria
-        if self.problem_type == 'regression':
-            if self.datatype == 'residues':
-                self.criterion = nn.MSELoss(reduction='sum')
-            elif self.datatype == 'sequence':
-                self.criterion = nn.L1Loss(reduction='sum')
-        elif self.problem_type == 'classification':
-            self.criterion = nn.CrossEntropyLoss(reduction='sum')
-    
-    def forward(self, x):
-        """Propogate input sequences through the network to produce outputs
-
-        Parameters
-        ----------
-        x : 3-dimensional PyTorch IntTensor
-            Input sequence to the network. Should be in the format:
-            [batch_dim X sequence_length X input_size]
-
-        Returns
-        -------
-        3-dimensional PyTorch FloatTensor
-            Output after propogating the sequences through the network. Will
-            be in the format:
-            [batch_dim X 1 X num_classes]
-        """
-        # Forward propagate LSTM
-        # out: tensor of shape: [batch_size, seq_length, lstm_hidden_size*2]
-        out, (h_n, c_n) = self.lstm(x)
-
-        # Retain the outputs of the last time step in the sequence for both directions
-        # (i.e. output of seq[n] in forward direction, seq[0] in reverse direction)
-        # forward_last_step = h_n[-2, :, :]
-        # reverse_last_step = h_n[-1, :, :]
-        # final_outs = torch.cat((forward_last_step, reverse_last_step), -1)
-
-        final_outs = torch.cat((h_n[:, :, :][-2, :], h_n[:, :, :][-1, :]), -1)
-
-        # Decode the hidden state of the last time step
-        fc_out = self.fc(final_outs)
-        return fc_out
-
-
-    def training_step(self, batch, batch_idx):
-        names, vectors, targets = batch
-        outputs = self.forward(vectors)
-        if self.problem_type == 'regression':
-            loss = self.criterion(outputs, targets.float())
-        else:
-            if self.datatype == 'residues':
-                outputs = outputs.permute(0, 2, 1)
-            loss = self.criterion(outputs, targets.long())
-        
-        self.log('batch_train_loss', loss)
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        names, vectors, targets = batch
-        outputs = self.forward(vectors)
-        if self.problem_type == 'regression':
-            loss = self.criterion(outputs, targets.float())
-        else:
-            if self.datatype == 'residues':
-                outputs = outputs.permute(0, 2, 1)
-            loss = self.criterion(outputs, targets.long())
-        self.log('batch_val_loss', loss)
-        return loss
-
-    def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=self.learn_rate)
-        return optimizer
