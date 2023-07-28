@@ -16,7 +16,7 @@ import pytorch_lightning as L
 # import lightning as L
 from torch import optim
 from torch.utils.data import DataLoader
-from torchmetrics import Accuracy, MeanSquaredError, R2Score, AUROC, ConfusionMatrix, F1Score
+from torchmetrics import Accuracy, MatthewsCorrCoef, R2Score, AUROC, F1Score, Precision
 import numpy as np
 
 import os
@@ -255,9 +255,12 @@ class BRNN_MtM(L.LightningModule):
                 self.criterion = nn.BCEWithLogitLoss(reduction='sum')
             
             self.accuracy = Accuracy(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.precision = Precision(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
             self.auroc = AUROC(task=self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.mcc = MatthewsCorrCoef(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
             self.f1_score = F1Score(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
-            self.confusion_matrix = ConfusionMatrix(task = self.task , num_classes=self.num_classes, compute_on_cpu=True)
+            
+            
 
         else:
             raise ValueError("Invalid problem type. Supported options: 'regression', 'classification'.")
@@ -333,6 +336,7 @@ class BRNN_MtM(L.LightningModule):
             if self.datatype == 'residues':
                 outputs = outputs.permute(0, 2, 1)
             loss = self.criterion(outputs, targets.long())   
+
             accuracy = self.accuracy(outputs, targets.long())
             self.log('epoch_val_accuracy', accuracy, on_step=True)
             
@@ -342,8 +346,11 @@ class BRNN_MtM(L.LightningModule):
             auroc = self.auroc(outputs, targets.long())
             self.log('epoch_val_auroc', auroc, on_step=True)
 
-            confusion_matrix = self.confusion_matrix(outputs, targets.long())
-            self.log('epoch_val_confusion_matrix', confusion_matrix, on_step=True)
+            precision = self.precision(outputs, targets.long())
+            self.log('epoch_val_precision', precision, on_step=True)
+
+            mcc = self.mcc(outputs, targets.long())
+            self.log('epoch_val_mcc', mcc, on_step=True)
 
         self.log('epoch_val_loss', loss)
 
@@ -356,7 +363,7 @@ class BRNN_MtM(L.LightningModule):
         elif self.optimizer_name == "AdamW":
             optimizer = optim.AdamW(self.parameters(), lr=self.learn_rate, betas=(self.beta1, self.beta2), 
                                                         eps=self.eps, weight_decay=self.weight_decay)
-        else:    
+        else:
             raise ValueError("Invalid optimizer name. Supported options: 'SGD', 'AdamW'.")
         
         return optimizer
@@ -470,9 +477,22 @@ class BRNN_MtO(L.LightningModule):
                 self.criterion = nn.MSELoss(reduction='sum')
             elif self.datatype == 'sequence':
                 self.criterion = nn.L1Loss(reduction='sum')
+        
         elif self.problem_type == 'classification':
-            self.accuracy = Accuracy(compute_on_cpu=True)
-            self.criterion = nn.CrossEntropyLoss(reduction='sum')
+            if self.num_classes > 2:
+                self.task = 'multiclass'
+                self.criterion = nn.CrossEntropyLoss(reduction='sum')
+            else:
+                self.task = 'binary'
+                self.criterion = nn.BCEWithLogitLoss(reduction='sum')
+            
+            self.accuracy = Accuracy(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.auroc = AUROC(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.f1_score = F1Score(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.precision = Precision(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.mcc = MatthewsCorrCoef(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
+
+
         else:
             raise ValueError("Invalid problem type. Supported options: 'regression', 'classification'.")
 
@@ -554,9 +574,22 @@ class BRNN_MtO(L.LightningModule):
             if self.datatype == 'residues':
                 outputs = outputs.permute(0, 2, 1)
             loss = self.criterion(outputs, targets.long())   
+
             accuracy = self.accuracy(outputs, targets.long())
             self.log('epoch_val_accuracy', accuracy, on_step=True)
+            
+            f1score = self.f1_score(outputs, targets.long())
+            self.log('epoch_val_f1score', f1score, on_step=True)
 
+            auroc = self.auroc(outputs, targets.long())
+            self.log('epoch_val_auroc', auroc, on_step=True)
+
+            precision = self.precision(outputs, targets.long())
+            self.log('epoch_val_precision', precision, on_step=True)
+            
+            mcc = self.mcc(outputs, targets.long())
+            self.log('epoch_val_mcc', mcc, on_step=True)
+        
         self.log('epoch_val_loss', loss)
 
         return loss
@@ -564,11 +597,11 @@ class BRNN_MtO(L.LightningModule):
     def configure_optimizers(self):
         if self.optimizer_name == "SGD":
             optimizer = optim.SGD(self.parameters(), lr=self.learn_rate, momentum=self.momentum, nesterov=True)            
-        # at some point fused=True in AdamW will be better but it LOOKS a little buggy right now - July 2023
+        # fused=True argument in AdamW will be much faster, but it LOOKS a little buggy right now - July 2023
         elif self.optimizer_name == "AdamW":
             optimizer = optim.AdamW(self.parameters(), lr=self.learn_rate, betas=(self.beta1, self.beta2), 
                                                         eps=self.eps, weight_decay=self.weight_decay)
-        else:    
+        else:
             raise ValueError("Invalid optimizer name. Supported options: 'SGD', 'AdamW'.")
         
         return optimizer
