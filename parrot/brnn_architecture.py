@@ -252,7 +252,7 @@ class BRNN_MtM(L.LightningModule):
                 self.criterion = nn.CrossEntropyLoss(reduction='sum')
             else:
                 self.task = 'binary'
-                self.criterion = nn.BCEWithLogitLoss(reduction='sum')
+                self.criterion = nn.BCEWithLogitsLoss(reduction='sum')
             
             self.accuracy = Accuracy(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
             self.precision = Precision(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
@@ -491,8 +491,7 @@ class BRNN_MtO(L.LightningModule):
             self.f1_score = F1Score(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
             self.precision = Precision(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
             self.mcc = MatthewsCorrCoef(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
-
-
+            
         else:
             raise ValueError("Invalid problem type. Supported options: 'regression', 'classification'.")
 
