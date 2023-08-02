@@ -1,0 +1,54 @@
+# config.yaml
+
+num_lstm_layers:
+    name: num_lstm_layers
+    min: 1
+    max: 2
+
+lstm_hidden_size:
+    name: lstm_hidden_size
+    min: 20
+    max: 75
+
+linear_hidden_size:
+    name: linear_hidden_size
+    min: 128
+    max: 384
+
+num_linear_layers:
+    name: num_linear_layers
+    min: 1
+    max: 1
+
+dropout:
+    name: dropout
+    min: 0.0
+    max: 0.5
+
+optimizer_name:
+    name: "optimizer_name"
+    choices:
+        SGD: "SGD"
+        AdamW: "AdamW"
+
+learn_rate:
+    name: "learn_rate"
+    min: 0.0001
+    max: 0.1
+    log: True
+
+beta1:
+    name: "beta1"
+    min: 0.8
+    max: 0.99
+
+beta2:
+    name: "beta2"
+    min: 0.9
+    max: 0.999
+
+eps:
+    name: "eps"
+    min: 0.00000001
+    max: 0.1
+    log: True
