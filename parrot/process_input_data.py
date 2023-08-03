@@ -681,7 +681,6 @@ def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=Fals
                 out.write("\n")
 
     else:
-        print("no here")        
         training_samples, val_samples, test_samples = read_split_file(split_file)
 
         # Generate datasets using the provided partitions

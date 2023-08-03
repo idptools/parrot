@@ -90,7 +90,7 @@ class ParrotDataModule(L.LightningDataModule):
             filename_prefix, parent_dir = validate_args.split_file_and_directory(network_file)
             self.split_file = f"{filename_prefix}_split_file.txt"
 
-        self.num_workers = os.cpu_count() if os.cpu_count() <= 32 else os.cpu_count()/4
+        self.num_workers = os.cpu_count() if os.cpu_count() <= 32 else os.cpu_count()//4
 
 
     def prepare_data(self):

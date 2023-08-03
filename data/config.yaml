@@ -1,5 +1,48 @@
 # config.yaml
 
+# parameters that MUST be set!!
+tsv_file: 
+    name: "tsv_file"
+    value: None
+
+num_classes:
+    name: "num_classes"
+    value: None
+
+datatype:
+    name: "datatype"
+    value: "residues"
+
+# this should always be as large as you can fit into memory.
+# advice by google: adjust hyperparameters around batch size not adjust batch size
+batch_size:
+    name: "batch_size"
+    value: 256
+
+split_file:
+    name: "split_file"
+    value: None
+
+study_name:
+    name: "study_name"
+    value: None
+
+gpu_id:
+    name: "gpu_id"
+    value: [0]
+
+# hyperparameters to optionally adjust. These can be overwritten from CLI but offer sane defaults.
+optimizer_name:
+    name: "optimizer_name"
+    choices:
+        SGD: "SGD"
+        
+learn_rate:
+    name: "learn_rate"
+    min: 0.0001
+    max: 0.01
+    log: True
+
 num_lstm_layers:
     name: num_lstm_layers
     min: 1
@@ -8,35 +51,30 @@ num_lstm_layers:
 lstm_hidden_size:
     name: lstm_hidden_size
     min: 20
-    max: 75
+    max: 45
+
+num_linear_layers:
+    name: num_linear_layers
+    min: 1
+    max: 3
 
 linear_hidden_size:
     name: linear_hidden_size
     min: 128
     max: 384
 
-num_linear_layers:
-    name: num_linear_layers
-    min: 1
-    max: 1
-
 dropout:
     name: dropout
     min: 0.0
     max: 0.5
 
-optimizer_name:
-    name: "optimizer_name"
-    choices:
-        SGD: "SGD"
-        AdamW: "AdamW"
+# SGD parameters:
+momentum:
+    name: "momentum"
+    min: 0.9
+    max: 0.999
 
-learn_rate:
-    name: "learn_rate"
-    min: 0.0001
-    max: 0.1
-    log: True
-
+# these params are only used if AdamW is used as optimizer.
 beta1:
     name: "beta1"
     min: 0.8
@@ -51,4 +89,10 @@ eps:
     name: "eps"
     min: 0.00000001
     max: 0.1
+    log: True
+
+weight_decay:
+    name: "weight_decay"
+    min: 0.000001
+    max: 0.01
     log: True
