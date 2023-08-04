@@ -90,7 +90,7 @@ class ParrotDataModule(L.LightningDataModule):
             filename_prefix, parent_dir = validate_args.split_file_and_directory(network_file)
             self.split_file = f"{filename_prefix}_split_file.txt"
 
-        self.num_workers = os.cpu_count() if os.cpu_count() <= 32 else os.cpu_count()//4
+        self.num_workers = os.cpu_count() if os.cpu_count() <= 32 else os.cpu_count()//8
 
 
     def prepare_data(self):
@@ -217,18 +217,23 @@ class BRNN_MtM(L.LightningModule):
             self.linear_layers = nn.ModuleList()
             # increase LSTM embedding to linear hidden size dimension * 2 because bidirection-LSTM
             # add first layer
-            self.linear_layers.append(nn.Linear(lstm_hidden_size*2, self.linear_hidden_size)) 
+            for i in range(0,self.num_linear_layers):
+                if i == 0:
+                    self.linear_layers.append(nn.Linear(lstm_hidden_size*2, self.linear_hidden_size)) 
+                    if self.dropout != 0.0 and self.dropout is not None:
+                        self.linear_layers.append(nn.Dropout(self.dropout))
+                elif i == self.num_linear_layers - 1:
+                    # add final output layer
+                    self.output_layer = nn.Linear(self.linear_hidden_size, num_classes)
+                else:
+                    # add second linear layer (index 1) to n-1. 
+                    # this is only used if num_linear_layers > 2 because first and last layer is predefined
+                    self.linear_layers.append(nn.ReLU(nn.Linear(self.linear_hidden_size, self.linear_hidden_size)))
             
-            # add layers 2 to n-1, this is only used if num_linear_layers > 2 because first and last layer is predefined
-            for i in range(1, self.num_linear_layers-1):
-                self.linear_layers.append(nn.ReLU(nn.Linear(self.linear_hidden_size, self.linear_hidden_size)))
-                # only a little bit of dropouts 
-                if i % 2 == 1 and self.dropout:
-                    self.linear_layers.append(nn.Dropout(self.dropout))
-                                
-            # add final output layer
-            self.output_layer = nn.Linear(self.linear_hidden_size, num_classes)
-
+                    # only a little bit of dropout
+                    if i % 2 == 0 and self.dropout != 0.0:
+                        self.linear_layers.append(nn.Dropout(self.dropout))
+        
         # set optimizer parameters
         if self.optimizer_name == "SGD":
             self.momentum = kwargs.get('momentum', 0.99)
@@ -352,7 +357,7 @@ class BRNN_MtM(L.LightningModule):
             mcc = self.mcc(outputs, targets.long())
             self.log('epoch_val_mcc', mcc, on_step=True)
 
-        self.log('epoch_val_loss', loss)
+        self.log('epoch_val_loss', loss, prog_bar=True)
 
         return loss
 

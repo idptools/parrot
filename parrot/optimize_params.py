@@ -68,11 +68,16 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
                                                                         config['linear_hidden_size']['min'],
                                                                         config['linear_hidden_size']['max'])
         
-        hparams[config['dropout']['name']] : trial.suggest_float(config['dropout']['name'],
+        hparams['use_dropout'] = trial.suggest_categorical(name="use_dropout", choices=[True, False]) 
+
+        if hparams['use_dropout']:
+           hparams[config['dropout']['name']] = trial.suggest_float(config['dropout']['name'],
                                                             config['dropout']['min'],
                                                             config['dropout']['max'])
-        
-        
+        else:
+            hparams[config['dropout']['name']] = 0.0
+            
+    
     if hparams['optimizer_name'] == 'SGD':
         # shrug - could probably tune gradient clip, but helped and worked so good enough
         
@@ -156,7 +161,7 @@ def run_optimization(config,
                      datatype, 
                      batch_size,
                      n_trials=100,
-                     ignore_warnings=False):
+                     ignore_warnings=True):
     
     # this can improve performance for tensor cores cards
     if determine_matmul_precision():
@@ -173,7 +178,7 @@ def run_optimization(config,
 
     pruner = optuna.pruners.MedianPruner()
 
-    sampler = optuna.samplers.TPESampler(n_startup_trials=50)
+    sampler = optuna.samplers.TPESampler(n_startup_trials=20)
 
     study = optuna.create_study(sampler=sampler, study_name=study_name, storage=storage, 
                                 direction='minimize', pruner=pruner, load_if_exists=True)
