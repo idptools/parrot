@@ -206,34 +206,36 @@ class BRNN_MtM(L.LightningModule):
         # improve generalization, stability, and model capacity
         self.layer_norm = nn.LayerNorm(lstm_hidden_size*2)
 
-        if self.num_linear_layers == 1:
-            self.output_layer = nn.Linear(in_features=lstm_hidden_size*2,  # *2 for bidirection
-                                        out_features=num_classes)
-        elif self.num_linear_layers == 2:
-            self.linear_layers = nn.ModuleList()
-            self.linear_layers.append(nn.Linear(lstm_hidden_size*2, self.linear_hidden_size)) 
-            self.output_layer = nn.Linear(self.linear_hidden_size, num_classes)
-        else:
-            self.linear_layers = nn.ModuleList()
-            # increase LSTM embedding to linear hidden size dimension * 2 because bidirection-LSTM
-            # add first layer
-            for i in range(0,self.num_linear_layers):
-                if i == 0:
-                    self.linear_layers.append(nn.Linear(lstm_hidden_size*2, self.linear_hidden_size)) 
-                    if self.dropout != 0.0 and self.dropout is not None:
-                        self.linear_layers.append(nn.Dropout(self.dropout))
-                elif i == self.num_linear_layers - 1:
-                    # add final output layer
-                    self.output_layer = nn.Linear(self.linear_hidden_size, num_classes)
+        self.linear_layers = nn.ModuleList()
+        # increase LSTM embedding to linear hidden size dimension * 2 because bidirection-LSTM
+        for i in range(0,self.num_linear_layers):
+            if i == 0 and i == self.num_linear_layers - 1:
+                # if theres only one linear layer map to output (old parrot-style)
+                self.linear_layers.append(nn.Linear(self.lstm_hidden_size*2, num_classes)) # *2 for bidirection LSTM
+            elif i == 0:
+                # if we're not going directly to output, add first layer to map to linear hidden size
+                self.linear_layers.append(nn.Linear(self.lstm_hidden_size*2, self.linear_hidden_size)) 
+
+                # add dropout on this initial layer if specified
+                if self.dropout != 0.0 and self.dropout is not None:
+                    self.linear_layers.append(nn.Dropout(self.dropout))
+            elif i < self.num_linear_layers - 1:
+                # if linear layer is even, add some dropout
+                if i % 2 == 0 and self.dropout != 0.0:
+                    self.linear_layers.append(nn.Sequential(
+                        nn.Linear(self.linear_hidden_size, self.linear_hidden_size),
+                        nn.Dropout(self.dropout),
+                        nn.ReLU()
+                    ))
                 else:
                     # add second linear layer (index 1) to n-1. 
-                    # this is only used if num_linear_layers > 2 because first and last layer is predefined
                     self.linear_layers.append(nn.ReLU(nn.Linear(self.linear_hidden_size, self.linear_hidden_size)))
-            
-                    # only a little bit of dropout
-                    if i % 2 == 0 and self.dropout != 0.0:
-                        self.linear_layers.append(nn.Dropout(self.dropout))
-        
+            elif i == self.num_linear_layers - 1:
+                # add final output layer
+                self.linear_layers.append(nn.Linear(self.linear_hidden_size, num_classes))
+            else:
+                raise ValueError("Invalid number of linear layers. Must be greater than 0.")
+
         # set optimizer parameters
         if self.optimizer_name == "SGD":
             self.momentum = kwargs.get('momentum', 0.99)
@@ -296,14 +298,8 @@ class BRNN_MtM(L.LightningModule):
         # out: tensor of shape: [batch_size, seq_length, lstm_hidden_size*2]
         out, (h_n, c_n) = self.lstm(x)
         out = self.layer_norm(out)
-
-        if self.num_linear_layers > 1:
-            for layer in self.linear_layers:
-                out = layer(out)
-            out = self.output_layer(out)
-        else:
-            # Decode the hidden state for each time step
-            out = self.output_layer(out)
+        for layer in self.linear_layers:
+            out = layer(out)
 
         return out
 
