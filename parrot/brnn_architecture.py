@@ -222,14 +222,13 @@ class BRNN_MtM(L.LightningModule):
             elif i < self.num_linear_layers - 1:
                 # if linear layer is even, add some dropout
                 if i % 2 == 0 and self.dropout != 0.0:
-                    self.linear_layers.append(nn.Sequential(
-                        nn.Linear(self.linear_hidden_size, self.linear_hidden_size),
-                        nn.Dropout(self.dropout),
-                        nn.ReLU()
-                    ))
+                    self.linear_layers.append(nn.Linear(self.linear_hidden_size, self.linear_hidden_size))
+                    self.linear_layers.append(nn.Dropout(self.dropout))
+                    self.linear_layers.append(nn.ReLU())
                 else:
                     # add second linear layer (index 1) to n-1. 
-                    self.linear_layers.append(nn.ReLU(nn.Linear(self.linear_hidden_size, self.linear_hidden_size)))
+                    self.linear_layers.append(nn.Linear(self.linear_hidden_size, self.linear_hidden_size))
+                    self.linear_layers.append(nn.ReLU())
             elif i == self.num_linear_layers - 1:
                 # add final output layer
                 self.linear_layers.append(nn.Linear(self.linear_hidden_size, num_classes))
@@ -266,9 +265,6 @@ class BRNN_MtM(L.LightningModule):
             self.auroc = AUROC(task=self.task, num_classes=self.num_classes, compute_on_cpu=True)
             self.mcc = MatthewsCorrCoef(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
             self.f1_score = F1Score(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
-            
-            
-
         else:
             raise ValueError("Invalid problem type. Supported options: 'regression', 'classification'.")
 

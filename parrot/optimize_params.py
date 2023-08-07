@@ -17,6 +17,13 @@ import wandb
 import pytorch_lightning as pl
 
 def determine_matmul_precision():
+    """returns True if the GPU supports Tensor Core matmul operations, False otherwise
+
+    Returns
+    -------
+    bool
+        A boolean indicating whether the GPU supports Tensor Core matmul operations
+    """
     if torch.cuda.is_available():
         device = torch.device("cuda")
         return torch.cuda.get_device_properties(device).major >= 7
@@ -24,13 +31,28 @@ def determine_matmul_precision():
         return False
     
 def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, config):
-    """Objective function for Optuna to optimize."""
+    """Objective function for Optuna to optimize.
+
+    Parameters
+    ----------
+    trial : optuna.trial.Trial
+        optuna trial object used for optimizing hyperparameters
+    datamodule : pl.LightningDataModule
+        a ParrotDataModule, which is a Lightning datamodule object, for the machine learning task.
+    config : _type_
+        Yaml configuration file for the hyperparameter search spaces
+
+    Returns
+    -------
+    float
+        validation loss for the model at the epoch.
+    """
 
     datatype = datamodule.datatype
     num_classes = datamodule.num_classes
     problem_type = datamodule.problem_type
     input_size = datamodule.input_size
-
+    
     # Define the hyperparameter search space using trial.suggest_*
     hparams = {
         config['optimizer_name']['name']: trial.suggest_categorical(config['optimizer_name']['name'],
@@ -153,16 +175,31 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
     # Return the validation loss as the objective value for Optuna
     return trainer.callback_metrics['epoch_val_loss'].detach()
 
-def run_optimization(config,    
-                     study_name,
-                     tsv_file,
-                     split_file, 
-                     num_classes,
-                     datatype, 
-                     batch_size,
-                     n_trials=100,
-                     ignore_warnings=True):
-    
+def run_optimization(config, study_name, tsv_file, split_file, num_classes,
+                     datatype,batch_size, ignore_warnings=False):
+    """Runs the optimization using Optuna.
+
+    Parameters
+    ----------
+    config : dict
+        Dictionary containing the hyperparameter search space from the config yaml file.
+    study_name : str
+        The name of the optuna study. This is what is used for logging to WandB.
+    tsv_file : str
+        The path to the training/validation/test split tsv file.
+    split_file : str
+        The path to the file indicating the train/validation/test splits
+    num_classes : _type_
+        Number of classes for the machine learning task, use 1 for regression.
+    datatype : str
+        Must be one of either residues or sequence.
+    batch_size : int
+        batch size to train your model with.
+    ignore_warnings : bool, optional
+        Ignore parrot warnings, by default False
+    """
+
+    n_trials = config['n_trials']
     # this can improve performance for tensor cores cards
     if determine_matmul_precision():
         torch.set_float32_matmul_precision("high")
@@ -186,6 +223,15 @@ def run_optimization(config,
     study.optimize(lambda trial: objective(trial, datamodule, config), n_trials=n_trials)
 
 def parse_and_write_args_to_yaml():
+    """Provide optional CLI overwrites to default yaml configuration file.
+    The default yaml configuration file is located in the parrot package directory under data/
+    Hyperparameter sweep search spaces are output to a yaml file in the current working directory.
+
+    Returns
+    -------
+    argparse.Namespace
+        argparse object containing the parsed arguments.
+    """
     parser = argparse.ArgumentParser()
     # required arguments
     parser.add_argument('--config', default=None, help='Path to the configuration file.')
@@ -196,6 +242,7 @@ def parse_and_write_args_to_yaml():
     parser.add_argument('--split_file', default=None, help='Path to the file indicating the train/validation/test split.')
     parser.add_argument('--study_name', default=None, help='Name of the study. Used for WandB logging.')
     parser.add_argument('--batch_size', default=None, type=int, help='The batch size of the model.')
+    parser.add_argument('--ignore_warnings', default=None, type=bool, help='Optionally ignore parrot warnings.')
     parser.add_argument('--gpu_id', nargs='+', default=[0], type=int, help='GPU device ID(s) to use.')
     
     # optional overrides to default configs
@@ -292,7 +339,6 @@ def parse_and_write_args_to_yaml():
 
 if __name__ == "__main__":
     args = parse_and_write_args_to_yaml()
-    
     with open(args.config) as config_file:
         final_config = yaml.safe_load(config_file)
 
@@ -302,4 +348,5 @@ if __name__ == "__main__":
                 final_config['split_file']['value'], 
                 final_config['num_classes']['value'],
                 final_config['datatype']['value'], 
-                final_config['batch_size']['value'])
+                final_config['batch_size']['value'],
+                ignore_warnings=final_config['ignore_warnings']['value'])

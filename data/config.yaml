@@ -96,3 +96,11 @@ weight_decay:
     min: 0.000001
     max: 0.01
     log: True
+
+n_trials:
+    name: "n_trials"
+    value: 100
+
+ignore_warnings:
+    name: "ignore_warnings"
+    value: False
