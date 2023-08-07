@@ -40,30 +40,31 @@ class ParrotDataModule(L.LightningDataModule):
                         ignore_warnings=False,
                         save_splits=True,
                  ):
-        """_summary_
+        """A Pytorch Lightning DataModule for PARROT formatted data files. 
+        This can be passed to a Pytorch Lightning Trainer object to train a PARROT network.
 
         Parameters
         ----------
-        tsv_file : _type_
-            _description_
-        num_classes : _type_
-            _description_
+        tsv_file : str
+            The path to the training/validation/test split tsv file.
+        num_classes : int
+            Number of classes for the machine learning task, use 1 for regression.
         datatype : str
-            residues or sequence
+            Must be either 'residues' or 'sequence'
         batch_size : int, optional
-            _description_, by default 32
+            batch size to train your model with., by default 32
         encode : str, optional
-            _description_, by default 'onehot'
+            encoding scheme to convert from amino acids to numerical vector, by default 'onehot'
         fractions : list, optional
-            _description_, by default [0.6, 0.25, 0.15]
+            train, validation, test splits, by default [0.6, 0.25, 0.15]
         split_file : _type_, optional
-            _description_, by default None
+            The path to the file indicating the train/validation/test splits, by default None
         excludeSeqID : bool, optional
-            _description_, by default False
+            Option to exclude the ID column, by default False
         ignore_warnings : bool, optional
-            _description_, by default False
+            Ignore PARROT prompted warnings, by default False
         save_splits : bool, optional
-            _description_, by default True
+            Optionally save the train/val/test splits, by default True
         """
         super().__init__()
         self.tsv_file = tsv_file
@@ -315,7 +316,6 @@ class BRNN_MtM(L.LightningModule):
         return loss
 
     def on_train_epoch_end(self):
-        # do something with all training_step outputs, for example:
         epoch_mean = torch.stack(self.train_step_losses).mean()
         self.log("epoch_train_loss", epoch_mean, prog_bar=True)
         
@@ -427,35 +427,79 @@ class BRNN_MtO(L.LightningModule):
         self.learn_rate = kwargs.get('learn_rate', 1e-3)
         self.dropout = kwargs.get('dropout', None)
 
-        # Core Model architecture!
         self.lstm = nn.LSTM(input_size, lstm_hidden_size, num_lstm_layers,
                                 batch_first=True, bidirectional=True)
         
         # improve generalization, stability, and model capacity
         self.layer_norm = nn.LayerNorm(lstm_hidden_size*2)
 
-        if self.num_linear_layers == 1:
-            self.output_layer = nn.Linear(in_features=lstm_hidden_size*2,  # *2 for bidirection
-                                        out_features=num_classes)
-        elif self.num_linear_layers == 2:
-            self.linear_layers = nn.ModuleList()
-            self.linear_layers.append(nn.Linear(lstm_hidden_size*2, self.linear_hidden_size)) 
-            self.output_layer = nn.Linear(self.linear_hidden_size, num_classes)
-        else:
-            self.linear_layers = nn.ModuleList()
-            # increase LSTM embedding to linear hidden size dimension * 2 because bidirection-LSTM
-            # add first layer
-            self.linear_layers.append(nn.Linear(lstm_hidden_size*2, self.linear_hidden_size)) 
-            
-            # add layers 2 to n-1, this is only used if num_linear_layers > 2 because first and last layer is predefined
-            for i in range(1, self.num_linear_layers-1):
-                self.linear_layers.append(nn.ReLU(nn.Linear(self.linear_hidden_size, self.linear_hidden_size)))
-                # only a little bit of dropouts 
-                if i % 2 == 1 and self.dropout:
+        self.linear_layers = nn.ModuleList()
+        # increase LSTM embedding to linear hidden size dimension * 2 because bidirection-LSTM
+        for i in range(0,self.num_linear_layers):
+            if i == 0 and i == self.num_linear_layers - 1:
+                # if theres only one linear layer map to output (old parrot-style)
+                self.linear_layers.append(nn.Linear(self.lstm_hidden_size*2, num_classes)) # *2 for bidirection LSTM
+            elif i == 0:
+                # if we're not going directly to output, add first layer to map to linear hidden size
+                self.linear_layers.append(nn.Linear(self.lstm_hidden_size*2, self.linear_hidden_size)) 
+
+                # add dropout on this initial layer if specified
+                if self.dropout != 0.0 and self.dropout is not None:
                     self.linear_layers.append(nn.Dropout(self.dropout))
-                                
-            # add final output layer
-            self.output_layer = nn.Linear(self.linear_hidden_size, num_classes)
+            elif i < self.num_linear_layers - 1:
+                # if linear layer is even, add some dropout
+                if i % 2 == 0 and self.dropout != 0.0:
+                    self.linear_layers.append(nn.Linear(self.linear_hidden_size, self.linear_hidden_size))
+                    self.linear_layers.append(nn.Dropout(self.dropout))
+                    self.linear_layers.append(nn.ReLU())
+                else:
+                    # add second linear layer (index 1) to n-1. 
+                    self.linear_layers.append(nn.Linear(self.linear_hidden_size, self.linear_hidden_size))
+                    self.linear_layers.append(nn.ReLU())
+            elif i == self.num_linear_layers - 1:
+                # add final output layer
+                self.linear_layers.append(nn.Linear(self.linear_hidden_size, num_classes))
+            else:
+                raise ValueError("Invalid number of linear layers. Must be greater than 0.")
+
+        # set optimizer parameters
+        if self.optimizer_name == "SGD":
+            self.momentum = kwargs.get('momentum', 0.99)
+        elif self.optimizer_name == "AdamW":
+            self.beta1 = kwargs.get('beta1', 0.9)
+            self.beta2 = kwargs.get('beta2', 0.999)
+            self.eps = kwargs.get('eps', 1e-8)
+            self.weight_decay = kwargs.get('weight_decay',1e-2)
+
+        # Set loss criteria
+        if self.problem_type == 'regression':
+            self.r2_score = R2Score(compute_on_cpu=True)
+            if self.datatype == 'residues':
+                # self.criterion = nn.MSELoss(reduction='mean')
+                self.criterion = nn.MSELoss(reduction='sum')
+            elif self.datatype == 'sequence':
+                self.criterion = nn.L1Loss(reduction='sum')
+        elif self.problem_type == 'classification':
+            if self.num_classes > 2:
+                self.task = 'multiclass'
+                self.criterion = nn.CrossEntropyLoss(reduction='sum')
+            else:
+                self.task = 'binary'
+                self.criterion = nn.BCEWithLogitsLoss(reduction='sum')
+            
+            self.accuracy = Accuracy(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.precision = Precision(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.auroc = AUROC(task=self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.mcc = MatthewsCorrCoef(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.f1_score = F1Score(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
+        else:
+            raise ValueError("Invalid problem type. Supported options: 'regression', 'classification'.")
+
+        # these are used to monitor the training losses for the *EPOCH*
+        self.train_step_losses = []
+
+        # save them sweet sweet hyperparameters 
+        self.save_hyperparameters()
 
         # set optimizer parameters
         if self.optimizer_name == "SGD":
@@ -525,15 +569,9 @@ class BRNN_MtO(L.LightningModule):
         out = torch.cat((h_n[:, :, :][-2, :], h_n[:, :, :][-1, :]), -1)
 
         out = self.layer_norm(out)
+        for layer in self.linear_layers:
+            out = layer(out)
 
-        if self.num_linear_layers > 1:
-            for layer in self.linear_layers:
-                out = layer(out)
-            out = self.output_layer(out)
-        else:
-            # Decode the hidden state for each time step
-            out = self.output_layer(out)
-    
         return out
 
     def training_step(self, batch, batch_idx):
@@ -552,7 +590,6 @@ class BRNN_MtO(L.LightningModule):
         return loss
 
     def on_train_epoch_end(self):
-        # do something with all training_step outputs, for example:
         epoch_mean = torch.stack(self.train_step_losses).mean()
         self.log("epoch_train_loss", epoch_mean, prog_bar=True)
         

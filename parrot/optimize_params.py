@@ -189,7 +189,7 @@ def run_optimization(config, study_name, tsv_file, split_file, num_classes,
         The path to the training/validation/test split tsv file.
     split_file : str
         The path to the file indicating the train/validation/test splits
-    num_classes : _type_
+    num_classes : int
         Number of classes for the machine learning task, use 1 for regression.
     datatype : str
         Must be one of either residues or sequence.
