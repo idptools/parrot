@@ -316,7 +316,6 @@ class BRNN_MtM(L.LightningModule):
             loss = self.criterion(outputs, targets.long())
         
         self.train_step_losses.append(loss)
-
         self.log('train_loss', loss)
         return loss
 
@@ -352,7 +351,7 @@ class BRNN_MtM(L.LightningModule):
             self.log('epoch_val_precision', precision, on_step=True)
 
             mcc = self.mcc(outputs, targets.long())
-            print(type(mcc))
+            
             self.log('epoch_val_mcc', mcc, on_step=True)
 
         self.log('epoch_val_loss', loss, prog_bar=True)
@@ -504,12 +503,6 @@ class BRNN_MtO(L.LightningModule):
         else:
             raise ValueError("Invalid problem type. Supported options: 'regression', 'classification'.")
 
-        # these are used to monitor the training losses for the *EPOCH*
-        self.train_step_losses = []
-
-        # save them sweet sweet hyperparameters 
-        self.save_hyperparameters()
-
         # set optimizer parameters
         if self.optimizer_name == "SGD":
             self.momentum = kwargs.get('momentum', 0.99)
@@ -552,6 +545,7 @@ class BRNN_MtO(L.LightningModule):
 
         # these are used to monitor the training losses for the *EPOCH*
         self.train_step_losses = []
+        self.val_step_losses = []
 
         # save them sweet sweet hyperparameters 
         self.save_hyperparameters()
@@ -597,19 +591,24 @@ class BRNN_MtO(L.LightningModule):
             if self.datatype == 'residues':
                 outputs = outputs.permute(0, 2, 1)
             loss = self.criterion(outputs, targets.long())
-        
         self.train_step_losses.append(loss)
-        # loss -> len(batch)
-        # train_loss(N,batch_size)
-        # train.mean()
 
         self.log('train_loss', loss)
         return loss
 
     def on_train_epoch_end(self):
+        my_data = np.array([data.detach().cpu().numpy() for data in self.train_step_losses])
+        
+        # train_step_losses 
+        print("mydata.shape",my_data.shape)
+        print("flattened_shape", my_data.flatten().shape)
+        per_data_point_loss = my_data.sum()  / len(my_data.flatten())
+        print("per_data_point step",per_data_point_loss.shape)
+        print("per_data point val",per_data_point_loss) 
+
         epoch_mean = torch.stack(self.train_step_losses).mean()
         self.log("epoch_train_loss", epoch_mean, prog_bar=True)
-        print("end of epoch meannnnn: ", epoch_mean)
+        print("end of epoch mean: ", epoch_mean)
         # free up the memory
         self.train_step_losses.clear()
 
@@ -640,7 +639,8 @@ class BRNN_MtO(L.LightningModule):
             mcc = self.mcc(outputs, targets.long())
             self.log('epoch_val_mcc', mcc)
         
-        self.log('epoch_val_loss', loss)
+        self.log('step_val_loss', loss, on_step=True)
+        self.log('epoch_val_loss', loss / 4)
 
         return loss
 

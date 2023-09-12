@@ -343,7 +343,7 @@ def parse_and_write_args_to_yaml():
             config[arg_name] = arg_value
 
 
-    args.config = f'{config["study_name"]}_param_sweep_{datetime.date.today().strftime("%Y_%m_%d")}.yaml'
+    args.config = f'{config["study_name"]["value"]}_param_sweep_{datetime.date.today().strftime("%Y_%m_%d")}.yaml'
     
     with open(args.config, 'w') as config_file:
         yaml.safe_dump(config, config_file)
