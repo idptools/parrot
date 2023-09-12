@@ -77,7 +77,6 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
         'problem_type': problem_type,
         'datatype': datatype,
     }
-    
 
     num_linear_layers = trial.suggest_int(config['num_linear_layers']['name'],
                                 config['num_linear_layers']['min'],
@@ -107,7 +106,6 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
                                                 config['momentum']['min'],
                                                 config['momentum']['max'])
         gradient_clip_val = 1.0
-
     elif hparams['optimizer_name'] == 'AdamW':
         hparams['beta1'] = trial.suggest_float(config['beta1']['name'],       
                                                  config['beta1']['min'],                                       
@@ -117,11 +115,28 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
                                                  config['beta2']['min'],  
                                                 config['beta2']['max'])   
         
-        hparams['eps'] = trial.suggest_int(config['eps']['name'],
+        hparams['eps'] = trial.suggest_float(config['eps']['name'],
                                                 config['eps']['min'],
                                                 config['eps']['max'])
              
-        hparams['weight_decay'] = trial.suggest_int(config['weight_decay']['name'],
+        hparams['weight_decay'] = trial.suggest_float(config['weight_decay']['name'],
+                                        config['weight_decay']['min'],
+                                        config['weight_decay']['max'])
+        gradient_clip_val = None
+    elif hparams['optimizer_name'] == 'Adam':
+        hparams['beta1'] = trial.suggest_float(config['beta1']['name'],       
+                                                 config['beta1']['min'],                                       
+                                                config['beta1']['max'])       
+        
+        hparams['beta2'] = trial.suggest_float(config['beta2']['name'],      
+                                                 config['beta2']['min'],  
+                                                config['beta2']['max'])   
+        
+        hparams['eps'] = trial.suggest_float(config['eps']['name'],
+                                                config['eps']['min'],
+                                                config['eps']['max'])
+             
+        hparams['weight_decay'] = trial.suggest_float(config['weight_decay']['name'],
                                         config['weight_decay']['min'],
                                         config['weight_decay']['max'])
         gradient_clip_val = None
@@ -147,7 +162,7 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
 
     pruning_callback = PyTorchLightningPruningCallback(trial, monitor="epoch_val_loss")
     
-    swa_callback = StochasticWeightAveraging(swa_lrs=1e-2)
+    # swa_callback = StochasticWeightAveraging(swa_lrs=1e-2)
 
     wandb_logger = WandbLogger(name=f"run{trial.number}",
                                project=f"{config['study_name']['value']}")
@@ -156,13 +171,15 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
 
     trainer = pl.Trainer(
         gradient_clip_val = gradient_clip_val,
-        precision = "16-mixed",  
+        # precision = "16-mixed",  
         logger = wandb_logger,
         enable_checkpointing = True,
-        max_epochs = 50,
+        # min_epochs = 50,
+        max_epochs = 100,
         accelerator = "auto",
         devices = config['gpu_id'],
-        callbacks = [pruning_callback, early_stop_callback, swa_callback],
+        # callbacks = [pruning_callback, early_stop_callback, swa_callback],
+        callbacks = [pruning_callback, early_stop_callback],
     )
 
     trainer.logger.log_hyperparams(hparams)
@@ -199,7 +216,7 @@ def run_optimization(config, study_name, tsv_file, split_file, num_classes,
         Ignore parrot warnings, by default False
     """
 
-    n_trials = config['n_trials']
+    n_trials = config['n_trials']['value']
     # this can improve performance for tensor cores cards
     if determine_matmul_precision():
         torch.set_float32_matmul_precision("high")
@@ -326,7 +343,7 @@ def parse_and_write_args_to_yaml():
             config[arg_name] = arg_value
 
 
-    args.config = f'output_param_sweep_{datetime.date.today().strftime("%Y_%m_%d")}.yaml'
+    args.config = f'{config["study_name"]}_param_sweep_{datetime.date.today().strftime("%Y_%m_%d")}.yaml'
     
     with open(args.config, 'w') as config_file:
         yaml.safe_dump(config, config_file)

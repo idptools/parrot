@@ -670,7 +670,6 @@ def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=Fals
         test_set = SequenceDataset(data=data, subset=test_samples,
                                    encoding_scheme=encoding_scheme, encoder=encoder)
 
-        print("here")        
         # Save train/val/test splits
         with open(split_file, 'w') as out:
                 out.write(" ".join(np.sort(training_samples).astype('str')))

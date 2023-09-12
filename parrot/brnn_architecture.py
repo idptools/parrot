@@ -244,6 +244,11 @@ class BRNN_MtM(L.LightningModule):
             self.beta2 = kwargs.get('beta2', 0.999)
             self.eps = kwargs.get('eps', 1e-8)
             self.weight_decay = kwargs.get('weight_decay',1e-2)
+        elif self.optimizer_name == "Adam":
+            self.beta1 = kwargs.get('beta1', 0.9)
+            self.beta2 = kwargs.get('beta2', 0.999)
+            self.eps = kwargs.get('eps', 1e-8)
+            self.weight_decay = kwargs.get('weight_decay',1e-2)
 
         # Set loss criteria
         if self.problem_type == 'regression':
@@ -347,6 +352,7 @@ class BRNN_MtM(L.LightningModule):
             self.log('epoch_val_precision', precision, on_step=True)
 
             mcc = self.mcc(outputs, targets.long())
+            print(type(mcc))
             self.log('epoch_val_mcc', mcc, on_step=True)
 
         self.log('epoch_val_loss', loss, prog_bar=True)
@@ -359,6 +365,9 @@ class BRNN_MtM(L.LightningModule):
         # at some point fused=True in AdamW will be better but it LOOKS a little buggy right now - July 2023
         elif self.optimizer_name == "AdamW":
             optimizer = optim.AdamW(self.parameters(), lr=self.learn_rate, betas=(self.beta1, self.beta2), 
+                                                        eps=self.eps, weight_decay=self.weight_decay)
+        elif self.optimizer_name == "Adam":
+            optimizer = optim.Adam(self.parameters(), lr=self.learn_rate, betas=(self.beta1, self.beta2), 
                                                         eps=self.eps, weight_decay=self.weight_decay)
         else:
             raise ValueError("Invalid optimizer name. Supported options: 'SGD', 'AdamW'.")
@@ -431,7 +440,7 @@ class BRNN_MtO(L.LightningModule):
                                 batch_first=True, bidirectional=True)
         
         # improve generalization, stability, and model capacity
-        self.layer_norm = nn.LayerNorm(lstm_hidden_size*2)
+        # self.layer_norm = nn.LayerNorm(lstm_hidden_size*2)
 
         self.linear_layers = nn.ModuleList()
         # increase LSTM embedding to linear hidden size dimension * 2 because bidirection-LSTM
@@ -509,6 +518,11 @@ class BRNN_MtO(L.LightningModule):
             self.beta2 = kwargs.get('beta2', 0.999)
             self.eps = kwargs.get('eps', 1e-8)
             self.weight_decay = kwargs.get('weight_decay',1e-2)
+        elif self.optimizer_name == "Adam":
+            self.beta1 = kwargs.get('beta1', 0.9)
+            self.beta2 = kwargs.get('beta2', 0.999)
+            self.eps = kwargs.get('eps', 1e-8)
+            self.weight_decay = kwargs.get('weight_decay',1e-2)
 
         # Set loss criteria
         if self.problem_type == 'regression':
@@ -568,7 +582,7 @@ class BRNN_MtO(L.LightningModule):
         # reverse_last_step = h_n[-1, :, :]
         out = torch.cat((h_n[:, :, :][-2, :], h_n[:, :, :][-1, :]), -1)
 
-        out = self.layer_norm(out)
+        # out = self.layer_norm(out)
         for layer in self.linear_layers:
             out = layer(out)
 
@@ -585,6 +599,9 @@ class BRNN_MtO(L.LightningModule):
             loss = self.criterion(outputs, targets.long())
         
         self.train_step_losses.append(loss)
+        # loss -> len(batch)
+        # train_loss(N,batch_size)
+        # train.mean()
 
         self.log('train_loss', loss)
         return loss
@@ -592,7 +609,7 @@ class BRNN_MtO(L.LightningModule):
     def on_train_epoch_end(self):
         epoch_mean = torch.stack(self.train_step_losses).mean()
         self.log("epoch_train_loss", epoch_mean, prog_bar=True)
-        
+        print("end of epoch meannnnn: ", epoch_mean)
         # free up the memory
         self.train_step_losses.clear()
 
@@ -609,19 +626,19 @@ class BRNN_MtO(L.LightningModule):
             loss = self.criterion(outputs, targets.long())   
 
             accuracy = self.accuracy(outputs, targets.long())
-            self.log('epoch_val_accuracy', accuracy, on_step=True)
+            self.log('epoch_val_accuracy', accuracy)
             
             f1score = self.f1_score(outputs, targets.long())
-            self.log('epoch_val_f1score', f1score, on_step=True)
+            self.log('epoch_val_f1score', f1score)
 
             auroc = self.auroc(outputs, targets.long())
-            self.log('epoch_val_auroc', auroc, on_step=True)
+            self.log('epoch_val_auroc', auroc)
 
             precision = self.precision(outputs, targets.long())
-            self.log('epoch_val_precision', precision, on_step=True)
+            self.log('epoch_val_precision', precision)
             
             mcc = self.mcc(outputs, targets.long())
-            self.log('epoch_val_mcc', mcc, on_step=True)
+            self.log('epoch_val_mcc', mcc)
         
         self.log('epoch_val_loss', loss)
 
@@ -633,6 +650,9 @@ class BRNN_MtO(L.LightningModule):
         # fused=True argument in AdamW will be much faster, but it LOOKS a little buggy right now - July 2023
         elif self.optimizer_name == "AdamW":
             optimizer = optim.AdamW(self.parameters(), lr=self.learn_rate, betas=(self.beta1, self.beta2), 
+                                                        eps=self.eps, weight_decay=self.weight_decay)
+        elif self.optimizer_name == "Adam":
+            optimizer = optim.Adam(self.parameters(), lr=self.learn_rate, betas=(self.beta1, self.beta2), 
                                                         eps=self.eps, weight_decay=self.weight_decay)
         else:
             raise ValueError("Invalid optimizer name. Supported options: 'SGD', 'AdamW'.")

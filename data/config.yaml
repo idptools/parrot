@@ -1,6 +1,6 @@
 # config.yaml
 
-# parameters that MUST be set!!
+###### parameters that MUST be set!! ######
 tsv_file: 
     name: "tsv_file"
     value: None
@@ -31,7 +31,8 @@ gpu_id:
     name: "gpu_id"
     value: [0]
 
-# hyperparameters to optionally adjust. These can be overwritten from CLI but offer sane defaults.
+###### hyperparameters to optionally adjust. ######
+###### These can be overwritten from CLI but here we offer some sane defaults. ######
 optimizer_name:
     name: "optimizer_name"
     choices:
