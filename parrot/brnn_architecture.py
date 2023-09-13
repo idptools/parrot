@@ -91,7 +91,8 @@ class ParrotDataModule(L.LightningDataModule):
             filename_prefix, parent_dir = validate_args.split_file_and_directory(network_file)
             self.split_file = f"{filename_prefix}_split_file.txt"
 
-        self.num_workers = os.cpu_count() if os.cpu_count() <= 32 else os.cpu_count()//8
+        # self.num_workers = os.cpu_count() if os.cpu_count() <= 32 else os.cpu_count()//8
+        self.num_workers = 1
 
 
     def prepare_data(self):
@@ -478,39 +479,6 @@ class BRNN_MtO(L.LightningModule):
             self.beta2 = kwargs.get('beta2', 0.999)
             self.eps = kwargs.get('eps', 1e-8)
             self.weight_decay = kwargs.get('weight_decay',1e-2)
-
-        # Set loss criteria
-        if self.problem_type == 'regression':
-            self.r2_score = R2Score(compute_on_cpu=True)
-            if self.datatype == 'residues':
-                # self.criterion = nn.MSELoss(reduction='mean')
-                self.criterion = nn.MSELoss(reduction='sum')
-            elif self.datatype == 'sequence':
-                self.criterion = nn.L1Loss(reduction='sum')
-        elif self.problem_type == 'classification':
-            if self.num_classes > 2:
-                self.task = 'multiclass'
-                self.criterion = nn.CrossEntropyLoss(reduction='sum')
-            else:
-                self.task = 'binary'
-                self.criterion = nn.BCEWithLogitsLoss(reduction='sum')
-            
-            self.accuracy = Accuracy(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
-            self.precision = Precision(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
-            self.auroc = AUROC(task=self.task, num_classes=self.num_classes, compute_on_cpu=True)
-            self.mcc = MatthewsCorrCoef(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
-            self.f1_score = F1Score(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
-        else:
-            raise ValueError("Invalid problem type. Supported options: 'regression', 'classification'.")
-
-        # set optimizer parameters
-        if self.optimizer_name == "SGD":
-            self.momentum = kwargs.get('momentum', 0.99)
-        elif self.optimizer_name == "AdamW":
-            self.beta1 = kwargs.get('beta1', 0.9)
-            self.beta2 = kwargs.get('beta2', 0.999)
-            self.eps = kwargs.get('eps', 1e-8)
-            self.weight_decay = kwargs.get('weight_decay',1e-2)
         elif self.optimizer_name == "Adam":
             self.beta1 = kwargs.get('beta1', 0.9)
             self.beta2 = kwargs.get('beta2', 0.999)
@@ -525,21 +493,20 @@ class BRNN_MtO(L.LightningModule):
                 self.criterion = nn.MSELoss(reduction='sum')
             elif self.datatype == 'sequence':
                 self.criterion = nn.L1Loss(reduction='sum')
-        
         elif self.problem_type == 'classification':
             if self.num_classes > 2:
                 self.task = 'multiclass'
-                self.criterion = nn.CrossEntropyLoss(reduction='sum')
+                self.criterion = nn.CrossEntropyLoss(reduction='mean')
+                # self.criterion = nn.CrossEntropyLoss(reduction='sum')
             else:
                 self.task = 'binary'
-                self.criterion = nn.BCEWithLogitLoss(reduction='sum')
+                self.criterion = nn.BCEWithLogitsLoss(reduction='sum')
             
             self.accuracy = Accuracy(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
-            self.auroc = AUROC(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
-            self.f1_score = F1Score(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
             self.precision = Precision(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
+            self.auroc = AUROC(task=self.task, num_classes=self.num_classes, compute_on_cpu=True)
             self.mcc = MatthewsCorrCoef(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
-            
+            self.f1_score = F1Score(task = self.task, num_classes=self.num_classes, compute_on_cpu=True)
         else:
             raise ValueError("Invalid problem type. Supported options: 'regression', 'classification'.")
 
@@ -597,18 +564,8 @@ class BRNN_MtO(L.LightningModule):
         return loss
 
     def on_train_epoch_end(self):
-        my_data = np.array([data.detach().cpu().numpy() for data in self.train_step_losses])
-        
-        # train_step_losses 
-        print("mydata.shape",my_data.shape)
-        print("flattened_shape", my_data.flatten().shape)
-        per_data_point_loss = my_data.sum()  / len(my_data.flatten())
-        print("per_data_point step",per_data_point_loss.shape)
-        print("per_data point val",per_data_point_loss) 
-
         epoch_mean = torch.stack(self.train_step_losses).mean()
         self.log("epoch_train_loss", epoch_mean, prog_bar=True)
-        print("end of epoch mean: ", epoch_mean)
         # free up the memory
         self.train_step_losses.clear()
 
@@ -639,8 +596,9 @@ class BRNN_MtO(L.LightningModule):
             mcc = self.mcc(outputs, targets.long())
             self.log('epoch_val_mcc', mcc)
         
+        self.val_step_loss.append(loss)
         self.log('step_val_loss', loss, on_step=True)
-        self.log('epoch_val_loss', loss / 4)
+        self.log('epoch_val_loss', loss)
 
         return loss
 
@@ -842,7 +800,7 @@ class BRNN_Matrix(L.LightningModule):
             accuracy = self.accuracy(outputs, targets.long())
             self.log('batch_val_accuracy', accuracy)
 
-        self.log('batch_val_loss', loss,)
+        self.log('batch_val_loss', loss)
         self.val_step_losses.append(loss)
         
         return loss
