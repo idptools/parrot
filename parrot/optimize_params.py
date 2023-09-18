@@ -10,7 +10,7 @@ import optuna
 from optuna.integration import PyTorchLightningPruningCallback
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
-
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 import wandb
 
@@ -52,6 +52,7 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
     num_classes = datamodule.num_classes
     problem_type = datamodule.problem_type
     input_size = datamodule.input_size
+    batch_size = datamodule.batch_size
     
     # Define the hyperparameter search space using trial.suggest_*
     hparams = {
@@ -76,6 +77,7 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
         'num_classes': num_classes,
         'problem_type': problem_type,
         'datatype': datatype,
+        'batch_size': batch_size,
     }
 
     num_linear_layers = trial.suggest_int(config['num_linear_layers']['name'],
@@ -162,24 +164,29 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
 
     pruning_callback = PyTorchLightningPruningCallback(trial, monitor="epoch_val_loss")
     
-    # swa_callback = StochasticWeightAveraging(swa_lrs=1e-2)
+    swa_callback = StochasticWeightAveraging(swa_lrs=1e-2)
 
     wandb_logger = WandbLogger(name=f"run{trial.number}",
                                project=f"{config['study_name']['value']}")
     
+
+    checkpoint_callback = ModelCheckpoint(
+                            monitor='epoch_val_loss',
+                            filename="epoch{epoch:03d}_val_loss{epoch_val_loss:.2f}",
+                            auto_insert_metric_name=False,
+                            save_on_train_epoch_end=False,
+    )
     wandb_logger.watch(model)
 
     trainer = pl.Trainer(
         gradient_clip_val = gradient_clip_val,
-        # precision = "16-mixed",  
+        precision = "16-mixed",  
         logger = wandb_logger,
-        enable_checkpointing = True,
-        # min_epochs = 50,
-        max_epochs = 100,
+        min_epochs = 100,
+        max_epochs = 250,
         accelerator = "auto",
         devices = config['gpu_id'],
-        # callbacks = [pruning_callback, early_stop_callback, swa_callback],
-        callbacks = [pruning_callback, early_stop_callback],
+        callbacks = [pruning_callback, early_stop_callback, checkpoint_callback, swa_callback],
     )
 
     trainer.logger.log_hyperparams(hparams)

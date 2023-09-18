@@ -92,7 +92,7 @@ class ParrotDataModule(L.LightningDataModule):
             self.split_file = f"{filename_prefix}_split_file.txt"
 
         self.num_workers = os.cpu_count() if os.cpu_count() <= 32 else os.cpu_count()//8
-        # self.num_workers = 1
+        
 
 
     def prepare_data(self):
@@ -407,7 +407,7 @@ class BRNN_MtO(L.LightningModule):
     """
 
     def __init__(self, input_size, lstm_hidden_size,
-                  num_lstm_layers, num_classes, problem_type, datatype, **kwargs):
+                  num_lstm_layers, num_classes, problem_type, datatype,batch_size, **kwargs):
         """
         Parameters
         ----------
@@ -429,7 +429,8 @@ class BRNN_MtO(L.LightningModule):
         self.num_classes = num_classes
         self.datatype = datatype
         self.problem_type = problem_type
-        
+        self.batch_size = batch_size
+
         self.num_linear_layers = kwargs.get("num_linear_layers", 1)
         self.optimizer_name = kwargs.get('optimizer_name', 'SGD')
         self.linear_hidden_size = kwargs.get('linear_hidden_size', None)
@@ -440,8 +441,8 @@ class BRNN_MtO(L.LightningModule):
                                 batch_first=True, bidirectional=True)
         
         # improve generalization, stability, and model capacity
-        # self.layer_norm = nn.LayerNorm(lstm_hidden_size*2)
-
+        self.layer_norm = nn.LayerNorm(lstm_hidden_size*2)
+        
         self.linear_layers = nn.ModuleList()
         # increase LSTM embedding to linear hidden size dimension * 2 because bidirection-LSTM
         for i in range(0,self.num_linear_layers):
@@ -496,8 +497,7 @@ class BRNN_MtO(L.LightningModule):
         elif self.problem_type == 'classification':
             if self.num_classes > 2:
                 self.task = 'multiclass'
-                self.criterion = nn.CrossEntropyLoss(reduction='mean')
-                # self.criterion = nn.CrossEntropyLoss(reduction='sum')
+                self.criterion = nn.CrossEntropyLoss(reduction='sum')
             else:
                 self.task = 'binary'
                 self.criterion = nn.BCEWithLogitsLoss(reduction='sum')
@@ -542,11 +542,9 @@ class BRNN_MtO(L.LightningModule):
         # forward_last_step = h_n[-2, :, :]
         # reverse_last_step = h_n[-1, :, :]
         out = torch.cat((h_n[:, :, :][-2, :], h_n[:, :, :][-1, :]), -1)
-
-        # out = self.layer_norm(out)
+        out = self.layer_norm(out)
         for layer in self.linear_layers:
             out = layer(out)
-
         return out
 
     def training_step(self, batch, batch_idx):
@@ -558,13 +556,15 @@ class BRNN_MtO(L.LightningModule):
             if self.datatype == 'residues':
                 outputs = outputs.permute(0, 2, 1)
             loss = self.criterion(outputs, targets.long())
+
+        loss = loss / self.batch_size
         self.train_step_losses.append(loss)
 
         self.log('train_loss', loss)
         return loss
 
     def on_train_epoch_end(self):
-        epoch_mean = torch.stack(self.train_step_losses).mean()
+        epoch_mean = torch.stack(self.train_step_losses).mean() 
         self.log("epoch_train_loss", epoch_mean, prog_bar=True)
         # free up the memory
         self.train_step_losses.clear()
@@ -580,27 +580,35 @@ class BRNN_MtO(L.LightningModule):
             if self.datatype == 'residues':
                 outputs = outputs.permute(0, 2, 1)
             loss = self.criterion(outputs, targets.long())   
-
-            accuracy = self.accuracy(outputs, targets.long())
-            self.log('epoch_val_accuracy', accuracy)
-            
-            f1score = self.f1_score(outputs, targets.long())
-            self.log('epoch_val_f1score', f1score)
-
-            auroc = self.auroc(outputs, targets.long())
-            self.log('epoch_val_auroc', auroc)
-
-            precision = self.precision(outputs, targets.long())
-            self.log('epoch_val_precision', precision)
-            
-            mcc = self.mcc(outputs, targets.long())
-            self.log('epoch_val_mcc', mcc)
         
-        self.val_step_loss.append(loss)
-        self.log('step_val_loss', loss, on_step=True)
-        self.log('epoch_val_loss', loss)
+        loss = loss / self.batch_size
+        self.log('val_loss', loss, on_epoch=False, on_step=True)
+
+        accuracy = self.accuracy(outputs, targets.long())
+        self.log('epoch_val_accuracy', accuracy)
+        
+        f1score = self.f1_score(outputs, targets.long())
+        self.log('epoch_val_f1score', f1score)
+
+        auroc = self.auroc(outputs, targets.long())
+        self.log('epoch_val_auroc', auroc)
+
+        precision = self.precision(outputs, targets.long())
+        self.log('epoch_val_precision', precision)
+        
+        mcc = self.mcc(outputs, targets.long())
+        self.log('epoch_val_mcc', mcc)
+
+        self.val_step_losses.append(loss)
 
         return loss
+    
+    def on_validation_epoch_end(self):
+        epoch_mean = torch.stack(self.val_step_losses).mean() 
+        self.log("epoch_val_loss", epoch_mean, prog_bar=True)
+
+        # free up the memory
+        self.val_step_losses.clear()
 
     def configure_optimizers(self):
         if self.optimizer_name == "SGD":
