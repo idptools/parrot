@@ -182,7 +182,6 @@ def objective(trial : optuna.trial.Trial, datamodule : pl.LightningDataModule, c
         gradient_clip_val = gradient_clip_val,
         precision = "16-mixed",  
         logger = wandb_logger,
-        min_epochs = 100,
         max_epochs = 250,
         accelerator = "auto",
         devices = config['gpu_id'],
