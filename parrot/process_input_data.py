@@ -635,8 +635,6 @@ def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=Fals
     ignoreWarnings : bool, optional
             If False, assess the structure and balance of the provided dataset with 
             basic heuristics and display warnings for common issues.
-    save_splits_output : str, optional
-            Location where the train / val / test splits for this run should be saved
 
     Returns
     -------
@@ -652,7 +650,7 @@ def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=Fals
                     excludeSeqID=excludeSeqID, ignoreWarnings=ignoreWarnings)
     num_samples = len(data)
 
-    if not os.path.exists(os.path.abspath(split_file)):
+    if split_file is None:
         percent_train = 1 - percent_val - percent_test
 
         all_samples = np.arange(num_samples)
@@ -671,7 +669,9 @@ def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=Fals
                                    encoding_scheme=encoding_scheme, encoder=encoder)
 
         # Save train/val/test splits
-        with open(split_file, 'w') as out:
+        cwd = os.getcwd()
+        split_file_path = os.path.join(cwd, "project_split_file.txt")
+        with open(split_file_path, 'w') as out:
                 out.write(" ".join(np.sort(training_samples).astype('str')))
                 out.write("\n")
                 out.write(" ".join(np.sort(val_samples).astype('str')))
@@ -679,7 +679,7 @@ def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=Fals
                 out.write(" ".join(np.sort(test_samples).astype('str')))
                 out.write("\n")
 
-    else:
+    elif os.path.isfile(split_file):
         training_samples, val_samples, test_samples = read_split_file(split_file)
 
         # Generate datasets using the provided partitions
@@ -689,10 +689,12 @@ def split_data(data_file, datatype, problem_type, num_classes, excludeSeqID=Fals
                                   encoding_scheme=encoding_scheme, encoder=encoder)
         test_set = SequenceDataset(data=data, subset=test_samples,
                                    encoding_scheme=encoding_scheme, encoder=encoder)
-
+    else:
+        raise FileNotFoundError (f"Provided split file {split_file} does not exist.")
+    
     return train_set, val_set, test_set
 
-
+#TODO: change for parrot lightning?
 def split_data_cv(data_file, datatype, problem_type, num_classes, excludeSeqID=False,
                   split_file=None, encoding_scheme='onehot', encoder=None,
                   percent_val=0.15, percent_test=0.15, n_folds=5, ignoreWarnings=False,
@@ -773,7 +775,7 @@ def split_data_cv(data_file, datatype, problem_type, num_classes, excludeSeqID=F
     n_samples = len(data)
 
     # Initial step: split into training, val, and test sets
-    if split_file == None:
+    if split_file is None:
         percent_train = 1 - percent_val - percent_test
 
         all_samples = np.arange(n_samples)
@@ -791,7 +793,7 @@ def split_data_cv(data_file, datatype, problem_type, num_classes, excludeSeqID=F
         test_set = SequenceDataset(data=data, subset=test_samples,
                                    encoding_scheme=encoding_scheme, encoder=encoder)
 
-        if save_splits_output != None:
+        if save_splits_output is not None:
             # Save train/val/test splits
             with open(save_splits_output, 'w') as out:
                 out.write(" ".join(np.sort(training_samples).astype('str')))
