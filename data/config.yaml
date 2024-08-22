@@ -13,6 +13,38 @@ datatype:
     name: "datatype"
     value: "residues"
 
+# this is what will be used during training and optimization for early stopping / other callbacks
+monitor:
+    name: "monitor"
+    value: "epoch_val_loss"
+
+min_epochs:
+    name: "min_epochs"
+    value: 20
+
+max_epochs:
+    name: "max_epochs"
+    value: 100
+
+# options: minimize, maximize - montior will be directed accordingly.
+direction:
+    name: "direction"
+    value: "minimize"
+
+min_delta:
+    name: "min_delta"
+    value: 0.000
+
+# number of random trials to perform in optimization before "bayesian optimization" in hyperparameter space
+warm_up_trials:
+    name: "warm_up_trials"
+    value: 10
+
+# null gets read in as None aka <class 'NoneType'>                                                                                
+gradient_clip_val:
+    name: "gradient_clip_val"
+    value: null
+
 # this should always be as large as you can fit into memory.
 # advice by google: adjust hyperparameters around batch size not adjust batch size
 batch_size:
@@ -40,9 +72,14 @@ optimizer_name:
         
 learn_rate:
     name: "learn_rate"
-    min: 0.0001
-    max: 0.01
+    min: 0.01
+    max: 0.1
     log: True
+                                                                         
+swa_lr:
+    name: "swa_lr"
+    min: 0.01
+    max: 0.05
 
 num_lstm_layers:
     name: num_lstm_layers
