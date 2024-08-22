@@ -16,13 +16,12 @@ import os
 import pytorch_lightning as L
 import torch
 import torch.nn as nn
+
 # import lightning as L
 from torch import optim
-from torch.optim.lr_scheduler import (CosineAnnealingLR,
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
-from torchmetrics import (AUROC, Accuracy, F1Score, MatthewsCorrCoef,
-                          Precision, R2Score)
+from torchmetrics import AUROC, Accuracy, F1Score, MatthewsCorrCoef, Precision, R2Score
 
 from parrot import process_input_data as pid
 from parrot.tools import validate_args
@@ -235,7 +234,6 @@ class BRNN_MtM(L.LightningModule):
             batch_first=True,
             bidirectional=True,
         )
-        
 
         # improve generalization, stability, and model capacity
         self.layer_norm = nn.LayerNorm(lstm_hidden_size * 2)
@@ -412,7 +410,9 @@ class BRNN_MtM(L.LightningModule):
             )
 
         lr_scheduler = {
-            "scheduler": CosineAnnealingLR(optimizer, T_max=self.trainer.max_epochs, eta_min=0.0001),
+            "scheduler": CosineAnnealingLR(
+                optimizer, T_max=self.trainer.max_epochs, eta_min=0.0001
+            ),
             "monitor": self.monitor,
             "interval": "epoch",
         }
@@ -537,7 +537,6 @@ class BRNN_MtO(L.LightningModule):
         self.dropout = kwargs.get("dropout", None)
 
         self.monitor = kwargs.get("monitor", "epoch_val_loss")
-
 
         self.lstm = nn.LSTM(
             input_size,
@@ -703,7 +702,9 @@ class BRNN_MtO(L.LightningModule):
         names, vectors, targets = batch
         outputs = self.forward(vectors)
         if self.problem_type == "regression":
-            targets = targets.view(-1, 1)  # Ensure targets have the shape [batch_size, 1]
+            targets = targets.view(
+                -1, 1
+            )  # Ensure targets have the shape [batch_size, 1]
 
             loss = self.criterion(outputs, targets.float())
             self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
@@ -773,7 +774,9 @@ class BRNN_MtO(L.LightningModule):
             )
 
         lr_scheduler = {
-            "scheduler": CosineAnnealingLR(optimizer, T_max=self.trainer.max_epochs, eta_min=0.0001),
+            "scheduler": CosineAnnealingLR(
+                optimizer, T_max=self.trainer.max_epochs, eta_min=0.0001
+            ),
             "monitor": self.monitor,
             "interval": "epoch",
         }
