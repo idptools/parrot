@@ -510,8 +510,8 @@ def parse_and_write_args_to_yaml():
 
 
 if __name__ == "__main__":
-    args = parse_and_write_args_to_yaml()
-    with open(args.config) as config_file:
+    arguments = parse_and_write_args_to_yaml()
+    with open(arguments.config) as config_file:
         final_config = yaml.safe_load(config_file)
 
     run_optimization(
