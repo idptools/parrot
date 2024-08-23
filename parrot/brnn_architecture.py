@@ -154,7 +154,12 @@ class ParrotDataModule(L.LightningDataModule):
 
     def test_dataloader(self):
         # Create and return the test dataloader
-        return DataLoader(self.test, batch_size=1, collate_fn=self.collate_function)
+        return DataLoader(
+            self.test,
+            batch_size=1,
+            collate_fn=self.collate_function,
+            num_workers=self.num_workers,
+        )
 
 
 class BRNN_MtM(L.LightningModule):
@@ -377,6 +382,23 @@ class BRNN_MtM(L.LightningModule):
 
         self.log("epoch_val_loss", loss, prog_bar=True)
 
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        names, vectors, targets = batch
+        outputs = self.forward(vectors)
+        if self.problem_type == "regression":
+            loss = self.criterion(outputs, targets.float())
+            self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
+            self.log("test_r2_score", self.r2_score)
+        else:
+            if self.datatype == "residues":
+                outputs = outputs.permute(0, 2, 1)
+            loss = self.criterion(outputs, targets.long())
+            accuracy = self.accuracy(outputs, targets.long())
+            self.log("test_accuracy", accuracy)
+
+        self.log("test_loss", loss)
         return loss
 
     def configure_optimizers(self):
@@ -734,6 +756,23 @@ class BRNN_MtO(L.LightningModule):
 
         self.val_step_losses.append(loss)
 
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        names, vectors, targets = batch
+        outputs = self.forward(vectors)
+        if self.problem_type == "regression":
+            loss = self.criterion(outputs, targets.float())
+            self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
+            self.log("test_r2_score", self.r2_score)
+        else:
+            if self.datatype == "residues":
+                outputs = outputs.permute(0, 2, 1)
+            loss = self.criterion(outputs, targets.long())
+            accuracy = self.accuracy(outputs, targets.long())
+            self.log("test_accuracy", accuracy)
+
+        self.log("test_loss", loss)
         return loss
 
     def on_validation_epoch_end(self):
