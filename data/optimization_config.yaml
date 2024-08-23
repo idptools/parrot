@@ -102,55 +102,68 @@ optimizer_name:
         
 learn_rate:
     name: "learn_rate"
-    value: 0.01
+    min: 0.01
+    max: 0.1
+    log: True
                                                                          
 swa_lr:
     name: "swa_lr"
-    value: 0.05
+    min: 0.01
+    max: 0.05
 
 num_lstm_layers:
     name: num_lstm_layers
-    value: 1
+    min: 1
+    max: 2
 
 lstm_hidden_size:
     name: lstm_hidden_size
-    value: 20
+    min: 20
+    max: 45
 
 num_linear_layers:
     name: num_linear_layers
-    value: 1
+    min: 1
+    max: 3
 
 linear_hidden_size:
     name: linear_hidden_size
-    value: 128
+    min: 128
+    max: 384
 
 dropout:
     name: dropout
-    value: 0.25
+    min: 0.0
+    max: 0.5
 
 # SGD parameters:
 momentum:
     name: "momentum"
-    value: 0.9
+    min: 0.9
+    max: 0.999
 
 # these params are only used if AdamW is used as optimizer.
 beta1:
     name: "beta1"
-    values: 0.9
+    min: 0.8
+    max: 0.99
 
 beta2:
     name: "beta2"
-    values: 0.999
+    min: 0.9
+    max: 0.999
 
 eps:
     name: "eps"
-    value: 0.00000001
-    
+    min: 0.00000001
+    max: 0.1
+    log: True
 
 weight_decay:
     name: "weight_decay"
-    value: 0.000001
-    
+    min: 0.000001
+    max: 0.01
+    log: True
 
 n_trials:
     name: "n_trials"
