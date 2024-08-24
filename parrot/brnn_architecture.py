@@ -16,12 +16,13 @@ import os
 import pytorch_lightning as L
 import torch
 import torch.nn as nn
-
 # import lightning as L
 from torch import optim
-from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
+from torch.optim.lr_scheduler import (CosineAnnealingLR,
+                                      CosineAnnealingWarmRestarts)
 from torch.utils.data import DataLoader
-from torchmetrics import AUROC, Accuracy, F1Score, MatthewsCorrCoef, Precision, R2Score
+from torchmetrics import (AUROC, Accuracy, F1Score, MatthewsCorrCoef,
+                          MeanMetric, Precision, R2Score)
 
 from parrot import process_input_data as pid
 from parrot.tools import validate_args
@@ -40,6 +41,7 @@ class ParrotDataModule(L.LightningDataModule):
         excludeSeqID=False,
         ignore_warnings=False,
         save_splits=True,
+        num_workers=None,
     ):
         """A Pytorch Lightning DataModule for PARROT formatted data files.
         This can be passed to a Pytorch Lightning Trainer object to train a PARROT network.
@@ -98,9 +100,12 @@ class ParrotDataModule(L.LightningDataModule):
             )
             self.split_file = f"{filename_prefix}_split_file.txt"
 
-        self.num_workers = (
-            os.cpu_count() if os.cpu_count() <= 32 else os.cpu_count() // 8
-        )
+        if num_workers is not None:
+            self.num_workers = num_workers
+        else:
+            self.num_workers = (
+                os.cpu_count() if os.cpu_count() <= 32 else os.cpu_count() // 4
+            )
 
     def prepare_data(self):
         pid.split_data(
@@ -302,7 +307,8 @@ class BRNN_MtM(L.LightningModule):
             )
 
         # these are used to monitor the training losses for the *EPOCH*
-        self.train_step_losses = []
+        self.train_loss_metric = MeanMetric()
+
 
         # save them sweet sweet hyperparameters
         self.save_hyperparameters()
@@ -341,16 +347,15 @@ class BRNN_MtM(L.LightningModule):
                 outputs = outputs.permute(0, 2, 1)
             loss = self.criterion(outputs, targets.long())
 
-        self.train_step_losses.append(loss)
+        self.train_loss_metric(loss)
+
         self.log("train_loss", loss)
         return loss
 
     def on_train_epoch_end(self):
-        epoch_mean = torch.stack(self.train_step_losses).mean()
+        epoch_mean = self.train_loss_metric.compute()
         self.log("epoch_train_loss", epoch_mean, prog_bar=True)
-
-        # free up the memory
-        self.train_step_losses.clear()
+        self.train_loss_metric.reset()
 
     def validation_step(self, batch, batch_idx):
         names, vectors, targets = batch
@@ -658,10 +663,8 @@ class BRNN_MtO(L.LightningModule):
             raise ValueError(
                 "Invalid problem type. Supported options: 'regression', 'classification'."
             )
-
-        # these are used to monitor the training losses for the *EPOCH*
-        self.train_step_losses = []
-        self.val_step_losses = []
+        
+        self.train_loss_metric = MeanMetric()
 
         # save them sweet sweet hyperparameters
         self.save_hyperparameters()
@@ -709,17 +712,16 @@ class BRNN_MtO(L.LightningModule):
             loss = self.criterion(outputs, targets.long())
 
         loss = loss / self.batch_size
-        self.train_step_losses.append(loss)
+        self.train_loss_metric(loss)
 
         self.log("train_loss", loss)
         return loss
 
     def on_train_epoch_end(self):
-        epoch_mean = torch.stack(self.train_step_losses).mean()
+        epoch_mean = self.train_loss_metric.compute()
         self.log("epoch_train_loss", epoch_mean, prog_bar=True)
-        # free up the memory
-        self.train_step_losses.clear()
-
+        self.train_loss_metric.reset()
+        
     def validation_step(self, batch, batch_idx):
         names, vectors, targets = batch
         outputs = self.forward(vectors)
@@ -754,8 +756,6 @@ class BRNN_MtO(L.LightningModule):
             mcc = self.mcc(outputs, targets.long())
             self.log("epoch_val_mcc", mcc)
 
-        self.val_step_losses.append(loss)
-
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -775,12 +775,6 @@ class BRNN_MtO(L.LightningModule):
         self.log("test_loss", loss)
         return loss
 
-    def on_validation_epoch_end(self):
-        epoch_mean = torch.stack(self.val_step_losses).mean()
-        self.log("epoch_val_loss", epoch_mean, prog_bar=True)
-
-        # free up the memory
-        self.val_step_losses.clear()
 
     def configure_optimizers(self):
         if self.optimizer_name == "SGD":
@@ -814,6 +808,13 @@ class BRNN_MtO(L.LightningModule):
 
         lr_scheduler = {
             "scheduler": CosineAnnealingLR(
+                optimizer, T_max=self.trainer.max_epochs, eta_min=0.0001
+            ),
+            "monitor": self.monitor,
+            "interval": "epoch",
+        }
+
+        return [optimizer], [lr_scheduler]
                 optimizer, T_max=self.trainer.max_epochs, eta_min=0.0001
             ),
             "monitor": self.monitor,
