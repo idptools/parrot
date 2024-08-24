@@ -16,13 +16,20 @@ import os
 import pytorch_lightning as L
 import torch
 import torch.nn as nn
+
 # import lightning as L
 from torch import optim
-from torch.optim.lr_scheduler import (CosineAnnealingLR,
-                                      CosineAnnealingWarmRestarts)
+from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
-from torchmetrics import (AUROC, Accuracy, F1Score, MatthewsCorrCoef,
-                          MeanMetric, Precision, R2Score)
+from torchmetrics import (
+    AUROC,
+    Accuracy,
+    F1Score,
+    MatthewsCorrCoef,
+    MeanMetric,
+    Precision,
+    R2Score,
+)
 
 from parrot import process_input_data as pid
 from parrot.tools import validate_args
@@ -308,7 +315,6 @@ class BRNN_MtM(L.LightningModule):
 
         # these are used to monitor the training losses for the *EPOCH*
         self.train_loss_metric = MeanMetric()
-
 
         # save them sweet sweet hyperparameters
         self.save_hyperparameters()
@@ -663,7 +669,7 @@ class BRNN_MtO(L.LightningModule):
             raise ValueError(
                 "Invalid problem type. Supported options: 'regression', 'classification'."
             )
-        
+
         self.train_loss_metric = MeanMetric()
 
         # save them sweet sweet hyperparameters
@@ -721,7 +727,7 @@ class BRNN_MtO(L.LightningModule):
         epoch_mean = self.train_loss_metric.compute()
         self.log("epoch_train_loss", epoch_mean, prog_bar=True)
         self.train_loss_metric.reset()
-        
+
     def validation_step(self, batch, batch_idx):
         names, vectors, targets = batch
         outputs = self.forward(vectors)
@@ -775,7 +781,6 @@ class BRNN_MtO(L.LightningModule):
         self.log("test_loss", loss)
         return loss
 
-
     def configure_optimizers(self):
         if self.optimizer_name == "SGD":
             optimizer = optim.SGD(
@@ -808,13 +813,6 @@ class BRNN_MtO(L.LightningModule):
 
         lr_scheduler = {
             "scheduler": CosineAnnealingLR(
-                optimizer, T_max=self.trainer.max_epochs, eta_min=0.0001
-            ),
-            "monitor": self.monitor,
-            "interval": "epoch",
-        }
-
-        return [optimizer], [lr_scheduler]
                 optimizer, T_max=self.trainer.max_epochs, eta_min=0.0001
             ),
             "monitor": self.monitor,
