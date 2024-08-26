@@ -21,21 +21,22 @@ class SequenceDataset(Dataset):
 
     def __getitem__(self, idx):
         with open(self.filepath, 'r') as file:
-            for i, line in enumerate(file):
-                if i == idx:
-                    seqID, sequence, values = line.strip().split('\t')
-                    values = np.array([float(value) for value in values.split()], dtype=np.float32)
+            #for i, line in enumerate(file):
+            #    if i == idx:
+            line=file.read().split('\n')[idx]
+            seqID, sequence, values = line.strip().split('\t')
+            values = np.array([float(value) for value in values.split()], dtype=np.float32)
 
-                    if self.encoding_scheme == 'onehot':
-                        sequence_vector = encode_sequence.one_hot(sequence)
-                    elif self.encoding_scheme == 'biophysics':
-                        sequence_vector = encode_sequence.biophysics(sequence)
-                    elif self.encoding_scheme == 'user' and self.encoder:
-                        sequence_vector = self.encoder.encode(sequence)
-                    else:
-                        raise ValueError(f"Unknown encoding scheme: {self.encoding_scheme}")
+            if self.encoding_scheme == 'onehot':
+                sequence_vector = encode_sequence.one_hot(sequence)
+            elif self.encoding_scheme == 'biophysics':
+                sequence_vector = encode_sequence.biophysics(sequence)
+            elif self.encoding_scheme == 'user' and self.encoder:
+                sequence_vector = self.encoder.encode(sequence)
+            else:
+                raise ValueError(f"Unknown encoding scheme: {self.encoding_scheme}")
 
-                    return seqID, sequence_vector, values
+            return seqID, sequence_vector, values
 
 
 def seq_regress_collate(batch):
