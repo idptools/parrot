@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python
 import argparse
 import datetime
 import os
@@ -214,6 +214,7 @@ def main(config):
         excludeSeqID=config.get("excludeSeqID", None),
         ignore_warnings=config["ignore_warnings"]["value"],
         save_splits=config["save_splits"]["value"],
+        num_workers=0,
     )
 
     # # Prepare the data
@@ -270,7 +271,7 @@ def main(config):
 
     silent = config["silent"]["value"]
     device = config["gpu_id"]["value"]
-
+    print("silent is: ", silent)
     # Set up trainer
     trainer = pl.Trainer(
         gradient_clip_val=1.0,
@@ -283,23 +284,7 @@ def main(config):
         callbacks=[early_stop_callback, checkpoint_callback],
         logger=logger,
         log_every_n_steps=100,
-        enable_progress_bar=not silent,
-        enable_model_summary=not silent,
     )
-
-    # Output to std out
-    if not config["silent"]["value"]:
-        print("\nPARROT with user-specified parameters")
-        print("-------------------------------------")
-        if config.get("verbose", False):
-            print(f"Train on: {trainer.accelerator}")
-            print(f"Datatype: {config['datatype']}")
-            print(f"ML Task: {datamodule.problem_type}")
-            print(f"Learning rate: {config['learn_rate']}")
-            print(f"Number of layers: {config['num_lstm_layers']}")
-            print(f"Hidden vector size: {config['lstm_hidden_size']}")
-            print(f"Batch size: {config['batch_size']}\n")
-        print("Validation set loss per epoch:")
 
     # Train the model
     trainer.fit(model, datamodule=datamodule)
