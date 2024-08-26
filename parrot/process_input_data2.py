@@ -9,7 +9,7 @@ import numpy as np
 import mmap
 
 from parrot import encode_sequence
-
+'''
 class SequenceDataset(Dataset):
     def __init__(self, filepath, encoding_scheme='onehot', encoder=None):
         self.filepath = filepath
@@ -41,6 +41,53 @@ class SequenceDataset(Dataset):
                     raise ValueError(f"Unknown encoding scheme: {self.encoding_scheme}")
 
                 return seqID, sequence_vector, values
+'''
+# trying a version that precomptues offsets. 
+
+def compute_offsets(filepath):
+    offsets = []
+    with open(filepath, 'r') as file:
+        offset = 0
+        for line in file:
+            offsets.append(offset)
+            offset += len(line.encode('utf-8'))  # Store the byte offset
+    return offsets
+
+class SequenceDataset(Dataset):
+    def __init__(self, filepath, encoding_scheme='onehot', encoder=None):
+        self.filepath = filepath
+        self.encoding_scheme = encoding_scheme
+        self.encoder = encoder
+
+        # Compute offsets for each line
+        self.offsets = compute_offsets(filepath)
+
+        # Memory-map the file
+        with open(self.filepath, 'r+b') as f:
+            self.mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+
+    def __len__(self):
+        return len(self.offsets)
+
+    def __getitem__(self, idx):
+        # Seek to the line's offset
+        self.mmapped_file.seek(self.offsets[idx])
+        line = self.mmapped_file.readline().decode('utf-8')
+
+        # Split the line into components
+        seqID, sequence, values = line.strip().split('\t')
+        values = np.array([float(value) for value in values.split()], dtype=np.float32)
+
+        if self.encoding_scheme == 'onehot':
+            sequence_vector = encode_sequence.one_hot(sequence)
+        elif self.encoding_scheme == 'biophysics':
+            sequence_vector = encode_sequence.biophysics(sequence)
+        elif self.encoding_scheme == 'user' and self.encoder:
+            sequence_vector = self.encoder.encode(sequence)
+        else:
+            raise ValueError(f"Unknown encoding scheme: {self.encoding_scheme}")
+
+        return seqID, sequence_vector, values
 
 
 def seq_regress_collate(batch):
