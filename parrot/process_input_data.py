@@ -70,7 +70,7 @@ def __parse_lines(lines, datatype, validate=True):
         data = []
         for lc, line in enumerate(lines, start=1):
             if datatype == "residues":
-                residue_data = list(map(float, line[2:]))
+                residue_data = list(map(float, line[2:].split()))
                 if validate and len(line[1]) != len(residue_data):
                     raise ValueError(
                         f"Mismatch between sequence length and residue values on line {lc}: {line}"
@@ -85,7 +85,7 @@ def __parse_lines(lines, datatype, validate=True):
         print(e)
         print("")
         raise parrot_exceptions.IOExceptionParrot(
-            f"Input data is not correctly formatted for datatype '{datatype}'.\nMake sure your datafile does not have empty lines at the end of the file.\nError on line {lc}:\n{x}"
+            f"Input data is not correctly formatted for datatype '{datatype}'.\nMake sure your datafile does not have empty lines at the end of the file.\nError on line {lc}:\n{line}"
         )
 
     return data
