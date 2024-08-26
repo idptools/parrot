@@ -17,6 +17,7 @@ import os
 
 import numpy as np
 import torch
+from IPython import embed
 from torch.utils.data import Dataset
 
 from parrot import encode_sequence, parrot_exceptions
@@ -26,7 +27,7 @@ from parrot.tools import dataset_warnings
 # .................................................................
 #
 #
-def read_tsv_raw(tsvfile, delimiter="\t"):
+def read_tsv_raw(tsvfile, delimiter=None):
     """
     Efficiently parses a TSV file, ignoring empty lines and comment lines.
     Parameters
@@ -70,7 +71,7 @@ def __parse_lines(lines, datatype, validate=True):
         data = []
         for lc, line in enumerate(lines, start=1):
             if datatype == "residues":
-                residue_data = list(map(float, "".join(data[2:]).split()))
+                residue_data = np.array(line[2:], dtype=float)
                 if validate and len(line[1]) != len(residue_data):
                     raise ValueError(
                         f"Mismatch between sequence length and residue values on line {lc}: {line}"
@@ -251,11 +252,7 @@ class SequenceDataset(Dataset):
         else:
             raise ValueError("Invalid encoding scheme or missing encoder.")
 
-        return (
-            seqID,
-            torch.tensor(sequence_vector, dtype=torch.float32),
-            torch.tensor(values, dtype=torch.float32),
-        )
+        return (seqID, sequence_vector, values)
 
 
 def seq_class_collate(batch):
