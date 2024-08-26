@@ -40,7 +40,7 @@ class SequenceDataset(Dataset):
 
 def seq_regress_collate(batch):
     names = [item[0] for item in batch]
-    seq_vectors = [torch.tensor(item[1], dtype=torch.float32) for item in batch]
+    seq_vectors = [item[1].clone().detach().float() for item in batch]
     
     # Determine the maximum length for target values in the batch
     max_target_len = max(item[2].shape[0] for item in batch)
@@ -49,7 +49,6 @@ def seq_regress_collate(batch):
     targets = torch.zeros((len(batch), max_target_len), dtype=torch.float32)
     for i, item in enumerate(batch):
         target_len = item[2].shape[0]
-        # Replace torch.tensor() with clone().detach() to avoid the warning
         targets[i, :target_len] = item[2].clone().detach().float()
 
     # Determine the longest sequence in the batch
