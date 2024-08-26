@@ -9,7 +9,8 @@ import numpy as np
 import mmap
 
 from parrot import encode_sequence
-'''
+
+
 class SequenceDataset(Dataset):
     def __init__(self, filepath, encoding_scheme='onehot', encoder=None):
         self.filepath = filepath
@@ -19,65 +20,41 @@ class SequenceDataset(Dataset):
         # Open the file and memory-map it
         with open(self.filepath, 'r+b') as f:
             self.mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        
+        # Calculate number of lines and store line offsets for direct access
+        self.length, self.line_offsets = self._calculate_line_offsets()
 
-    def __len__(self):
-        return self.mmapped_file.read().count(b'\n')
-
-    def __getitem__(self, idx):
-        self.mmapped_file.seek(0)
-        for i, line in enumerate(iter(self.mmapped_file.readline, b"")):
-            if i == idx:
-                line = line.decode('utf-8')
-                seqID, sequence, values = line.strip().split('\t')
-                values = np.array([float(value) for value in values.split()], dtype=np.float32)
-
-                if self.encoding_scheme == 'onehot':
-                    sequence_vector = encode_sequence.one_hot(sequence)
-                elif self.encoding_scheme == 'biophysics':
-                    sequence_vector = encode_sequence.biophysics(sequence)
-                elif self.encoding_scheme == 'user' and self.encoder:
-                    sequence_vector = self.encoder.encode(sequence)
-                else:
-                    raise ValueError(f"Unknown encoding scheme: {self.encoding_scheme}")
-
-                return seqID, sequence_vector, values
-'''
-# trying a version that precomptues offsets. 
-
-def compute_offsets(filepath):
-    offsets = []
-    with open(filepath, 'r') as file:
+    def _calculate_line_offsets(self):
+        """Calculate the file offsets for the beginning of each line."""
+        offsets = []
         offset = 0
-        for line in file:
+        length = 0
+
+        while True:
+            line = self.mmapped_file.readline()
+            if not line:
+                break
             offsets.append(offset)
-            offset += len(line.encode('utf-8'))  # Store the byte offset
-    return offsets
+            offset += len(line)
+            length += 1
 
-class SequenceDataset(Dataset):
-    def __init__(self, filepath, encoding_scheme='onehot', encoder=None):
-        self.filepath = filepath
-        self.encoding_scheme = encoding_scheme
-        self.encoder = encoder
-
-        # Compute offsets for each line
-        self.offsets = compute_offsets(filepath)
-
-        # Memory-map the file
-        with open(self.filepath, 'r+b') as f:
-            self.mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        # Reset the file pointer
+        self.mmapped_file.seek(0)
+        return length, offsets
 
     def __len__(self):
-        return len(self.offsets)
+        return self.length
 
     def __getitem__(self, idx):
-        # Seek to the line's offset
-        self.mmapped_file.seek(self.offsets[idx])
+        # Directly seek to the correct offset
+        self.mmapped_file.seek(self.line_offsets[idx])
         line = self.mmapped_file.readline().decode('utf-8')
-
-        # Split the line into components
+        
+        # Parse the line
         seqID, sequence, values = line.strip().split('\t')
         values = np.array([float(value) for value in values.split()], dtype=np.float32)
-
+        
+        # Encode the sequence based on the specified encoding scheme
         if self.encoding_scheme == 'onehot':
             sequence_vector = encode_sequence.one_hot(sequence)
         elif self.encoding_scheme == 'biophysics':
