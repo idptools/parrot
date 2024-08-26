@@ -32,6 +32,7 @@ from torchmetrics import (
 )
 
 from parrot import process_input_data as pid
+from parrot import process_input_data2 as pid2
 from parrot.tools import validate_args
 
 
@@ -100,6 +101,14 @@ class ParrotDataModule(L.LightningDataModule):
         self.ignore_warnings = ignore_warnings
         self.save_splits = save_splits
 
+        # load dataset 
+        self.dataset=pid2.SequenceDataset(self.tsv_file)
+
+        # make data loaders
+        self.train_loader, self.val_loader, self.test_loader = pid2.create_dataloaders(
+            self.dataset,batch_size=self.batch_size, train_ratio=self.fractions[0],
+            val_ratio=self.fractions[2])
+
         # if true and split file has not been provided
         if self.save_splits and not os.path.isfile(self.split_file):
             # take TSV file
@@ -149,32 +158,16 @@ class ParrotDataModule(L.LightningDataModule):
 
     def train_dataloader(self):
         # Create and return the training dataloader
-        return DataLoader(
-            self.train,
-            batch_size=self.batch_size,
-            collate_fn=self.collate_function,
-            shuffle=True,
-            num_workers=self.num_workers,
-        )
+        return self.train_loader
 
     def val_dataloader(self):
         # Create and return the validation dataloader
-        return DataLoader(
-            self.val,
-            batch_size=self.batch_size,
-            collate_fn=self.collate_function,
-            shuffle=False,
-            num_workers=self.num_workers,
-        )
+        return self.val_loader
 
     def test_dataloader(self):
         # Create and return the test dataloader
-        return DataLoader(
-            self.test,
-            batch_size=1,
-            collate_fn=self.collate_function,
-            num_workers=self.num_workers,
-        )
+        return self.test_loader
+
 
 
 class BRNN_MtM(L.LightningModule):
