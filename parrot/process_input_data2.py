@@ -49,7 +49,7 @@ def seq_regress_collate(batch):
     targets = torch.zeros((len(batch), max_target_len), dtype=torch.float32)
     for i, item in enumerate(batch):
         target_len = item[2].shape[0]
-        targets[i, :target_len] = item[2].clone().detach().float()
+        targets[i, :target_len] = torch.tensor(item[2], dtype=torch.float32)
 
     # Determine the longest sequence in the batch
     max_len = max(seq.size(0) for seq in seq_vectors)
@@ -61,6 +61,8 @@ def seq_regress_collate(batch):
         padded_seqs[i, :seq.size(0), :] = seq.clone().detach()
 
     return names, padded_seqs, targets
+
+    
 
 def split_dataset_indices(dataset, train_ratio=0.7, val_ratio=0.15):
     dataset_size = len(dataset)
