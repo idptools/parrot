@@ -60,9 +60,7 @@ def seq_regress_collate(batch):
     for i, seq in enumerate(seq_vectors):
         padded_seqs[i, :seq.size(0), :] = seq.clone().detach()
 
-    return names, padded_seqs, targets
-
-    
+    return names, torch.FloatTensor(padded_seqs), torch.FloatTensor(targets)
 
 def split_dataset_indices(dataset, train_ratio=0.7, val_ratio=0.15):
     dataset_size = len(dataset)
