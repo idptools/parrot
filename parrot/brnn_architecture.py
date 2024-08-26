@@ -82,6 +82,9 @@ class ParrotDataModule(L.LightningDataModule):
         self.datatype = datatype
         self.batch_size = batch_size
         self.encode = encode
+        # Need to set this to False for distributed training
+        # should detect this dynamically
+        # self.prepare_data_per_node = False
 
         self.problem_type, self.collate_function = validate_args.set_ml_task(
             self.num_classes, self.datatype
