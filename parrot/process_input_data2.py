@@ -6,6 +6,7 @@
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 import numpy as np
+import mmap
 
 from parrot import encode_sequence
 
@@ -15,28 +16,31 @@ class SequenceDataset(Dataset):
         self.encoding_scheme = encoding_scheme
         self.encoder = encoder
 
+        # Open the file and memory-map it
+        with open(self.filepath, 'r+b') as f:
+            self.mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+
     def __len__(self):
-        with open(self.filepath, 'r') as file:
-            return sum(1 for _ in file)
+        return self.mmapped_file.read().count(b'\n')
 
     def __getitem__(self, idx):
-        with open(self.filepath, 'r') as file:
-            #for i, line in enumerate(file):
-            #    if i == idx:
-            line=file.read().split('\n')[idx]
-            seqID, sequence, values = line.strip().split('\t')
-            values = np.array([float(value) for value in values.split()], dtype=np.float32)
+        self.mmapped_file.seek(0)
+        for i, line in enumerate(iter(self.mmapped_file.readline, b"")):
+            if i == idx:
+                line = line.decode('utf-8')
+                seqID, sequence, values = line.strip().split('\t')
+                values = np.array([float(value) for value in values.split()], dtype=np.float32)
 
-            if self.encoding_scheme == 'onehot':
-                sequence_vector = encode_sequence.one_hot(sequence)
-            elif self.encoding_scheme == 'biophysics':
-                sequence_vector = encode_sequence.biophysics(sequence)
-            elif self.encoding_scheme == 'user' and self.encoder:
-                sequence_vector = self.encoder.encode(sequence)
-            else:
-                raise ValueError(f"Unknown encoding scheme: {self.encoding_scheme}")
+                if self.encoding_scheme == 'onehot':
+                    sequence_vector = encode_sequence.one_hot(sequence)
+                elif self.encoding_scheme == 'biophysics':
+                    sequence_vector = encode_sequence.biophysics(sequence)
+                elif self.encoding_scheme == 'user' and self.encoder:
+                    sequence_vector = self.encoder.encode(sequence)
+                else:
+                    raise ValueError(f"Unknown encoding scheme: {self.encoding_scheme}")
 
-            return seqID, sequence_vector, values
+                return seqID, sequence_vector, values
 
 
 def seq_regress_collate(batch):
