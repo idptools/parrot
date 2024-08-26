@@ -35,18 +35,22 @@ class SequenceDataset(Dataset):
                     else:
                         raise ValueError(f"Unknown encoding scheme: {self.encoding_scheme}")
 
-                    print(len(sequence_vector))
-                    print(len(values))
-
                     return seqID, sequence_vector, values
 
 
 
 def seq_regress_collate(batch):
-
     names = [item[0] for item in batch]
     seq_vectors = [torch.tensor(item[1], dtype=torch.float32) for item in batch]
-    targets = torch.tensor([item[2] for item in batch], dtype=torch.float32)
+    
+    # Determine the maximum length for target values in the batch
+    max_target_len = max(item[2].shape[0] for item in batch)
+    
+    # Pad targets to have the same length
+    targets = torch.zeros((len(batch), max_target_len), dtype=torch.float32)
+    for i, item in enumerate(batch):
+        target_len = item[2].shape[0]
+        targets[i, :target_len] = torch.tensor(item[2], dtype=torch.float32)
 
     # Determine the longest sequence in the batch
     max_len = max(seq.size(0) for seq in seq_vectors)
