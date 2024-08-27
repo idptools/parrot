@@ -7,19 +7,10 @@ import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 import numpy as np
 import mmap
+import gc
 
 from parrot import encode_sequence
 
-
-# for computing offsets
-def compute_offsets(filepath):
-    offsets = []
-    with open(filepath, 'r') as file:
-        offset = 0
-        for line in file:
-            offsets.append(offset)
-            offset += len(line.encode('utf-8'))  # Store the byte offset
-    return offsets
 
 class SequenceDataset(Dataset):
     def __init__(self, filepath, encoding_scheme='onehot', encoder=None):
@@ -28,11 +19,21 @@ class SequenceDataset(Dataset):
         self.encoder = encoder
 
         # Compute offsets for each line
-        self.offsets = compute_offsets(filepath)
+        self.offsets = self.compute_offsets(filepath)
 
         # Memory-map the file
         with open(self.filepath, 'r+b') as f:
             self.mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+
+    # for computing offsets
+    def compute_offsets(self, filepath):
+        offsets = []
+        with open(filepath, 'r') as file:
+            offset = 0
+            for line in file:
+                offsets.append(offset)
+                offset += len(line.encode('utf-8'))  # Store the byte offset
+        return offsets
 
     def __len__(self):
         return len(self.offsets)
@@ -57,6 +58,14 @@ class SequenceDataset(Dataset):
 
         return seqID, sequence_vector, values
 
+    def __del__(self):
+        # Close the memory-mapped file
+        if hasattr(self, 'mmapped_file') and self.mmapped_file:
+            self.mmapped_file.close()
+            del self.mmapped_file
+
+        # Trigger garbage collection
+        gc.collect()    
 
 def seq_regress_collate(batch):
     names = [item[0] for item in batch]
