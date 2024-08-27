@@ -31,7 +31,7 @@ from torchmetrics import (
     R2Score,
 )
 
-from parrot import process_input_data as pid
+#from parrot import process_input_data as pid
 from parrot import process_input_data2 as pid2
 from parrot.tools import validate_args
 
@@ -104,10 +104,19 @@ class ParrotDataModule(L.LightningDataModule):
         # load dataset 
         self.dataset=pid2.SequenceDataset(self.tsv_file)
 
+        # get the indices
+        #self.train_indices, self.val_indices, self.test_indices = pid2.split_dataset_indices(self.dataset,
+        #                                                                train_ratio=self.fractions[0],
+        #                                                                val_ratio=self.fractions[2])
+
         # make data loaders
-        self.train_loader, self.val_loader, self.test_loader = pid2.create_dataloaders(
-            self.dataset,batch_size=self.batch_size, train_ratio=self.fractions[0],
-            val_ratio=self.fractions[2])
+        #self.train_loader, self.val_loader, self.test_loader = pid2.create_dataloaders(dataset=self.dataset,
+        #                                                                train_indices=self.train_indices, 
+        #                                                                val_indices=self.val_indices, 
+        #                                                                test_indices=self.test_indices, 
+        #                                                                batch_size=self.batch_size)
+
+
 
         # if true and split file has not been provided
         if self.save_splits and not os.path.isfile(self.split_file):
@@ -127,34 +136,19 @@ class ParrotDataModule(L.LightningDataModule):
             )
 
     def prepare_data(self):
-        pid.split_data(
-            self.tsv_file,
-            datatype=self.datatype,
-            problem_type=self.problem_type,
-            num_classes=self.num_classes,
-            excludeSeqID=self.excludeSeqID,
-            split_file=self.split_file,
-            encoding_scheme=self.encoding_scheme,
-            encoder=self.encoder,
-            percent_val=self.fractions[1],
-            percent_test=self.fractions[2],
-            ignoreWarnings=self.ignore_warnings,
-        )
+        pid2.initial_data_prep(save_splits_loc = self.split_file, 
+                                dataset=self.dataset, 
+                                train_ratio=self.fractions[0], 
+                                val_ratio=self.fractions[2])
 
-    def setup(self, stage=None):
-        self.train, self.val, self.test = pid.split_data(
-            self.tsv_file,
-            datatype=self.datatype,
-            problem_type=self.problem_type,
-            num_classes=self.num_classes,
-            excludeSeqID=self.excludeSeqID,
-            split_file=self.split_file,
-            encoding_scheme=self.encoding_scheme,
-            encoder=self.encoder,
-            percent_val=self.fractions[1],
-            percent_test=self.fractions[2],
-            ignoreWarnings=self.ignore_warnings,
-        )
+    def setup(self, stage):
+        self.train_indices, self.val_indices, self.test_indices = pid2.read_indices(self.split_file)
+        self.train_loader, self.val_loader, self.test_loader = pid2.create_dataloaders(
+                                                                    dataset=self.dataset,
+                                                                    train_indices=self.train_indices,
+                                                                    val_indices=self.val_indices,
+                                                                    test_indices=self.test_indices,
+                                                                    batch_size=self.batch_size)
 
     def train_dataloader(self):
         # Create and return the training dataloader

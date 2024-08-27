@@ -107,10 +107,50 @@ def split_dataset_indices(dataset, train_ratio=0.7, val_ratio=0.15):
     return train_indices, val_indices, test_indices
 
 
-
-def create_dataloaders(dataset, batch_size=32, train_ratio=0.7, val_ratio=0.15):
+def initial_data_prep(save_splits_loc, dataset, train_ratio, val_ratio):
+    # function that does initial data prep. Basically,
+    # this function will take in a dataset, get the indices
+    # then write them out to disk. 
     train_indices, val_indices, test_indices = split_dataset_indices(dataset, train_ratio, val_ratio)
+    with open(save_splits_loc, "w") as f:
+        f.write(" ".join(str(i) for i in train_indices))
+        f.write("\n")
+        f.write(" ".join(str(i) for i in val_indices))
+        f.write("\n")
+        f.write(" ".join(str(i) for i in test_indices))
+    f.close()
 
+
+
+def read_indices(filepath):
+    """
+    Read in the indices for train, val, test
+
+    Parameters
+    ----------
+    split_file : str
+            Path to a whitespace-separated splitfile
+
+    Returns
+    -------
+    numpy int array
+            an array of the indices for the training set samples
+    numpy int array
+            an array of the indices for the validation set samples
+    numpy int array
+            an array of the indices for the testing set samples
+    """
+
+    with open(filepath) as f:
+        lines = f.readlines()
+
+    training_samples = np.fromstring(lines[0], dtype=int, sep=" ")
+    val_samples = np.fromstring(lines[1], dtype=int, sep=" ")
+    test_samples = np.fromstring(lines[2], dtype=int, sep=" ")
+
+    return training_samples, val_samples, test_samples   
+
+def create_dataloaders(dataset, train_indices, val_indices, test_indices, batch_size=32):
     train_sampler = torch.utils.data.SubsetRandomSampler(train_indices)
     val_sampler = torch.utils.data.SubsetRandomSampler(val_indices)
     test_sampler = torch.utils.data.SubsetRandomSampler(test_indices)
@@ -120,6 +160,13 @@ def create_dataloaders(dataset, batch_size=32, train_ratio=0.7, val_ratio=0.15):
     test_loader = DataLoader(dataset, batch_size=1, sampler=test_sampler, collate_fn=seq_regress_collate)
 
     return train_loader, val_loader, test_loader
+
+
+
+
+
+
+
 
 
 
