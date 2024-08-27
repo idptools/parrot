@@ -119,7 +119,17 @@ class ParrotDataModule(L.LightningDataModule):
 
 
         # if true and split file has not been provided
-        if self.save_splits and not os.path.isfile(self.split_file):
+        #if self.save_splits and not os.path.isfile(self.split_file):
+        #    # take TSV file
+        #    network_file = os.path.abspath(self.tsv_file)
+        #    # Extract tsv filename without the extension and parent directory of TSV
+        #    filename_prefix, parent_dir = validate_args.split_file_and_directory(
+        #        network_file
+        #    )
+        #    self.split_file = f"{filename_prefix}_split_file.txt"
+
+        # if we don't have a name for split_file, make one. 
+        if self.split_file==None:
             # take TSV file
             network_file = os.path.abspath(self.tsv_file)
             # Extract tsv filename without the extension and parent directory of TSV
