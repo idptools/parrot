@@ -12,6 +12,7 @@ Licensed under the MIT license.
 """
 
 import os
+from IPython import embed
 
 import pytorch_lightning as L
 import torch
@@ -255,6 +256,8 @@ class BRNN_MtM(L.LightningModule):
             self.beta2 = kwargs.get("beta2", 0.999)
             self.eps = kwargs.get("eps", 1e-8)
             self.weight_decay = kwargs.get("weight_decay", 1e-2)
+        
+        self.distributed = kwargs.get("distributed",False)
 
         # nothing wrong with this, but this code is getting uglier and uglier.
         direction_map = {"minimize": "min", "maximize": "max"}

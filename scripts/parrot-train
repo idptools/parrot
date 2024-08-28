@@ -239,6 +239,7 @@ def main(config):
             datatype=config["datatype"]["value"],
             batch_size=config["batch_size"]["value"],
             learn_rate=config["learn_rate"]["value"],
+            distributed=config["distributed"]["value"]
         )
     elif config["datatype"]["value"] == "residues":
         model = BRNN_MtM(
@@ -250,6 +251,7 @@ def main(config):
             datatype=config["datatype"]["value"],
             batch_size=config["batch_size"]["value"],
             learn_rate=config["learn_rate"]["value"],
+            distributed=config["distributed"]["value"]
         )
     else:
         raise ValueError(
@@ -291,7 +293,7 @@ def main(config):
         devices=device,
         callbacks=[early_stop_callback, checkpoint_callback],
         logger=logger,
-        log_every_n_steps=100
+        log_every_n_steps=100,
     )
 
     # Train the model
