@@ -12,7 +12,6 @@ Licensed under the MIT license.
 """
 
 import os
-from IPython import embed
 
 import pytorch_lightning as L
 import torch
@@ -348,7 +347,7 @@ class BRNN_MtM(L.LightningModule):
 
     def on_train_epoch_end(self):
         epoch_mean = self.train_loss_metric.compute()
-        self.log("epoch_train_loss", epoch_mean, prog_bar=True)
+        self.log("epoch_train_loss", epoch_mean, prog_bar=True,sync_dist=self.distributed)
         self.train_loss_metric.reset()
 
     def validation_step(self, batch, batch_idx):
@@ -379,7 +378,7 @@ class BRNN_MtM(L.LightningModule):
 
             self.log("epoch_val_mcc", mcc, on_step=True)
 
-        self.log("epoch_val_loss", loss, prog_bar=True)
+        self.log("epoch_val_loss", loss, prog_bar=True, sync_dist=self.distributed)
 
         return loss
 
