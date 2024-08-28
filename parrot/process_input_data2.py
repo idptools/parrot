@@ -158,8 +158,8 @@ def create_dataloaders(dataset, train_indices, val_indices, test_indices, batch_
 
     else:
         train_sampler = torch.utils.data.DistributedSampler(train_indices, shuffle=True)
-        val_sampler = torch.utils.data.DistributedSampler(val_indices, shuffle=True)
-        test_sampler = torch.utils.data.DistributedSampler(test_indices, shuffle=True)
+        val_sampler = torch.utils.data.DistributedSampler(val_indices, shuffle=False)
+        test_sampler = torch.utils.data.DistributedSampler(test_indices, shuffle=False)
 
     train_loader = DataLoader(dataset, batch_size=batch_size, sampler=train_sampler, collate_fn=seq_regress_collate)
     val_loader = DataLoader(dataset, batch_size=batch_size, sampler=val_sampler, collate_fn=seq_regress_collate)
