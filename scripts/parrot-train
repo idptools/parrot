@@ -47,6 +47,12 @@ def parse_and_write_args_to_yaml():
         "--config", default=None, help="Path to the configuration file."
     )
     parser.add_argument(
+        "--num_nodes",
+        default=1,
+        type=int,
+        help="Number of nodes to run on",
+    )
+    parser.add_argument(
         "--num_classes",
         default=None,
         type=int,
@@ -281,6 +287,7 @@ def main(config):
         accelerator="gpu"
         if torch.cuda.is_available() and not config["force_cpu"]["value"]
         else "cpu",
+        num_nodes=args.num_nodes,
         devices=device,
         callbacks=[early_stop_callback, checkpoint_callback],
         logger=logger,
