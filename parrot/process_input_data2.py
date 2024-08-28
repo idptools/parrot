@@ -13,7 +13,7 @@ from parrot import encode_sequence
 
 
 class SequenceDataset(Dataset):
-    def __init__(self, filepath, encoding_scheme='onehot', encoder=None, , dynamic_loading=True):
+    def __init__(self, filepath, encoding_scheme='onehot', encoder=None, dynamic_loading=True):
         self.filepath = filepath
         self.encoding_scheme = encoding_scheme
         self.encoder = encoder
