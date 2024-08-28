@@ -51,6 +51,7 @@ class ParrotDataModule(L.LightningDataModule):
         save_splits=True,
         num_workers=None,
         distributed=False,
+        dynamic_loading=True,
     ):
         """A Pytorch Lightning DataModule for PARROT formatted data files.
         This can be passed to a Pytorch Lightning Trainer object to train a PARROT network.
@@ -79,6 +80,8 @@ class ParrotDataModule(L.LightningDataModule):
             Optionally save the train/val/test splits, by default True
         distributed : bool, optional
             Set whether training is distributed. Default is False. 
+        dynamic_loading : bool, optional
+            Whether to dynamically load data. Might cause issues if distributed. Default is True. 
         """
         super().__init__()
         self.tsv_file = tsv_file
@@ -105,8 +108,10 @@ class ParrotDataModule(L.LightningDataModule):
         else:
             self.prepare_data_per_node = True
 
+        self.dynamic_loading = dynamic_loading
+
         # load dataset 
-        self.dataset=pid2.SequenceDataset(self.tsv_file)
+        self.dataset=pid2.SequenceDataset(self.tsv_file, dynamic_loading=self.dynamic_loading)
 
         # if we don't have a name for split_file, make one. 
         if self.split_file==None:

@@ -13,17 +13,24 @@ from parrot import encode_sequence
 
 
 class SequenceDataset(Dataset):
-    def __init__(self, filepath, encoding_scheme='onehot', encoder=None):
+    def __init__(self, filepath, encoding_scheme='onehot', encoder=None, , dynamic_loading=True):
         self.filepath = filepath
         self.encoding_scheme = encoding_scheme
         self.encoder = encoder
+        self.dynamic_loading = dynamic_loading
 
-        # Compute offsets for each line
-        self.offsets = self.compute_offsets(filepath)
+        # Compute offsets for each line if we plan to dynamically load stuff. 
+        if self.dynamic_loading:
+            self.offsets = self.compute_offsets(filepath)
+            self.length=len(self.offsets)
+            # Memory-map the file
+            with open(self.filepath, 'r+b') as f:
+                self.mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)                
 
-        # Memory-map the file
-        with open(self.filepath, 'r+b') as f:
-            self.mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        else:
+            with open(self.filepath, 'r') as f:
+                self.lines = f.readlines()
+                self.length=len(self.lines)
 
     # for computing offsets
     def compute_offsets(self, filepath):
@@ -36,12 +43,15 @@ class SequenceDataset(Dataset):
         return offsets
 
     def __len__(self):
-        return len(self.offsets)
+        return self.length
 
     def __getitem__(self, idx):
-        # Seek to the line's offset
-        self.mmapped_file.seek(self.offsets[idx])
-        line = self.mmapped_file.readline().decode('utf-8')
+        if self.dynamic_loading:
+            # Seek to the line's offset
+            self.mmapped_file.seek(self.offsets[idx])
+            line = self.mmapped_file.readline().decode('utf-8')
+        else:
+            line = self.lines[idx]
 
         # Split the line into components
         seqID, sequence, values = line.strip().split('\t')
@@ -59,13 +69,19 @@ class SequenceDataset(Dataset):
         return seqID, sequence_vector, values
 
     def __del__(self):
-        # Close the memory-mapped file
-        if hasattr(self, 'mmapped_file') and self.mmapped_file:
-            self.mmapped_file.close()
-            del self.mmapped_file
+        if self.dynamic_loading:
+            # Close the memory-mapped file
+            if hasattr(self, 'mmapped_file') and self.mmapped_file:
+                self.mmapped_file.close()
+                del self.mmapped_file
+
+        else:
+            if hasattr(self, 'lines') and self.lines:
+                del self.lines
 
         # Trigger garbage collection
         gc.collect()    
+
 
 def seq_regress_collate(batch):
     names = [item[0] for item in batch]
