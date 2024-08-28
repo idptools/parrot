@@ -214,7 +214,8 @@ def main(config):
         excludeSeqID=config.get("excludeSeqID", None),
         ignore_warnings=config["ignore_warnings"]["value"],
         save_splits=config["save_splits"]["value"],
-        num_workers=0,
+        num_workers=config["num_workers"]["value"],
+        distributed=config["distributed"]["value"]
     )
 
     # # Prepare the data
@@ -269,6 +270,11 @@ def main(config):
     else:
         logger = CSVLogger("logs", name="parrot_model")
 
+    if config["distributed"]["value"]==True:
+        deterministic_trainer=True
+    else:
+        deterministic_trainer=None
+
     silent = config["silent"]["value"]
     device = config["gpu_id"]["value"]
     print("silent is: ", silent)
@@ -284,6 +290,7 @@ def main(config):
         callbacks=[early_stop_callback, checkpoint_callback],
         logger=logger,
         log_every_n_steps=100,
+        deterministic=deterministic_trainer
     )
 
     # Train the model

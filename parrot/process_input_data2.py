@@ -150,14 +150,20 @@ def read_indices(filepath):
 
     return training_samples, val_samples, test_samples   
 
-def create_dataloaders(dataset, train_indices, val_indices, test_indices, batch_size=32):
-    train_sampler = torch.utils.data.SubsetRandomSampler(train_indices)
-    val_sampler = torch.utils.data.SubsetRandomSampler(val_indices)
-    test_sampler = torch.utils.data.SubsetRandomSampler(test_indices)
+def create_dataloaders(dataset, train_indices, val_indices, test_indices, batch_size=32, distributed=False):
+    if distributed==False:
+        train_sampler = torch.utils.data.SubsetRandomSampler(train_indices)
+        val_sampler = torch.utils.data.SubsetRandomSampler(val_indices)
+        test_sampler = torch.utils.data.SubsetRandomSampler(test_indices)
 
-    train_loader = DataLoader(dataset, batch_size=batch_size, sampler=train_sampler, collate_fn=seq_regress_collate)
-    val_loader = DataLoader(dataset, batch_size=batch_size, sampler=val_sampler, collate_fn=seq_regress_collate)
-    test_loader = DataLoader(dataset, batch_size=1, sampler=test_sampler, collate_fn=seq_regress_collate)
+    else:
+        train_sampler = torch.utils.data.DistributedSampler(train_indices)
+        val_sampler = torch.utils.data.DistributedSampler(val_indices)
+        test_sampler = torch.utils.data.DistributedSampler(test_indices)
+
+    train_loader = DataLoader(dataset, batch_size=batch_size, sampler=train_sampler, collate_fn=seq_regress_collate, shuffle=True)
+    val_loader = DataLoader(dataset, batch_size=batch_size, sampler=val_sampler, collate_fn=seq_regress_collate, shuffle=True)
+    test_loader = DataLoader(dataset, batch_size=1, sampler=test_sampler, collate_fn=seq_regress_collate, shuffle=True)
 
     return train_loader, val_loader, test_loader
 

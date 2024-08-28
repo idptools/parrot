@@ -50,6 +50,7 @@ class ParrotDataModule(L.LightningDataModule):
         ignore_warnings=False,
         save_splits=True,
         num_workers=None,
+        distributed=False,
     ):
         """A Pytorch Lightning DataModule for PARROT formatted data files.
         This can be passed to a Pytorch Lightning Trainer object to train a PARROT network.
@@ -76,6 +77,8 @@ class ParrotDataModule(L.LightningDataModule):
             Ignore PARROT prompted warnings, by default False
         save_splits : bool, optional
             Optionally save the train/val/test splits, by default True
+        distributed : bool, optional
+            Set whether training is distributed. Default is False. 
         """
         super().__init__()
         self.tsv_file = tsv_file
@@ -83,50 +86,27 @@ class ParrotDataModule(L.LightningDataModule):
         self.datatype = datatype
         self.batch_size = batch_size
         self.encode = encode
-        # Need to set this to False for distributed training
-        # should detect this dynamically
-        # self.prepare_data_per_node = False
-
+        self.distributed=distributed
         self.problem_type, self.collate_function = validate_args.set_ml_task(
             self.num_classes, self.datatype
         )
         self.encoding_scheme, self.encoder, self.input_size = (
             validate_args.set_encoding_scheme(self.encode)
         )
-
         self.fractions = fractions
-
         self.split_file = split_file
         self.excludeSeqID = excludeSeqID
         self.ignore_warnings = ignore_warnings
         self.save_splits = save_splits
 
+        # set prepare_data_per_node depending on if distributed
+        if self.distributed:
+            self.prepare_data_per_node = False
+        else:
+            self.prepare_data_per_node = True
+
         # load dataset 
         self.dataset=pid2.SequenceDataset(self.tsv_file)
-
-        # get the indices
-        #self.train_indices, self.val_indices, self.test_indices = pid2.split_dataset_indices(self.dataset,
-        #                                                                train_ratio=self.fractions[0],
-        #                                                                val_ratio=self.fractions[2])
-
-        # make data loaders
-        #self.train_loader, self.val_loader, self.test_loader = pid2.create_dataloaders(dataset=self.dataset,
-        #                                                                train_indices=self.train_indices, 
-        #                                                                val_indices=self.val_indices, 
-        #                                                                test_indices=self.test_indices, 
-        #                                                                batch_size=self.batch_size)
-
-
-
-        # if true and split file has not been provided
-        #if self.save_splits and not os.path.isfile(self.split_file):
-        #    # take TSV file
-        #    network_file = os.path.abspath(self.tsv_file)
-        #    # Extract tsv filename without the extension and parent directory of TSV
-        #    filename_prefix, parent_dir = validate_args.split_file_and_directory(
-        #        network_file
-        #    )
-        #    self.split_file = f"{filename_prefix}_split_file.txt"
 
         # if we don't have a name for split_file, make one. 
         if self.split_file==None:
