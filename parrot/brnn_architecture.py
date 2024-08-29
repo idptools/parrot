@@ -250,6 +250,8 @@ class BRNN_MtM(L.LightningModule):
             self.beta2 = kwargs.get("beta2", 0.999)
             self.eps = kwargs.get("eps", 1e-8)
             self.weight_decay = kwargs.get("weight_decay", 1e-2)
+        
+        self.distributed = kwargs.get("distributed",False)
 
         # nothing wrong with this, but this code is getting uglier and uglier.
         direction_map = {"minimize": "min", "maximize": "max"}
@@ -340,7 +342,7 @@ class BRNN_MtM(L.LightningModule):
 
     def on_train_epoch_end(self):
         epoch_mean = self.train_loss_metric.compute()
-        self.log("epoch_train_loss", epoch_mean, prog_bar=True)
+        self.log("epoch_train_loss", epoch_mean, prog_bar=True,sync_dist=self.distributed)
         self.train_loss_metric.reset()
 
     def validation_step(self, batch, batch_idx):
@@ -371,7 +373,7 @@ class BRNN_MtM(L.LightningModule):
 
             self.log("epoch_val_mcc", mcc, on_step=True)
 
-        self.log("epoch_val_loss", loss, prog_bar=True)
+        self.log("epoch_val_loss", loss, prog_bar=True, sync_dist=self.distributed)
 
         return loss
 
