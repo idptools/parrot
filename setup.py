@@ -57,7 +57,6 @@ setup(
             'cython',
             'torch>=1.8.0',
             'numpy',
-            'argparse',
             'more-itertools',
             'scipy',
             'scikit-learn',
