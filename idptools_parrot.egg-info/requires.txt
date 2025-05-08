@@ -1,9 +1,7 @@
-cython
-torch>=1.8.0
 numpy
-argparse
-more-itertools
 scipy
+torch>=1.8.0
+more-itertools
 scikit-learn
 matplotlib
 seaborn
@@ -12,3 +10,6 @@ pandas
 [optimize]
 GPy
 GPyOpt
+
+[test]
+pytest>=6.1.2

@@ -6,6 +6,7 @@
 
 This package can handle regression and classification ML problems, as well as sequence-mapped and residue-mapped input data.
 
+#### Version 1.7.6 [Ma 2025]
 ## Installation:
 
 PARROT is available through GitHub or the Python Package Index (PyPI). To install the base version of PARROT through PyPI, run
@@ -94,10 +95,11 @@ Once a network has been trained for a particular machine learning task, the user
 
 ### Copyright
 
-Copyright (c) 2020-2023, Holehouse Lab
+Copyright (c) 2020-2025, Holehouse Lab
 
 ### Change log 
 
+* Version 1.7.6 [May 2025]: Updated the build process to use pyproject.toml and versioningit for version updates, so PARROT is now compatible with Python 3.13+.
 * Version 1.7.2: Updated Python dependency so PARROT is compatible with Python 3.8, 3.9, and 3.10. 
 
 #### Acknowledgements

@@ -2,9 +2,10 @@
 ####### requirements.txt #######
 #
 ###### Requirements without Version Specifiers ######
+versioningit
+sphinx_rtd_theme
 numpy
 torch
-argparse
 more-itertools
 scipy
 matplotlib

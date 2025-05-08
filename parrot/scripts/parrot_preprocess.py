@@ -26,7 +26,8 @@ from parrot.tools import preproc
 #<><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
 #
 #
-if __name__=="__main__":
+# Parse the command line arguments
+def main():
 
     parser = argparse.ArgumentParser(description='parrot-preprocess is a file manipulation tool for generating input files for parrot-predict')    
 

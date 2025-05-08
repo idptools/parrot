@@ -16,6 +16,7 @@ idptools_parrot.egg-info/PKG-INFO
 build/lib/parrot/_version.py
 idptools_parrot.egg-info/PKG-INFO
 
+parrot/_version.py
 
 
 # ignore built docs
