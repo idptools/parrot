@@ -476,6 +476,7 @@ class BRNN_MtM(L.LightningModule):
             self.log("epoch_val_mcc", mcc, on_step=True)
 
         self.log("epoch_val_loss", loss, prog_bar=True, sync_dist=self.distributed)
+        self.log("val_loss", loss, sync_dist=self.distributed)  # For compatibility with standard monitoring
 
         return loss
 
@@ -784,6 +785,7 @@ class BRNN_MtO(L.LightningModule):
             self.log("epoch_val_mcc", mcc, on_step=True)
 
         self.log("epoch_val_loss", loss, prog_bar=True, sync_dist=self.distributed)
+        self.log("val_loss", loss, sync_dist=self.distributed)  # For compatibility with standard monitoring
         return loss
 
     def test_step(self, batch, batch_idx):
