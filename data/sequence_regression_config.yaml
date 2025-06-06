@@ -1,0 +1,178 @@
+# PARROT Optimization Config for Sequence Regression
+# This config is optimized for training regression models on protein sequences
+# Adjust tsv_file, study_name, and other paths as needed for your specific dataset
+
+###### REQUIRED PARAMETERS ######
+# Path to your training data TSV file
+tsv_file: 
+    name: "tsv_file"
+    value: "data/seq_regress_dataset.tsv"
+
+# Number of classes (always 1 for regression)
+num_classes:
+    name: "num_classes"
+    value: 1
+
+# Data type - "sequence" for per-sequence predictions
+datatype:
+    name: "datatype"
+    value: "sequence"
+
+# Optional: Path to file specifying train/val/test splits
+# If null, will use set_fractions to randomly split
+split_file:
+    name: "split_file"
+    value: null
+
+# Fraction splits for train/validation/test
+set_fractions:
+    name: "set_fractions"
+    value: [0.7, 0.15, 0.15]
+
+# Encoding scheme - "onehot" is standard for amino acids
+encode:
+    name: "encode"
+    value: "onehot"
+
+###### OPTIMIZATION PARAMETERS ######
+# Metric to monitor for optimization (minimize validation loss)
+monitor:
+    name: "monitor"
+    value: "val_loss"
+
+# Training epochs
+min_epochs:
+    name: "min_epochs"
+    value: 10
+
+max_epochs:
+    name: "max_epochs"
+    value: 80
+
+# Optimization direction (minimize for loss)
+direction:
+    name: "direction"
+    value: "minimize"
+
+# Early stopping sensitivity
+min_delta:
+    name: "min_delta"
+    value: 0.001
+
+# Number of trials for optimization
+n_trials:
+    name: "n_trials"
+    value: 50
+
+# Number of warm-up trials before Bayesian optimization
+warm_up_trials:
+    name: "warm_up_trials"
+    value: 10
+
+# Study name for WandB logging
+study_name:
+    name: "study_name"
+    value: "sequence_regression_optimization"
+
+###### HARDWARE CONFIGURATION ######
+# Batch size - adjust based on your GPU memory
+batch_size:
+    name: "batch_size"
+    value: 64
+
+# GPU configuration
+gpu_id:
+    name: "gpu_id"
+    value: [0]
+
+force_cpu:
+    name: "force_cpu"
+    value: false
+
+# Other settings
+ignore_warnings:
+    name: "ignore_warnings"
+    value: false
+
+save_splits:
+    name: "save_splits"
+    value: true
+
+###### HYPERPARAMETER SEARCH SPACES ######
+# Optimizer choices - AdamW generally works well for regression
+optimizer_name:
+    name: "optimizer_name"
+    choices:
+        AdamW: "AdamW"
+        SGD: "SGD"
+
+# Learning rate range (log scale)
+learn_rate:
+    name: "learn_rate"
+    min: 0.0001
+    max: 0.01
+    log: true
+
+# Gradient clipping range
+gradient_clip_val:
+    name: "gradient_clip_val"
+    min: 0.5
+    max: 2.0
+
+# LSTM architecture
+num_lstm_layers:
+    name: "num_lstm_layers"
+    min: 1
+    max: 3
+
+lstm_hidden_size:
+    name: "lstm_hidden_size"
+    min: 64
+    max: 512
+
+# Linear layers
+num_linear_layers:
+    name: "num_linear_layers"
+    min: 1
+    max: 4
+
+linear_hidden_size:
+    name: "linear_hidden_size"
+    min: 32
+    max: 256
+
+# Dropout for regularization
+dropout:
+    name: "dropout"
+    min: 0.0
+    max: 0.4
+
+###### OPTIMIZER-SPECIFIC PARAMETERS ######
+# SGD parameters
+momentum:
+    name: "momentum"
+    min: 0.85
+    max: 0.95
+
+# AdamW parameters
+beta1:
+    name: "beta1"
+    min: 0.85
+    max: 0.95
+
+beta2:
+    name: "beta2"
+    min: 0.98
+    max: 0.9999
+
+eps:
+    name: "eps"
+    min: 0.000000001
+    max: 0.00001
+    log: true
+
+weight_decay:
+    name: "weight_decay"
+    min: 0.000001
+    max: 0.01
+    log: true

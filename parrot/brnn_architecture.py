@@ -368,13 +368,12 @@ class BRNN_MtM(L.LightningModule):
         if self.problem_type == "regression":
             self.r2_score = R2Score(compute_on_cpu=True)
             if self.datatype == "residues":
-                # self.criterion = nn.MSELoss(reduction='mean')
-                self.criterion = nn.MSELoss(reduction="sum")
+                self.criterion = nn.MSELoss(reduction="mean")
             elif self.datatype == "sequence":
-                self.criterion = nn.L1Loss(reduction="sum")
+                self.criterion = nn.L1Loss(reduction="mean")
         elif self.problem_type == "classification":
             self.task = "multiclass"
-            self.criterion = nn.CrossEntropyLoss(reduction="sum")
+            self.criterion = nn.CrossEntropyLoss(reduction="mean")
 
             self.accuracy = Accuracy(
                 task=self.task, num_classes=self.num_classes, compute_on_cpu=True
@@ -451,8 +450,10 @@ class BRNN_MtM(L.LightningModule):
         outputs = self.forward(vectors.float())
         if self.problem_type == "regression":
             loss = self.criterion(outputs, targets.float())
-            self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
-            self.log("epoch_val_rsquare", self.r2_score)
+            # Only compute R² score if we have at least 2 samples
+            if outputs.size(0) >= 2:
+                self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
+                self.log("epoch_val_rsquare", self.r2_score)
         else:
             if self.datatype == "residues":
                 outputs = outputs.permute(0, 2, 1)
@@ -483,8 +484,10 @@ class BRNN_MtM(L.LightningModule):
         outputs = self.forward(vectors.float())
         if self.problem_type == "regression":
             loss = self.criterion(outputs, targets.float())
-            self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
-            self.log("test_r2_score", self.r2_score)
+            # Only compute R² score if we have at least 2 samples
+            if outputs.size(0) >= 2:
+                self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
+                self.log("test_r2_score", self.r2_score)
         else:
             if self.datatype == "residues":
                 outputs = outputs.permute(0, 2, 1)
@@ -669,14 +672,13 @@ class BRNN_MtO(L.LightningModule):
         if self.problem_type == "regression":
             self.r2_score = R2Score(compute_on_cpu=True)
             if self.datatype == "residues":
-                # self.criterion = nn.MSELoss(reduction='mean')
-                self.criterion = nn.MSELoss(reduction="sum")
+                self.criterion = nn.MSELoss(reduction="mean")
             elif self.datatype == "sequence":
-                self.criterion = nn.L1Loss(reduction="sum")
+                self.criterion = nn.L1Loss(reduction="mean")
 
         elif self.problem_type == "classification":
             self.task = "multiclass"
-            self.criterion = nn.CrossEntropyLoss(reduction="sum")
+            self.criterion = nn.CrossEntropyLoss(reduction="mean")
 
             self.accuracy = Accuracy(
                 task=self.task, num_classes=self.num_classes, compute_on_cpu=True
@@ -757,8 +759,10 @@ class BRNN_MtO(L.LightningModule):
         if self.problem_type == "regression":
             targets = targets.view(-1, 1)
             loss = self.criterion(outputs, targets.float())
-            self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
-            self.log("epoch_val_rsquare", self.r2_score)
+            # Only compute R² score if we have at least 2 samples
+            if outputs.size(0) >= 2:
+                self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
+                self.log("epoch_val_rsquare", self.r2_score)
         else:
             if self.datatype == "residues":
                 outputs = outputs.permute(0, 2, 1)
@@ -788,8 +792,10 @@ class BRNN_MtO(L.LightningModule):
         if self.problem_type == "regression":
             targets = targets.view(-1, 1)
             loss = self.criterion(outputs, targets.float())
-            self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
-            self.log("test_r2_score", self.r2_score)
+            # Only compute R² score if we have at least 2 samples
+            if outputs.size(0) >= 2:
+                self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
+                self.log("test_r2_score", self.r2_score)
         else:
             if self.datatype == "residues":
                 outputs = outputs.permute(0, 2, 1)
