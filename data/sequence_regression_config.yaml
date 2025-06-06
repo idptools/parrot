@@ -6,7 +6,7 @@
 # Path to your training data TSV file
 tsv_file: 
     name: "tsv_file"
-    value: "data/seq_regress_dataset.tsv"
+    value: "degrons_fomratted.tsv"
 
 # Number of classes (always 1 for regression)
 num_classes:
@@ -47,7 +47,7 @@ min_epochs:
 
 max_epochs:
     name: "max_epochs"
-    value: 80
+    value: 100
 
 # Optimization direction (minimize for loss)
 direction:
@@ -62,12 +62,12 @@ min_delta:
 # Number of trials for optimization
 n_trials:
     name: "n_trials"
-    value: 50
+    value: 100
 
 # Number of warm-up trials before Bayesian optimization
 warm_up_trials:
     name: "warm_up_trials"
-    value: 10
+    value: 20
 
 # Study name for WandB logging
 study_name:
@@ -78,7 +78,7 @@ study_name:
 # Batch size - adjust based on your GPU memory
 batch_size:
     name: "batch_size"
-    value: 64
+    value: 1024
 
 # GPU configuration
 gpu_id:
@@ -102,9 +102,7 @@ save_splits:
 # Optimizer choices - AdamW generally works well for regression
 optimizer_name:
     name: "optimizer_name"
-    choices:
-        AdamW: "AdamW"
-        SGD: "SGD"
+    value: "AdamW"
 
 # Learning rate range (log scale)
 learn_rate:
@@ -149,10 +147,10 @@ dropout:
 
 ###### OPTIMIZER-SPECIFIC PARAMETERS ######
 # SGD parameters
-momentum:
-    name: "momentum"
-    min: 0.85
-    max: 0.95
+#momentum:
+#    name: "momentum"
+#    min: 0.85
+#    max: 0.95
 
 # AdamW parameters
 beta1:

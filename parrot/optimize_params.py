@@ -410,7 +410,7 @@ def parse_args():
     parser.add_argument(
         "--optimizer_name",
         nargs="+",
-        default=["adamw"],
+        default=["AdamW"],
         help="List of optimizers to potentially use. Currently supported are adamw and sgd",
     )
     parser.add_argument(
