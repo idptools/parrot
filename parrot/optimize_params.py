@@ -572,7 +572,7 @@ def parse_args():
         "max_epochs": 100,
         
         # Convert optimizer choices to the format expected by the objective function
-        "optimizer_choices": config.get("optimizer_name", ["adamw"]),
+        "optimizer_choices": config.get("optimizer_name", ["AdamW"]),
         
         # Convert hyperparameter ranges to the format expected by the objective function
         "learn_rate_min": config.get("learn_rate", [1e-5, 1e-2])[0],
