@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 import argparse
 import datetime
 import os
@@ -30,21 +30,19 @@ def determine_matmul_precision():
         return False
 
 
-def parse_and_write_args_to_yaml():
-    """Provide optional CLI overwrites to default YAML configuration file.
-    The default YAML configuration file is located in the parrot package directory under data/.
-    Hyperparameter sweep search spaces are output to a YAML file in the current working directory.
-
+def parse_args():
+    """Parse command line arguments with sensible defaults.
+    
     Returns
     -------
-    argparse.Namespace
-        argparse object containing the parsed arguments.
+    dict
+        Dictionary containing all configuration parameters with defaults applied.
     """
     parser = argparse.ArgumentParser()
 
     # Required arguments
     parser.add_argument(
-        "--config", default=None, help="Path to the configuration file."
+        "--config", default=None, help="Path to the configuration file (optional)."
     )
     parser.add_argument(
         "--num_nodes",
@@ -54,17 +52,17 @@ def parse_and_write_args_to_yaml():
     )
     parser.add_argument(
         "--num_classes",
-        default=None,
+        default=1,
         type=int,
         help="Number of classes. For regression, this value must be set to 1.",
     )
     parser.add_argument(
         "--datatype",
-        default=None,
+        default="residues",
         help="Type of data. Must be 'sequence' or 'residues'.",
     )
     parser.add_argument(
-        "--tsv_file", default=None, help="Path to the training TSV file."
+        "--tsv_file", required=True, help="Path to the training TSV file."
     )
     parser.add_argument(
         "--split_file",
@@ -72,55 +70,83 @@ def parse_and_write_args_to_yaml():
         help="Path to the file indicating the train/validation/test split.",
     )
     parser.add_argument(
-        "--study_name", default=None, help="Name of the study. Used for WandB logging."
+        "--study_name", default="parrot_study", help="Name of the study. Used for WandB logging."
     )
     parser.add_argument(
-        "--batch_size", default=None, type=int, help="The batch size of the model."
+        "--batch_size", default=256, type=int, help="The batch size of the model."
     )
     parser.add_argument(
         "--ignore_warnings",
-        default=None,
-        type=bool,
+        default=False,
+        action="store_true",
         help="Optionally ignore parrot warnings.",
     )
     parser.add_argument(
-        "--gpu_id", nargs="+", type=int, help="GPU device ID(s) to use."
+        "--gpu_id", nargs="+", type=int, default=[0], help="GPU device ID(s) to use."
+    )
+    parser.add_argument(
+        "--max_epochs", default=100, type=int, help="Maximum number of training epochs."
+    )
+    parser.add_argument(
+        "--output_network", default="parrot_model.ckpt", help="Output path for the trained model."
+    )
+    parser.add_argument(
+        "--save_splits", action="store_true", default=False, help="Save train/val/test splits to file."
+    )
+    parser.add_argument(
+        "--encode", default="onehot", help="Encoding scheme for sequences."
+    )
+    parser.add_argument(
+        "--set_fractions", nargs=3, type=float, default=[0.6, 0.25, 0.15], 
+        help="Train, validation, test split fractions."
+    )
+    parser.add_argument(
+        "--force_cpu", action="store_true", default=False, help="Force CPU usage even if GPU is available."
+    )
+    parser.add_argument(
+        "--silent", action="store_true", default=False, help="Run in silent mode."
+    )
+    parser.add_argument(
+        "--num_workers", type=int, default=None, help="Number of data loader workers."
+    )
+    parser.add_argument(
+        "--distributed", action="store_true", default=False, help="Enable distributed training."
     )
 
     # Optional overrides to default configs
     parser.add_argument(
         "--optimizer_name",
-        default=None,
+        default="SGD",
         help="Optimizer to use. Supported values: 'AdamW', 'SGD'.",
     )
     parser.add_argument(
         "--learn_rate",
         type=float,
-        default=None,
+        default=0.01,
         help="The learning rate of the optimizer.",
     )
     parser.add_argument(
-        "--num_lstm_layers", type=int, default=None, help="Number of LSTM layers."
+        "--num_lstm_layers", type=int, default=1, help="Number of LSTM layers."
     )
     parser.add_argument(
         "--lstm_hidden_size",
         type=int,
-        default=None,
+        default=20,
         help="Number of hidden units in the LSTM layers.",
     )
     parser.add_argument(
-        "--num_linear_layers", type=int, default=None, help="Number of linear layers."
+        "--num_linear_layers", type=int, default=1, help="Number of linear layers."
     )
     parser.add_argument(
         "--linear_hidden_size",
         type=int,
-        default=None,
+        default=128,
         help="Number of hidden units in the linear layers.",
     )
     parser.add_argument(
         "--dropout",
         type=float,
-        default=None,
+        default=0.25,
         help="Dropout rate on dense linear layers.",
     )
 
@@ -128,7 +154,7 @@ def parse_and_write_args_to_yaml():
     parser.add_argument(
         "--momentum",
         type=float,
-        default=None,
+        default=0.9,
         help="Momentum value for the SGD optimizer.",
     )
 
@@ -136,52 +162,53 @@ def parse_and_write_args_to_yaml():
     parser.add_argument(
         "--beta1",
         type=float,
-        default=None,
+        default=0.9,
         help="Beta1 value for the Adam-based optimizer.",
     )
     parser.add_argument(
         "--beta2",
         type=float,
-        default=None,
+        default=0.999,
         help="Beta2 value for the Adam-based optimizer.",
     )
     parser.add_argument(
         "--eps",
         type=float,
-        default=None,
+        default=1e-8,
         help="Epsilon value for the Adam-based optimizer.",
     )
     parser.add_argument(
         "--weight_decay",
         type=float,
-        default=None,
+        default=1e-6,
         help="Weight decay value for the Adam-based optimizer.",
     )
 
     args = parser.parse_args()
-
-    # Load the default config file or use the provided one
-    if args.config is None:
-        default_config_path = os.path.join(get_directory(), "config.yaml")
-        args.config = default_config_path
-
-    with open(args.config) as config_file:
-        config = yaml.safe_load(config_file)
-
-    # Update the configuration with CLI arguments
+    
+    # Convert args to config dictionary
+    config = {}
+    
+    # If config file is provided, load it first
+    if args.config is not None:
+        try:
+            with open(args.config) as config_file:
+                yaml_config = yaml.safe_load(config_file)
+            # Extract values from YAML structure if it uses the nested format
+            for key, value in yaml_config.items():
+                if isinstance(value, dict) and "value" in value:
+                    config[key] = value["value"]
+                else:
+                    config[key] = value
+        except FileNotFoundError:
+            print(f"Warning: Config file {args.config} not found. Using command line arguments and defaults.")
+    
+    # Override with command line arguments
     for arg_name, arg_value in vars(args).items():
-        if arg_name == "config" or arg_value is None:
-            continue
-        config[arg_name] = arg_value
-
-    # Generate the output YAML file
-    output_filename = f'{config["study_name"]["value"]}_param_sweep_{datetime.date.today().strftime("%Y_%m_%d")}.yaml'
-    with open(output_filename, "w") as config_file:
-        yaml.safe_dump(config, config_file)
-
-    # Set the new config path for the return value
-    args.config = output_filename
-    return args
+        if arg_name != "config":
+            config[arg_name] = arg_value
+    
+    return config
 
 
 def main(config):
@@ -189,73 +216,81 @@ def main(config):
         torch.set_float32_matmul_precision("high")
 
     # Validate arguments and initialize network
-    data_file = validate_args.check_file_exists(config["tsv_file"]["value"], "Datafile")
-    network_file = os.path.abspath(config["output_network"]["value"])
+    data_file = validate_args.check_file_exists(config["tsv_file"], "Datafile")
+    network_file = os.path.abspath(config["output_network"])
     filename_prefix, output_dir = validate_args.split_file_and_directory(network_file)
 
-    if config["split_file"]["value"]:
-        print(config["split_file"]["value"])
+    if config["split_file"]:
+        print(config["split_file"])
         split_file = validate_args.check_file_exists(
-            config["split_file"]["value"], "Split-file"
+            config["split_file"], "Split-file"
         )
     else:
         split_file = None
 
     save_splits_output = (
-        filename_prefix + "_split_file.txt" if config["save_splits"]["value"] else None
+        filename_prefix + "_split_file.txt" if config["save_splits"] else None
     )
 
     encoding_scheme, encoder, input_size = validate_args.set_encoding_scheme(
-        config["encode"]["value"]
+        config["encode"]
     )
+    
+    # Set default num_workers if not specified
+    if config["num_workers"] is None:
+        config["num_workers"] = (
+            os.cpu_count() if os.cpu_count() <= 32 else os.cpu_count() // 4
+        )
+    
     # Set up the ParrotDataModule
     datamodule = ParrotDataModule(
         data_file,
-        num_classes=config["num_classes"]["value"],
-        datatype=config["datatype"]["value"],
-        batch_size=config["batch_size"]["value"],
-        encode=config["encode"]["value"],
-        fractions=config["set_fractions"]["value"],
+        num_classes=config["num_classes"],
+        datatype=config["datatype"],
+        batch_size=config["batch_size"],
+        encode=config["encode"],
+        fractions=config["set_fractions"],
         split_file=split_file,
         excludeSeqID=config.get("excludeSeqID", None),
-        ignore_warnings=config["ignore_warnings"]["value"],
-        save_splits=config["save_splits"]["value"],
-        num_workers=config["num_workers"]["value"],
-        distributed=config["distributed"]["value"]
+        ignore_warnings=config["ignore_warnings"],
+        save_splits=config["save_splits"],
+        num_workers=config["num_workers"],
+        distributed=config["distributed"]
     )
 
-    # # Prepare the data
-    # datamodule.prepare_data()
-    # datamodule.setup()
-
     # Initialize the appropriate BRNN model
-    if config["datatype"]["value"] == "sequence":
-        model = BRNN_MtO(
-            input_size=datamodule.input_size,
-            lstm_hidden_size=config["lstm_hidden_size"]["value"],
-            num_lstm_layers=config["num_lstm_layers"]["value"],
-            num_classes=config["num_classes"]["value"],
-            problem_type=datamodule.problem_type,
-            datatype=config["datatype"]["value"],
-            batch_size=config["batch_size"]["value"],
-            learn_rate=config["learn_rate"]["value"],
-            distributed=config["distributed"]["value"]
-        )
-    elif config["datatype"]["value"] == "residues":
-        model = BRNN_MtM(
-            input_size=datamodule.input_size,
-            lstm_hidden_size=config["lstm_hidden_size"]["value"],
-            num_lstm_layers=config["num_lstm_layers"]["value"],
-            num_classes=config["num_classes"]["value"],
-            problem_type=datamodule.problem_type,
-            datatype=config["datatype"]["value"],
-            batch_size=config["batch_size"]["value"],
-            learn_rate=config["learn_rate"]["value"],
-            distributed=config["distributed"]["value"]
-        )
+    model_kwargs = {
+        "input_size": datamodule.input_size,
+        "lstm_hidden_size": config["lstm_hidden_size"],
+        "num_lstm_layers": config["num_lstm_layers"],
+        "num_classes": config["num_classes"],
+        "problem_type": datamodule.problem_type,
+        "datatype": config["datatype"],
+        "batch_size": config["batch_size"],
+        "learn_rate": config["learn_rate"],
+        "distributed": config["distributed"],
+        "optimizer_name": config["optimizer_name"],
+        "num_linear_layers": config["num_linear_layers"],
+        "linear_hidden_size": config["linear_hidden_size"],
+        "dropout": config["dropout"]
+    }
+    
+    # Add optimizer-specific parameters
+    if config["optimizer_name"] == "SGD":
+        model_kwargs["momentum"] = config["momentum"]
+    elif config["optimizer_name"] in ["AdamW", "Adam"]:
+        model_kwargs["beta1"] = config["beta1"]
+        model_kwargs["beta2"] = config["beta2"]
+        model_kwargs["eps"] = config["eps"]
+        model_kwargs["weight_decay"] = config["weight_decay"]
+
+    if config["datatype"] == "sequence":
+        model = BRNN_MtO(**model_kwargs)
+    elif config["datatype"] == "residues":
+        model = BRNN_MtM(**model_kwargs)
     else:
         raise ValueError(
-            f"Invalid datatype {config['datatype']['value']}. Must be 'sequence' or 'residues'."
+            f"Invalid datatype {config['datatype']}. Must be 'sequence' or 'residues'."
         )
 
     # Set up callbacks
@@ -273,24 +308,31 @@ def main(config):
 
     # Set up logger
     if "WANDB_API_KEY" in os.environ:
-        logger = WandbLogger(project=config["study_name"]["value"], name="parrot_run")
+        logger = WandbLogger(project=config["study_name"], name="parrot_run")
         logger.watch(model)
     else:
         logger = CSVLogger("logs", name="parrot_model")
 
-    silent = config["silent"]["value"]
-    device = config["gpu_id"]["value"]
+    silent = config["silent"]
+    device = config["gpu_id"]
     print("silent is: ", silent)
+    
+    # Determine accelerator and device configuration
+    if torch.cuda.is_available() and not config["force_cpu"]:
+        accelerator = "gpu"
+        devices = device
+    else:
+        accelerator = "cpu"
+        devices = 1  # CPU accelerator expects an integer
+    
     # Set up trainer
     trainer = pl.Trainer(
         gradient_clip_val=1.0,
         precision="16-mixed",
-        max_epochs=config["max_epochs"]["value"],
-        accelerator="gpu"
-        if torch.cuda.is_available() and not config["force_cpu"]["value"]
-        else "cpu",
-        num_nodes=args.num_nodes,
-        devices=device,
+        max_epochs=config["max_epochs"],
+        accelerator=accelerator,
+        num_nodes=config["num_nodes"],
+        devices=devices,
         callbacks=[early_stop_callback, checkpoint_callback],
         logger=logger,
         log_every_n_steps=100,
@@ -303,9 +345,9 @@ def main(config):
     trainer.test(model, datamodule=datamodule)
 
     # Save the model
-    trainer.save_checkpoint(config["output_network"]["value"])
+    trainer.save_checkpoint(config["output_network"])
 
-    if not config["silent"]["value"]:
+    if not config["silent"]:
         print(f'\nTest Loss: {trainer.callback_metrics["test_loss"]:.4f}')
 
     # If using wandb, finish the run
@@ -316,8 +358,5 @@ def main(config):
 
 
 if __name__ == "__main__":
-    args = parse_and_write_args_to_yaml()
-    with open(args.config) as config_file:
-        final_config = yaml.safe_load(config_file)
-
-    main(final_config)
+    config = parse_args()
+    main(config)
