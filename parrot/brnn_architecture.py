@@ -36,6 +36,61 @@ from parrot import process_input_data2 as pid2
 from parrot.tools import validate_args
 
 
+def _build_linear_layers(lstm_hidden_size, num_classes, num_linear_layers=1, 
+                        linear_hidden_size=None, dropout=None):
+    """Build linear layers for BRNN architectures to eliminate code duplication.
+    
+    Parameters
+    ----------
+    lstm_hidden_size : int
+        Size of LSTM hidden layers (will be doubled for bidirectional)
+    num_classes : int
+        Number of output classes
+    num_linear_layers : int, optional
+        Number of linear layers, by default 1
+    linear_hidden_size : int, optional
+        Hidden size for intermediate linear layers, by default None
+    dropout : float, optional
+        Dropout rate, by default None
+        
+    Returns
+    -------
+    nn.ModuleList
+        List of linear layers
+    """
+    linear_layers = nn.ModuleList()
+    
+    for i in range(num_linear_layers):
+        if i == 0 and i == num_linear_layers - 1:
+            # Single linear layer - map directly to output
+            linear_layers.append(nn.Linear(lstm_hidden_size * 2, num_classes))
+        elif i == 0:
+            # First layer - map to hidden size
+            if linear_hidden_size is None:
+                raise ValueError("linear_hidden_size must be specified when num_linear_layers > 1")
+            linear_layers.append(nn.Linear(lstm_hidden_size * 2, linear_hidden_size))
+            
+            # Add dropout if specified
+            if dropout is not None and dropout > 0.0:
+                linear_layers.append(nn.Dropout(dropout))
+        elif i < num_linear_layers - 1:
+            # Intermediate layers
+            if i % 2 == 0 and dropout is not None and dropout > 0.0:
+                linear_layers.append(nn.Linear(linear_hidden_size, linear_hidden_size))
+                linear_layers.append(nn.Dropout(dropout))
+                linear_layers.append(nn.ReLU())
+            else:
+                linear_layers.append(nn.Linear(linear_hidden_size, linear_hidden_size))
+                linear_layers.append(nn.ReLU())
+        elif i == num_linear_layers - 1:
+            # Final output layer
+            linear_layers.append(nn.Linear(linear_hidden_size, num_classes))
+        else:
+            raise ValueError("Invalid number of linear layers. Must be greater than 0.")
+    
+    return linear_layers
+
+
 class ParrotDataModule(L.LightningDataModule):
     def __init__(
         self,
@@ -81,6 +136,29 @@ class ParrotDataModule(L.LightningDataModule):
             Set whether training is distributed. Default is False. 
         """
         super().__init__()
+        
+        # Input validation
+        if not os.path.exists(tsv_file):
+            raise FileNotFoundError(f"TSV file not found: {tsv_file}")
+        
+        if not isinstance(num_classes, int) or num_classes < 1:
+            raise ValueError("num_classes must be a positive integer")
+        
+        if datatype not in ['residues', 'sequence']:
+            raise ValueError("datatype must be either 'residues' or 'sequence'")
+        
+        if not isinstance(batch_size, int) or batch_size < 1:
+            raise ValueError("batch_size must be a positive integer")
+        
+        if not isinstance(fractions, (list, tuple)) or len(fractions) != 3:
+            raise ValueError("fractions must be a list/tuple of 3 values")
+        
+        if abs(sum(fractions) - 1.0) > 1e-6:
+            raise ValueError(f"fractions must sum to 1.0, got {sum(fractions)}")
+        
+        if any(f <= 0 for f in fractions):
+            raise ValueError("All fractions must be positive")
+        
         self.tsv_file = tsv_file
         self.num_classes = num_classes
         self.datatype = datatype
@@ -129,7 +207,7 @@ class ParrotDataModule(L.LightningDataModule):
         pid2.initial_data_prep(save_splits_loc = self.split_file, 
                                 dataset=self.dataset, 
                                 train_ratio=self.fractions[0], 
-                                val_ratio=self.fractions[2])
+                                val_ratio=self.fractions[1])
 
     def setup(self, stage):
         self.train_indices, self.val_indices, self.test_indices = pid2.read_indices(self.split_file)
@@ -211,6 +289,26 @@ class BRNN_MtM(L.LightningModule):
             it should be the number of classes.
         """
         super(BRNN_MtM, self).__init__()
+        
+        # Input validation
+        if not isinstance(input_size, int) or input_size < 1:
+            raise ValueError("input_size must be a positive integer")
+        
+        if not isinstance(lstm_hidden_size, int) or lstm_hidden_size < 1:
+            raise ValueError("lstm_hidden_size must be a positive integer")
+        
+        if not isinstance(num_lstm_layers, int) or num_lstm_layers < 1:
+            raise ValueError("num_lstm_layers must be a positive integer")
+        
+        if not isinstance(num_classes, int) or num_classes < 1:
+            raise ValueError("num_classes must be a positive integer")
+        
+        if problem_type not in ['regression', 'classification']:
+            raise ValueError("problem_type must be either 'regression' or 'classification'")
+        
+        if datatype not in ['residues', 'sequence']:
+            raise ValueError("datatype must be either 'residues' or 'sequence'")
+        
         self.lstm_hidden_size = lstm_hidden_size
         self.num_lstm_layers = num_lstm_layers
         self.num_classes = num_classes
@@ -235,7 +333,10 @@ class BRNN_MtM(L.LightningModule):
         # improve generalization, stability, and model capacity
         self.layer_norm = nn.LayerNorm(lstm_hidden_size * 2)
 
-        self.linear_layers = self._gather_linear_layers()
+        self.linear_layers = _build_linear_layers(lstm_hidden_size, num_classes, 
+                                                self.num_linear_layers, 
+                                                self.linear_hidden_size, 
+                                                self.dropout)
 
         # set optimizer parameters
         if self.optimizer_name == "SGD":
@@ -379,7 +480,7 @@ class BRNN_MtM(L.LightningModule):
 
     def test_step(self, batch, batch_idx):
         names, vectors, targets = batch
-        outputs = self.forward(vectors)
+        outputs = self.forward(vectors.float())
         if self.problem_type == "regression":
             loss = self.criterion(outputs, targets.float())
             self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
@@ -433,50 +534,6 @@ class BRNN_MtM(L.LightningModule):
         }
 
         return [optimizer], [lr_scheduler]
-
-    def _gather_linear_layers(self):
-        linear_layers = nn.ModuleList()
-        # increase LSTM embedding to linear hidden size dimension * 2 because bidirection-LSTM
-        for i in range(0, self.num_linear_layers):
-            if i == 0 and i == self.num_linear_layers - 1:
-                # if theres only one linear layer map to output (old parrot-style)
-                linear_layers.append(
-                    nn.Linear(self.lstm_hidden_size * 2, self.num_classes)
-                )  # *2 for bidirection LSTM
-            elif i == 0:
-                # if we're not going directly to output, add first layer to map to linear hidden size
-                linear_layers.append(
-                    nn.Linear(self.lstm_hidden_size * 2, self.linear_hidden_size)
-                )
-
-                # add dropout on this initial layer if specified
-                if self.dropout != 0.0 and self.dropout is not None:
-                    linear_layers.append(nn.Dropout(self.dropout))
-            elif i < self.num_linear_layers - 1:
-                # if linear layer is even, add some dropout
-                if i % 2 == 0 and self.dropout != 0.0:
-                    linear_layers.append(
-                        nn.Linear(self.linear_hidden_size, self.linear_hidden_size)
-                    )
-                    linear_layers.append(nn.Dropout(self.dropout))
-                    linear_layers.append(nn.ReLU())
-                else:
-                    # add second linear layer (index 1) to n-1.
-                    linear_layers.append(
-                        nn.Linear(self.linear_hidden_size, self.linear_hidden_size)
-                    )
-                    linear_layers.append(nn.ReLU())
-            elif i == self.num_linear_layers - 1:
-                # add final output layer
-                linear_layers.append(
-                    nn.Linear(self.linear_hidden_size, self.num_classes)
-                )
-            else:
-                raise ValueError(
-                    "Invalid number of linear layers. Must be greater than 0."
-                )
-
-        return linear_layers
 
 
 class BRNN_MtO(L.LightningModule):
@@ -538,6 +595,29 @@ class BRNN_MtO(L.LightningModule):
         """
 
         super(BRNN_MtO, self).__init__()
+        
+        # Input validation
+        if not isinstance(input_size, int) or input_size < 1:
+            raise ValueError("input_size must be a positive integer")
+        
+        if not isinstance(lstm_hidden_size, int) or lstm_hidden_size < 1:
+            raise ValueError("lstm_hidden_size must be a positive integer")
+        
+        if not isinstance(num_lstm_layers, int) or num_lstm_layers < 1:
+            raise ValueError("num_lstm_layers must be a positive integer")
+        
+        if not isinstance(num_classes, int) or num_classes < 1:
+            raise ValueError("num_classes must be a positive integer")
+        
+        if not isinstance(batch_size, int) or batch_size < 1:
+            raise ValueError("batch_size must be a positive integer")
+        
+        if problem_type not in ['regression', 'classification']:
+            raise ValueError("problem_type must be either 'regression' or 'classification'")
+        
+        if datatype not in ['residues', 'sequence']:
+            raise ValueError("datatype must be either 'residues' or 'sequence'")
+        
         self.lstm_hidden_size = lstm_hidden_size
         self.num_lstm_layers = num_lstm_layers
         self.num_classes = num_classes
@@ -564,46 +644,12 @@ class BRNN_MtO(L.LightningModule):
         # improve generalization, stability, and model capacity
         self.layer_norm = nn.LayerNorm(lstm_hidden_size * 2)
 
-        self.linear_layers = nn.ModuleList()
-        # increase LSTM embedding to linear hidden size dimension * 2 because bidirection-LSTM
-        for i in range(0, self.num_linear_layers):
-            if i == 0 and i == self.num_linear_layers - 1:
-                # if theres only one linear layer map to output (old parrot-style)
-                self.linear_layers.append(
-                    nn.Linear(self.lstm_hidden_size * 2, num_classes)
-                )  # *2 for bidirection LSTM
-            elif i == 0:
-                # if we're not going directly to output, add first layer to map to linear hidden size
-                self.linear_layers.append(
-                    nn.Linear(self.lstm_hidden_size * 2, self.linear_hidden_size)
-                )
+        self.linear_layers = _build_linear_layers(lstm_hidden_size, num_classes, 
+                                                self.num_linear_layers, 
+                                                self.linear_hidden_size, 
+                                                self.dropout)
 
-                # add dropout on this initial layer if specified
-                if self.dropout != 0.0 and self.dropout is not None:
-                    self.linear_layers.append(nn.Dropout(self.dropout))
-            elif i < self.num_linear_layers - 1:
-                # if linear layer is even, add some dropout
-                if i % 2 == 0 and self.dropout != 0.0:
-                    self.linear_layers.append(
-                        nn.Linear(self.linear_hidden_size, self.linear_hidden_size)
-                    )
-                    self.linear_layers.append(nn.Dropout(self.dropout))
-                    self.linear_layers.append(nn.ReLU())
-                else:
-                    # add second linear layer (index 1) to n-1.
-                    self.linear_layers.append(
-                        nn.Linear(self.linear_hidden_size, self.linear_hidden_size)
-                    )
-                    self.linear_layers.append(nn.ReLU())
-            elif i == self.num_linear_layers - 1:
-                # add final output layer
-                self.linear_layers.append(
-                    nn.Linear(self.linear_hidden_size, num_classes)
-                )
-            else:
-                raise ValueError(
-                    "Invalid number of linear layers. Must be greater than 0."
-                )
+        self.distributed = kwargs.get("distributed", False)
 
         # set optimizer parameters
         if self.optimizer_name == "SGD":
@@ -679,9 +725,7 @@ class BRNN_MtO(L.LightningModule):
 
         # Retain the outputs of the last time step in the sequence for both directions
         # (i.e. output of seq[n] in forward direction, seq[0] in reverse direction)
-        # forward_last_step = h_n[-2, :, :]
-        # reverse_last_step = h_n[-1, :, :]
-        out = torch.cat((h_n[:, :, :][-2, :], h_n[:, :, :][-1, :]), -1)
+        out = torch.cat((h_n[-2, :, :], h_n[-1, :, :]), dim=-1)
         out = self.layer_norm(out)
         for layer in self.linear_layers:
             out = layer(out)
@@ -689,35 +733,29 @@ class BRNN_MtO(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         names, vectors, targets = batch
-        outputs = self.forward(vectors)
+        outputs = self.forward(vectors.float())
         if self.problem_type == "regression":
             targets = targets.view(-1, 1)
-
             loss = self.criterion(outputs, targets.float())
         else:
             if self.datatype == "residues":
                 outputs = outputs.permute(0, 2, 1)
             loss = self.criterion(outputs, targets.long())
 
-        loss = loss / self.batch_size
         self.train_loss_metric(loss)
-
         self.log("train_loss", loss)
         return loss
 
     def on_train_epoch_end(self):
         epoch_mean = self.train_loss_metric.compute()
-        self.log("epoch_train_loss", epoch_mean, prog_bar=True)
+        self.log("epoch_train_loss", epoch_mean, prog_bar=True, sync_dist=self.distributed)
         self.train_loss_metric.reset()
 
     def validation_step(self, batch, batch_idx):
         names, vectors, targets = batch
-        outputs = self.forward(vectors)
+        outputs = self.forward(vectors.float())
         if self.problem_type == "regression":
-            targets = targets.view(
-                -1, 1
-            )  # Ensure targets have the shape [batch_size, 1]
-
+            targets = targets.view(-1, 1)
             loss = self.criterion(outputs, targets.float())
             self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
             self.log("epoch_val_rsquare", self.r2_score)
@@ -726,30 +764,29 @@ class BRNN_MtO(L.LightningModule):
                 outputs = outputs.permute(0, 2, 1)
             loss = self.criterion(outputs, targets.long())
 
-            loss = loss / self.batch_size
-            self.log("val_loss", loss, on_epoch=False, on_step=True)
-
             accuracy = self.accuracy(outputs, targets.long())
-            self.log("epoch_val_accuracy", accuracy)
+            self.log("epoch_val_accuracy", accuracy, on_step=True)
 
             f1score = self.f1_score(outputs, targets.long())
-            self.log("epoch_val_f1score", f1score)
+            self.log("epoch_val_f1score", f1score, on_step=True)
 
             auroc = self.auroc(outputs, targets.long())
-            self.log("epoch_val_auroc", auroc)
+            self.log("epoch_val_auroc", auroc, on_step=True)
 
             precision = self.precision(outputs, targets.long())
-            self.log("epoch_val_precision", precision)
+            self.log("epoch_val_precision", precision, on_step=True)
 
             mcc = self.mcc(outputs, targets.long())
-            self.log("epoch_val_mcc", mcc)
+            self.log("epoch_val_mcc", mcc, on_step=True)
 
+        self.log("epoch_val_loss", loss, prog_bar=True, sync_dist=self.distributed)
         return loss
 
     def test_step(self, batch, batch_idx):
         names, vectors, targets = batch
-        outputs = self.forward(vectors)
+        outputs = self.forward(vectors.float())
         if self.problem_type == "regression":
+            targets = targets.view(-1, 1)
             loss = self.criterion(outputs, targets.float())
             self.r2_score(outputs.view(-1, 1), targets.float().view(-1, 1))
             self.log("test_r2_score", self.r2_score)

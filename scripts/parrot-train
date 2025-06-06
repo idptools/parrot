@@ -62,7 +62,9 @@ def parse_args():
         help="Type of data. Must be 'sequence' or 'residues'.",
     )
     parser.add_argument(
-        "--tsv_file", required=True, help="Path to the training TSV file."
+        "--tsv_file", 
+        default=None,
+        help="Path to the training TSV file."
     )
     parser.add_argument(
         "--split_file",
@@ -194,19 +196,29 @@ def parse_args():
         try:
             with open(args.config) as config_file:
                 yaml_config = yaml.safe_load(config_file)
-            # Extract values from YAML structure if it uses the nested format
-            for key, value in yaml_config.items():
-                if isinstance(value, dict) and "value" in value:
-                    config[key] = value["value"]
-                else:
-                    config[key] = value
+            # Handle case where YAML file is empty or None
+            if yaml_config is not None:
+                # Extract values from YAML structure if it uses the nested format
+                for key, value in yaml_config.items():
+                    if isinstance(value, dict) and "value" in value:
+                        config[key] = value["value"]
+                    else:
+                        config[key] = value
         except FileNotFoundError:
             print(f"Warning: Config file {args.config} not found. Using command line arguments and defaults.")
+        except Exception as e:
+            print(f"Error loading config file: {e}")
     
     # Override with command line arguments
     for arg_name, arg_value in vars(args).items():
         if arg_name != "config":
-            config[arg_name] = arg_value
+            # If the command line argument is None and we have it from config, don't override
+            if arg_value is not None or arg_name not in config:
+                config[arg_name] = arg_value
+    
+    # Validate that required arguments are present
+    if "tsv_file" not in config or config["tsv_file"] is None:
+        parser.error("--tsv_file is required either as a command line argument or in the config file")
     
     return config
 
@@ -295,13 +307,13 @@ def main(config):
 
     # Set up callbacks
     early_stop_callback = EarlyStopping(
-        monitor="epoch_val_loss", min_delta=0.00, patience=3, verbose=True, mode="min"
+        monitor="epoch_train_loss", min_delta=0.00, patience=3, verbose=True, mode="min"
     )
 
     checkpoint_callback = ModelCheckpoint(
-        monitor="epoch_val_loss",
+        monitor="epoch_train_loss",
         dirpath="checkpoints/",
-        filename="epoch{epoch:02d}-val_loss{epoch_val_loss:.2f}",
+        filename="epoch{epoch:02d}-train_loss{epoch_train_loss:.2f}",
         save_top_k=1,
         mode="min",
     )
