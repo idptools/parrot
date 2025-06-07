@@ -537,11 +537,44 @@ def parse_args():
         except Exception as e:
             print(f"Error loading config file: {e}")
     
-    # Override with command line arguments
+    # Override with command line arguments (only if explicitly provided)
+    # Store defaults to check if values were explicitly set
+    parser_defaults = {
+        'num_classes': 1,
+        'datatype': 'sequence', 
+        'tsv_file': None,
+        'split_file': None,
+        'study_name': 'parrot_optimization',
+        'batch_size': 32,
+        'ignore_warnings': False,
+        'gpu_id': [0],
+        'n_trials': 100,
+        'direction': 'minimize',
+        'warm_up_trials': 10,
+        'optimizer_name': ['AdamW'],
+        'learn_rate': [1e-5, 1e-2],
+        'num_lstm_layers': [1, 3],
+        'lstm_hidden_size': [32, 256],
+        'num_linear_layers': [1, 4],
+        'linear_hidden_size': [32, 512],
+        'dropout': [0.0, 0.5],
+        'momentum': [0.8, 0.99],
+        'beta1': [0.85, 0.95],
+        'beta2': [0.98, 0.9999],
+        'eps': [1e-9, 1e-7],
+        'weight_decay': [1e-6, 1e-2],
+        'distributed': False,
+        'num_workers': None,
+        'force_cpu': False
+    }
+    
     for arg_name, arg_value in vars(args).items():
         if arg_name != "config":
-            # If the command line argument is None and we have it from config, don't override
-            if arg_value is not None or arg_name not in config:
+            # Only override config if the argument was explicitly provided (different from default)
+            # or if the argument is not in the config file
+            if (arg_name not in parser_defaults or 
+                arg_value != parser_defaults[arg_name] or 
+                arg_name not in config):
                 config[arg_name] = arg_value
     
     # Validate that required arguments are present
