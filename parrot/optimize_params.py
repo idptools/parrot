@@ -111,18 +111,21 @@ def objective(trial: optuna.trial.Trial, datamodule: pl.LightningDataModule, con
     hparams["direction"] = direction
     hparams["monitor"] = monitor
 
-    if num_linear_layers > 1:
-        hparams["linear_hidden_size"] = trial.suggest_int(
-            "linear_hidden_size",
-            config["linear_hidden_size_min"],
-            config["linear_hidden_size_max"],
-        )
+    # Always suggest linear_hidden_size, even if num_linear_layers == 1
+    # When num_linear_layers == 1, this parameter will be ignored by the architecture
+    # but it's better to always include it for consistent hyperparameter exploration
+    hparams["linear_hidden_size"] = trial.suggest_int(
+        "linear_hidden_size",
+        config["linear_hidden_size_min"],
+        config["linear_hidden_size_max"],
+    )
 
-        hparams["dropout"] = trial.suggest_float(
-            "dropout",
-            config["dropout_min"],
-            config["dropout_max"],
-        )
+    # Always suggest dropout for linear layers (when num_linear_layers > 1, dropout is applied)
+    hparams["dropout"] = trial.suggest_float(
+        "dropout",
+        config["dropout_min"],
+        config["dropout_max"],
+    )
 
     if hparams["optimizer_name"] == "SGD":
         hparams["momentum"] = trial.suggest_float(
