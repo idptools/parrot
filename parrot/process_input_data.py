@@ -10,6 +10,16 @@ Question/comments/concerns? Raise an issue on github:
 https://github.com/idptools/parrot
 
 Licensed under the MIT license.
+
+
+
+NOTE: THIS IS NOT CURRENTLY BEING USED!
+PLEASE USE process_input_data2.py INSTEAD
+Sorry! This was a dumb decision from a previous me...
+
+
+
+
 """
 
 import math
