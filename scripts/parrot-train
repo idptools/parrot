@@ -90,6 +90,11 @@ def parse_args():
         "--max_epochs", default=100, type=int, help="Maximum number of training epochs."
     )
     parser.add_argument(
+        "--monitor", 
+        default="epoch_val_loss", 
+        help="Metric to monitor for early stopping and checkpointing. Available options: epoch_val_loss, epoch_val_rsquare (regression), epoch_val_accuracy, epoch_val_f1score, epoch_val_auroc, epoch_val_precision, epoch_val_mcc (classification)."
+    )
+    parser.add_argument(
         "--output_network", default="parrot_model.ckpt", help="Output path for the trained model."
     )
     parser.add_argument(
@@ -269,6 +274,18 @@ def main(config):
         num_workers=config["num_workers"],
         distributed=config["distributed"]
     )
+    
+    # Validate monitor parameter based on problem type
+    valid_metrics = ["epoch_val_loss"]
+    if datamodule.problem_type == "regression":
+        valid_metrics.extend(["epoch_val_rsquare"])
+    else:  # classification
+        valid_metrics.extend(["epoch_val_accuracy", "epoch_val_f1score", "epoch_val_auroc", 
+                             "epoch_val_precision", "epoch_val_mcc"])
+    
+    if config["monitor"] not in valid_metrics:
+        raise ValueError(f"Invalid monitor metric '{config['monitor']}' for {datamodule.problem_type}. "
+                        f"Valid options: {', '.join(valid_metrics)}")
 
     # Initialize the appropriate BRNN model
     model_kwargs = {
@@ -305,17 +322,27 @@ def main(config):
             f"Invalid datatype {config['datatype']}. Must be 'sequence' or 'residues'."
         )
 
+    # Determine monitoring mode based on metric
+    monitor_metric = config["monitor"]
+    if monitor_metric in ["epoch_val_loss"]:
+        monitor_mode = "min"
+    else:
+        # For accuracy, R², F1, AUROC, precision, MCC - higher is better
+        monitor_mode = "max"
+    
     # Set up callbacks
     early_stop_callback = EarlyStopping(
-        monitor="epoch_train_loss", min_delta=0.00, patience=3, verbose=True, mode="min"
+        monitor=monitor_metric, min_delta=0.00, patience=3, verbose=True, mode=monitor_mode
     )
 
+    # Create safe filename for checkpoint based on metric name
+    metric_safe_name = monitor_metric.replace("epoch_", "").replace("val_", "")
     checkpoint_callback = ModelCheckpoint(
-        monitor="epoch_train_loss",
+        monitor=monitor_metric,
         dirpath="checkpoints/",
-        filename="epoch{epoch:02d}-train_loss{epoch_train_loss:.2f}",
+        filename=f"epoch{{epoch:02d}}-{metric_safe_name}{{{monitor_metric}:.4f}}",
         save_top_k=1,
-        mode="min",
+        mode=monitor_mode,
     )
 
     # Set up logger

@@ -23,6 +23,40 @@ python scripts/parrot-optimize \
     --batch_size 128
 ```
 
+## Using parrot-train with monitoring
+
+You can also use the config file with parrot-train and specify different metrics to monitor:
+
+```bash
+# Monitor validation loss (default)
+python scripts/parrot-train \
+    --config data/sequence_regression_config.yaml \
+    --tsv_file data/seq_regress_dataset.tsv \
+    --output_network my_model.ckpt \
+    --monitor epoch_val_loss
+
+# Monitor R² score for regression tasks
+python scripts/parrot-train \
+    --config data/sequence_regression_config.yaml \
+    --tsv_file data/seq_regress_dataset.tsv \
+    --output_network my_model.ckpt \
+    --monitor epoch_val_rsquare
+```
+
+### Available monitoring metrics:
+
+**For regression tasks:**
+- `epoch_val_loss` (default) - Validation loss (lower is better)
+- `epoch_val_rsquare` - R² coefficient of determination (higher is better)
+
+**For classification tasks:**
+- `epoch_val_loss` (default) - Validation loss (lower is better)
+- `epoch_val_accuracy` - Validation accuracy (higher is better)
+- `epoch_val_f1score` - F1 score (higher is better)
+- `epoch_val_auroc` - Area under ROC curve (higher is better)
+- `epoch_val_precision` - Precision (higher is better)
+- `epoch_val_mcc` - Matthews correlation coefficient (higher is better)
+
 ## Config File Explanation
 
 ### Key Parameters for Good Performance:
