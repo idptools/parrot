@@ -118,18 +118,11 @@ def objective(trial: optuna.trial.Trial, datamodule: pl.LightningDataModule, con
             config["linear_hidden_size_max"],
         )
 
-        hparams["use_dropout"] = trial.suggest_categorical(
-            name="use_dropout", choices=[True, False]
+        hparams["dropout"] = trial.suggest_float(
+            "dropout",
+            config["dropout_min"],
+            config["dropout_max"],
         )
-
-        if hparams["use_dropout"]:
-            hparams["dropout"] = trial.suggest_float(
-                "dropout",
-                config["dropout_min"],
-                config["dropout_max"],
-            )
-        else:
-            hparams["dropout"] = 0.0
 
     if hparams["optimizer_name"] == "SGD":
         hparams["momentum"] = trial.suggest_float(
@@ -512,6 +505,37 @@ def parse_args():
         action="store_true",
         help="Force CPU usage even if GPU is available",
     )
+    parser.add_argument(
+        "--gradient_clip_val",
+        nargs=2,
+        type=float,
+        default=[0.5, 2.0],
+        help="Gradient clipping value range [min, max]",
+    )
+    parser.add_argument(
+        "--optimize_monitor",
+        type=str,
+        default="val_loss",
+        help="Metric to monitor for optimization",
+    )
+    parser.add_argument(
+        "--min_delta",
+        type=float,
+        default=0.001,
+        help="Minimum change in monitored metric for early stopping",
+    )
+    parser.add_argument(
+        "--min_epochs",
+        type=int,
+        default=5,
+        help="Minimum number of epochs to train",
+    )
+    parser.add_argument(
+        "--optimize_max_epochs",
+        type=int,
+        default=100,
+        help="Maximum number of epochs for optimization trials",
+    )
 
     args = parser.parse_args()
     
@@ -563,6 +587,12 @@ def parse_args():
         'beta2': [0.98, 0.9999],
         'eps': [1e-9, 1e-7],
         'weight_decay': [1e-6, 1e-2],
+        'gradient_clip_val': [0.5, 2.0],
+        'optimize_monitor': 'val_loss',
+        'min_delta': 0.001,
+        'min_epochs': 5,
+        'max_epochs': 100,
+        'optimize_max_epochs': 100,
         'distributed': False,
         'num_workers': None,
         'force_cpu': False
@@ -599,10 +629,10 @@ def parse_args():
         "force_cpu": config.get("force_cpu", False),
         
         # Set parameters needed by objective function that weren't in the original config structure
-        "monitor": "val_loss",
-        "min_delta": 0.001,
-        "min_epochs": 5,
-        "max_epochs": 100,
+        "monitor": config.get("optimize_monitor", "val_loss"),
+        "min_delta": config.get("min_delta", 0.001),
+        "min_epochs": config.get("min_epochs", 5),
+        "max_epochs": config.get("optimize_max_epochs", config.get("max_epochs", 100)),
         
         # Convert optimizer choices to the format expected by the objective function
         "optimizer_choices": config.get("optimizer_name", ["AdamW"]),
@@ -633,8 +663,8 @@ def parse_args():
         "weight_decay_min": config.get("weight_decay", [1e-6, 1e-2])[0],
         "weight_decay_max": config.get("weight_decay", [1e-6, 1e-2])[1],
         "weight_decay_log": True,
-        "gradient_clip_val_min": 0.5,
-        "gradient_clip_val_max": 2.0,
+        "gradient_clip_val_min": config.get("gradient_clip_val", [0.5, 2.0])[0],
+        "gradient_clip_val_max": config.get("gradient_clip_val", [0.5, 2.0])[1],
     }
     
     return final_config
