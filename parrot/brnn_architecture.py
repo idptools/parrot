@@ -69,19 +69,17 @@ def _build_linear_layers(lstm_hidden_size, num_classes, num_linear_layers=1,
             if linear_hidden_size is None:
                 raise ValueError("linear_hidden_size must be specified when num_linear_layers > 1")
             linear_layers.append(nn.Linear(lstm_hidden_size * 2, linear_hidden_size))
-            
-            # Add dropout if specified
+            linear_layers.append(nn.ReLU())
+            # Add dropout
             if dropout is not None and dropout > 0.0:
                 linear_layers.append(nn.Dropout(dropout))
+            
         elif i < num_linear_layers - 1:
             # Intermediate layers
-            if i % 2 == 0 and dropout is not None and dropout > 0.0:
-                linear_layers.append(nn.Linear(linear_hidden_size, linear_hidden_size))
+            linear_layers.append(nn.Linear(linear_hidden_size, linear_hidden_size))
+            linear_layers.append(nn.ReLU())
+            if dropout is not None and dropout > 0.0:
                 linear_layers.append(nn.Dropout(dropout))
-                linear_layers.append(nn.ReLU())
-            else:
-                linear_layers.append(nn.Linear(linear_hidden_size, linear_hidden_size))
-                linear_layers.append(nn.ReLU())
         elif i == num_linear_layers - 1:
             # Final output layer
             linear_layers.append(nn.Linear(linear_hidden_size, num_classes))
@@ -328,6 +326,7 @@ class BRNN_MtM(L.LightningModule):
             num_lstm_layers,
             batch_first=True,
             bidirectional=True,
+            dropout=self.dropout if self.dropout is not None and num_lstm_layers > 1 else 0.0
         )
 
         # improve generalization, stability, and model capacity
@@ -643,6 +642,7 @@ class BRNN_MtO(L.LightningModule):
             num_lstm_layers,
             batch_first=True,
             bidirectional=True,
+            dropout=self.dropout if self.dropout is not None and num_lstm_layers > 1 else 0.0
         )
 
         # improve generalization, stability, and model capacity
