@@ -516,10 +516,10 @@ def parse_args():
         help="Gradient clipping value range [min, max]",
     )
     parser.add_argument(
-        "--optimize_monitor",
+        "--monitor",
         type=str,
-        default="val_loss",
-        help="Metric to monitor for optimization",
+        default="epoch_val_loss",
+        help="Metric to monitor for optimization (supports both epoch_val_loss and val_loss formats)",
     )
     parser.add_argument(
         "--min_delta",
@@ -591,7 +591,7 @@ def parse_args():
         'eps': [1e-9, 1e-7],
         'weight_decay': [1e-6, 1e-2],
         'gradient_clip_val': [0.5, 2.0],
-        'optimize_monitor': 'val_loss',
+        'monitor': 'epoch_val_loss',
         'min_delta': 0.001,
         'min_epochs': 5,
         'max_epochs': 100,
@@ -614,6 +614,13 @@ def parse_args():
     if "tsv_file" not in config or config["tsv_file"] is None:
         parser.error("--tsv_file is required either as a command line argument or in the config file")
     
+    # Convert monitor metric from new format (epoch_val_loss) to old format (val_loss) for compatibility
+    monitor_metric = config.get("monitor", "epoch_val_loss")
+    if monitor_metric.startswith("epoch_"):
+        converted_monitor = monitor_metric.replace("epoch_", "")
+    else:
+        converted_monitor = monitor_metric
+    
     # Convert args to a config dictionary with the structure expected by the optimization functions
     final_config = {
         "num_classes": config.get("num_classes", 1),
@@ -632,7 +639,7 @@ def parse_args():
         "force_cpu": config.get("force_cpu", False),
         
         # Set parameters needed by objective function that weren't in the original config structure
-        "monitor": config.get("optimize_monitor", "val_loss"),
+        "monitor": converted_monitor,
         "min_delta": config.get("min_delta", 0.001),
         "min_epochs": config.get("min_epochs", 5),
         "max_epochs": config.get("optimize_max_epochs", config.get("max_epochs", 100)),

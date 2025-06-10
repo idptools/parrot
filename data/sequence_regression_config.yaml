@@ -29,13 +29,10 @@ max_epochs: 100
 # Metric to monitor for early stopping and checkpointing
 # For regression: epoch_val_loss, epoch_val_rsquare
 # For classification: epoch_val_loss, epoch_val_accuracy, epoch_val_f1score, epoch_val_auroc, epoch_val_precision, epoch_val_mcc
+# Note: This same parameter is used for both parrot-train and parrot-optimize
 monitor: "epoch_val_loss"
 
 ###### OPTIMIZATION PARAMETERS ######
-# Metric to monitor for optimization (minimize validation loss)
-# Note: For parrot-optimize, use "val_loss" format; for parrot-train use "epoch_val_loss" format
-optimize_monitor: "val_loss"
-
 # Training epochs for optimization
 min_epochs: 10
 
