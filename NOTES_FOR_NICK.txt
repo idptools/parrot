@@ -24,7 +24,7 @@ Current status of modules:
 • parrot_exceptions.py - I haven't touched this.
 • process_input_data.py - This has been changed totally from the old version. 
     • It used to be called 'process_input_data2.py', but I've combined the previous implementation with my new one. 
-    • some of the tests and stuff in /scripts still rely on old process_input_data.py functions (specifically read_tsv_raw and __parse_lines)
+    • some of the tests and stuff in /scripts still rely on old process_input_data.py functions (specifically read_tsv_raw(), __parse_lines(), and vector_split())
         • We could change this but I haven't had time to.
 • py_predictor.py - I've made some changes to this but I don't think it's finished as far as implementing base_predictor.py. 
     • Honestly it would just be a wrapper around the create_predictor() function in base_predictor.py.
