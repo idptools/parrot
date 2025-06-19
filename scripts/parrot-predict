@@ -24,7 +24,6 @@ import torch
 import argparse
 
 from parrot import brnn_architecture
-from parrot import process_input_data as pid
 from parrot import train_network
 from parrot.tools import cli, validate_args
 

@@ -1,12 +1,11 @@
+#!/usr/bin/env python
 import argparse
-import datetime
 import os
 
 import optuna
 import pytorch_lightning as pl
 import torch
 import wandb
-import yaml
 from optuna.integration import PyTorchLightningPruningCallback
 
 # from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
@@ -14,8 +13,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 
-from parrot import get_directory
-from parrot.brnn_architecture import BRNN_MtM, BRNN_MtO, ParrotDataModule
+from parrot.brnn_architecture import BRNN_PARROT, ParrotDataModule
 
 # import lightning.pytorch as pl
 # from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint, LearningRateMonitor,
@@ -46,8 +44,8 @@ def objective(trial: optuna.trial.Trial, datamodule: pl.LightningDataModule, con
         optuna trial object used for optimizing hyperparameters
     datamodule : pl.LightningDataModule
         a ParrotDataModule, which is a Lightning datamodule object, for the machine learning task.
-    config : _type_
-        Yaml configuration file for the hyperparameter search spaces
+    config : dict
+        Configuration dictionary for the hyperparameter search spaces
 
     Returns
     -------
@@ -61,39 +59,37 @@ def objective(trial: optuna.trial.Trial, datamodule: pl.LightningDataModule, con
     input_size = datamodule.input_size
     batch_size = datamodule.batch_size
 
-    monitor = config["monitor"]["value"]
-    min_delta = config["min_delta"]["value"]
-    direction = config["direction"]["value"]
-    min_epoch = config["min_epochs"]["value"]
-    max_epoch = config["max_epochs"]["value"]
+    monitor = config["monitor"]
+    min_delta = config["min_delta"]
+    direction = config["direction"]
+    min_epoch = config["min_epochs"]
+    max_epoch = config["max_epochs"]
 
-    print(config["optimizer_name"]["name"])
     # Define the hyperparameter search space using trial.suggest_*
     hparams = {
-        config["optimizer_name"]["name"]: trial.suggest_categorical(
-            config["optimizer_name"]["name"],
-            list(config["optimizer_name"]["choices"].values()),
+        "optimizer_name": trial.suggest_categorical(
+            "optimizer_name", config["optimizer_choices"]
         ),
-        config["num_lstm_layers"]["name"]: trial.suggest_int(
-            config["num_lstm_layers"]["name"],
-            config["num_lstm_layers"]["min"],
-            config["num_lstm_layers"]["max"],
+        "num_lstm_layers": trial.suggest_int(
+            "num_lstm_layers",
+            config["num_lstm_layers_min"],
+            config["num_lstm_layers_max"],
         ),
-        config["lstm_hidden_size"]["name"]: trial.suggest_int(
-            config["lstm_hidden_size"]["name"],
-            config["lstm_hidden_size"]["min"],
-            config["lstm_hidden_size"]["max"],
+        "lstm_hidden_size": trial.suggest_int(
+            "lstm_hidden_size",
+            config["lstm_hidden_size_min"],
+            config["lstm_hidden_size_max"],
         ),
-        config["learn_rate"]["name"]: trial.suggest_float(
-            config["learn_rate"]["name"],
-            config["learn_rate"]["min"],
-            config["learn_rate"]["max"],
-            log=config["learn_rate"]["log"],
+        "learn_rate": trial.suggest_float(
+            "learn_rate",
+            config["learn_rate_min"],
+            config["learn_rate_max"],
+            log=config["learn_rate_log"],
         ),
-        config["gradient_clip_val"]["name"]: trial.suggest_float(
-            config["gradient_clip_val"]["name"],
-            config["gradient_clip_val"]["min"],
-            config["gradient_clip_val"]["max"],
+        "gradient_clip_val": trial.suggest_float(
+            "gradient_clip_val",
+            config["gradient_clip_val_min"],
+            config["gradient_clip_val_max"],
         ),
         "input_size": input_size,
         "num_classes": num_classes,
@@ -102,92 +98,87 @@ def objective(trial: optuna.trial.Trial, datamodule: pl.LightningDataModule, con
         "batch_size": batch_size,
         "min_epoch": min_epoch,
         "max_epoch": max_epoch,
+        "distributed": config["distributed"],
     }
 
     num_linear_layers = trial.suggest_int(
-        config["num_linear_layers"]["name"],
-        config["num_linear_layers"]["min"],
-        config["num_linear_layers"]["max"],
+        "num_linear_layers",
+        config["num_linear_layers_min"],
+        config["num_linear_layers_max"],
     )
 
-    hparams[config["num_linear_layers"]["name"]] = num_linear_layers
-    hparams[config["direction"]["name"]] = direction
-    hparams[config["monitor"]["name"]] = monitor
+    hparams["num_linear_layers"] = num_linear_layers
+    hparams["direction"] = direction
+    hparams["monitor"] = monitor
 
-    if num_linear_layers > 1:
-        hparams[config["linear_hidden_size"]["name"]] = trial.suggest_int(
-            config["linear_hidden_size"]["name"],
-            config["linear_hidden_size"]["min"],
-            config["linear_hidden_size"]["max"],
-        )
+    # Always suggest linear_hidden_size, even if num_linear_layers == 1
+    # When num_linear_layers == 1, this parameter will be ignored by the architecture
+    # but it's better to always include it for consistent hyperparameter exploration
+    hparams["linear_hidden_size"] = trial.suggest_int(
+        "linear_hidden_size",
+        config["linear_hidden_size_min"],
+        config["linear_hidden_size_max"],
+    )
 
-        hparams["use_dropout"] = trial.suggest_categorical(
-            name="use_dropout", choices=[True, False]
-        )
-
-        if hparams["use_dropout"]:
-            hparams[config["dropout"]["name"]] = trial.suggest_float(
-                config["dropout"]["name"],
-                config["dropout"]["min"],
-                config["dropout"]["max"],
-            )
-        else:
-            hparams[config["dropout"]["name"]] = 0.0
+    # Always suggest dropout for linear layers (when num_linear_layers > 1, dropout is applied)
+    hparams["dropout"] = trial.suggest_float(
+        "dropout",
+        config["dropout_min"],
+        config["dropout_max"],
+    )
 
     if hparams["optimizer_name"] == "SGD":
-        # shrug - could probably tune gradient clip, but helped and worked so good enough
-
         hparams["momentum"] = trial.suggest_float(
-            config["momentum"]["name"],
-            config["momentum"]["min"],
-            config["momentum"]["max"],
+            "momentum",
+            config["momentum_min"],
+            config["momentum_max"],
         )
 
     elif hparams["optimizer_name"] == "AdamW":
         hparams["beta1"] = trial.suggest_float(
-            config["beta1"]["name"], config["beta1"]["min"], config["beta1"]["max"]
+            "beta1", config["beta1_min"], config["beta1_max"]
         )
 
         hparams["beta2"] = trial.suggest_float(
-            config["beta2"]["name"], config["beta2"]["min"], config["beta2"]["max"]
+            "beta2", config["beta2_min"], config["beta2_max"]
         )
 
         hparams["eps"] = trial.suggest_float(
-            config["eps"]["name"], config["eps"]["min"], config["eps"]["max"]
+            "eps", config["eps_min"], config["eps_max"], log=config["eps_log"]
         )
 
         hparams["weight_decay"] = trial.suggest_float(
-            config["weight_decay"]["name"],
-            config["weight_decay"]["min"],
-            config["weight_decay"]["max"],
+            "weight_decay",
+            config["weight_decay_min"],
+            config["weight_decay_max"],
+            log=config["weight_decay_log"],
         )
 
     elif hparams["optimizer_name"] == "Adam":
         hparams["beta1"] = trial.suggest_float(
-            config["beta1"]["name"], config["beta1"]["min"], config["beta1"]["max"]
+            "beta1", config["beta1_min"], config["beta1_max"]
         )
 
         hparams["beta2"] = trial.suggest_float(
-            config["beta2"]["name"], config["beta2"]["min"], config["beta2"]["max"]
+            "beta2", config["beta2_min"], config["beta2_max"]
         )
 
         hparams["eps"] = trial.suggest_float(
-            config["eps"]["name"], config["eps"]["min"], config["eps"]["max"]
+            "eps", config["eps_min"], config["eps_max"], log=config["eps_log"]
         )
 
         hparams["weight_decay"] = trial.suggest_float(
-            config["weight_decay"]["name"],
-            config["weight_decay"]["min"],
-            config["weight_decay"]["max"],
+            "weight_decay",
+            config["weight_decay_min"],
+            config["weight_decay_max"],
+            log=config["weight_decay_log"],
         )
 
     else:
         hparams["momentum"] = None
 
-    if datatype == "sequence":
-        model = BRNN_MtO(**hparams)
-    elif datatype == "residues":
-        model = BRNN_MtM(**hparams)
+    # Create the model with the suggested hyperparameters
+    model= BRNN_PARROT(**hparams)
 
     for hparam_name, hparam_value in hparams.items():
         print(f"{hparam_name} = ", hparam_value)
@@ -205,7 +196,7 @@ def objective(trial: optuna.trial.Trial, datamodule: pl.LightningDataModule, con
     # pruning_callback = PyTorchLightningPruningCallback(trial, monitor=monitor)
 
     wandb_logger = WandbLogger(
-        name=f"run{trial.number}", project=f"{config['study_name']['value']}"
+        name=f"run{trial.number}", project=f"{config['study_name']}"
     )
 
     checkpoint_callback = ModelCheckpoint(
@@ -217,14 +208,22 @@ def objective(trial: optuna.trial.Trial, datamodule: pl.LightningDataModule, con
 
     wandb_logger.watch(model)
 
+    # Determine accelerator and device configuration
+    if torch.cuda.is_available() and not config["force_cpu"]:
+        accelerator = "gpu"
+        devices = config["gpu_id"]
+    else:
+        accelerator = "cpu"
+        devices = 1  # CPU accelerator expects an integer
+
     trainer = pl.Trainer(
         gradient_clip_val=hparams["gradient_clip_val"],
         precision="16-mixed",
         logger=wandb_logger,
-        min_epochs=config["min_epochs"]["value"],
-        max_epochs=config["max_epochs"]["value"],
-        accelerator="auto",
-        devices=config["gpu_id"],
+        min_epochs=config["min_epochs"],
+        max_epochs=config["max_epochs"],
+        accelerator=accelerator,
+        devices=devices,
         # callbacks = [pruning_callback, early_stop_callback, checkpoint_callback, lr_monitor],
         callbacks=[early_stop_callback, checkpoint_callback, lr_monitor],
     )
@@ -255,7 +254,7 @@ def run_optimization(
     Parameters
     ----------
     config : dict
-        Dictionary containing the hyperparameter search space from the config yaml file.
+        Dictionary containing the hyperparameter search space configuration.
     study_name : str
         The name of the optuna study. This is what is used for logging to WandB.
     tsv_file : str
@@ -272,12 +271,19 @@ def run_optimization(
         Ignore parrot warnings, by default False
     """
 
-    n_trials = config["n_trials"]["value"]
-    direction = config["direction"]["value"]
-    warm_up_trials = config["warm_up_trials"]["value"]
+    n_trials = config["n_trials"]
+    direction = config["direction"]
+    warm_up_trials = config["warm_up_trials"]
+    
     # this can improve performance for tensor cores cards
     if determine_matmul_precision():
         torch.set_float32_matmul_precision("high")
+
+    # Set default num_workers if not specified
+    if config.get("num_workers") is None:
+        config["num_workers"] = (
+            os.cpu_count() if os.cpu_count() <= 32 else os.cpu_count() // 4
+        )
 
     datamodule = ParrotDataModule(
         f"{tsv_file}",
@@ -286,6 +292,8 @@ def run_optimization(
         split_file=f"{split_file}",
         ignore_warnings=ignore_warnings,
         batch_size=batch_size,
+        num_workers=config["num_workers"],
+        distributed=config["distributed"]
     )
 
     storage = f"sqlite:///{study_name}.db"
@@ -308,112 +316,138 @@ def run_optimization(
     )
 
 
-def parse_and_write_args_to_yaml():
-    """Provide optional CLI overwrites to default yaml configuration file.
-    The default yaml configuration file is located in the parrot package directory under data/
-    Hyperparameter sweep search spaces are output to a yaml file in the current working directory.
+def parse_args():
+    """
+    Parse command line arguments for optimization. Provides sensible defaults for all parameters.
 
     Returns
     -------
-    argparse.Namespace
-        argparse object containing the parsed arguments.
+    dict
+        Dictionary containing the configuration parameters.
     """
-    parser = argparse.ArgumentParser()
-    # required arguments
-    parser.add_argument(
-        "--config", default=None, help="Path to the configuration file."
+    parser = argparse.ArgumentParser(
+        description="PARROT hyperparameter optimization without YAML config files"
     )
+    
+    # Config file argument
+    parser.add_argument(
+        "--config", default=None, help="Path to the configuration file (optional)."
+    )
+    
+    # Required arguments with defaults
     parser.add_argument(
         "--num_classes",
-        default=None,
+        default=1,
         type=int,
         help="Number of classes. For regression, this value must be set to 1.",
     )
     parser.add_argument(
-        "--datatype", default=None, help="Type of data. Must be 'sequence' or 'residues"
+        "--datatype", 
+        default="sequence", 
+        help="Type of data. Must be 'sequence' or 'residues'"
     )
     parser.add_argument(
-        "--tsv_file", default=None, help="Path to the training tsv file."
+        "--tsv_file", 
+        default=None,
+        help="Path to the training tsv file."
     )
-
     parser.add_argument(
         "--split_file",
         default=None,
         help="Path to the file indicating the train/validation/test split.",
     )
     parser.add_argument(
-        "--study_name", default=None, help="Name of the study. Used for WandB logging."
+        "--study_name", 
+        default="parrot_optimization", 
+        help="Name of the study. Used for WandB logging."
     )
     parser.add_argument(
-        "--batch_size", default=None, type=int, help="The batch size of the model."
+        "--batch_size", 
+        default=32, 
+        type=int, 
+        help="The batch size of the model."
     )
     parser.add_argument(
         "--ignore_warnings",
-        default=None,
-        type=bool,
+        action="store_true",
         help="Optionally ignore parrot warnings.",
     )
     parser.add_argument(
-        "--gpu_id", nargs="+", default=[0], type=int, help="GPU device ID(s) to use."
+        "--gpu_id", 
+        nargs="+", 
+        default=[0], 
+        type=int, 
+        help="GPU device ID(s) to use."
     )
 
-    # optional overrides to default configs
+    # Optimization parameters
+    parser.add_argument(
+        "--n_trials",
+        default=100,
+        type=int,
+        help="Number of optimization trials to run.",
+    )
+    parser.add_argument(
+        "--direction",
+        default="minimize",
+        choices=["minimize", "maximize"],
+        help="Direction of optimization.",
+    )
+    parser.add_argument(
+        "--warm_up_trials",
+        default=10,
+        type=int,
+        help="Number of warm-up trials for pruning.",
+    )
+
+    # Hyperparameter ranges
     parser.add_argument(
         "--optimizer_name",
         nargs="+",
-        help="List of optimizers to potentially use. Currently support are AdamW and SGD+momentum",
+        default=["AdamW"],
+        help="List of optimizers to potentially use. Currently supported are adamw and sgd",
     )
-
     parser.add_argument(
         "--learn_rate",
         nargs=2,
         type=float,
-        help="The learning rate of the optimizer. "
-        "The first index will be used as the min. "
-        "The second will be used as the max.",
+        default=[1e-5, 1e-2],
+        help="Learning rate range [min, max]",
     )
-
     parser.add_argument(
         "--num_lstm_layers",
         nargs=2,
         type=int,
-        help=f"The number of lstm layers to consider. "
-        "The first index will be used as the min. "
-        "The second will be used as the max.",
+        default=[1, 3],
+        help="LSTM layers range [min, max]",
     )
-
     parser.add_argument(
         "--lstm_hidden_size",
         nargs=2,
         type=int,
-        help=f"The number of hidden units in the lstm layers.",
+        default=[32, 256],
+        help="LSTM hidden size range [min, max]",
     )
-
     parser.add_argument(
         "--num_linear_layers",
         nargs=2,
         type=int,
-        help=f"The number of linear layers to consider. "
-        "The first index will be used as the min. "
-        "The second will be used as the max.",
+        default=[1, 4],
+        help="Linear layers range [min, max]",
     )
-
     parser.add_argument(
         "--linear_hidden_size",
         nargs=2,
         type=int,
-        help=f"The number of hidden units in the linear layers."
-        "The first index will be used as the min. "
-        "The second will be used as the max.",
+        default=[32, 512],
+        help="Linear hidden size range [min, max]",
     )
-
     parser.add_argument(
         "--dropout",
         nargs=2,
         type=float,
-        help="The range of dropout rates on dense linear layers to test. "
-        "The first index will be used as the min. "
-        "The second will be used as the max.",
+        default=[0.0, 0.5],
+        help="Dropout range [min, max]",
     )
 
     # SGD specific parameters
@@ -421,10 +455,8 @@ def parse_and_write_args_to_yaml():
         "--momentum",
         nargs=2,
         type=float,
-        help="Parameter only used if using an SGD optimizer."
-        "The range of momentum values to add to denominator of SGD optimizer. "
-        "The first index will be used as the min. "
-        "The second will be used as the max.",
+        default=[0.8, 0.99],
+        help="SGD momentum range [min, max]",
     )
 
     # AdamW specific parameters
@@ -432,95 +464,230 @@ def parse_and_write_args_to_yaml():
         "--beta1",
         nargs=2,
         type=float,
-        help="Parameter only used if using an Adam-based optimizer. "
-        "These will define range of beta1 values to add to denominator of adamW optimizer. "
-        "The first index will be used as the min. "
-        "The second will be used as the max.",
+        default=[0.85, 0.95],
+        help="AdamW beta1 range [min, max]",
     )
-
     parser.add_argument(
         "--beta2",
         nargs=2,
         type=float,
-        help="Parameter only used if using an Adam-based optimizer. "
-        "The range of beta2 values to add to denominator of adamW optimizer. "
-        "The first index will be used as the min. "
-        "The second will be used as the max.",
+        default=[0.98, 0.9999],
+        help="AdamW beta2 range [min, max]",
     )
-
     parser.add_argument(
         "--eps",
         nargs=2,
         type=float,
-        help="Parameter only used if using an Adam-based optimizer. "
-        "The range of eps values to add to denominator of adamW optimizer. "
-        "The first index will be used as the min."
-        "The second will be used as the max.",
+        default=[1e-9, 1e-7],
+        help="AdamW eps range [min, max]",
     )
-
     parser.add_argument(
         "--weight_decay",
         nargs=2,
         type=float,
-        help="Parameter only used if using an Adam-based optimizer. "
-        "The range of weight decay values to add to denominator of adamW optimizer. "
-        "The first index will be used as the min."
-        "The second will be used as the max.",
+        default=[1e-6, 1e-2],
+        help="AdamW weight decay range [min, max]",
+    )
+
+    # Additional parameters
+    parser.add_argument(
+        "--distributed",
+        action="store_true",
+        help="Use distributed training",
+    )
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=None,
+        help="Number of data loader workers (auto-detected if not specified)",
+    )
+    parser.add_argument(
+        "--force_cpu",
+        action="store_true",
+        help="Force CPU usage even if GPU is available",
+    )
+    parser.add_argument(
+        "--gradient_clip_val",
+        nargs=2,
+        type=float,
+        default=[0.5, 2.0],
+        help="Gradient clipping value range [min, max]",
+    )
+    parser.add_argument(
+        "--monitor",
+        type=str,
+        default="epoch_val_loss",
+        help="Metric to monitor for optimization (supports both epoch_val_loss and val_loss formats)",
+    )
+    parser.add_argument(
+        "--min_delta",
+        type=float,
+        default=0.001,
+        help="Minimum change in monitored metric for early stopping",
+    )
+    parser.add_argument(
+        "--min_epochs",
+        type=int,
+        default=5,
+        help="Minimum number of epochs to train",
+    )
+    parser.add_argument(
+        "--optimize_max_epochs",
+        type=int,
+        default=100,
+        help="Maximum number of epochs for optimization trials",
     )
 
     args = parser.parse_args()
-
-    if args.config is None:
-        # Set the default configuration file path to the data folder of the package
-        default_config_path = os.path.join(get_directory(), "config.yaml")
-        args.config = default_config_path
-
-    with open(args.config) as config_file:
-        config = yaml.safe_load(config_file)
-
+    
+    # Start with empty config, then load from file if provided
+    config = {}
+    
+    # If config file is provided, load it first
+    if args.config is not None:
+        try:
+            import yaml
+            with open(args.config) as config_file:
+                yaml_config = yaml.safe_load(config_file)
+            # Handle case where YAML file is empty or None
+            if yaml_config is not None:
+                # Extract values from YAML structure if it uses the nested format
+                for key, value in yaml_config.items():
+                    if isinstance(value, dict) and "value" in value:
+                        config[key] = value["value"]
+                    else:
+                        config[key] = value
+        except FileNotFoundError:
+            print(f"Warning: Config file {args.config} not found. Using command line arguments and defaults.")
+        except Exception as e:
+            print(f"Error loading config file: {e}")
+    
+    # Override with command line arguments (only if explicitly provided)
+    # Store defaults to check if values were explicitly set
+    parser_defaults = {
+        'num_classes': 1,
+        'datatype': 'sequence', 
+        'tsv_file': None,
+        'split_file': None,
+        'study_name': 'parrot_optimization',
+        'batch_size': 32,
+        'ignore_warnings': False,
+        'gpu_id': [0],
+        'n_trials': 100,
+        'direction': 'minimize',
+        'warm_up_trials': 10,
+        'optimizer_name': ['AdamW'],
+        'learn_rate': [1e-5, 1e-2],
+        'num_lstm_layers': [1, 3],
+        'lstm_hidden_size': [32, 256],
+        'num_linear_layers': [1, 4],
+        'linear_hidden_size': [32, 512],
+        'dropout': [0.0, 0.5],
+        'momentum': [0.8, 0.99],
+        'beta1': [0.85, 0.95],
+        'beta2': [0.98, 0.9999],
+        'eps': [1e-9, 1e-7],
+        'weight_decay': [1e-6, 1e-2],
+        'gradient_clip_val': [0.5, 2.0],
+        'monitor': 'epoch_val_loss',
+        'min_delta': 0.001,
+        'min_epochs': 5,
+        'max_epochs': 100,
+        'optimize_max_epochs': 100,
+        'distributed': False,
+        'num_workers': None,
+        'force_cpu': False
+    }
+    
     for arg_name, arg_value in vars(args).items():
-        if arg_name == "config" or arg_value is None:
-            continue
-
-        # Update the corresponding key in the configuration dictionary
-        if isinstance(arg_value, list) and arg_name != "gpu_id":
-            # Handle list values
-            config[arg_name].update({"min": arg_value[0]})
-            config[arg_name].update({"max": arg_value[1]})
-            if len(arg_value) > 2:
-                assert arg_value[2] in [
-                    True,
-                    False,
-                ], f"log value must be True or False, not {arg_value[2]}"
-                config[arg_name].update({"log": arg_value[2]})
-        else:
-            # Handle single values or list gpu_id (? check this)
-            config[arg_name] = arg_value
-
-    args.config = f'{config["study_name"]["value"]}_param_sweep_{datetime.date.today().strftime("%Y_%m_%d")}.yaml'
-
-    with open(args.config, "w") as config_file:
-        yaml.safe_dump(config, config_file)
-
-    # Set defaults from the updated config dictionary
-    # is this the best spot for this? parsing code feels a bit odd but works
-    parser.set_defaults(**config)
-
-    return args
+        if arg_name != "config":
+            # Only override config if the argument was explicitly provided (different from default)
+            # or if the argument is not in the config file
+            if (arg_name not in parser_defaults or 
+                arg_value != parser_defaults[arg_name] or 
+                arg_name not in config):
+                config[arg_name] = arg_value
+    
+    # Validate that required arguments are present
+    if "tsv_file" not in config or config["tsv_file"] is None:
+        parser.error("--tsv_file is required either as a command line argument or in the config file")
+    
+    # Convert monitor metric from new format (epoch_val_loss) to old format (val_loss) for compatibility
+    monitor_metric = config.get("monitor", "epoch_val_loss")
+    if monitor_metric.startswith("epoch_"):
+        converted_monitor = monitor_metric.replace("epoch_", "")
+    else:
+        converted_monitor = monitor_metric
+    
+    # Convert args to a config dictionary with the structure expected by the optimization functions
+    final_config = {
+        "num_classes": config.get("num_classes", 1),
+        "datatype": config.get("datatype", "sequence"),
+        "tsv_file": config["tsv_file"],
+        "split_file": config.get("split_file", None),
+        "study_name": config.get("study_name", "parrot_optimization"),
+        "batch_size": config.get("batch_size", 32),
+        "ignore_warnings": config.get("ignore_warnings", False),
+        "gpu_id": config.get("gpu_id", [0]),
+        "n_trials": config.get("n_trials", 100),
+        "direction": config.get("direction", "minimize"),
+        "warm_up_trials": config.get("warm_up_trials", 10),
+        "distributed": config.get("distributed", False),
+        "num_workers": config.get("num_workers", None),
+        "force_cpu": config.get("force_cpu", False),
+        
+        # Set parameters needed by objective function that weren't in the original config structure
+        "monitor": converted_monitor,
+        "min_delta": config.get("min_delta", 0.001),
+        "min_epochs": config.get("min_epochs", 5),
+        "max_epochs": config.get("optimize_max_epochs", config.get("max_epochs", 100)),
+        
+        # Convert optimizer choices to the format expected by the objective function
+        "optimizer_choices": config.get("optimizer_name", ["AdamW"]),
+        
+        # Convert hyperparameter ranges to the format expected by the objective function
+        "learn_rate_min": config.get("learn_rate", [1e-5, 1e-2])[0],
+        "learn_rate_max": config.get("learn_rate", [1e-5, 1e-2])[1], 
+        "learn_rate_log": True,
+        "num_lstm_layers_min": config.get("num_lstm_layers", [1, 3])[0],
+        "num_lstm_layers_max": config.get("num_lstm_layers", [1, 3])[1],
+        "lstm_hidden_size_min": config.get("lstm_hidden_size", [32, 256])[0],
+        "lstm_hidden_size_max": config.get("lstm_hidden_size", [32, 256])[1],
+        "num_linear_layers_min": config.get("num_linear_layers", [1, 4])[0],
+        "num_linear_layers_max": config.get("num_linear_layers", [1, 4])[1],
+        "linear_hidden_size_min": config.get("linear_hidden_size", [32, 512])[0],
+        "linear_hidden_size_max": config.get("linear_hidden_size", [32, 512])[1],
+        "dropout_min": config.get("dropout", [0.0, 0.5])[0],
+        "dropout_max": config.get("dropout", [0.0, 0.5])[1],
+        "momentum_min": config.get("momentum", [0.8, 0.99])[0],
+        "momentum_max": config.get("momentum", [0.8, 0.99])[1],
+        "beta1_min": config.get("beta1", [0.85, 0.95])[0],
+        "beta1_max": config.get("beta1", [0.85, 0.95])[1],
+        "beta2_min": config.get("beta2", [0.98, 0.9999])[0],
+        "beta2_max": config.get("beta2", [0.98, 0.9999])[1],
+        "eps_min": config.get("eps", [1e-9, 1e-7])[0],
+        "eps_max": config.get("eps", [1e-9, 1e-7])[1],
+        "eps_log": True,
+        "weight_decay_min": config.get("weight_decay", [1e-6, 1e-2])[0],
+        "weight_decay_max": config.get("weight_decay", [1e-6, 1e-2])[1],
+        "weight_decay_log": True,
+        "gradient_clip_val_min": config.get("gradient_clip_val", [0.5, 2.0])[0],
+        "gradient_clip_val_max": config.get("gradient_clip_val", [0.5, 2.0])[1],
+    }
+    
+    return final_config
 
 
 if __name__ == "__main__":
-    arguments = parse_and_write_args_to_yaml()
-    with open(arguments.config) as config_file:
-        final_config = yaml.safe_load(config_file)
-
+    config = parse_args()
+    
     run_optimization(
-        final_config,
-        final_config["study_name"]["value"],
-        final_config["tsv_file"]["value"],
-        final_config["split_file"]["value"],
-        final_config["num_classes"]["value"],
-        final_config["datatype"]["value"],
-        final_config["batch_size"]["value"],
-        ignore_warnings=final_config["ignore_warnings"]["value"],
+        config,
+        config["study_name"],
+        config["tsv_file"],
+        config["split_file"],
+        config["num_classes"],
+        config["datatype"],
+        config["batch_size"],
+        ignore_warnings=config["ignore_warnings"],
     )

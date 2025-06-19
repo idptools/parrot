@@ -140,3 +140,53 @@ class Predictor():
                 prediction = softmax(prediction)
 
         return prediction
+
+# Additional predictor classes for advanced usage
+# For new projects, consider using the base predictor classes which provide
+# more flexibility and automatic model type detection
+try:
+    from parrot.base_predictor import BasePredictor, LegacyBRNNPredictor, LightningPredictor, ParrotPredictor, create_predictor
+    
+    # Convenience function for automatic model type detection
+    def create_predictor_auto(model_path, datatype=None, **kwargs):
+        """
+        Create a predictor with automatic model type detection.
+        
+        This function is recommended for new code as it automatically
+        detects whether the model is a legacy BRNN, Lightning checkpoint,
+        or unified BRNN_PARROT model.
+        
+        Parameters
+        ----------
+        model_path : str or Path
+            Path to the saved model
+        datatype : str, optional
+            Data type for legacy models ('sequence' or 'residues')
+            Only required for legacy models, automatically detected for Lightning models
+        **kwargs
+            Additional arguments passed to the predictor constructor
+            
+        Returns
+        -------
+        BasePredictor
+            Appropriate predictor instance for the model
+            
+        Examples
+        --------
+        >>> # For Lightning models (automatic detection)
+        >>> predictor = create_predictor_auto('model.ckpt')
+        >>> 
+        >>> # For BRNN_PARROT models (automatic detection)
+        >>> predictor = create_predictor_auto('parrot_model.ckpt')
+        >>> 
+        >>> # For legacy models (datatype required)
+        >>> predictor = create_predictor_auto('model.pt', datatype='sequence')
+        >>> 
+        >>> # Make predictions
+        >>> prediction = predictor.predict('ACDEFGHIKLMNPQRSTVWY')
+        """
+        return create_predictor(model_path, datatype=datatype, **kwargs)
+        
+except ImportError:
+    # base_predictor module not available
+    pass

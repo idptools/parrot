@@ -1,31 +1,18 @@
-"""
-Module with functions for processing an input datafile into a PyTorch-compatible
-format.
-
-.............................................................................
-idptools-parrot was developed by the Holehouse lab
-     Original release ---- 2020
-
-Question/comments/concerns? Raise an issue on github:
-https://github.com/idptools/parrot
-
-Licensed under the MIT license.
-"""
+# Alternative implementation of process_input_data with memory-efficient loading
 
 import math
 import os
+import gc
 
-import numpy as np
 import torch
-from IPython import embed
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader, random_split
+import numpy as np
 
-from parrot import encode_sequence, parrot_exceptions
-from parrot.tools import dataset_warnings
-
+from parrot import encode_sequence
+from parrot.parrot_exceptions import IOExceptionParrot
 
 # .................................................................
-#
+# From original implementation of PARROT
 #
 def read_tsv_raw(tsvfile, delimiter=None):
     """
@@ -47,403 +34,78 @@ def read_tsv_raw(tsvfile, delimiter=None):
             if stripped and not stripped.startswith("#"):
                 yield stripped.split(delimiter)
 
-
-# .................................................................
-#
-#
 def __parse_lines(lines, datatype, validate=True):
     """
-    Efficiently parses lines based on the specified datatype.
+    Internal function for parsing a set of lines
+
     Parameters
     ----------
-    lines : generator
-        A generator yielding parsed lines from the TSV file.
+    lines : list
+        A list of lists, where the sublists reflect the columns in a tsvfile. Should be the output
+        from the read_tsv_raw() function.
+
     datatype : str
-        'residues' or 'sequence'.
+        Identifier that defines the type of data being passed in. Must be either 'residues', 'sequence'
+
     validate : bool
-        Validates residue counts if set to True.
+        If set to true, ensures the number of residue values equals the number of residues
+ 
     Returns
-    -------
+    -----------
     list
-        Parsed data in the form [id, sequence, data].
+        Returns a parsed list of lists, where each sublist contains the structure
+        [id, sequence, <data>]
+        where <data> is either a single float (mode=sequence) or a set of floats 
+
+    Raises
+    ---------
+    Exception
+        If an error occurs while parsing the file, the linenumber of the file is printed as well as the
+        idenity of the offending line.
+
     """
+
+    
+    # check the datatype is valid
+    if datatype not in ['residues','sequence']:
+        raise ValueError('Invalid datatype. Must be "residues" or "sequence".')
+        
+    # parse the lines
     try:
+
         data = []
-        for lc, line in enumerate(lines, start=1):
-            if datatype == "residues":
-                residue_data = np.array(line[2:], dtype=float)
-                if validate and len(line[1]) != len(residue_data):
-                    raise ValueError(
-                        f"Mismatch between sequence length and residue values on line {lc}: {line}"
-                    )
-                data.append([line[0], line[1], residue_data])
-            elif datatype == "sequence":
-                data.append([line[0], line[1], float(line[2])])
-            else:
-                raise ValueError('Invalid datatype. Must be "residues" or "sequence".')
-    except Exception as e:
-        print("Excecption raised on parsing input file...")
+        lc = 0
+
+        # A value for each residue in a sequence
+        if datatype == 'residues':	
+            for x in lines:
+                lc = lc + 1
+                
+                residue_data = np.array(x[2:], dtype=float)
+
+                data.append([x[0], x[1], residue_data])
+
+        # A single value per sequence
+        elif datatype == 'sequence':  
+            for x in lines:
+                lc = lc + 1
+                data.append([x[0], x[1], float(x[2])])
+
+    except Exception as e:        
+        print('Excecption raised on parsing input file...')
         print(e)
-        print("")
-        raise parrot_exceptions.IOExceptionParrot(
-            f"Input data is not correctly formatted for datatype '{datatype}'.\nMake sure your datafile does not have empty lines at the end of the file.\nError on line {lc}:\n{line}"
-        )
+        print('')
+        raise IOExceptionParrot(f"Input data is not correctly formatted for datatype '{datatype}'.\nMake sure your datafile does not have empty lines at the end of the file.\nError on line {lc}:\n{x}")
 
+    # if we want to validate each line 
+    if validate:
+        if datatype == 'residues':
+            lc = 0
+            for x in data:
+                lc = lc + 1
+                if len(x[1]) != len(x[2]):
+                    raise IOExceptionParrot(f"Input data is not correctly formatted for datatype '{datatype}'.\nInconsistent number of residue values and residues. Error on line {lc}:\n{x}")
     return data
-
-
-# .................................................................
-#
-#
-def parse_file(
-    tsvfile,
-    datatype,
-    problem_type,
-    num_classes,
-    excludeSeqID=False,
-    ignoreWarnings=False,
-):
-    """Parse a datafile containing sequences and values.
-
-    Each line of of the input tsv file contains a sequence of amino acids, a value
-    (or values) corresponding to that sequence, and an optional sequence ID. This
-    file will be parsed into a more convenient list of lists.
-
-    If excludeSeqID is False, then the format of each line in the file should be:
-    <seqID> <sequence> <value(s)>
-
-    If excludeSeqID is True, then the format of each line in the file should be:
-    <sequence> <value(s)>
-
-    `value(s)` will either be a single number if `datatype` is 'sequence' or a
-    len(sequence) series of whitespace-separated numbers if it is 'residues'.
-
-    If `problem_type` is 'regression', then each value can be any real number. But
-    if it is 'classification' then each value should be an integer in the range
-    [0-N] where N is the number of classes.
-
-    Parameters
-    ----------
-    tsvfile : str
-            Path to a whitespace-separated datafile
-    datatype : str
-            Description of the format of the values in `tsvfile`. Providing a string
-            other than 'sequence' or 'residues' will produce unintended behavior.
-    problem_type : str
-            Description of the machine-learning task. Providing a string other than
-            'regression' or 'classification' will produce unintended behavior.
-    excludeSeqID : bool, optional
-            Boolean indicating whether or not each line in `tsvfile` has a sequence ID
-            (default is False)
-    ignoreWarnings : bool, optional
-            If False, assess the structure and balance of the provided dataset with
-            basic heuristics and display warnings for common issues.
-
-    Returns
-    -------
-    list of lists
-            A list representing the entire `tsvfile`. Each inner list corresponds to a
-            single line in the file and has the format [seqID, sequence, values].
-    """
-
-    # read in and parse the TSV file.
-    lines = read_tsv_raw(tsvfile)
-
-    # Add a dummy seqID if none are provided
-    if excludeSeqID:
-        lines = ([""] + line for line in lines)
-
-    data = __parse_lines(lines, datatype)
-
-    if not ignoreWarnings:
-        # Check for identical sequences
-        dataset_warnings.check_duplicate_sequences(data)
-
-        # Check for class imbalance
-        if problem_type == "classification":
-            dataset_warnings.check_class_imbalance(data)
-
-        # Check for data distribution imbalance
-        elif problem_type == "regression":
-            dataset_warnings.check_regression_imbalance(data)
-
-    # if we're doing a classification problem...
-    if problem_type == "classification":
-        # if a sequence classification
-        if datatype == "sequence":
-            for sample in data:
-                sample[2] = int(sample[2])
-
-                # Validate that all of the class labels are valid
-                if sample[2] >= num_classes or sample[2] < 0:
-                    raise ValueError(
-                        f"Invalid class label on entry {sample[0]}.\nClass label was {sample[2]} but must be between 0 and {num_classes}"
-                    )
-
-        else:
-            for sample in data:
-                sample[2] = list(map(int, sample[2]))
-                if any(val < 0 or val >= num_classes for val in sample[2]):
-                    raise ValueError(
-                        f"Invalid class label on entry {sample[0]}.\nClass labels must be between 0 and {num_classes}"
-                    )
-
-    return data
-
-
-class SequenceDataset(Dataset):
-    """
-    A PyTorch-compatible dataset containing sequences and values.
-
-    Stores a collection of sequences as tensors along with their corresponding
-    target values. Designed to be provided to PyTorch DataLoaders.
-    """
-
-    def __init__(self, data, subset=None, encoding_scheme="onehot", encoder=None):
-        """
-        Parameters
-        ----------
-        data : list of lists
-            Each inner list represents a single sequence in the dataset and should
-            have the format: [seqID, sequence, value(s)].
-        subset : array-like, optional
-            Indices of `data` to be part of this dataset. Defaults to None (all data).
-        encoding_scheme : str
-            How to encode amino acid sequences ('onehot', 'biophysics', or 'user').
-        encoder : UserEncoder object, optional
-            Used if `encoding_scheme` is 'user'. Converts sequences to numeric vectors.
-        """
-        self.encoding_scheme = encoding_scheme
-        self.encoder = encoder
-
-        # Handle subset selection with lazy access via indexing
-        self.data = data if subset is None else [data[i] for i in subset]
-
-    def __len__(self):
-        """Return the number of sequences in the dataset."""
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        """Retrieve the sequence and values at a specified index.
-
-        Converts a string sequence to an encoded numeric vector on-the-fly.
-
-        Parameters
-        ----------
-        idx : int
-            Index of the desired sequence.
-
-        Returns
-        -------
-        tuple
-            A tuple containing the sequence name, encoded vector, and values.
-        """
-        if isinstance(idx, torch.Tensor):
-            idx = idx.item()
-
-        seqID, sequence, values = self.data[idx]
-
-        if self.encoding_scheme == "onehot":
-            sequence_vector = encode_sequence.one_hot(sequence)
-        elif self.encoding_scheme == "biophysics":
-            sequence_vector = encode_sequence.biophysics(sequence)
-        elif self.encoding_scheme == "user" and self.encoder is not None:
-            sequence_vector = self.encoder.encode(sequence)
-        else:
-            raise ValueError("Invalid encoding scheme or missing encoder.")
-
-        return (seqID, sequence_vector, values)
-
-
-def seq_class_collate(batch):
-    """Collates sequences and their values into a batch
-
-    Transforms a collection of tuples of sequence vectors and values into a single
-    tuple by stacking along a newly-created batch dimension. This function is
-    specifically designed for classification problems with sequence-mapped data.
-
-    Parameters
-    ----------
-    batch : list
-            A list of tuples of the form (sequence_vector, target_value(s))
-
-    Returns
-    -------
-    tuple
-            a tuple with concatenated names, sequence_vectors and target_values
-    """
-
-    names = []
-    orig_seq_vectors = []
-    orig_targets = []
-
-    for item in batch:
-        names.append(item[0])
-        orig_seq_vectors.append(item[1])
-        orig_targets.append(item[2])
-
-    longest_seq = len(max(orig_seq_vectors, key=lambda x: len(x)))
-
-    padded_seq_vectors = np.zeros(
-        [len(orig_seq_vectors), longest_seq, len(orig_seq_vectors[0][0])]
-    )
-
-    for i, j in enumerate(orig_seq_vectors):
-        padded_seq_vectors[i][0 : len(j)] = j
-
-    padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)
-    targets = torch.LongTensor(orig_targets)
-
-    return (names, padded_seq_vectors, targets)
-
-
-def seq_regress_collate(batch):
-    """Collates sequences and their values into a batch
-
-    Transforms a collection of tuples of sequence vectors and values into a single
-    tuple by stacking along a newly-created batch dimension. This function is
-    specifically designed for regression problems with sequence-mapped data.
-
-    Parameters
-    ----------
-    batch : list
-            A list of tuples of the form (sequence_vector, target_value(s))
-
-    Returns
-    -------
-    tuple
-            a tuple with concatenated names, sequence_vectors and target_value
-    """
-
-    names = []
-    orig_seq_vectors = []
-    orig_targets = []
-
-    for item in batch:
-        names.append(item[0])
-        orig_seq_vectors.append(item[1])
-        orig_targets.append(item[2])
-
-    longest_seq = len(max(orig_seq_vectors, key=lambda x: len(x)))
-
-    padded_seq_vectors = np.zeros(
-        [len(orig_seq_vectors), longest_seq, len(orig_seq_vectors[0][0])]
-    )
-
-    for i, j in enumerate(orig_seq_vectors):
-        padded_seq_vectors[i][0 : len(j)] = j
-
-    padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)
-    targets = torch.FloatTensor(orig_targets)
-
-    return (names, padded_seq_vectors, targets)
-
-
-def res_class_collate(batch):
-    """Collates sequences and their values into a batch
-
-    Transforms a collection of tuples of sequence vectors and values into a single
-    tuple by stacking along a newly-created batch dimension. This function is
-    specifically designed for classification problems with residue-mapped data. To
-    account for sequences with different lengths, all sequence vectors are zero-
-    padded to the length of the longest sequence in the batch
-
-    Parameters
-    ----------
-    batch : list
-            A list of tuples of the form (sequence_vector, target_value(s))
-
-    Returns
-    -------
-    tuple
-            a tuple with concatenated names, sequence_vectors and target_values
-    """
-
-    names = []
-    orig_seq_vectors = []
-    orig_targets = []
-
-    for item in batch:
-        names.append(item[0])
-        orig_seq_vectors.append(item[1])
-        orig_targets.append(item[2])
-
-    longest_seq = len(max(orig_seq_vectors, key=lambda x: len(x)))
-
-    padded_seq_vectors = np.zeros(
-        [len(orig_seq_vectors), longest_seq, len(orig_seq_vectors[0][0])]
-    )
-    padded_targets = np.zeros([len(orig_targets), longest_seq])
-
-    for i, (seq_vector, target) in enumerate(zip(orig_seq_vectors, orig_targets)):
-        padded_seq_vectors[i][: len(seq_vector)] = seq_vector
-        padded_targets[i][: len(target)] = target
-
-    #     for i, j in enumerate(orig_seq_vectors):
-    #         padded_seq_vectors[i][0:len(j)] = j
-
-    #     for i, j in enumerate(orig_targets):
-    #         padded_targets[i][0:len(j)] = j
-
-    padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)
-    padded_targets = torch.LongTensor(padded_targets)
-
-    return (names, padded_seq_vectors, padded_targets)
-
-
-def res_regress_collate(batch):
-    """Collates sequences and their values into a batch
-
-    Transforms a collection of tuples of sequence vectors and values into a single
-    tuple by stacking along a newly-created batch dimension. This function is
-    specifically designed for regression problems with residue-mapped data. To
-    account for sequences with different lengths, all sequence vectors are zero-
-    padded to the length of the longest sequence in the batch
-
-    Parameters
-    ----------
-    batch : list
-            A list of tuples of the form (sequence_vector, target_value(s))
-
-    Returns
-    -------
-    tuple
-            a tuple with concatenated names, sequence_vectors and target_values
-    """
-
-    names = []
-    orig_seq_vectors = []
-    orig_targets = []
-
-    for item in batch:
-        names.append(item[0])
-        orig_seq_vectors.append(item[1])
-        orig_targets.append(item[2])
-
-    longest_seq = len(max(orig_seq_vectors, key=lambda x: len(x)))
-
-    padded_seq_vectors = np.zeros(
-        [len(orig_seq_vectors), longest_seq, len(orig_seq_vectors[0][0])]
-    )
-    padded_targets = np.zeros([len(orig_targets), longest_seq])
-
-    for i, (seq_vector, target) in enumerate(zip(orig_seq_vectors, orig_targets)):
-        padded_seq_vectors[i][: len(seq_vector)] = seq_vector
-        padded_targets[i][: len(target)] = target
-
-    #     for i, j in enumerate(orig_seq_vectors):
-    #         padded_seq_vectors[i][0:len(j)] = j
-
-    #     for i, j in enumerate(orig_targets):
-    #         padded_targets[i][0:len(j)] = j
-
-    padded_seq_vectors = torch.FloatTensor(padded_seq_vectors)
-    padded_targets = torch.FloatTensor(padded_targets).view(
-        (len(padded_targets), len(padded_targets[0]), 1)
-    )
-
-    return (names, padded_seq_vectors, padded_targets)
-
 
 def vector_split(v, fraction):
     """Split a vector randomly by a specified proportion
@@ -472,13 +134,224 @@ def vector_split(v, fraction):
     segment2 = np.setdiff1d(v, segment1, assume_unique=True)
     return segment1, segment2
 
+# .................................................................
+# .................... New implementations below ..................
+# .................................................................
 
-def read_split_file(split_file):
-    """Read in a split_file
+class SequenceDataset(Dataset):
+    def __init__(self, filepath, encoding_scheme='onehot', encoder=None, excludeSeqID=False,
+                  datatype='sequence', delimiter=None):
+        self.filepath = filepath
+        self.encoding_scheme = encoding_scheme
+        self.encoder = encoder
+        self.excludeSeqID = excludeSeqID
+        self.datatype = datatype
+        self.delimiter = delimiter
+        
+        # Validate inputs
+        if not os.path.exists(filepath):
+            raise IOExceptionParrot(f"File not found: {filepath}")
+        
+        # Load and parse all data (fixed approach for reliability)
+        self.data = self._load_data()
+
+    def _load_data(self):
+        """Load and parse the entire dataset, handling various PARROT formats"""
+        data = []
+        
+        with open(self.filepath, 'r') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                
+                # Skip empty lines and comments
+                if not line or line.startswith('#'):
+                    continue
+                    
+                try:
+                    # Split by delimiter (None = any whitespace, like original PARROT)
+                    parts = line.split(self.delimiter)
+                    
+                    # Handle excludeSeqID case
+                    if self.excludeSeqID:
+                        # Format: sequence values...
+                        if len(parts) < 2:
+                            raise ValueError(f"Insufficient data on line {line_num}")
+                        seqID = f"seq_{line_num}"  # Generate ID
+                        sequence = parts[0]
+                        values_str = parts[1:]
+                    else:
+                        # Format: seqID sequence values...
+                        if len(parts) < 3:
+                            raise ValueError(f"Insufficient data on line {line_num}")
+                        seqID = parts[0]
+                        sequence = parts[1]
+                        values_str = parts[2:]
+                    
+                    # Parse values based on datatype
+                    if self.datatype == 'sequence':
+                        # Single value per sequence
+                        if len(values_str) != 1:
+                            raise ValueError(f"Expected single value for sequence data on line {line_num}")
+                        values = float(values_str[0])
+                    elif self.datatype == 'residues':
+                        # One value per residue
+                        values = np.array([float(v) for v in values_str], dtype=np.float32)
+                        if len(values) != len(sequence):
+                            raise ValueError(f"Number of values ({len(values)}) doesn't match sequence length ({len(sequence)}) on line {line_num}")
+                    else:
+                        raise ValueError(f"Invalid datatype: {self.datatype}")
+                    
+                    data.append((seqID, sequence, values))
+                    
+                except Exception as e:
+                    raise IOExceptionParrot(f"Error parsing line {line_num}: {line}\nError: {str(e)}")
+        
+        return data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        seqID, sequence, values = self.data[idx]
+
+        # Encode sequence
+        if self.encoding_scheme == 'onehot':
+            sequence_vector = encode_sequence.one_hot(sequence)
+        elif self.encoding_scheme == 'biophysics':
+            sequence_vector = encode_sequence.biophysics(sequence)
+        elif self.encoding_scheme == 'user' and self.encoder:
+            sequence_vector = self.encoder.encode(sequence)
+        else:
+            raise ValueError(f"Unknown encoding scheme: {self.encoding_scheme}")
+
+        return seqID, sequence_vector, values
+
+    def __del__(self):
+        # Clean up if needed
+        gc.collect()    
+
+
+def seq_regress_collate(batch):
+    """Collate function for sequence regression"""
+    names = [item[0] for item in batch]
+    seq_vectors = [item[1].clone().detach().float() for item in batch]
+    targets = [item[2] for item in batch]  # Single value per sequence
+    
+    # Determine the longest sequence in the batch
+    max_len = max(seq.size(0) for seq in seq_vectors)
+
+    # Preallocate tensor with appropriate size and type
+    padded_seqs = torch.zeros((len(seq_vectors), max_len, seq_vectors[0].size(1)), dtype=torch.float32)
+
+    for i, seq in enumerate(seq_vectors):
+        padded_seqs[i, :seq.size(0), :] = seq.clone().detach()
+
+    # Convert targets to tensor
+    targets_tensor = torch.tensor(targets, dtype=torch.float32)
+
+    return names, padded_seqs, targets_tensor
+
+
+def seq_class_collate(batch):
+    """Collate function for sequence classification"""
+    names = [item[0] for item in batch]
+    seq_vectors = [item[1].clone().detach().float() for item in batch]
+    targets = [item[2] for item in batch]  # Single class per sequence
+    
+    # Determine the longest sequence in the batch
+    max_len = max(seq.size(0) for seq in seq_vectors)
+
+    # Preallocate tensor with appropriate size and type
+    padded_seqs = torch.zeros((len(seq_vectors), max_len, seq_vectors[0].size(1)), dtype=torch.float32)
+
+    for i, seq in enumerate(seq_vectors):
+        padded_seqs[i, :seq.size(0), :] = seq.clone().detach()
+
+    # Convert targets to tensor (integers for classification)
+    targets_tensor = torch.tensor(targets, dtype=torch.long)
+
+    return names, padded_seqs, targets_tensor
+
+
+def res_regress_collate(batch):
+    """Collate function for residue regression"""
+    names = [item[0] for item in batch]
+    seq_vectors = [item[1].clone().detach().float() for item in batch]
+    target_arrays = [item[2] for item in batch]  # Array of values per sequence
+    
+    # Determine the longest sequence in the batch
+    max_len = max(seq.size(0) for seq in seq_vectors)
+
+    # Preallocate tensors
+    padded_seqs = torch.zeros((len(seq_vectors), max_len, seq_vectors[0].size(1)), dtype=torch.float32)
+    padded_targets = torch.zeros((len(seq_vectors), max_len), dtype=torch.float32)
+
+    for i, (seq, targets) in enumerate(zip(seq_vectors, target_arrays)):
+        seq_len = seq.size(0)
+        padded_seqs[i, :seq_len, :] = seq.clone().detach()
+        padded_targets[i, :seq_len] = torch.tensor(targets, dtype=torch.float32)
+
+    return names, padded_seqs, padded_targets
+
+
+def res_class_collate(batch):
+    """Collate function for residue classification"""
+    names = [item[0] for item in batch]
+    seq_vectors = [item[1].clone().detach().float() for item in batch]
+    target_arrays = [item[2] for item in batch]  # Array of class labels per sequence
+    
+    # Determine the longest sequence in the batch
+    max_len = max(seq.size(0) for seq in seq_vectors)
+
+    # Preallocate tensors
+    padded_seqs = torch.zeros((len(seq_vectors), max_len, seq_vectors[0].size(1)), dtype=torch.float32)
+    padded_targets = torch.zeros((len(seq_vectors), max_len), dtype=torch.long)
+
+    for i, (seq, targets) in enumerate(zip(seq_vectors, target_arrays)):
+        seq_len = seq.size(0)
+        padded_seqs[i, :seq_len, :] = seq.clone().detach()
+        padded_targets[i, :seq_len] = torch.tensor(targets, dtype=torch.long)
+
+    return names, padded_seqs, padded_targets
+
+
+def split_dataset_indices(dataset, train_ratio=0.7, val_ratio=0.15):
+    dataset_size = len(dataset)
+    indices = list(range(dataset_size))
+    np.random.shuffle(indices)
+
+    train_split = int(np.floor(train_ratio * dataset_size))
+    val_split = int(np.floor((train_ratio + val_ratio) * dataset_size))
+
+    train_indices = indices[:train_split]
+    val_indices = indices[train_split:val_split]
+    test_indices = indices[val_split:]
+
+    return train_indices, val_indices, test_indices
+
+
+def initial_data_prep(save_splits_loc, dataset, train_ratio, val_ratio):
+    # function that does initial data prep. Basically,
+    # this function will take in a dataset, get the indices
+    # then write them out to disk. 
+    train_indices, val_indices, test_indices = split_dataset_indices(dataset, train_ratio, val_ratio)
+    with open(save_splits_loc, "w") as f:
+        f.write(" ".join(str(i) for i in train_indices))
+        f.write("\n")
+        f.write(" ".join(str(i) for i in val_indices))
+        f.write("\n")
+        f.write(" ".join(str(i) for i in test_indices))
+    f.close()
+
+
+
+def read_indices(filepath):
+    """
+    Read in the indices for train, val, test
 
     Parameters
     ----------
-    split_file : str
+    filepath : str
             Path to a whitespace-separated splitfile
 
     Returns
@@ -491,9 +364,10 @@ def read_split_file(split_file):
             an array of the indices for the testing set samples
     """
 
-    with open(split_file) as f:
+    with open(filepath) as f:
         lines = f.readlines()
 
+    # Use np.fromstring with explicit dtype and separator (handles deprecation)
     training_samples = np.fromstring(lines[0], dtype=int, sep=" ")
     val_samples = np.fromstring(lines[1], dtype=int, sep=" ")
     test_samples = np.fromstring(lines[2], dtype=int, sep=" ")
@@ -501,357 +375,106 @@ def read_split_file(split_file):
     return training_samples, val_samples, test_samples
 
 
-def split_data(
-    data_file,
-    datatype,
-    problem_type,
-    num_classes,
-    excludeSeqID=False,
-    split_file=None,
-    encoding_scheme="onehot",
-    encoder=None,
-    percent_val=0.15,
-    percent_test=0.15,
-    ignoreWarnings=False,
-):
-    """Divide a datafile into training, validation, and test datasets
-
-    Takes in a datafile and specification of the data format and the machine
-    learning problem, and returns PyTorch-compatible Dataset objects for
-    the training, validation and test sets of the data. The user may optionally
-    specify how the dataset should be split into these subsets, as well as how
-    protein sequences should be encoded as numeric vectors.
-
-    Parameters
-    ----------
-    data_file : str
-            Path to the datafile containing sequences and corresponding values
-    datatype : str
-            Format of the values within `data_file`. Should be 'sequence' if the
-            `data_file` contains a single value per sequence, or 'residues' if
-            it contains a value for each residue per sequence.
-    problem_type : str
-            The machine learning task to be addressed. Should be either 'regression'
-            or 'classification'.
-    excludeSeqID : bool, optional
-            Flag that indicates how `data_file` is formatted. If False (default),
-            then each line in the file should begin with a column containing a
-            sequence ID. If True, then the datafile will not have this ID column,
-            and will begin with the protein sequence.
-    split_file : str, optional
-            Path to a file containing information on how to divide the data into
-            training, validation and test datasets. Default is None, which will
-            cause the data to be divided randomly, with proportions based on
-            `percent_val` and `percent_test`. If `split_file` is provided it must
-            contain 3 lines in the file, corresponding to the training, validation
-            and test sets. Each line should have whitespace-separated integer indices
-            which correspond to lines in `data_file`.
-    encoding_scheme : str, optional
-            The method to be used for encoding protein sequences as numeric vectors.
-            Currently 'onehot' and 'biophysics' are implemented (default is 'onehot').
-    encoder: UserEncoder object, optional
-            If encoding_scheme is 'user', encoder should be a UserEncoder object
-            that can convert amino acid sequences to numeric vectors. If
-            encoding_scheme is not 'user', use None.
-    percent_val : float, optional
-            If `split_file` is not provided, the fraction of the data that should be
-            randomly assigned to the validation set. Should be in the range [0-1]
-            (default is 0.15).
-    percent_test : float, optional
-            If `split_file` is not provided, the fraction of the data that should be
-            randomly assigned to the test set. Should be in the range [0-1] (default
-            is 0.15). The proportion of the training set will be calculated by the
-            difference between 1 and the sum of `percent_val` and `percent_train`, so
-            these should not sum to be greater than 1.
-    ignoreWarnings : bool, optional
-            If False, assess the structure and balance of the provided dataset with
-            basic heuristics and display warnings for common issues.
-
-    Returns
-    -------
-    SequenceDataset object
-            a dataset containing the training set sequences and values
-    SequenceDataset object
-            a dataset containing the validation set sequences and values
-    SequenceDataset object
-            a dataset containing the test set sequences and values
+def parse_file_v2(filepath, datatype='sequence', problem_type='regression', num_classes=1, 
+                  excludeSeqID=False, encoding_scheme='onehot', encoder=None, delimiter=None):
     """
-
-    data = parse_file(
-        data_file,
-        datatype,
-        problem_type,
-        num_classes,
-        excludeSeqID=excludeSeqID,
-        ignoreWarnings=ignoreWarnings,
-    )
-    num_samples = len(data)
-
-    if split_file is None:
-        percent_train = 1 - percent_val - percent_test
-
-        all_samples = np.arange(num_samples)
-        training_samples, val_test_samples = vector_split(all_samples, percent_train)
-
-        # Repeat procedure to split val and test sets
-        val_test_fraction = percent_val / (percent_val + percent_test)
-        val_samples, test_samples = vector_split(val_test_samples, val_test_fraction)
-
-        # Generate datasets using these random partitions
-        train_set = SequenceDataset(
-            data=data,
-            subset=training_samples,
-            encoding_scheme=encoding_scheme,
-            encoder=encoder,
-        )
-        val_set = SequenceDataset(
-            data=data,
-            subset=val_samples,
-            encoding_scheme=encoding_scheme,
-            encoder=encoder,
-        )
-        test_set = SequenceDataset(
-            data=data,
-            subset=test_samples,
-            encoding_scheme=encoding_scheme,
-            encoder=encoder,
-        )
-
-        # Save train/val/test splits
-        cwd = os.getcwd()
-        split_file_path = os.path.join(cwd, "project_split_file.txt")
-        with open(split_file_path, "w") as out:
-            out.write(" ".join(np.sort(training_samples).astype("str")))
-            out.write("\n")
-            out.write(" ".join(np.sort(val_samples).astype("str")))
-            out.write("\n")
-            out.write(" ".join(np.sort(test_samples).astype("str")))
-            out.write("\n")
-
-    elif os.path.isfile(split_file):
-        training_samples, val_samples, test_samples = read_split_file(split_file)
-
-        # Generate datasets using the provided partitions
-        train_set = SequenceDataset(
-            data=data,
-            subset=training_samples,
-            encoding_scheme=encoding_scheme,
-            encoder=encoder,
-        )
-        val_set = SequenceDataset(
-            data=data,
-            subset=val_samples,
-            encoding_scheme=encoding_scheme,
-            encoder=encoder,
-        )
-        test_set = SequenceDataset(
-            data=data,
-            subset=test_samples,
-            encoding_scheme=encoding_scheme,
-            encoder=encoder,
-        )
-    else:
-        raise FileNotFoundError(f"Provided split file {split_file} does not exist.")
-
-    return train_set, val_set, test_set
-
-
-# TODO: change for parrot lightning?
-def split_data_cv(
-    data_file,
-    datatype,
-    problem_type,
-    num_classes,
-    excludeSeqID=False,
-    split_file=None,
-    encoding_scheme="onehot",
-    encoder=None,
-    percent_val=0.15,
-    percent_test=0.15,
-    n_folds=5,
-    ignoreWarnings=False,
-    save_splits_output=None,
-):
-    """Divide a datafile into training, val, test and 5 cross-val datasets.
-
-    Takes in a datafile and specification of the data format and the machine
-    learning problem, and returns PyTorch-compatible Dataset objects for
-    the training, validation, test and cross-validation sets of the data. The
-    user may optionally specify how the dataset should be split into these
-    subsets, as well as how protein sequences should be encoded as numeric
-    vectors.
-
-    Parameters
-    ----------
-    data_file : str
-            Path to the datafile containing sequences and corresponding values
+    Alternative implementation of parse_file with improved memory handling
+    
+    Returns a SequenceDataset object instead of raw parsed data
+    
+    Parameters:
+    -----------
+    filepath : str
+        Path to the data file
     datatype : str
-            Format of the values within `data_file`. Should be 'sequence' if the
-            `data_file` contains a single value per sequence, or 'residues' if
-            it contains a value for each residue per sequence.
+        'sequence' or 'residues'
     problem_type : str
-            The machine learning task to be addressed. Should be either 'regression'
-            or 'classification'.
-    excludeSeqID : bool, optional
-            Flag that indicates how `data_file` is formatted. If False (default),
-            then each line in the file should begin with a column containing a
-            sequence ID. If True, then the datafile will not have this ID column,
-            and will begin with the protein sequence.
-    split_file : str, optional
-            Path to a file containing information on how to divide the data into
-            training, validation and test datasets. Default is None, which will
-            cause the data to be divided randomly, with proportions based on
-            `percent_val` and `percent_test`. If `split_file` is provided it must
-            contain 3 lines in the file, corresponding to the training, validation
-            and test sets. Each line should have whitespace-separated integer indices
-            which correspond to lines in `data_file`.
-    encoding_scheme : str, optional
-            The method to be used for encoding protein sequences as numeric vectors.
-            Currently 'onehot' and 'biophysics' are implemented (default is 'onehot').
-    encoder: UserEncoder object, optional
-            If encoding_scheme is 'user', encoder should be a UserEncoder object
-            that can convert amino acid sequences to numeric vectors. If
-            encoding_scheme is not 'user', use None.
-    percent_val : float, optional
-            If `split_file` is not provided, the fraction of the data that should be
-            randomly assigned to the validation set. Should be in the range [0-1]
-            (default is 0.15).
-    percent_test : float, optional
-            If `split_file` is not provided, the fraction of the data that should be
-            randomly assigned to the test set. Should be in the range [0-1] (default
-            is 0.15). The proportion of the training set will be calculated by the
-            difference between 1 and the sum of `percent_val` and `percent_train`, so
-            these should not sum to be greater than 1.
-    n_folds : int, optional
-            Number of folds for cross-validation (default is 5).
-    ignoreWarnings : bool, optional
-            If False, assess the structure and balance of the provided dataset with
-            basic heuristics and display warnings for common issues.
-    save_splits_output : str, optional
-            Location where the train / val / test splits for this run should be saved
-
-    Returns
-    -------
-    list of tuples of SequenceDataset objects
-            a list of tuples of length `n_folds`. Each tuple contains the training
-            and validation datasets for one of the cross-val folds.
-    SequenceDataset object
-            a dataset containing the training set sequences and values
-    SequenceDataset object
-            a dataset containing the validation set sequences and values
-    SequenceDataset object
-            a dataset containing the test set sequences and values
+        'regression' or 'classification'
+    num_classes : int
+        Number of classes (for classification)
+    excludeSeqID : bool
+        Whether sequence IDs are excluded from the file
+    encoding_scheme : str
+        Encoding scheme ('onehot', 'biophysics', 'user')
+    encoder : object
+        User encoder object (if encoding_scheme='user')
+    delimiter : str
+        Delimiter for splitting lines (None = any whitespace)
     """
+    
+    dataset = SequenceDataset(filepath=filepath, 
+                             encoding_scheme=encoding_scheme,
+                             encoder=encoder,
+                             excludeSeqID=excludeSeqID,
+                             datatype=datatype,
+                             delimiter=delimiter)
+    
+    # Validate class labels if classification
+    if problem_type == 'classification':
+        for i, (seqID, _, values) in enumerate(dataset.data):
+            if datatype == 'sequence':
+                # Single class label
+                if not isinstance(values, (int, float)) or values < 0 or values >= num_classes:
+                    raise ValueError(f"Invalid class label {values} for sequence {seqID}. Must be 0 <= label < {num_classes}")
+            else:  # residues
+                # Array of class labels
+                if np.any(values < 0) or np.any(values >= num_classes):
+                    raise ValueError(f"Invalid class labels for sequence {seqID}. All labels must be 0 <= label < {num_classes}")
+    
+    return dataset   
 
-    data = parse_file(
-        data_file,
-        datatype,
-        problem_type,
-        num_classes,
-        excludeSeqID=excludeSeqID,
-        ignoreWarnings=ignoreWarnings,
-    )
-    n_samples = len(data)
-
-    # Initial step: split into training, val, and test sets
-    if split_file is None:
-        percent_train = 1 - percent_val - percent_test
-
-        all_samples = np.arange(n_samples)
-        training_samples, val_test_samples = vector_split(all_samples, percent_train)
-
-        # Repeat procedure to split val and test sets
-        val_test_fraction = percent_val / (percent_val + percent_test)
-        val_samples, test_samples = vector_split(val_test_samples, val_test_fraction)
-
-        # Generate datasets using these random partitions
-        train_set = SequenceDataset(
-            data=data,
-            subset=training_samples,
-            encoding_scheme=encoding_scheme,
-            encoder=encoder,
-        )
-        val_set = SequenceDataset(
-            data=data,
-            subset=val_samples,
-            encoding_scheme=encoding_scheme,
-            encoder=encoder,
-        )
-        test_set = SequenceDataset(
-            data=data,
-            subset=test_samples,
-            encoding_scheme=encoding_scheme,
-            encoder=encoder,
-        )
-
-        if save_splits_output is not None:
-            # Save train/val/test splits
-            with open(save_splits_output, "w") as out:
-                out.write(" ".join(np.sort(training_samples).astype("str")))
-                out.write("\n")
-                out.write(" ".join(np.sort(val_samples).astype("str")))
-                out.write("\n")
-                out.write(" ".join(np.sort(test_samples).astype("str")))
-                out.write("\n")
-
-    # If provided, split datasets according to split_file
+def create_dataloaders(dataset, train_indices, val_indices, test_indices, batch_size=32, 
+                      distributed=False, num_workers=0, datatype='sequence', problem_type='regression'):
+    """
+    Create DataLoaders with appropriate collate functions based on data type and problem type
+    
+    Parameters:
+    -----------
+    dataset : SequenceDataset
+        The dataset to create loaders for
+    train_indices, val_indices, test_indices : array-like
+        Indices for each split
+    batch_size : int
+        Batch size for training/validation (test uses batch_size=1)
+    distributed : bool
+        Whether to use distributed sampling
+    num_workers : int
+        Number of worker processes for data loading
+    datatype : str
+        'sequence' or 'residues'
+    problem_type : str
+        'regression' or 'classification'
+    """
+    
+    # Select appropriate collate function
+    if datatype == 'sequence':
+        if problem_type == 'regression':
+            collate_fn = seq_regress_collate
+        else:  # classification
+            collate_fn = seq_class_collate
+    else:  # residues
+        if problem_type == 'regression':
+            collate_fn = res_regress_collate
+        else:  # classification
+            collate_fn = res_class_collate
+    
+    # Create samplers
+    if distributed == False:
+        train_sampler = torch.utils.data.SubsetRandomSampler(train_indices)
+        val_sampler = torch.utils.data.SubsetRandomSampler(val_indices)
+        test_sampler = torch.utils.data.SubsetRandomSampler(test_indices)
     else:
-        training_samples, val_samples, test_samples = read_split_file(split_file)
+        train_sampler = torch.utils.data.DistributedSampler(train_indices, shuffle=True)
+        val_sampler = torch.utils.data.DistributedSampler(val_indices, shuffle=False)
+        test_sampler = torch.utils.data.DistributedSampler(test_indices, shuffle=False)
 
-        # Generate datasets using the provided partitions
-        train_set = SequenceDataset(
-            data=data,
-            subset=training_samples,
-            encoding_scheme=encoding_scheme,
-            encoder=encoder,
-        )
-        val_set = SequenceDataset(
-            data=data,
-            subset=val_samples,
-            encoding_scheme=encoding_scheme,
-            encoder=encoder,
-        )
-        test_set = SequenceDataset(
-            data=data,
-            subset=test_samples,
-            encoding_scheme=encoding_scheme,
-            encoder=encoder,
-        )
+    # Create dataloaders
+    train_loader = DataLoader(dataset, batch_size=batch_size, sampler=train_sampler, 
+                             collate_fn=collate_fn, num_workers=num_workers)
+    val_loader = DataLoader(dataset, batch_size=batch_size, sampler=val_sampler, 
+                           collate_fn=collate_fn, num_workers=num_workers)
+    test_loader = DataLoader(dataset, batch_size=1, sampler=test_sampler, 
+                            collate_fn=collate_fn, num_workers=num_workers)
 
-    # Second step: combine train and val samples, and split evenly into n_folds
-    cv_samples = np.append(training_samples, val_samples)
-    np.random.shuffle(cv_samples)  # Shuffle train and val to avoid bias
+    return train_loader, val_loader, test_loader
 
-    # Split into n_folds
-    cv_samples = np.array_split(cv_samples, n_folds)
-
-    # cv_sets will be a list of tuples: (fold_k_train_dataset, fold_k_test_dataset)
-    cv_sets = []
-    for i in range(len(cv_samples)):
-        cv_test = cv_samples[i]
-        cv_train = np.array([], dtype=int)
-        for j in range(len(cv_samples)):
-            if j != i:
-                cv_train = np.append(cv_train, cv_samples[j])
-        cv_train.sort()
-        cv_test.sort()
-
-        # Tuple of cross val train and test sets
-        cv_sets.append(
-            (
-                SequenceDataset(
-                    data=data,
-                    subset=cv_train,
-                    encoding_scheme=encoding_scheme,
-                    encoder=encoder,
-                ),
-                SequenceDataset(
-                    data=data,
-                    subset=cv_test,
-                    encoding_scheme=encoding_scheme,
-                    encoder=encoder,
-                ),
-            )
-        )
-
-    return cv_sets, train_set, val_set, test_set

@@ -1,0 +1,104 @@
+# PARROT Optimization Config for Sequence Regression
+# This config is optimized for training regression models on protein sequences
+# Adjust tsv_file, study_name, and other paths as needed for your specific dataset
+
+###### REQUIRED PARAMETERS ######
+# Path to your training data TSV file
+tsv_file: "degrons_fomratted.tsv"
+
+# Number of classes (always 1 for regression)
+num_classes: 1
+
+# Data type - "sequence" for per-sequence predictions
+datatype: "sequence"
+
+# Optional: Path to file specifying train/val/test splits
+# If null, will use set_fractions to randomly split
+split_file: null
+
+# Fraction splits for train/validation/test
+set_fractions: [0.7, 0.15, 0.15]
+
+# Encoding scheme - "onehot" is standard for amino acids
+encode: "onehot"
+
+###### TRAINING PARAMETERS ######
+# Maximum number of training epochs
+max_epochs: 100
+
+# Metric to monitor for early stopping and checkpointing
+# For regression: epoch_val_loss, epoch_val_rsquare
+# For classification: epoch_val_loss, epoch_val_accuracy, epoch_val_f1score, epoch_val_auroc, epoch_val_precision, epoch_val_mcc
+# Note: This same parameter is used for both parrot-train and parrot-optimize
+monitor: "epoch_val_loss"
+
+###### OPTIMIZATION PARAMETERS ######
+# Training epochs for optimization
+min_epochs: 10
+
+optimize_max_epochs: 100
+
+# Optimization direction (minimize for loss)
+direction: "minimize"
+
+# Early stopping sensitivity
+min_delta: 0.001
+
+# Number of trials for optimization
+n_trials: 100
+
+# Number of warm-up trials before Bayesian optimization
+warm_up_trials: 20
+
+# Study name for WandB logging
+study_name: "sequence_regression_optimization"
+
+###### HARDWARE CONFIGURATION ######
+# Batch size - adjust based on your GPU memory
+batch_size: 1024
+
+# GPU configuration
+gpu_id: [0]
+
+force_cpu: false
+
+# Other settings
+ignore_warnings: false
+
+save_splits: true
+
+###### HYPERPARAMETER SEARCH SPACES ######
+# Optimizer choices - AdamW generally works well for regression
+optimizer_name: ["AdamW"]
+
+# Learning rate range (log scale)
+learn_rate: [0.0001, 0.01]
+
+# Gradient clipping range  
+gradient_clip_val: [0.5, 2.0]
+
+# LSTM architecture
+num_lstm_layers: [1, 3]
+
+lstm_hidden_size: [64, 512]
+
+# Linear layers
+num_linear_layers: [1, 4]
+
+linear_hidden_size: [32, 256]
+
+# Dropout for regularization
+dropout: [0.0, 0.4]
+
+###### OPTIMIZER-SPECIFIC PARAMETERS ######
+# SGD parameters
+#momentum: [0.85, 0.95]
+
+# AdamW parameters
+beta1: [0.85, 0.95]
+
+beta2: [0.98, 0.9999]
+
+eps: [0.000000001, 0.00001]
+
+weight_decay: [0.000001, 0.01]
