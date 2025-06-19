@@ -16,11 +16,13 @@ The base predictor architecture consists of several key components:
 - **Unified Interface**: All predictors share the same methods for prediction
 - **Automatic Type Detection**: Factory function automatically determines model type
 - **Extensible Design**: Easy to create custom predictors for specialized use cases
-- **Batch Processing**: Built-in support for batch predictions
-- **File I/O**: Direct prediction from/to files
+- **Efficient Batch Processing**: Built-in support for optimized batch predictions with automatic batch size detection
+- **Variable Length Support**: Handles sequences of different lengths with automatic padding
+- **File I/O**: Direct prediction from/to files with flexible formatting
 - **Backward Compatibility**: Existing code continues to work unchanged
 - **Device Management**: Automatic CPU/GPU detection and management
 - **Input Validation**: Comprehensive validation of sequences and parameters
+- **Smart Batch Size Detection**: Automatically detects and uses training batch size for optimal performance
 
 ## Basic Usage
 
@@ -55,16 +57,29 @@ lightning_predictor = LightningPredictor('lightning_model.ckpt')
 ### Batch Predictions
 
 ```python
-# Predict multiple sequences at once
+# Predict multiple sequences at once (uses efficient batching by default)
 sequences = [
     "ACDEFGHIKLMNPQRSTVWY",
-    "GGGGGGGGGGGGGGGGGGGG",
-    "PPPPPPPPPPPPPPPPPPPP"
+    "GGGGGGGGGGGGGGGGGGGG", 
+    "PPPPPPPPPPPPPPPPPPPP",
+    "AAAAAAAAAAAAAAAAAAAA"
 ]
 
+# Efficient batch processing (recommended)
 predictions = predictor.predict_batch(sequences)
 for seq, pred in zip(sequences, predictions):
     print(f"{seq}: {pred}")
+
+# Control batch size manually
+predictions = predictor.predict_batch(sequences, batch_size=16)
+
+# Use legacy one-by-one processing if needed
+predictions = predictor.predict_batch(sequences, use_efficient_batching=False)
+
+# For very large datasets, use efficient batch processing
+large_sequences = ["SEQUENCE" + str(i) for i in range(1000)]
+predictions = predictor.predict_batch_efficient(large_sequences, batch_size=32)
+```
 ```
 
 ### File-based Predictions
@@ -72,8 +87,28 @@ for seq, pred in zip(sequences, predictions):
 ```python
 # Predict from file and save results
 predictions = predictor.predict_from_file(
-    input_file='sequences.txt',  # Format: "seq_id\tsequence"
-    output_file='predictions.txt'
+    input_file='sequences.txt',      # Format: "seq_id\tsequence" or just "sequence"
+    output_file='predictions.txt',
+    exclude_seq_id=False,           # Set True if file contains only sequences
+    use_efficient_batching=True,    # Use optimized batch processing
+    batch_size=32                   # Optional: specify batch size
+)
+
+# Example input file formats:
+# With sequence IDs (exclude_seq_id=False):
+# seq1\tACDEFGHIKLMNPQRSTVWY
+# seq2\tGGGGGGGGGGGGGGGGGGGG
+
+# Without sequence IDs (exclude_seq_id=True):
+# ACDEFGHIKLMNPQRSTVWY
+# GGGGGGGGGGGGGGGGGGGG
+
+# Process large files efficiently
+large_predictions = predictor.predict_from_file(
+    input_file='large_dataset.txt',
+    output_file='large_predictions.txt',
+    use_efficient_batching=True,
+    batch_size=64  # Larger batch for better GPU utilization
 )
 ```
 
@@ -164,6 +199,46 @@ prediction = predictor.predict('ACDEFGHIKLMNPQRSTVWY')
 
 ## Advanced Features
 
+### Efficient Batch Processing
+
+The base predictor includes sophisticated batch processing that significantly improves performance:
+
+```python
+# Automatic batch size detection from training
+predictor = create_predictor('model.pt', datatype='sequence')
+print(f"Detected batch size: {predictor.batch_size}")
+
+# The predictor automatically uses the training batch size for optimal performance
+sequences = ["SEQUENCE" + str(i) for i in range(100)]
+predictions = predictor.predict_batch(sequences)  # Uses detected batch size
+
+# Override batch size if needed
+predictions = predictor.predict_batch(sequences, batch_size=16)
+
+# Handle variable-length sequences automatically
+mixed_length_seqs = [
+    "ACDEFGHIKLMNPQRSTVWY",      # Length 20
+    "GGGGGGGGGGGG",              # Length 12  
+    "PPPPPPPPPPPPPPPPPPPPPPPP"   # Length 24
+]
+predictions = predictor.predict_batch(mixed_length_seqs)  # Automatic padding
+```
+
+### Variable Length Sequence Support
+
+```python
+# The predictor handles sequences of different lengths automatically
+sequences = [
+    "SHORT",                     # Short sequence
+    "MEDIUMLENGTHSEQUENCE",      # Medium sequence
+    "VERYLONGSEQUENCEWITHMANYRESIDUES"  # Long sequence
+]
+
+# Sequences are automatically padded to the same length for efficient batch processing
+predictions = predictor.predict_batch(sequences)
+# Each prediction will have the correct length for its original sequence
+```
+
 ### Device Management
 
 ```python
@@ -227,10 +302,30 @@ prediction = predictor.predict('ACDEFGHIKLMNPQRSTVWY')
 
 ```
 BasePredictor (Abstract)
-├── LegacyBRNNPredictor
-├── LightningPredictor
-└── CustomPredictor (User-defined)
+├── LegacyBRNNPredictor (for legacy .pt models)
+├── LightningPredictor (for PyTorch Lightning .ckpt models)
+└── CustomPredictor (User-defined extensions)
 ```
+
+### Technical Implementation Details
+
+#### Batch Processing Optimization
+- **Automatic batch size detection**: Extracts training batch size from model hyperparameters
+- **Variable length padding**: Automatically pads sequences to the same length for efficient batching
+- **Memory-efficient processing**: Processes large datasets in chunks to avoid memory issues
+- **GPU optimization**: Uses larger batch sizes when GPU is available
+
+#### Sequence Encoding
+- **Flexible encoding schemes**: Support for one-hot encoding with extensibility for others
+- **Batch encoding**: Efficiently encodes multiple sequences simultaneously
+- **Automatic padding**: Handles variable-length sequences with zero-padding
+- **Device management**: Automatically moves tensors to appropriate device
+
+#### Model Type Detection
+- **Automatic detection**: Distinguishes between Legacy and Lightning models
+- **Hyperparameter extraction**: Intelligently extracts model configuration
+- **State dict handling**: Properly handles different checkpoint formats
+- **Error recovery**: Robust error handling for corrupted or incompatible models
 
 ### Abstract Methods
 
@@ -245,24 +340,93 @@ All predictor implementations must implement:
 All predictors inherit these methods:
 
 - `predict(sequence)`: Single sequence prediction
-- `predict_batch(sequences)`: Batch predictions
-- `predict_from_file(input_file, output_file)`: File-based predictions
-- `get_model_info()`: Model information
+- `predict_batch(sequences, use_efficient_batching=True, batch_size=None)`: Batch predictions with optimization options
+- `predict_batch_efficient(sequences, batch_size=None)`: Optimized batch processing for large datasets
+- `predict_from_file(input_file, output_file=None, exclude_seq_id=False, use_efficient_batching=True, batch_size=None)`: File-based predictions
+- `get_model_info()`: Model information including detected batch size
 - `_validate_sequence(sequence)`: Input validation
-- `_encode_sequence(sequence)`: Sequence encoding
+- `_encode_sequence(sequence)`: Single sequence encoding
+- `_encode_sequences_batch(sequences)`: Batch sequence encoding with padding
 
 ## Best Practices
 
 1. **Use the factory function**: `create_predictor()` for automatic type detection
-2. **Validate inputs**: The base class does this automatically
-3. **Handle errors gracefully**: Use try-catch blocks for file operations
-4. **Batch when possible**: Use `predict_batch()` for multiple sequences
-5. **Specify device**: Use `device='auto'` or explicit device specification
-6. **Document custom predictors**: Provide clear documentation for custom implementations
+2. **Leverage efficient batching**: Use `predict_batch()` with default settings for optimal performance
+3. **Validate inputs**: The base class does this automatically
+4. **Handle errors gracefully**: Use try-catch blocks for file operations
+5. **Process large datasets efficiently**: Use `predict_batch_efficient()` or file-based processing
+6. **Let auto-detection work**: The predictor automatically detects optimal batch sizes
+7. **Specify device appropriately**: Use `device='auto'` or explicit device specification
+8. **Handle variable lengths**: The predictor automatically handles sequences of different lengths
+9. **Document custom predictors**: Provide clear documentation for custom implementations
+10. **Use appropriate batch sizes**: Larger batches for GPU, smaller for CPU or memory constraints
 
-## Examples
+## Performance Examples
 
-See `predictor_examples.py` for comprehensive examples of all features and use cases.
+### Efficient Large Dataset Processing
+
+```python
+from parrot.base_predictor import create_predictor
+
+# Load model
+predictor = create_predictor('model.pt', datatype='sequence')
+
+# Process large dataset efficiently
+large_sequences = []
+with open('large_dataset.txt', 'r') as f:
+    for line in f:
+        seq_id, sequence = line.strip().split('\t')
+        large_sequences.append(sequence)
+
+print(f"Processing {len(large_sequences)} sequences...")
+
+# Use efficient batch processing
+predictions = predictor.predict_batch_efficient(
+    large_sequences, 
+    batch_size=64  # Optimize based on your GPU memory
+)
+
+# Save results
+with open('predictions.txt', 'w') as f:
+    for i, pred in enumerate(predictions):
+        f.write(f"seq_{i}\t{pred}\n")
+
+print("Processing complete!")
+```
+
+### Memory-Efficient File Processing
+
+```python
+# For very large files, use direct file processing
+# This processes the file in chunks without loading everything into memory
+predictions = predictor.predict_from_file(
+    input_file='huge_dataset.txt',
+    output_file='predictions.txt',
+    use_efficient_batching=True,
+    batch_size=32  # Smaller batch size for memory efficiency
+)
+
+print(f"Processed {len(predictions)} sequences")
+```
+
+### Variable Length Sequence Handling
+
+```python
+# Mixed length sequences are handled automatically
+sequences = [
+    "MKLL",                                    # 4 residues
+    "ACDEFGHIKLMNPQRSTVWY",                   # 20 residues  
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",    # 35 residues
+    "A"                                        # 1 residue
+]
+
+# All sequences processed efficiently in one batch
+predictions = predictor.predict_batch(sequences)
+
+# Each prediction corresponds to its original sequence length
+for seq, pred in zip(sequences, predictions):
+    print(f"Sequence length {len(seq)}: prediction shape {pred.shape}")
+```
 
 ## Troubleshooting
 
@@ -272,7 +436,11 @@ See `predictor_examples.py` for comprehensive examples of all features and use c
 2. **CUDA not available**: Set `force_cpu=True` or `device='cpu'`
 3. **Invalid sequences**: Check for non-amino acid characters
 4. **Legacy model datatype**: Specify `datatype` parameter for old models
-5. **Memory issues**: Use batch processing for large datasets
+5. **Memory issues**: Use smaller batch sizes or efficient batching for large datasets
+6. **Variable sequence lengths**: The predictor handles this automatically with padding
+7. **Batch size optimization**: Let the predictor auto-detect optimal batch size
+8. **File format issues**: Ensure proper tab-separated format for sequence files
+9. **Import errors**: Ensure all required dependencies (torch, numpy) are installed
 
 ### Getting Help
 
@@ -285,8 +453,18 @@ See `predictor_examples.py` for comprehensive examples of all features and use c
 
 Planned features for future versions:
 
-1. **Additional encoding schemes**: Support for custom encodings
-2. **Streaming predictions**: For very large datasets
-3. **Model ensembling**: Combine predictions from multiple models
-4. **Uncertainty quantification**: Confidence intervals for predictions
-5. **Performance optimization**: Further speed improvements
+1. **Additional encoding schemes**: Support for custom encodings beyond one-hot
+
+## Current Implementation Notes
+
+### Known Limitations
+- Error handling could be enhanced in certain edge cases
+
+### Dependencies
+The base predictor requires:
+- PyTorch
+- NumPy  
+- PyTorch Lightning (for Lightning model support)
+- PARROT core modules (`brnn_architecture`, `encode_sequence`, `validate_args`)
+
+Make sure all dependencies are properly installed for full functionality.

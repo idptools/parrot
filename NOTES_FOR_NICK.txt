@@ -1,0 +1,43 @@
+Notes for Nick as he takes over PARROT-LIGTNING
+• Major changes in brnn_architecture.py are documented in /docs/BRNN_PARROT_Integration_Guide.md
+• Major changes in base_predictor.py (which need to be implemented fully in py_predictor.py or we can remove py_predictor.py..?) can be found in /docs/base_predictor_gude.md
+• Example datasets for current config.yaml stuff can be found in /data (ex. /data/sequence_regression_config.yaml)
+• Docs need to be udpated still for ReadTheDocs. Happy to help do this once we have the final implementations worked out. 
+
+Current status of modules:
+-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+/parrot 
+-=-=-=-=-=--=
+• base_predictor.py  -  Works with all legacy (including legacy pytorch) networks out the box. Tested on all of the SPARROW networks and it works. 
+    NOTE: the current 'need' for specifying datatype when using create_predictor is actually necessary for the legacy networks.
+• brnn_architecture.py - should be all up to date. 
+    NOTE: we absolutely need the BRNN_PARROT_LEGACY class for the old stuff. 
+    The current implementation does now use dropout in the linear layers and the lstm layers. 
+        Jeff mentioned dropout isn't in fashion anymore, so you could consider changing the architecture. 
+        We don't currently have any public networks using the lightning architecture, so there is no constraints on changing it.
+        I'm not saying you have to change it but you *could* change it (the lightning one anyways DEFINITELY DON'T CHANGE THE LEGACY VERSION)
+• brnn_plot.py - I have not touched this.
+• encode_sequnece.py - I have not touched this.
+• layers.py - I have not touched this.
+• optimize_params.py - I've changed this a lot. It's not fully worked out but it *DOES RUN*! However, there's room for improvement here, specifically implementing hydra.
+• parrot_exceptions.py - I haven't touched this.
+• process_input_data.py - This has been changed totally from the old version. 
+    • It used to be called 'process_input_data2.py', but I've combined the previous implementation with my new one. 
+    • some of the tests and stuff in /scripts still rely on old process_input_data.py functions (specifically read_tsv_raw and __parse_lines)
+        • We could change this but I haven't had time to.
+• py_predictor.py - I've made some changes to this but I don't think it's finished as far as implementing base_predictor.py. 
+    • Honestly it would just be a wrapper around the create_predictor() function in base_predictor.py.
+• train_network.py - I've made some changes to this but this is another place we should integrate hydra.
+
+/scripts 
+-=-=-=-=-=--=
+    • parrot-cvsplit - never touched this.
+    • parrot-optimize - Updated to work with new unified BRNN_PARROT implementation.
+    • parrot-predict - NEEDS TO BE UPDATED!
+    • parrot-preprocess - I haven't touched this.
+    • parrot-train - Updated to work with new unified BRNN_PARROT implementation.
+
+/tests
+-=-=-=-=-=--=
+    • Haven't done anything here but should...

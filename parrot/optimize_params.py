@@ -13,7 +13,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 
-from parrot.brnn_architecture import BRNN_MtM, BRNN_MtO, ParrotDataModule
+from parrot.brnn_architecture import BRNN_PARROT, ParrotDataModule
 
 # import lightning.pytorch as pl
 # from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint, LearningRateMonitor,
@@ -177,10 +177,8 @@ def objective(trial: optuna.trial.Trial, datamodule: pl.LightningDataModule, con
     else:
         hparams["momentum"] = None
 
-    if datatype == "sequence":
-        model = BRNN_MtO(**hparams)
-    elif datatype == "residues":
-        model = BRNN_MtM(**hparams)
+    # Create the model with the suggested hyperparameters
+    model= BRNN_PARROT(**hparams)
 
     for hparam_name, hparam_value in hparams.items():
         print(f"{hparam_name} = ", hparam_value)

@@ -11,7 +11,7 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger, WandbLogger
 
 from parrot import get_directory
-from parrot.brnn_architecture import BRNN_MtM, BRNN_MtO, ParrotDataModule
+from parrot.brnn_architecture import BRNN_PARROT, ParrotDataModule
 from parrot.tools import validate_args
 
 
@@ -318,15 +318,9 @@ def main(config):
         model_kwargs["eps"] = config["eps"]
         model_kwargs["weight_decay"] = config["weight_decay"]
 
-    if config["datatype"] == "sequence":
-        model = BRNN_MtO(**model_kwargs)
-    elif config["datatype"] == "residues":
-        model = BRNN_MtM(**model_kwargs)
-    else:
-        raise ValueError(
-            f"Invalid datatype {config['datatype']}. Must be 'sequence' or 'residues'."
-        )
-
+    # Initialize the BRNN_PARROT model
+    model= BRNN_PARROT(**model_kwargs)
+    
     # Determine monitoring mode based on metric
     monitor_metric = config["monitor"]
     if monitor_metric in ["epoch_val_loss"]:

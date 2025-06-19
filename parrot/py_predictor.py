@@ -145,7 +145,7 @@ class Predictor():
 # For new projects, consider using the base predictor classes which provide
 # more flexibility and automatic model type detection
 try:
-    from parrot.base_predictor import BasePredictor, LegacyBRNNPredictor, LightningPredictor, create_predictor
+    from parrot.base_predictor import BasePredictor, LegacyBRNNPredictor, LightningPredictor, ParrotPredictor, create_predictor
     
     # Convenience function for automatic model type detection
     def create_predictor_auto(model_path, datatype=None, **kwargs):
@@ -153,7 +153,8 @@ try:
         Create a predictor with automatic model type detection.
         
         This function is recommended for new code as it automatically
-        detects whether the model is a legacy BRNN or Lightning checkpoint.
+        detects whether the model is a legacy BRNN, Lightning checkpoint,
+        or unified BRNN_PARROT model.
         
         Parameters
         ----------
@@ -174,6 +175,9 @@ try:
         --------
         >>> # For Lightning models (automatic detection)
         >>> predictor = create_predictor_auto('model.ckpt')
+        >>> 
+        >>> # For BRNN_PARROT models (automatic detection)
+        >>> predictor = create_predictor_auto('parrot_model.ckpt')
         >>> 
         >>> # For legacy models (datatype required)
         >>> predictor = create_predictor_auto('model.pt', datatype='sequence')

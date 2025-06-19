@@ -22,6 +22,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from typing import Union, Dict, Any, List, Optional, Tuple
 from pathlib import Path
+from collections import OrderedDict
 
 from parrot import brnn_architecture
 from parrot import encode_sequence
@@ -92,12 +93,17 @@ class BasePredictor(ABC):
         # Initialize placeholders
         self.network = None
         self.hyperparameters = {}
-        self.datatype = None
+        # Don't set datatype to None if it's already set by subclass
+        if not hasattr(self, 'datatype'):
+            self.datatype = None
+        if not hasattr(self, 'batch_size'):
+            self.batch_size = None
         self.problem_type = None
         self.num_classes = None
         self.encoding_scheme = None
         self.encoder = None
         self.input_size = None
+        self.default_batch_size = 32  # Reasonable default for inference
         
         # Load model and extract metadata
         self._load_model()
@@ -183,25 +189,21 @@ class BasePredictor(ABC):
         For Lightning models, this is stored in hyperparameters. For legacy models,
         we use a reasonable default or try to infer from the model structure.
         """
-        if hasattr(self, 'hyperparameters'):
-            # Try to get batch size from hyperparameters (Lightning models)
-            self.training_batch_size = self.hyperparameters.get('batch_size', None)
-            
-            # If not found, try common alternative names
-            if self.training_batch_size is None:
-                self.training_batch_size = self.hyperparameters.get('train_batch_size', None)
-            if self.training_batch_size is None:
-                self.training_batch_size = self.hyperparameters.get('dataloader_batch_size', None)
-        else:
-            self.training_batch_size = None
+        if self.batch_size is None:
+            if hasattr(self, 'hyperparameters'):
+                # Try to get batch size from hyperparameters (Lightning models)
+                self.batch_size = self.hyperparameters.get('batch_size', None)
+                
+                # If not found, try common alternative names
+                if self.batch_size is None:
+                    self.batch_size = self.hyperparameters.get('train_batch_size', None)
+                if self.batch_size is None:
+                    self.batch_size = self.hyperparameters.get('dataloader_batch_size', None)
         
-        # Set a reasonable default if no batch size found
-        if self.training_batch_size is None:
-            self.training_batch_size = 32  # Common default
+            # Set a reasonable default if no batch size found
+            else:
+                self.batch_size = self.default_batch_size  # Default batch size for inference
             
-        # Ensure it's a reasonable value for inference
-        self.inference_batch_size = min(self.training_batch_size, 64)  # Cap at 64 for memory efficiency
-    
     def _validate_sequence(self, sequence: str) -> str:
         """
         Validate and preprocess input sequence.
@@ -374,11 +376,19 @@ class BasePredictor(ABC):
         """
         if not sequences:
             return []
-        
-        # Use detected batch size or provided batch size
+
+        # make sure we have a batch size
         if batch_size is None:
-            batch_size = self.inference_batch_size
-        
+            if self.batch_size is not None:
+                batch_size = self.batch_size
+            else:
+                batch_size = self.default_batch_size
+        if not isinstance(batch_size, int) or batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
+        if batch_size > len(sequences):
+            # If batch size is larger than number of sequences, just use the full list
+            batch_size = len(sequences)
+            
         # Validate all sequences first
         validated_sequences = [self._validate_sequence(seq) for seq in sequences]
         
@@ -559,26 +569,10 @@ class BasePredictor(ABC):
             'num_classes': self.num_classes,
             'encoding_scheme': self.encoding_scheme,
             'input_size': self.input_size,
-            'training_batch_size': getattr(self, 'training_batch_size', None),
-            'inference_batch_size': getattr(self, 'inference_batch_size', None),
+            'batch_size': getattr(self, 'batch_size', None),
             'hyperparameters': self.hyperparameters.copy()
         }
     
-    def get_batch_info(self) -> Dict[str, Any]:
-        """
-        Get information about batch processing capabilities.
-        
-        Returns
-        -------
-        Dict[str, Any]
-            Dictionary containing batch processing information
-        """
-        return {
-            'training_batch_size': getattr(self, 'training_batch_size', None),
-            'inference_batch_size': getattr(self, 'inference_batch_size', None),
-            'supports_efficient_batching': True,
-            'recommended_batch_size': getattr(self, 'inference_batch_size', 32)
-        }
     
     def __str__(self) -> str:
         """String representation of the predictor."""
@@ -601,23 +595,65 @@ class LegacyBRNNPredictor(BasePredictor):
     interface while using the new base class architecture.
     """
     
+    def __init__(
+        self,
+        model_path: Union[str, Path],
+        datatype: str,
+        device: str = 'auto',
+        force_cpu: bool = False,
+        **kwargs
+    ):
+        """
+        Initialize the legacy BRNN predictor.
+        
+        Parameters
+        ----------
+        model_path : str or Path
+            Path to the saved model checkpoint
+        datatype : str
+            Type of data the model was trained on ('sequence' or 'residues')
+        device : str, optional
+            Device to use for predictions ('auto', 'cpu', 'cuda'), by default 'auto'
+        force_cpu : bool, optional
+            Force CPU usage even if GPU is available, by default False
+        **kwargs
+            Additional keyword arguments
+        """
+        # Validate datatype
+        if datatype not in ['sequence', 'residues']:
+            raise ValueError("datatype must be 'sequence' or 'residues'. This is a required input for legacy models.")
+        
+        # store datatype
+        self.datatype = datatype
+
+        # Call parent constructor
+        super().__init__(model_path, device, force_cpu, datatype=self.datatype, **kwargs)
+    
     def _extract_hyperparameters(self) -> None:
         """Extract hyperparameters from legacy BRNN checkpoint."""
         # For legacy models, extract parameters from the state dict
         state_dict = self.checkpoint
-        
+
+        # handle legacy models that may have 'module.' prefix
+        if 'module' in list(state_dict.keys())[0]:
+            # remake the odict
+            state_dict = OrderedDict((k.replace('module.', ''), v) for k, v in state_dict.items())
+            # set self.checkpoint to the new state_dict
+            self.checkpoint = state_dict
+    
+
         # Determine number of LSTM layers
         num_layers = 0
         while f'lstm.weight_ih_l{num_layers}' in state_dict:
             num_layers += 1
         
         # Extract hidden size (weight_ih has shape [4*hidden_size, input_size])
-        lstm_weight_shape = state_dict['lstm.weight_ih_l0'].shape
+        lstm_weight_shape = state_dict[f'lstm.weight_ih_l0'].shape
         hidden_size = lstm_weight_shape[0] // 4
         
         # Extract number of classes from final layer
-        if 'fc.bias' in state_dict:
-            num_classes = state_dict['fc.bias'].shape[0]
+        if f'fc.bias' in state_dict:
+            num_classes = state_dict[f'fc.bias'].shape[0]
         else:
             # For newer models with multiple linear layers, find the last linear layer
             linear_layers = [k for k in state_dict.keys() if 'linear_layers' in k and 'bias' in k]
@@ -649,55 +685,20 @@ class LegacyBRNNPredictor(BasePredictor):
         hidden_size = self.hyperparameters['lstm_hidden_size']
         num_classes = self.hyperparameters['num_classes']
         input_size = self.hyperparameters['input_size']
-        
-        # For legacy models, we need to determine datatype from usage context
-        # Since this info isn't stored in old checkpoints, we'll need it passed in
-        if not hasattr(self, 'datatype') or self.datatype is None:
-            # Default to sequence for backward compatibility
-            self.datatype = 'sequence'
+        datatype= self.datatype
         
         # Try to create legacy-style network first (for very old models)
         try:
-            # Check if we're dealing with a very old model format
-            # Old models used different constructor signatures
-            if self.datatype == 'sequence':
-                # Try old-style constructor first
-                from parrot import brnn_architecture
-                # Note: This might fail for new Lightning models
-                self.network = brnn_architecture.BRNN_MtO(
-                    input_size, hidden_size, num_layers, num_classes, self.device
-                )
-            elif self.datatype == 'residues':
-                from parrot import brnn_architecture
-                self.network = brnn_architecture.BRNN_MtM(
-                    input_size, hidden_size, num_layers, num_classes, self.device
-                )
-            else:
-                raise ValueError(f"Invalid datatype: {self.datatype}")
-                
-        except TypeError:
-            # New model format - use Lightning-style constructor
-            if self.datatype == 'sequence':
-                self.network = brnn_architecture.BRNN_MtO(
-                    input_size=input_size,
-                    lstm_hidden_size=hidden_size,
-                    num_lstm_layers=num_layers,
-                    num_classes=num_classes,
-                    problem_type=self.problem_type,
-                    datatype=self.datatype,
-                    batch_size=1  # For prediction, batch size is typically 1
-                )
-            elif self.datatype == 'residues':
-                self.network = brnn_architecture.BRNN_MtM(
-                    input_size=input_size,
-                    lstm_hidden_size=hidden_size,
-                    num_lstm_layers=num_layers,
-                    num_classes=num_classes,
-                    problem_type=self.problem_type,
-                    datatype=self.datatype
-                )
-            else:
-                raise ValueError(f"Invalid datatype: {self.datatype}")
+            self.network = brnn_architecture.BRNN_PARROT_LEGACY(
+                datatype=datatype,
+                input_size=input_size, 
+                hidden_size=hidden_size, 
+                num_layers=num_layers, 
+                num_classes=num_classes, 
+                device=self.device
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize legacy BRNN network: {e}")
         
         # Load the state dict
         self.network.load_state_dict(self.checkpoint)
@@ -757,13 +758,7 @@ class LightningPredictor(BasePredictor):
     def _initialize_network(self) -> None:
         """Initialize the Lightning BRNN network."""
         # Create network based on datatype
-        if self.datatype == 'sequence':
-            self.network = brnn_architecture.BRNN_MtO(**self.hyperparameters)
-        elif self.datatype == 'residues':
-            self.network = brnn_architecture.BRNN_MtM(**self.hyperparameters)
-        else:
-            raise ValueError(f"Invalid datatype: {self.datatype}")
-        
+        self.network = brnn_architecture.BRNN_PARROT(**self.hyperparameters)
         # Load the state dict
         self.network.load_state_dict(self.checkpoint['state_dict'])
         self.network.to(self.device)
@@ -825,13 +820,8 @@ def create_predictor(model_path: Union[str, Path], datatype: str = None, **kwarg
     
     # Determine model type
     if 'hyper_parameters' in checkpoint:
-        # Lightning checkpoint
+        # we have a lightning checkpoint, can use lightning predictor
         return LightningPredictor(model_path, **kwargs)
     else:
-        # Legacy checkpoint
-        if datatype is None:
-            raise ValueError("datatype must be specified for legacy models")
-        predictor = LegacyBRNNPredictor(model_path, **kwargs)
-        predictor.datatype = datatype
-        predictor._initialize_network()  # Re-initialize with correct datatype
-        return predictor
+        return LegacyBRNNPredictor(model_path, datatype=datatype, **kwargs)
+
