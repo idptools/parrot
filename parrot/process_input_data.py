@@ -28,12 +28,26 @@ def read_tsv_raw(tsvfile, delimiter=None):
     generator
         Yields parsed lines as lists of strings.
     """
+    # Note: This function parses the data in a memory efficient manner and
+    # does not require the program to read the entire file at once (good for large files)
+
+    # opens a file in the default read mode
     with open(tsvfile) as fh:
+        # file objects are iterable over the lines in the file
         for line in fh:
+            # remove whitespace from the front and end of the line
             stripped = line.strip()
+            # check that the string is not empty and check the line does not start with a # - indicating a commment
             if stripped and not stripped.startswith("#"):
+                # None defaults to any whitespace
+                # pauses and waits for the caller to accept the parsed line value until continuing
+                # This is memory efficient as it processes one line and then moves onto the next one
                 yield stripped.split(delimiter)
 
+# Note: The parser in this function will have issues if the data is not
+# formatted perfectly. This should be made to be a little more forgiving.
+# I would like to incorporate the ability to use .csv as well. This would
+# require modification to this code.
 def __parse_lines(lines, datatype, validate=True):
     """
     Internal function for parsing a set of lines
@@ -71,38 +85,49 @@ def __parse_lines(lines, datatype, validate=True):
         raise ValueError('Invalid datatype. Must be "residues" or "sequence".')
         
     # parse the lines
+    # the conversion from text to numbers could fail if the user provides improper data
     try:
-
-        data = []
-        lc = 0
+        # here to store the data for each line
+        data = [] # splits up data by column [col1,col2,...]
+        lc = 0 # counts the lines (rows) in the dataset - only used for the error message
 
         # A value for each residue in a sequence
+        # Note: this does not check that the number of targets matches the number of residues
         if datatype == 'residues':	
             for x in lines:
+                # to the number of entries in the dataset
                 lc = lc + 1
                 
+                # Pull the last portion of the dataset out and turns it into a numpy array
+                # These should be the target values
                 residue_data = np.array(x[2:], dtype=float)
 
+                # Reformats the data as (ID, sequence, target value)
                 data.append([x[0], x[1], residue_data])
 
         # A single value per sequence
         elif datatype == 'sequence':  
             for x in lines:
+                # to the number of entries in the dataset
                 lc = lc + 1
+                # Reformats the data as (ID, sequence, target value)
                 data.append([x[0], x[1], float(x[2])])
 
+    # catch any exception and print it.
     except Exception as e:        
         print('Excecption raised on parsing input file...')
         print(e)
         print('')
         raise IOExceptionParrot(f"Input data is not correctly formatted for datatype '{datatype}'.\nMake sure your datafile does not have empty lines at the end of the file.\nError on line {lc}:\n{x}")
 
-    # if we want to validate each line 
+    # if we want to validate each line - aka check that the length of the sequence matches the number of target values
     if validate:
+        # check that the datatype is residues - if not there is nothing to validate
         if datatype == 'residues':
             lc = 0
             for x in data:
                 lc = lc + 1
+                # check that the lengths match between sequence and targets
                 if len(x[1]) != len(x[2]):
                     raise IOExceptionParrot(f"Input data is not correctly formatted for datatype '{datatype}'.\nInconsistent number of residue values and residues. Error on line {lc}:\n{x}")
     return data
@@ -139,43 +164,78 @@ def vector_split(v, fraction):
 # .................................................................
 
 class SequenceDataset(Dataset):
-    def __init__(self, filepath, encoding_scheme='onehot', encoder=None, excludeSeqID=False,
-                  datatype='sequence', delimiter=None):
+    def __init__(self, filepath : str, encoding_scheme : str = 'onehot', 
+                 encoder= None, excludeSeqID : bool = False,
+                  datatype : str = 'sequence', delimiter : str = None):
+        """
+        Initializes a SequenceDataset object. This is used by parrot to handle dataset parsing
+        so that models can be easily trained.
+        
+        Parameters
+        ----------
+        filepath : str
+            Path to the dataset
+        encoding_scheme : str
+            Encoding scheme to use ('onehot', 'biophysics', 'user')
+        encoder : object
+            User encoder object (if encoding_scheme='user')
+        exludeSeqID : bool
+            Whether sequence IDs are excluded from the data file
+        datatype : str
+            'sequence' or 'residues'
+        delimiter : str
+            Delimiter for splitting lines (None = any whitespace)
+        """
+        # set the values of the properties based on the user input
         self.filepath = filepath
         self.encoding_scheme = encoding_scheme
         self.encoder = encoder
+
+        # Validate inputs - check that the path exists
+        if not os.path.exists(filepath):
+            raise IOExceptionParrot(f"File not found: {filepath}")
+
+        # TODO: Automatically infer the datatype
         self.excludeSeqID = excludeSeqID
         self.datatype = datatype
         self.delimiter = delimiter
-        
-        # Validate inputs
-        if not os.path.exists(filepath):
-            raise IOExceptionParrot(f"File not found: {filepath}")
         
         # Load and parse all data (fixed approach for reliability)
         self.data = self._load_data()
 
     def _load_data(self):
-        """Load and parse the entire dataset, handling various PARROT formats"""
+        """Load and parse the entire dataset, handling various PARROT formats.
+        
+        This function should be able to handle a variety of different frameworks.
+
+        """
+        # the empty list that will store the data
         data = []
         
+        # open the file in read mode
         with open(self.filepath, 'r') as f:
+            # loop over each line and get the line number
             for line_num, line in enumerate(f, 1):
+                # remove whitespace from the front and end of the line
                 line = line.strip()
                 
                 # Skip empty lines and comments
                 if not line or line.startswith('#'):
                     continue
                     
+                # wrap in a try statement to catch errors
                 try:
                     # Split by delimiter (None = any whitespace, like original PARROT)
                     parts = line.split(self.delimiter)
                     
                     # Handle excludeSeqID case
+                    # Both paths need to end by having a seqID, sequence, values_str
+                    # A seqID will be generated for data that does not have it already
                     if self.excludeSeqID:
                         # Format: sequence values...
                         if len(parts) < 2:
                             raise ValueError(f"Insufficient data on line {line_num}")
+                        # generate a sequence ID for the sequences
                         seqID = f"seq_{line_num}"  # Generate ID
                         sequence = parts[0]
                         values_str = parts[1:]
@@ -227,8 +287,14 @@ class SequenceDataset(Dataset):
         return seqID, sequence_vector, values
 
     def __del__(self):
-        # Clean up if needed
+        # Forces garbage collection if needed (aka - frees up memory by destroying this object)
         gc.collect()    
+
+
+
+#----------------
+# Collate function for the various modes
+#----------------
 
 
 def seq_regress_collate(batch):
@@ -316,13 +382,33 @@ def res_class_collate(batch):
 
 
 def split_dataset_indices(dataset, train_ratio=0.7, val_ratio=0.15):
+    """
+    Splits data into training, validation, and test sets based on the 
+    specified ratio requested by the user.
+
+    Returns
+    -------
+    tuple
+        train_indices, val_indices, test_indices
+    """
+    # determine the length of the dataset (number of rows)
     dataset_size = len(dataset)
+
+    # create a list of all the different row indexes (to uniquely identify each row)
     indices = list(range(dataset_size))
+
+    # randomly shuffle the indexes so that we can just pull the first 70% of indexes to get out training set
     np.random.shuffle(indices)
 
+    # determine the number of rows to put in the training and validation set
+    # Note: we are aiming to find the last index for each set.
+    # the test set is just the rest of the indexes
     train_split = int(np.floor(train_ratio * dataset_size))
+    # we add the percentage to find the last row that correspond to having both train and validation indexes pulled
+    # this makes life much easier as we can use the integers directly for our indexing below
     val_split = int(np.floor((train_ratio + val_ratio) * dataset_size))
 
+    # pull out the unique indexes for each set from the shuffled set
     train_indices = indices[:train_split]
     val_indices = indices[train_split:val_split]
     test_indices = indices[val_split:]
@@ -331,6 +417,21 @@ def split_dataset_indices(dataset, train_ratio=0.7, val_ratio=0.15):
 
 
 def initial_data_prep(save_splits_loc, dataset, train_ratio, val_ratio):
+    """
+    This function preps the data and writes the splits of train, validation, and test to disk.
+
+    Parameters
+    ----------
+    save_splits_loc : str
+        this is the file location to save the splits that are used from the dataset
+    dataset : Object
+        This is a dataset that you will use to train the model
+    train_ratio : float
+        this is the ratio to use to train the model
+    val_ratio : float
+        this is the ratio to use to validate the model
+
+    """
     # function that does initial data prep. Basically,
     # this function will take in a dataset, get the indices
     # then write them out to disk. 

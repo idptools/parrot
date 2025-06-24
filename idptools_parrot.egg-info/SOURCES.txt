@@ -12,6 +12,7 @@ idptools_parrot.egg-info/requires.txt
 idptools_parrot.egg-info/top_level.txt
 parrot/__init__.py
 parrot/_version.py
+parrot/base_predictor.py
 parrot/brnn_architecture.py
 parrot/brnn_plot.py
 parrot/encode_sequence.py
@@ -19,7 +20,6 @@ parrot/layers.py
 parrot/optimize_params.py
 parrot/parrot_exceptions.py
 parrot/process_input_data.py
-parrot/process_input_data2.py
 parrot/py_predictor.py
 parrot/train_network.py
 parrot/tools/__init__.py
