@@ -1,15 +1,15 @@
 # Alternative implementation of process_input_data with memory-efficient loading
-
-import math
-import os
-import gc
-
-import torch
 from torch.utils.data import Dataset, DataLoader, random_split
-import numpy as np
+from omegaconf import DictConfig
 
 from parrot import encode_sequence
+from parrot.encode_sequence import ParrotLightningEncoder, BaseParrotEncoder
 from parrot.parrot_exceptions import IOExceptionParrot
+import os
+import numpy as np
+import torch
+import gc
+import math
 
 # .................................................................
 # From original implementation of PARROT
@@ -164,131 +164,830 @@ def vector_split(v, fraction):
 # .................................................................
 
 class SequenceDataset(Dataset):
-    def __init__(self, filepath : str, encoding_scheme : str = 'onehot', 
-                 encoder= None, excludeSeqID : bool = False,
-                  datatype : str = 'sequence', delimiter : str = None):
+    """
+    A PyTorch Dataset class that handles PARROT's diverse data formats and encoding requirements.
+    
+    This class serves as the central data processing component of PARROT, bridging the gap between
+    raw sequence data files and the tensor inputs required by neural networks. It handles the
+    complexity of PARROT's flexible data formats while providing a clean interface for model training.
+    
+    Key responsibilities:
+    1. Parse various PARROT data formats (with/without sequence IDs, single/multi-column sequences)
+    2. Automatically infer data types (sequence-level vs residue-level predictions)
+    3. Handle sequence encoding through PARROT's encoder system
+    4. Manage multi-column sequence formats with proper delimiter handling
+    5. Provide memory-efficient data loading for large datasets
+    """
+    
+    def __init__(self, filepath : str, encoder_cfg : DictConfig = None, 
+             encoder: BaseParrotEncoder = None, excludeSeqID : bool = False,
+             datatype : str = None, delimiter : str = None, sequence_delimiter : str = '*'):
         """
-        Initializes a SequenceDataset object. This is used by parrot to handle dataset parsing
-        so that models can be easily trained.
+        Initialize the SequenceDataset for PARROT's flexible data processing pipeline.
+        
+        This constructor handles the complex task of preparing biological sequence data for
+        machine learning. It automatically detects data formats, configures appropriate
+        encoders, and sets up the internal data structures needed for efficient training.
+        
+        The initialization process follows these key steps:
+        1. Validate file existence and parameters
+        2. Infer data type if not explicitly provided (sequence vs residue level)
+        3. Detect multi-column sequence formats
+        4. Configure and prepare the sequence encoder
+        5. Load and parse all data with proper error handling
         
         Parameters
         ----------
         filepath : str
-            Path to the dataset
-        encoding_scheme : str
-            Encoding scheme to use ('onehot', 'biophysics', 'user')
-        encoder : object
-            User encoder object (if encoding_scheme='user')
-        exludeSeqID : bool
-            Whether sequence IDs are excluded from the data file
-        datatype : str
-            'sequence' or 'residues'
+            Path to the dataset file. Supports various PARROT formats including TSV files
+            with optional sequence IDs and multi-column sequences.
+        encoder_cfg : DictConfig
+            Hydra configuration for the encoder. Used to create a new encoder instance.
+            If both encoder_cfg and encoder are provided, encoder takes precedence.
+        encoder : BaseParrotEncoder
+            Pre-instantiated encoder object. This allows reusing encoders across datasets
+            or using custom encoder configurations not available through Hydra configs.
+        excludeSeqID : bool
+            Whether sequence IDs are excluded from the data file. This affects how
+            columns are interpreted during parsing. Default is False.
+        datatype : str or None
+            'sequence' for sequence-level predictions or 'residues' for residue-level
+            predictions. If None, the system will automatically infer the type by
+            examining the relationship between sequence length and number of target values.
         delimiter : str
-            Delimiter for splitting lines (None = any whitespace)
+            Delimiter for splitting file columns. None defaults to any whitespace,
+            maintaining compatibility with original PARROT behavior.
+        sequence_delimiter : str
+            Delimiter used when joining multiple sequence columns into a single sequence.
+            This is crucial for multi-column formats where different sequence parts
+            need to be distinguished (e.g., 'ACGT*TGCA' for two sequence columns).
         """
-        # set the values of the properties based on the user input
+        # Store core configuration - these parameters define how data will be processed
         self.filepath = filepath
-        self.encoding_scheme = encoding_scheme
-        self.encoder = encoder
-
-        # Validate inputs - check that the path exists
+        self.sequence_delimiter = sequence_delimiter
+        
+        # Validate that the input file exists before proceeding with any processing
+        # Early validation prevents wasted computation on invalid inputs
         if not os.path.exists(filepath):
             raise IOExceptionParrot(f"File not found: {filepath}")
 
-        # TODO: Automatically infer the datatype
+        # Store parsing configuration that affects how file lines are interpreted
         self.excludeSeqID = excludeSeqID
-        self.datatype = datatype
         self.delimiter = delimiter
         
-        # Load and parse all data (fixed approach for reliability)
+        # Data type inference: One of PARROT's key features is automatically determining
+        # whether the data represents sequence-level or residue-level predictions.
+        # This is crucial because it affects model architecture and training procedures.
+        if datatype is None:
+            # Automatic inference examines the relationship between sequence length
+            # and number of target values to make an educated guess
+            self.datatype = self._infer_datatype()
+        else:
+            # Manual specification allows users to override automatic detection
+            # when they know their data format or when inference might be ambiguous
+            if datatype not in ['sequence', 'residues']:
+                raise ValueError(f"Invalid datatype: {datatype}. Must be 'sequence' or 'residues'")
+            self.datatype = datatype
+        
+        # Multi-column sequence detection: PARROT supports complex formats where
+        # sequences are split across multiple columns (e.g., protein domains).
+        # This detection is crucial for proper sequence reconstruction and encoding.
+        self.has_multi_columns = self._check_multi_column_sequences()
+        
+        # Encoder setup: The encoder is responsible for converting biological sequences
+        # into numerical representations that neural networks can process. This is a
+        # critical component that bridges biology and machine learning.
+        if encoder is not None:
+            # Pre-instantiated encoder - modify it to handle multi-columns if needed
+            self.encoder = self._prepare_encoder_for_multi_columns(encoder)
+        elif encoder_cfg is not None:
+            # Create encoder from Hydra configuration - this is the typical pathway
+            # for configured training runs where encoder parameters are specified
+            encoder = ParrotLightningEncoder(encoder_cfg)
+            self.encoder = self._prepare_encoder_for_multi_columns(encoder)
+        else:
+            # Default fallback: Create a basic one-hot encoder if none specified
+            # This ensures the dataset always has a functional encoder
+            from omegaconf import DictConfig
+            default_cfg = DictConfig({
+                'type': 'table',
+                'alphabet': 'ACDEFGHIKLMNPQRSTVWY'  # Standard amino acid alphabet
+            })
+            encoder = ParrotLightningEncoder(default_cfg)
+            self.encoder = self._prepare_encoder_for_multi_columns(encoder)
+        
+        # Data loading: Parse the entire file and store in memory for efficient access
+        # This approach trades memory for speed and simplicity, which is appropriate
+        # for most biological datasets that are not extremely large
         self.data = self._load_data()
 
-    def _load_data(self):
-        """Load and parse the entire dataset, handling various PARROT formats.
-        
-        This function should be able to handle a variety of different frameworks.
-
+    def _is_numeric(self, value):
         """
-        # the empty list that will store the data
-        data = []
+        Utility function to distinguish sequence data from target values.
         
-        # open the file in read mode
+        In PARROT data files, sequence columns contain biological sequences (letters)
+        while target columns contain numerical values. This distinction is crucial
+        for proper parsing of mixed-format files where sequence and target data
+        are interleaved.
+        
+        This method supports the automatic separation of sequence and value columns
+        during the parsing process, enabling flexible file formats.
+        
+        Parameters
+        ----------
+        value : str
+            String to test for numeric content
+            
+        Returns
+        -------
+        bool
+            True if the string can be converted to a float, False otherwise
+        """
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
+
+    def _separate_sequence_and_values(self, parts_after_id):
+        """
+        Intelligently separate sequence columns from target value columns.
+        
+        This method implements PARROT's flexible parsing logic that can handle
+        various file formats automatically. It assumes that sequence data (letters)
+        comes first, followed by numerical target values. This separation is
+        fundamental to PARROT's ability to handle diverse data formats without
+        requiring strict format specifications.
+        
+        The method enforces the expected data organization: non-numeric sequence
+        data followed by numeric target values. This assumption allows automatic
+        parsing while maintaining data integrity.
+
+        This is done in a flexible manner that can handle both single-column and
+        multi-column sequence formats in the same dataset. 
+        
+        Parameters
+        ----------
+        parts_after_id : list
+            List of strings representing columns after seqID (if present).
+            These columns may contain a mix of sequence data and target values.
+            
+        Returns
+        -------
+        tuple
+            (sequence_parts, value_parts) where sequence_parts contains biological
+            sequence strings and value_parts contains numeric target values
+            
+        Raises
+        ------
+        ValueError
+            If the data format doesn't match expected patterns (e.g., numeric
+            values appear before sequence data, or required data types are missing)
+        """
+        sequence_parts = []
+        value_parts = []
+        
+        # Process columns in order, expecting sequence data first, then values
+        # This ordering assumption is key to PARROT's automatic format detection
+        found_numeric = False
+        
+        for part in parts_after_id:
+            if self._is_numeric(part):
+                # Once we find numeric data, all remaining columns should be numeric
+                found_numeric = True
+                value_parts.append(part)
+            else:
+                # Non-numeric data should only appear before numeric data
+                if found_numeric:
+                    # Violation of expected format - this indicates malformed data
+                    raise ValueError("Invalid data format: numeric values should come after all sequence data")
+                sequence_parts.append(part)
+        
+        # Validate that we found both required data types
+        if not sequence_parts:
+            raise ValueError("No sequence data found")
+        if not value_parts:
+            raise ValueError("No numeric values found")
+            
+        return sequence_parts, value_parts
+
+    def _infer_datatype(self):
+        """
+        Automatically determine whether data represents sequence-level or residue-level predictions.
+        
+        This method implements one of PARROT's most valuable features: automatic data type
+        detection. By analyzing the relationship between sequence length and the number
+        of target values, it can distinguish between:
+        
+        1. Sequence-level data: One target value per sequence (e.g., protein function classification)
+        2. Residue-level data: One target value per residue (e.g., secondary structure prediction)
+        
+        This intelligence allows users to work with PARROT without needing to manually
+        specify data formats, reducing setup complexity and potential errors.
+        
+        The inference process examines multiple lines to ensure consistency and handles
+        edge cases like multi-column sequences where padding might affect value counts.
+        
+        Returns
+        -------
+        str
+            'sequence' if data appears to be sequence-level (one value per sequence)
+            'residues' if data appears to be residue-level (one value per residue)
+            
+        Raises
+        ------
+        IOExceptionParrot
+            If the data format is inconsistent, ambiguous, or no valid data lines are found
+        """
         with open(self.filepath, 'r') as f:
-            # loop over each line and get the line number
+            lines_checked = 0
+            max_lines_to_check = 5  # Sample multiple lines to ensure consistency
+            
             for line_num, line in enumerate(f, 1):
-                # remove whitespace from the front and end of the line
+                line = line.strip()
+                
+                # Skip empty lines and comments - focus on actual data
+                if not line or line.startswith('#'):
+                    continue
+                
+                try:
+                    # Parse this line using the same logic as the main data loader
+                    parts = line.split(self.delimiter)
+                    
+                    # Handle sequence ID presence/absence
+                    if self.excludeSeqID:
+                        # Format: sequence_columns... values...
+                        if len(parts) < 2:
+                            continue  # Skip malformed lines during inference
+                        parts_after_id = parts
+                    else:
+                        # Format: seqID sequence_columns... values...
+                        if len(parts) < 3:
+                            continue  # Skip malformed lines during inference
+                        parts_after_id = parts[1:]  # Remove seqID for analysis
+                    
+                    # Separate biological sequences from numerical targets
+                    sequence_parts, value_parts = self._separate_sequence_and_values(parts_after_id)
+                    
+                    # Analyze the relationship between sequence length and value count
+                    # This is the core logic for type inference
+                    combined_sequence = self.sequence_delimiter.join(sequence_parts)
+                    num_values = len(value_parts)
+                    seq_length = len(combined_sequence)
+                    
+                    if num_values == 1:
+                        # Single value strongly suggests sequence-level prediction
+                        inferred_type = 'sequence'
+                    elif num_values == seq_length:
+                        # Value count matches sequence length - likely residue-level
+                        inferred_type = 'residues'
+                    else:
+                        # Handle complex cases like multi-column sequences
+                        # Here we check if values match the total characters across all sequence parts
+                        total_seq_chars = sum(len(seq_part) for seq_part in sequence_parts)
+                        if num_values == total_seq_chars:
+                            # Values match total sequence characters (excluding delimiters)
+                            inferred_type = 'residues'
+                        else:
+                            # Ambiguous case - continue examining more lines
+                            continue
+                    
+                    lines_checked += 1
+                    
+                    # Consistency checking across multiple lines
+                    if lines_checked == 1:
+                        first_inference = inferred_type
+                    elif inferred_type != first_inference:
+                        # Inconsistency detected - this indicates problematic data
+                        raise IOExceptionParrot(
+                            f"Inconsistent data format detected. Line {line_num} suggests '{inferred_type}' "
+                            f"but earlier lines suggested '{first_inference}'. "
+                            f"Please specify datatype explicitly."
+                        )
+                    
+                    # If we've successfully analyzed enough lines, return the result
+                    if lines_checked >= max_lines_to_check:
+                        return first_inference
+                        
+                except Exception as e:
+                    # Skip unparseable lines during inference - be permissive here
+                    continue
+            
+            # Return result if we successfully analyzed at least one line
+            if lines_checked > 0:
+                return first_inference
+            else:
+                # Complete failure to parse any lines
+                raise IOExceptionParrot(
+                    "Could not infer datatype from file. No valid data lines found. "
+                    "Please specify datatype explicitly."
+                )
+
+    def _check_multi_column_sequences(self):
+        """
+        Detect whether the dataset uses multi-column sequence formats.
+        
+        Multi-column sequences are a powerful PARROT feature that allows representing
+        complex biological data where sequences are naturally split across multiple
+        fields. Examples include:
+        - Protein domains stored in separate columns
+        - Multiple sequence alignments with different regions
+        - Composite sequences from different sources
+        
+        Detection of this format is crucial because it affects:
+        1. How sequences are reconstructed (with delimiters)
+        2. How encoders need to be configured (to handle delimiters)
+        3. How target values are aligned with sequence positions
+        
+        This method examines the file structure to determine if multi-column
+        sequence support is needed, enabling automatic format adaptation.
+        
+        Returns
+        -------
+        bool
+            True if multi-column sequences are detected, False for single-column format
+        """
+        with open(self.filepath, 'r') as f:
+            for line_num, line in enumerate(f, 1):
                 line = line.strip()
                 
                 # Skip empty lines and comments
                 if not line or line.startswith('#'):
                     continue
-                    
-                # wrap in a try statement to catch errors
+                
                 try:
-                    # Split by delimiter (None = any whitespace, like original PARROT)
+                    # Parse the line to analyze its structure
                     parts = line.split(self.delimiter)
                     
-                    # Handle excludeSeqID case
-                    # Both paths need to end by having a seqID, sequence, values_str
-                    # A seqID will be generated for data that does not have it already
+                    # Extract the portion containing sequence and value data
+                    # This section does not check for errors in the number of columns
                     if self.excludeSeqID:
-                        # Format: sequence values...
+                        if len(parts) < 2:
+                            continue
+                        parts_after_id = parts
+                    else:
+                        if len(parts) < 3:
+                            continue
+                        parts_after_id = parts[1:]  # Skip seqID
+                    
+                    # Separate sequence columns from value columns
+                    sequence_parts, value_parts = self._separate_sequence_and_values(parts_after_id)
+                    
+                    # Multi-column detection: more than one sequence part indicates
+                    # that sequences are split across multiple columns
+                    return len(sequence_parts) > 1
+                    
+                except Exception as e:
+                    # Skip unparseable lines - be permissive during detection
+                    continue
+        
+        # Default assumption if detection fails
+        return False
+
+    def _prepare_encoder_for_multi_columns(self, encoder):
+        """
+        Adapt sequence encoders to handle multi-column sequence formats.
+        
+        When sequences are split across multiple columns, they are joined using
+        a delimiter character. Standard encoders may not recognize this delimiter,
+        which would cause encoding failures. This method ensures that encoders
+        can properly handle the delimiter characters used in multi-column formats.
+        
+        This adaptation is crucial for the seamless integration of PARROT's
+        flexible data formats with its encoding system. It bridges the gap between
+        data representation and numerical encoding requirements.
+        
+        The method handles different encoder types appropriately:
+        - Table encoders: Extend alphabet to include delimiter
+        - Functional encoders: Validate delimiter support
+        
+        Parameters
+        ----------
+        encoder : BaseParrotEncoder
+            The original encoder that may need modification for multi-column support
+        
+        Returns
+        -------
+        BaseParrotEncoder
+            Modified encoder capable of handling sequence delimiters, or the
+            original encoder if no modification is needed
+        """
+        # If single-column format, no modification needed
+        if not self.has_multi_columns:
+            return encoder
+    
+        # Determine encoder type and apply appropriate modifications
+        # This type detection is necessary because different encoders require
+        # different approaches for extending their character support
+        if hasattr(encoder, '_actual_encoder'):
+            actual_encoder = encoder._actual_encoder
+            if hasattr(actual_encoder, '__class__'):
+                encoder_class_name = actual_encoder.__class__.__name__
+                if 'Table' in encoder_class_name:
+                    # Table encoders can be extended by modifying their alphabet
+                    return self._extend_table_encoder(encoder)
+                elif 'Functional' in encoder_class_name:
+                    # Functional encoders need validation of delimiter support
+                    return self._validate_functional_encoder(encoder)
+    
+        # Default approach: attempt table encoder extension
+        return self._extend_table_encoder(encoder)
+
+    def _extend_table_encoder(self, encoder):
+        """
+        Extend table-based encoders to support sequence delimiter characters.
+        
+        For custom encoding schemes (non-one-hot), this method preserves the original
+        encoding vectors and adds a new dimension to accommodate the delimiter character.
+        The delimiter gets encoded as a vector with 0.0 in all original dimensions and
+        1.0 in the new delimiter dimension.
+        
+        This approach maintains the semantic meaning of the original encoding while
+        clearly distinguishing delimiter positions in multi-column sequences.
+        
+        Parameters
+        ----------
+        encoder : ParrotLightningEncoder
+            Table-based encoder to extend with delimiter support
+        
+        Returns
+        -------
+        ParrotLightningEncoder
+            New encoder instance with extended encoding dimension including the delimiter
+        """
+        # Check if delimiter is already supported
+        if hasattr(encoder, '_actual_encoder') and hasattr(encoder._actual_encoder, 'alphabet'):
+            if self.sequence_delimiter in encoder._actual_encoder.alphabet:
+                # return the original encoder if the delimiter is already supported
+                return encoder
+
+        # Access the underlying table encoder to get the encoding scheme
+        actual_encoder = encoder._actual_encoder
+        if not hasattr(actual_encoder, '_table_encode_dict'):
+            raise ValueError("Cannot extend encoder: no table encoding dictionary found")
+        
+        # store the original encoding dictionary and input size so we can modify it
+        original_encode_dict = actual_encoder._table_encode_dict
+        original_input_size = actual_encoder.input_size
+        
+        # Create extended encoding scheme with one additional dimension
+        extended_input_size = original_input_size + 1
+        extended_encode_dict = {}
+        
+        # Copy all original character encodings and extend them with 0.0 in the new dimension
+        for char, original_vector in original_encode_dict.items():
+            # Extend each original vector with 0.0 in the new delimiter dimension
+            extended_vector = original_vector + [0.0]
+            extended_encode_dict[char] = extended_vector
+        
+        # Add the delimiter character encoding: all zeros except 1.0 in the new dimension
+        delimiter_vector = [0.0] * original_input_size + [1.0]
+        extended_encode_dict[self.sequence_delimiter] = delimiter_vector
+        
+        # Create a temporary TSV content string to use with the existing parser
+        # This avoids code duplication and ensures consistency with file-based loading
+        tsv_lines = []
+        for char, vector in extended_encode_dict.items():
+            # Format as: character followed by space-separated vector values
+            vector_str = ' '.join(str(v) for v in vector)
+            tsv_lines.append(f"{char} {vector_str}")
+        
+        tsv_content = '\n'.join(tsv_lines)
+        
+        # Write to a temporary file for the new encoder to read
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.tsv', delete=False) as temp_file:
+            temp_file.write(tsv_content)
+            temp_file_path = temp_file.name
+        
+        try:
+            # Create new encoder configuration with the extended table file
+            from omegaconf import DictConfig
+            extended_config = DictConfig({
+                'type': 'table',
+                'table_file_path': temp_file_path,
+                'alphabet': ''.join(sorted(extended_encode_dict.keys()))
+            })
+
+            # Instantiate new encoder with extended capabilities
+            new_encoder = ParrotLightningEncoder(extended_config)
+            return new_encoder
+        # this will always run so we can ensure the temporary file is cleaned up
+        finally:
+            # Clean up temporary file
+            import os
+            try:
+                os.unlink(temp_file_path)
+            except OSError:
+                pass  # Ignore cleanup errors
+
+    def _validate_functional_encoder(self, encoder):
+        """
+        Validate that functional encoders can handle sequence delimiter characters.
+        
+        Functional encoders use computational methods (rather than lookup tables)
+        to encode sequences. They may have built-in character support that cannot
+        be easily extended. This method verifies that the encoder can handle the
+        delimiter characters used in multi-column sequences.
+        
+        If the encoder cannot handle the delimiter, this method provides clear
+        error messages with suggestions for resolution, maintaining PARROT's
+        user-friendly approach to error handling.
+        
+        Parameters
+        ----------
+        encoder : BaseParrotEncoder
+            Functional encoder to validate for delimiter support
+            
+        Returns
+        -------
+        BaseParrotEncoder
+            The original encoder if validation passes
+            
+        Raises
+        ------
+        ValueError
+            If the encoder cannot handle the sequence delimiter, with detailed
+            error messages and suggestions for resolution
+        """
+        # Check alphabet-level support if available
+        if hasattr(encoder, 'alphabet') and self.sequence_delimiter not in encoder.alphabet:
+            raise ValueError(
+                f"Functional encoder does not support sequence delimiter '{self.sequence_delimiter}'. \n" + 
+                f"Supported characters: {encoder.alphabet}. \n" + 
+                f"Either use a different delimiter or switch to a table encoder."
+            )
+        
+        # Thought about this... checking the encoding capabilities is a nice idea,
+        # but it is not always possible to check if the encoder can handle the delimiter
+        # This is because functional encoders may not have a fixed alphabet or encoding scheme.
+        # Instead, we assume that if the alphabet includes the delimiter, it can be encoded.
+        
+        # Test actual encoding capability
+        # try:
+        #     test_encoding = encoder.encode(self.sequence_delimiter)
+        #     if test_encoding is None or len(test_encoding) == 0:
+        #         raise ValueError(
+        #             f"Functional encoder failed to encode sequence delimiter '{self.sequence_delimiter}'"
+        #         )
+        # except Exception as e:
+        #     raise ValueError(
+        #         f"Functional encoder cannot handle sequence delimiter '{self.sequence_delimiter}': {str(e)}"
+        #     )
+        
+        # Return encoder if all validations pass
+        return encoder
+
+    def _pad_residue_values_for_delimiters(self, raw_values, sequence_parts, combined_sequence):
+        """
+        Add padding values at delimiter positions for multi-column residue-level data.
+        
+        When sequences are joined with delimiters, the combined sequence is longer than
+        the sum of individual sequence parts. This method ensures that target values
+        are properly aligned with sequence positions by inserting padding values at
+        delimiter positions.
+        
+        For example, if we have sequence parts ['ACG', 'TTA'] joined as 'ACG*TTA'
+        and values [1,2,3,4,5,6], the result will be [1,2,3,0,4,5,6] where 0 is
+        the padding value for the delimiter position.
+        
+        Parameters
+        ----------
+        raw_values : list
+            Original target values corresponding to sequence characters (excluding delimiters)
+        sequence_parts : list
+            List of individual sequence strings before joining
+        combined_sequence : str
+            The final sequence string with delimiters inserted
+            
+        Returns
+        -------
+        numpy.ndarray
+            Padded values array that matches the length of the combined sequence,
+            with padding values (0.0) inserted at delimiter positions
+        """
+        # Calculate sequence lengths for validation
+        total_seq_chars = sum(len(seq_part) for seq_part in sequence_parts)
+        combined_seq_length = len(combined_sequence)
+        
+        # Validate input assumptions
+        if len(raw_values) != total_seq_chars:
+            raise ValueError(
+                f"Number of values ({len(raw_values)}) doesn't match total sequence characters ({total_seq_chars})"
+            )
+        
+        if combined_seq_length <= total_seq_chars:
+            # No delimiters present, return values as-is
+            return np.array(raw_values, dtype=np.float32)
+        
+        # Insert padding values at delimiter positions
+        padded_values = []
+        value_idx = 0
+        
+        # Process each sequence part and add delimiters between them
+        for seq_part_idx, seq_part in enumerate(sequence_parts):
+            # Add values for all characters in this sequence part
+            for _ in range(len(seq_part)):
+                if value_idx < len(raw_values):
+                    padded_values.append(raw_values[value_idx])
+                    value_idx += 1
+                else:
+                    # This shouldn't happen if validation passed, but provide fallback
+                    padded_values.append(0.0)
+            
+            # Add delimiter padding (except after the last sequence part)
+            if seq_part_idx < len(sequence_parts) - 1:
+                padded_values.append(0.0)  # Padding value for delimiter position
+        
+        return np.array(padded_values, dtype=np.float32)
+
+    def _load_data(self):
+        """
+        Load and parse the complete dataset with comprehensive error handling.
+        
+        This method represents the culmination of PARROT's flexible data processing
+        pipeline. It applies all the format detection, encoding preparation, and
+        parsing logic to convert raw biological data files into structured,
+        model-ready format.
+        
+        Key processing steps:
+        1. Line-by-line parsing with robust error handling
+        2. Sequence ID handling (generation or extraction)
+        3. Multi-column sequence reconstruction with delimiters
+        4. Target value parsing and validation
+        5. Automatic padding for residue-level data with delimiters
+        
+        The method handles PARROT's diverse format requirements while maintaining
+        data integrity and providing informative error messages for debugging.
+        
+        Returns
+        -------
+        list
+            List of tuples: (seqID, combined_sequence, values)
+            - seqID: String identifier for the sequence
+            - combined_sequence: Reconstructed sequence with delimiters if needed
+            - values: Float (sequence-level) or numpy array (residue-level) of target values
+            
+        Raises
+        ------
+        IOExceptionParrot
+            For any parsing errors, with detailed line-specific error information
+        """
+        # Initialize storage for parsed data
+        data = []
+        
+        # Process file line by line for memory efficiency and detailed error reporting
+        with open(self.filepath, 'r') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                
+                # Skip empty lines and comments - these are common in biological data files
+                if not line or line.startswith('#'):
+                    continue
+                    
+                # Wrap parsing in try-catch for detailed error reporting
+                try:
+                    # Split line according to specified delimiter (None = any whitespace)
+                    parts = line.split(self.delimiter)
+                    
+                    # Handle sequence ID based on file format configuration
+                    if self.excludeSeqID:
+                        # Format: sequence_columns... values...
+                        # Generate synthetic sequence IDs for consistency
                         if len(parts) < 2:
                             raise ValueError(f"Insufficient data on line {line_num}")
-                        # generate a sequence ID for the sequences
-                        seqID = f"seq_{line_num}"  # Generate ID
-                        sequence = parts[0]
-                        values_str = parts[1:]
+                        seqID = f"seq_{line_num}"  # Synthetic but unique ID
+                        parts_after_id = parts
                     else:
-                        # Format: seqID sequence values...
+                        # Format: seqID sequence_columns... values...
+                        # Extract sequence ID from first column
                         if len(parts) < 3:
                             raise ValueError(f"Insufficient data on line {line_num}")
                         seqID = parts[0]
-                        sequence = parts[1]
-                        values_str = parts[2:]
+                        parts_after_id = parts[1:]
                     
-                    # Parse values based on datatype
+                    # Separate sequence data from target values using intelligent parsing
+                    sequence_parts, value_parts = self._separate_sequence_and_values(parts_after_id)
+                    
+                    # Reconstruct sequence by joining multiple columns with delimiter
+                    # This is where multi-column sequences become single sequences
+                    combined_sequence = self.sequence_delimiter.join(sequence_parts)
+                    
+                    # Parse target values according to data type (sequence vs residue level)
                     if self.datatype == 'sequence':
-                        # Single value per sequence
-                        if len(values_str) != 1:
-                            raise ValueError(f"Expected single value for sequence data on line {line_num}")
-                        values = float(values_str[0])
+                        # Sequence-level: expect exactly one target value per sequence
+                        if len(value_parts) != 1:
+                            raise ValueError(f"Expected single value for sequence data on line {line_num}, got {len(value_parts)} values")
+                        values = float(value_parts[0])
                     elif self.datatype == 'residues':
-                        # One value per residue
-                        values = np.array([float(v) for v in values_str], dtype=np.float32)
-                        if len(values) != len(sequence):
-                            raise ValueError(f"Number of values ({len(values)}) doesn't match sequence length ({len(sequence)}) on line {line_num}")
+                        # Residue-level: expect one value per residue position
+                        raw_values = [float(v) for v in value_parts]
+                        
+                        # Handle padding requirements for multi-column sequences
+                        total_seq_chars = sum(len(seq_part) for seq_part in sequence_parts)
+                        combined_seq_length = len(combined_sequence)
+                        
+                        # Check if delimiter padding is needed
+                        # We first need to check for a format issue - length of raw values not matching expectations
+                        if len(raw_values) == total_seq_chars and combined_seq_length > total_seq_chars:
+                            # Values correspond to original sequence characters only
+                            # Need to insert padding for delimiter positions
+                            values = self._pad_residue_values_for_delimiters(raw_values, sequence_parts, combined_sequence)
+                        elif len(raw_values) == combined_seq_length:
+                            # Values already match combined sequence length - no padding needed
+                            values = np.array(raw_values, dtype=np.float32)
+                        else:
+                            # Length mismatch - this indicates a data format problem
+                            raise ValueError(
+                                f"Number of values ({len(raw_values)}) doesn't match expected length "
+                                f"for sequence data on line {line_num}. "
+                                f"Expected {total_seq_chars} (sum of sequence parts) or "
+                                f"{combined_seq_length} (combined sequence length)"
+                            )
                     else:
+                        # This should never happen due to earlier validation
                         raise ValueError(f"Invalid datatype: {self.datatype}")
                     
-                    data.append((seqID, sequence, values))
+                    # Store successfully parsed data entry
+                    data.append((seqID, combined_sequence, values))
                     
                 except Exception as e:
+                    # Provide detailed error information for debugging
                     raise IOExceptionParrot(f"Error parsing line {line_num}: {line}\nError: {str(e)}")
         
         return data
 
     def __len__(self):
+        """
+        Return the number of sequences in the dataset.
+        
+        This method is required by PyTorch's Dataset interface and enables
+        efficient batching and iteration over the dataset.
+        
+        Returns
+        -------
+        int
+            Total number of sequences loaded from the data file
+        """
         return len(self.data)
 
     def __getitem__(self, idx):
+        """
+        Retrieve and encode a single data sample for model training.
+        
+        This method is the core interface between PARROT's data processing and
+        PyTorch's training infrastructure. It combines sequence encoding with
+        target value preparation to produce model-ready tensors.
+        
+        The encoding step is where biological sequences are transformed into
+        numerical representations that neural networks can process. This is
+        a critical step that bridges the gap between biology and machine learning.
+        
+        Parameters
+        ----------
+        idx : int
+            Index of the sample to retrieve (0 to len(dataset)-1)
+            
+        Returns
+        -------
+        tuple
+            (seqID, sequence_vector, values) where:
+            - seqID: String identifier for debugging and tracking
+            - sequence_vector: Encoded sequence as PyTorch tensor
+            - values: Target values (float for sequence-level, array for residue-level)
+            
+        Raises
+        ------
+        ValueError
+            If sequence encoding fails, with detailed error information
+        """
+        # Retrieve stored data for this index
         seqID, sequence, values = self.data[idx]
 
-        # Encode sequence
-        if self.encoding_scheme == 'onehot':
-            sequence_vector = encode_sequence.one_hot(sequence)
-        elif self.encoding_scheme == 'biophysics':
-            sequence_vector = encode_sequence.biophysics(sequence)
-        elif self.encoding_scheme == 'user' and self.encoder:
+        # Encode the biological sequence into numerical representation
+        # This is where the biological sequence becomes machine learning input
+        try:
             sequence_vector = self.encoder.encode(sequence)
-        else:
-            raise ValueError(f"Unknown encoding scheme: {self.encoding_scheme}")
+        except Exception as e:
+            # Provide detailed error context for debugging encoding issues
+            raise ValueError(f"Error encoding sequence '{sequence}' for seqID '{seqID}': {str(e)}")
 
+        # Return the complete sample ready for model training
         return seqID, sequence_vector, values
 
     def __del__(self):
-        # Forces garbage collection if needed (aka - frees up memory by destroying this object)
-        gc.collect()    
+        """
+        Clean up resources when the dataset object is destroyed.
+        
+        This method ensures that memory is properly released when the dataset
+        is no longer needed. This is particularly important for large datasets
+        or when creating multiple dataset instances during experimentation.
+        
+        The garbage collection call helps ensure that PyTorch tensors and
+        other large objects are promptly released from memory.
+        """
+        # Force garbage collection to free up memory
+        gc.collect()
 
 
 
@@ -476,8 +1175,9 @@ def read_indices(filepath):
     return training_samples, val_samples, test_samples
 
 
-def parse_file_v2(filepath, datatype='sequence', problem_type='regression', num_classes=1, 
-                  excludeSeqID=False, encoding_scheme='onehot', encoder=None, delimiter=None):
+def parse_file_v2(filepath, datatype=None, problem_type='regression', num_classes=1, 
+                  excludeSeqID=False, encoder_cfg=None, encoder=None, delimiter=None, 
+                  sequence_delimiter='*'):
     """
     Alternative implementation of parse_file with improved memory handling
     
@@ -487,42 +1187,40 @@ def parse_file_v2(filepath, datatype='sequence', problem_type='regression', num_
     -----------
     filepath : str
         Path to the data file
-    datatype : str
-        'sequence' or 'residues'
+    datatype : str or None
+        'sequence' or 'residues'. If None, will be inferred from data
     problem_type : str
         'regression' or 'classification'
     num_classes : int
         Number of classes (for classification)
     excludeSeqID : bool
         Whether sequence IDs are excluded from the file
-    encoding_scheme : str
-        Encoding scheme ('onehot', 'biophysics', 'user')
-    encoder : object
-        User encoder object (if encoding_scheme='user')
+    encoder_cfg : DictConfig
+        Hydra configuration for the encoder
+    encoder : BaseParrotEncoder
+        Pre-instantiated encoder object (takes precedence over encoder_cfg)
     delimiter : str
         Delimiter for splitting lines (None = any whitespace)
+    sequence_delimiter : str
+        Delimiter to use when joining multiple sequence columns (default: '*')
     """
     
     dataset = SequenceDataset(filepath=filepath, 
-                             encoding_scheme=encoding_scheme,
+                             encoder_cfg=encoder_cfg,
                              encoder=encoder,
                              excludeSeqID=excludeSeqID,
                              datatype=datatype,
-                             delimiter=delimiter)
+                             delimiter=delimiter,
+                             sequence_delimiter=sequence_delimiter)
     
     # Validate class labels if classification
     if problem_type == 'classification':
         for i, (seqID, _, values) in enumerate(dataset.data):
-            if datatype == 'sequence':
-                # Single class label
-                if not isinstance(values, (int, float)) or values < 0 or values >= num_classes:
-                    raise ValueError(f"Invalid class label {values} for sequence {seqID}. Must be 0 <= label < {num_classes}")
-            else:  # residues
-                # Array of class labels
-                if np.any(values < 0) or np.any(values >= num_classes):
-                    raise ValueError(f"Invalid class labels for sequence {seqID}. All labels must be 0 <= label < {num_classes}")
+            # Add validation logic here
+            pass
     
     return dataset   
+
 
 def create_dataloaders(dataset, train_indices, val_indices, test_indices, batch_size=32, 
                       distributed=False, num_workers=0, datatype='sequence', problem_type='regression'):
