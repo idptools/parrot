@@ -23,20 +23,20 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import specific classes directly from parrot
 try:
-    from parrot.brnn_architecture import DoubleConv, Down, Up, UNet_PARROT
+    from parrot.unet_architecture import DoubleConv, Down, Up, UNet_PARROT
 except ImportError:
     # If that fails, try importing directly from the file
     import importlib.util
     spec = importlib.util.spec_from_file_location(
-        "brnn_architecture", 
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "parrot", "brnn_architecture.py")
+        "unet_architecture", 
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "parrot", "unet_architecture.py")
     )
-    brnn_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(brnn_module)
-    DoubleConv = brnn_module.DoubleConv
-    Down = brnn_module.Down
-    Up = brnn_module.Up
-    UNet_PARROT = brnn_module.UNet_PARROT
+    unet_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(unet_module)
+    DoubleConv = unet_module.DoubleConv
+    Down = unet_module.Down
+    Up = unet_module.Up
+    UNet_PARROT = unet_module.UNet_PARROT
 
 
 class TestDoubleConv:
