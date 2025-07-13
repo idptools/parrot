@@ -676,3 +676,521 @@ class BRNN_PARROT_LEGACY(nn.Module):
         # Decode the hidden state for each time step
         fc_out = self.fc(out)
         return fc_out
+    
+
+
+
+
+
+"""
+Code below for UNet that handles nXn input to nXn output predictions.
+
+The UNet architecture takes nXn input and produces nXn output.
+This makes it its own 'datatype' that is 'square' (not 'residues' or 'sequence').
+It can handle both classification and regression problems.
+"""
+
+class DoubleConv(nn.Module):
+    """Double convolution block used in UNet encoder and decoder paths.
+
+    This block consists of two convolutional layers, each followed by batch normalization
+    and ReLU activation. It is used to extract features from the input at different
+    resolutions.
+    """
+
+    def __init__(self, in_channels, out_channels, dropout=None, kernel_size=3):
+        """
+        Initialize the double convolution block.
+
+        Input and output data sizes are nXn, meaning the spatial dimensions
+        remain the same after the convolutions. The block consists of two
+        convolutional layers with kernel size kernel_size and padding kernel_size // 2, followed by
+        batch normalization and ReLU activation. Optionally, dropout can be applied.
+        The dropout layer is applied after the second convolution.
+        The padding is computed to maintain the spatial dimensions of the input
+        data after the convolutions.
+
+        Parameters
+        ----------
+        in_channels : int
+            Number of input channels (e.g., 1 for grayscale, 3 for RGB, etc.)
+        out_channels : int
+            Number of output channels after the convolution
+        dropout : float, optional
+            Dropout rate to apply after the second convolution, by default None.
+            If None, no dropout is applied. 
+        kernel_size : int, optional
+            Size of the convolution kernel, by default 3.
+        """
+        super(DoubleConv, self).__init__()
+        # Validate input parameters
+        if not isinstance(in_channels, int) or in_channels < 1:
+            raise ValueError("in_channels must be a positive integer") 
+        if not isinstance(out_channels, int) or out_channels < 1:
+            raise ValueError("out_channels must be a positive integer")
+        if dropout is not None and (not isinstance(dropout, (int, float)) or dropout < 0.0):
+            raise ValueError("dropout must be a non-negative float or None")
+        if not isinstance(kernel_size, int) or kernel_size <= 0:
+            raise ValueError("kernel_size must be a positive integer")
+
+        # check that the kernel size is odd
+        if kernel_size % 2 == 0:
+            raise ValueError("kernel_size must be an odd integer to maintain spatial dimensions")
+        
+        #compute the padding size
+        padding = kernel_size // 2
+        
+        # Input data size nXn, output data size nXn
+        layers = [
+            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=kernel_size, padding=padding),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        ]
+        
+        if dropout is not None and dropout > 0.0:
+            layers.append(nn.Dropout2d(dropout))
+            
+        self.double_conv = nn.Sequential(*layers)
+    
+    def forward(self, x):
+        return self.double_conv(x)
+
+
+class Down(nn.Module):
+    """Downscaling block with maxpool followed by double conv for the contracting path of UNet.
+    
+    This block first applies max pooling to reduce the spatial dimensions by half,
+    then applies a double convolution block to extract features at the reduced
+    resolution. This is used in the encoder path of the UNet.
+    """
+    
+    def __init__(self, in_channels, out_channels, dropout=None, kernel_size=3):
+        """
+        Initialize the downscaling block.
+        
+        The input data is first downsampled by a factor of 2 using max pooling,
+        then processed through a double convolution block. The spatial dimensions
+        are reduced from nXn to (n/2)X(n/2).
+        
+        Parameters
+        ----------
+        in_channels : int
+            Number of input channels
+        out_channels : int
+            Number of output channels after the double convolution
+        dropout : float, optional
+            Dropout rate to apply in the double convolution block, by default None.
+            If None, no dropout is applied.
+        kernel_size : int, optional
+            Size of the convolution kernel used in the double convolution block,
+            by default 3. Must be an odd integer to maintain proper padding.
+        """
+        super(Down, self).__init__()
+        
+        # Validate input parameters
+        if not isinstance(in_channels, int) or in_channels < 1:
+            raise ValueError("in_channels must be a positive integer")
+        if not isinstance(out_channels, int) or out_channels < 1:
+            raise ValueError("out_channels must be a positive integer")
+        if dropout is not None and (not isinstance(dropout, (int, float)) or dropout < 0.0):
+            raise ValueError("dropout must be a non-negative float or None")
+        if not isinstance(kernel_size, int) or kernel_size <= 0:
+            raise ValueError("kernel_size must be a positive integer")
+        if kernel_size % 2 == 0:
+            raise ValueError("kernel_size must be an odd integer to maintain spatial dimensions")
+        
+        self.maxpool_conv = nn.Sequential(
+            nn.MaxPool2d(2),
+            DoubleConv(in_channels, out_channels, dropout, kernel_size)
+        )
+    
+    def forward(self, x):
+        """
+        Forward pass through the downscaling block.
+        
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape [batch_size, in_channels, height, width]
+            
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape [batch_size, out_channels, height//2, width//2]
+        """
+        return self.maxpool_conv(x)
+
+
+class Up(nn.Module):
+    """Upscaling block with transposed conv followed by double conv.
+    
+    This block first upscales the input using either bilinear interpolation or
+    transposed convolution, then concatenates it with the corresponding feature
+    map from the encoder path (skip connection), and finally applies a double
+    convolution block. This is used in the decoder path of the UNet.
+    """
+    
+    def __init__(self, in_channels, out_channels, bilinear=True, dropout=None, kernel_size=3):
+        """
+        Initialize the upscaling block for the expansion path of the UNet.
+        
+        The input data is first upsampled by a factor of 2, then concatenated with
+        skip connection features, and processed through a double convolution block.
+        The spatial dimensions are increased from nXn to (2n)X(2n).
+        
+        Parameters
+        ----------
+        in_channels : int
+            Number of input channels from the previous layer
+        out_channels : int
+            Number of output channels after the double convolution
+        bilinear : bool, optional
+            Use bilinear upsampling instead of transposed convolution, by default True.
+            Bilinear upsampling is generally more stable and uses less memory.
+        dropout : float, optional
+            Dropout rate to apply in the double convolution block, by default None.
+            If None, no dropout is applied.
+        kernel_size : int, optional
+            Size of the convolution kernel used in the double convolution block,
+            by default 3. Must be an odd integer to maintain proper padding.
+        """
+        super(Up, self).__init__()
+        
+        # Validate input parameters
+        if not isinstance(in_channels, int) or in_channels < 1:
+            raise ValueError("in_channels must be a positive integer")
+        if not isinstance(out_channels, int) or out_channels < 1:
+            raise ValueError("out_channels must be a positive integer")
+        if not isinstance(bilinear, bool):
+            raise ValueError("bilinear must be a boolean")
+        if dropout is not None and (not isinstance(dropout, (int, float)) or dropout < 0.0):
+            raise ValueError("dropout must be a non-negative float or None")
+        if not isinstance(kernel_size, int) or kernel_size <= 0:
+            raise ValueError("kernel_size must be a positive integer")
+        if kernel_size % 2 == 0:
+            raise ValueError("kernel_size must be an odd integer to maintain spatial dimensions")
+        
+        # Use bilinear upsampling or transposed convolution
+        if bilinear:
+            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+            self.conv = DoubleConv(in_channels, out_channels, dropout, kernel_size)
+        else:
+            self.up = nn.ConvTranspose2d(in_channels, in_channels // 2, kernel_size=2, stride=2)
+            self.conv = DoubleConv(in_channels, out_channels, dropout, kernel_size)
+    
+    def forward(self, x1, x2):
+        """
+        Forward pass through the upscaling block.
+        
+        Parameters
+        ----------
+        x1 : torch.Tensor
+            Input tensor from the previous decoder layer of shape 
+            [batch_size, in_channels, height, width]
+        x2 : torch.Tensor
+            Skip connection tensor from the corresponding encoder layer of shape
+            [batch_size, skip_channels, height*2, width*2]
+            
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape [batch_size, out_channels, height*2, width*2]
+        """
+        x1 = self.up(x1)
+
+        # Input is CHW (channels, height, width), handle potential size differences
+        diffY = x2.size()[2] - x1.size()[2]
+        diffX = x2.size()[3] - x1.size()[3]
+        
+        # Pad the smaller tensor to match the size of the larger tensor
+        x1 = nn.functional.pad(x1, [diffX // 2, diffX - diffX // 2,
+                                   diffY // 2, diffY - diffY // 2])
+        
+        # Concatenate along channel dimension
+        x = torch.cat([x2, x1], dim=1)
+        return self.conv(x)
+
+
+class UNet_PARROT(L.LightningModule):
+    """A UNet architecture for nXn to nXn predictions in PARROT.
+    
+    This UNet implementation follows the classic encoder-decoder architecture
+    with skip connections. It's designed for square input/output data where
+    spatial relationships are important.
+
+    Valid input sizes for nXn are any n that is divisible by 16.
+    This is because the network downsamples by a factor of 2 at each
+    downsampling step, and there are four downsampling steps in total.
+    Therefore, the input size must be at least 16x16 to produce a valid output.
+    This will require enforced padding in the data to ensure the input size is valid.
+
+    Parameters
+    ----------
+    input_channels : int
+        Number of input channels (e.g., 1 for grayscale, 3 for RGB, etc.)
+    num_classes : int
+        Number of output classes for classification or 1 for regression
+    problem_type : str
+        Type of problem to solve, either 'regression' or 'classification'
+    batch_size : int
+        Size of the batch for training and inference
+    bilinear : bool, optional
+        Use bilinear upsampling instead of transposed convolution, by default True
+    base_channels : int, optional
+        Number of channels in the first encoder layer, by default 64
+    kernel_size : int, optional
+        Size of the convolution kernel used throughout the network, by default 3.
+        Must be an odd integer to maintain proper padding.
+    **kwargs : dict
+        Additional keyword arguments for model configuration, similar to BRNN_PARROT
+    """
+    
+    def __init__(
+        self,
+        input_channels,
+        num_classes,
+        problem_type,
+        batch_size,
+        bilinear=True,
+        base_channels=64,
+        kernel_size=3,
+        **kwargs
+    ):
+        super(UNet_PARROT, self).__init__()
+        
+        # Input validation
+        if not isinstance(input_channels, int) or input_channels < 1:
+            raise ValueError("input_channels must be a positive integer")
+        
+        if not isinstance(num_classes, int) or num_classes < 1:
+            raise ValueError("num_classes must be a positive integer")
+        
+        if not isinstance(batch_size, int) or batch_size < 1:
+            raise ValueError("batch_size must be a positive integer")
+        
+        if problem_type not in ['regression', 'classification']:
+            raise ValueError("problem_type must be either 'regression' or 'classification'")
+        
+        if not isinstance(kernel_size, int) or kernel_size <= 0:
+            raise ValueError("kernel_size must be a positive integer")
+        
+        if kernel_size % 2 == 0:
+            raise ValueError("kernel_size must be an odd integer to maintain spatial dimensions")
+        
+        self.input_channels = input_channels
+        self.num_classes = num_classes
+        self.problem_type = problem_type
+        self.batch_size = batch_size
+        self.bilinear = bilinear
+        self.base_channels = base_channels
+        self.kernel_size = kernel_size
+        
+        # Model configuration from kwargs
+        self.optimizer_name = kwargs.get("optimizer_name", "AdamW")
+        self.learn_rate = kwargs.get("learn_rate", 1e-3)
+        self.dropout = kwargs.get("dropout", None)
+        self.monitor = kwargs.get("monitor", "epoch_val_loss")
+        self.distributed = kwargs.get("distributed", False)
+        
+        # Calculate factor for bilinear upsampling
+        factor = 2 if bilinear else 1
+        
+        # Encoder (downsampling path)
+        self.inc = DoubleConv(input_channels, base_channels, self.dropout, kernel_size)
+        self.down1 = Down(base_channels, base_channels * 2, self.dropout, kernel_size)
+        self.down2 = Down(base_channels * 2, base_channels * 4, self.dropout, kernel_size)
+        self.down3 = Down(base_channels * 4, base_channels * 8, self.dropout, kernel_size)
+        self.down4 = Down(base_channels * 8, base_channels * 16 // factor, self.dropout, kernel_size)
+        
+        # Decoder (upsampling path)
+        self.up1 = Up(base_channels * 16, base_channels * 8 // factor, bilinear, self.dropout, kernel_size)
+        self.up2 = Up(base_channels * 8, base_channels * 4 // factor, bilinear, self.dropout, kernel_size)
+        self.up3 = Up(base_channels * 4, base_channels * 2 // factor, bilinear, self.dropout, kernel_size)
+        self.up4 = Up(base_channels * 2, base_channels, bilinear, self.dropout, kernel_size)
+        
+        # Output layer
+        self.outc = nn.Conv2d(base_channels, num_classes, kernel_size=1)
+        
+        # Set optimizer parameters
+        if self.optimizer_name == "SGD":
+            self.momentum = kwargs.get("momentum", 0.99)
+        elif self.optimizer_name == "AdamW":
+            self.beta1 = kwargs.get("beta1", 0.9)
+            self.beta2 = kwargs.get("beta2", 0.999)
+            self.eps = kwargs.get("eps", 1e-8)
+            self.weight_decay = kwargs.get("weight_decay", 1e-2)
+        else:
+            raise ValueError("Invalid optimizer name. Supported options: 'SGD', 'AdamW'.")
+        
+        # Set direction for LR scheduler
+        direction_map = {"minimize": "min", "maximize": "max"}
+        if kwargs.get("direction"):
+            self.lr_direction = direction_map[kwargs.get("direction")]
+        else:
+            self.lr_direction = "min"
+        
+        # Set loss criteria
+        if self.problem_type == "regression":
+            self.r2_score = R2Score(compute_on_cpu=True)
+            self.criterion = nn.MSELoss(reduction="mean")
+        elif self.problem_type == "classification":
+            self.task = "multiclass"
+            self.criterion = nn.CrossEntropyLoss(reduction="mean")
+            
+            self.accuracy = Accuracy(
+                task=self.task, num_classes=self.num_classes, compute_on_cpu=True
+            )
+            self.precision = Precision(
+                task=self.task, num_classes=self.num_classes, compute_on_cpu=True
+            )
+            self.auroc = AUROC(
+                task=self.task, num_classes=self.num_classes, compute_on_cpu=True
+            )
+            self.mcc = MatthewsCorrCoef(
+                task=self.task, num_classes=self.num_classes, compute_on_cpu=True
+            )
+            self.f1_score = F1Score(
+                task=self.task, num_classes=self.num_classes, compute_on_cpu=True
+            )
+        
+        # Training loss metric
+        self.train_loss_metric = MeanMetric()
+        
+        # Save hyperparameters
+        self.save_hyperparameters()
+    
+    def forward(self, x):
+        """Forward pass through the UNet.
+        
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape [batch_size, input_channels, height, width]
+        
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape [batch_size, num_classes, height, width]
+        """
+        # Encoder path
+        x1 = self.inc(x)
+        x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4)
+        
+        # Decoder path with skip connections
+        x = self.up1(x5, x4)
+        x = self.up2(x, x3)
+        x = self.up3(x, x2)
+        x = self.up4(x, x1)
+        
+        # Output layer
+        logits = self.outc(x)
+        return logits
+    
+    def training_step(self, batch, batch_idx):
+        """Training step for the UNet model."""
+        inputs, targets = batch
+        outputs = self.forward(inputs.float())
+        
+        if self.problem_type == "regression":
+            loss = self.criterion(outputs, targets.float())
+        else:
+            loss = self.criterion(outputs, targets.long())
+        
+        self.train_loss_metric(loss)
+        self.log("train_loss", loss)
+        return loss
+    
+    def on_train_epoch_end(self):
+        """Called at the end of each training epoch."""
+        epoch_mean = self.train_loss_metric.compute()
+        self.log("epoch_train_loss", epoch_mean, prog_bar=True, sync_dist=self.distributed)
+        self.train_loss_metric.reset()
+    
+    def validation_step(self, batch, batch_idx):
+        """Validation step for the UNet model."""
+        inputs, targets = batch
+        outputs = self.forward(inputs.float())
+        
+        if self.problem_type == "regression":
+            loss = self.criterion(outputs, targets.float())
+            # Compute R² score if we have enough samples
+            if outputs.numel() >= 2:
+                self.r2_score(outputs.flatten(), targets.float().flatten())
+                self.log("epoch_val_rsquare", self.r2_score)
+        else:
+            loss = self.criterion(outputs, targets.long())
+            
+            # Compute classification metrics
+            accuracy = self.accuracy(outputs, targets.long())
+            self.log("epoch_val_accuracy", accuracy, on_step=True)
+            
+            f1score = self.f1_score(outputs, targets.long())
+            self.log("epoch_val_f1score", f1score, on_step=True)
+            
+            auroc = self.auroc(outputs, targets.long())
+            self.log("epoch_val_auroc", auroc, on_step=True)
+            
+            precision = self.precision(outputs, targets.long())
+            self.log("epoch_val_precision", precision, on_step=True)
+            
+            mcc = self.mcc(outputs, targets.long())
+            self.log("epoch_val_mcc", mcc, on_step=True)
+        
+        self.log("epoch_val_loss", loss, prog_bar=True, sync_dist=self.distributed)
+        self.log("val_loss", loss, sync_dist=self.distributed)
+        return loss
+    
+    def test_step(self, batch, batch_idx):
+        """Test step for the UNet model."""
+        inputs, targets = batch
+        outputs = self.forward(inputs.float())
+        
+        if self.problem_type == "regression":
+            loss = self.criterion(outputs, targets.float())
+            # Compute R² score if we have enough samples
+            if outputs.numel() >= 2:
+                self.r2_score(outputs.flatten(), targets.float().flatten())
+                self.log("test_r2_score", self.r2_score)
+        else:
+            loss = self.criterion(outputs, targets.long())
+            accuracy = self.accuracy(outputs, targets.long())
+            self.log("test_accuracy", accuracy)
+        
+        self.log("test_loss", loss)
+        return loss
+    
+    def configure_optimizers(self):
+        """Configure optimizers and learning rate schedulers."""
+        if self.optimizer_name == "SGD":
+            optimizer = optim.SGD(
+                self.parameters(),
+                lr=self.learn_rate,
+                momentum=self.momentum,
+                nesterov=True,
+            )
+        elif self.optimizer_name == "AdamW":
+            optimizer = optim.AdamW(
+                self.parameters(),
+                lr=self.learn_rate,
+                betas=(self.beta1, self.beta2),
+                eps=self.eps,
+                weight_decay=self.weight_decay,
+            )
+        else:
+            raise ValueError("Invalid optimizer name. Supported options: 'SGD', 'AdamW'.")
+        
+        lr_scheduler = {
+            "scheduler": CosineAnnealingLR(
+                optimizer, T_max=self.trainer.max_epochs, eta_min=0.0001
+            ),
+            "monitor": self.monitor,
+            "interval": "epoch",
+        }
+        
+        return [optimizer], [lr_scheduler]

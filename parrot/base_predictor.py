@@ -399,6 +399,7 @@ class BasePredictor(ABC):
         
         # Process sequences in batches
         for i in range(0, len(validated_sequences), batch_size):
+            # pull out of the specific sequences in each batch
             batch_sequences = validated_sequences[i:i + batch_size]
             
             # Encode the batch
