@@ -40,7 +40,16 @@ except ImportError:
 
 
 class TestDoubleConv:
-    """Test the DoubleConv block used in UNet encoder and decoder paths."""
+    """Test the DoubleConv block used in UNet encoder and decoder paths.
+    
+    What is actually tested:
+    - DoubleConv blocks output shape of the forward pass
+    - DoubleConv blocks with dropout have the correct output shape from the forward pass
+    - DoubleConv blocks with custom kernel sizes have the correct output shape from the forward pass
+    - DoubleConv blocks handle invalid input shapes properly by checking for: in_channels must be a positive integer,
+      out_channels must be a positive integer, dropout must be a non-negative float or None,
+      kernel_size must be a positive integer, and kernel_size must be an odd integer.
+    """
     
     def test_doubleconv_basic_functionality(self):
         """Test basic forward pass through DoubleConv block."""
@@ -50,6 +59,7 @@ class TestDoubleConv:
         # Create sample input
         batch_size = 2
         height, width = 32, 32
+        # Dimension description: (batch_size, in_channels, height, width)
         x = torch.randn(batch_size, 3, height, width)
         
         # Forward pass
@@ -61,6 +71,7 @@ class TestDoubleConv:
     def test_doubleconv_with_dropout(self):
         """Test DoubleConv block with dropout."""
         conv_block = DoubleConv(in_channels=3, out_channels=64, dropout=0.2)
+        # Dimension description: (batch_size, in_channels, height, width)
         x = torch.randn(2, 3, 32, 32)
         
         output = conv_block(x)
@@ -69,6 +80,7 @@ class TestDoubleConv:
     def test_doubleconv_custom_kernel_size(self):
         """Test DoubleConv block with custom kernel size."""
         conv_block = DoubleConv(in_channels=3, out_channels=64, kernel_size=5)
+        # Dimension description: (batch_size, in_channels, height, width)
         x = torch.randn(2, 3, 32, 32)
         
         output = conv_block(x)
@@ -104,25 +116,39 @@ class TestDoubleConv:
 
 
 class TestDown:
-    """Test the Down block used in UNet encoder path."""
+    """Test the Down block used in UNet encoder path.
+    
+    What is actually tested:
+    - Down blocks output shape of the forward pass
+    - Down blocks with dropout have the correct output shape from the forward pass
+    - Down blocks with custom kernel sizes have the correct output shape from the forward pass
+    - Down blocks handle invalid input shapes properly by checking for: in_channels must be a positive integer,
+      out_channels must be a positive integer, dropout must be a non-negative float or None,
+      kernel_size must be a positive integer, and kernel_size must be an odd integer."""
     
     def test_down_basic_functionality(self):
         """Test basic forward pass through Down block."""
         down_block = Down(in_channels=64, out_channels=128)
         
         # Input will be downsampled by factor of 2
+        # Dimension description: (batch_size, in_channels, height, width)
         x = torch.randn(2, 64, 32, 32)
         output = down_block(x)
         
         # Check output shape (spatial dimensions halved, channels changed)
+        # expected shape: (batch_size, out_channels, height//2, width//2)
         assert output.shape == (2, 128, 16, 16)
         
     def test_down_with_dropout_and_kernel_size(self):
         """Test Down block with dropout and custom kernel size."""
         down_block = Down(in_channels=64, out_channels=128, dropout=0.1, kernel_size=5)
+        # Input will be downsampled by factor of 2
+        # Dimension description: (batch_size, in_channels, height, width)
         x = torch.randn(2, 64, 64, 64)
         
         output = down_block(x)
+        # Check output shape (spatial dimensions halved, channels changed)
+        # expected shape: (batch_size, out_channels, height//2, width//2)
         assert output.shape == (2, 128, 32, 32)
         
     def test_down_parameter_validation(self):
@@ -139,7 +165,16 @@ class TestDown:
 
 
 class TestUp:
-    """Test the Up block used in UNet decoder path."""
+    """Test the Up block used in UNet decoder path.
+    
+    What is actually tested:
+    - Up blocks output shape of the forward pass
+    - Up blocks with bilinear upsampling have the correct output shape from the forward pass
+    - Up blocks with transposed convolution have the correct output shape from the forward pass
+    - Up blocks handle size mismatches between x1 and x2 (skip connection) by padding
+    - Up blocks handle invalid input shapes properly by checking for: in_channels must be a positive integer,
+      out_channels must be a positive integer, bilinear must be a boolean.
+    """
     
     def test_up_bilinear_functionality(self):
         """Test Up block with bilinear upsampling."""
@@ -161,10 +196,14 @@ class TestUp:
         """Test Up block with transposed convolution."""
         up_block = Up(in_channels=128, out_channels=64, bilinear=False)
         
+        #Dimension description: (batch_size, in_channels, height, width)
         x1 = torch.randn(2, 128, 16, 16)
         x2 = torch.randn(2, 128, 32, 32)  # Skip connection (should be in_channels)
         
+        # skip connection goes second in the forward pass
+        # x1 is upsampled, then concatenated with x2
         output = up_block(x1, x2)
+        # expected output shape: (batch_size, out_channels, height of skip connection, width of skip connection)
         assert output.shape == (2, 64, 32, 32)
         
     def test_up_size_mismatch_handling(self):
@@ -172,11 +211,13 @@ class TestUp:
         up_block = Up(in_channels=128, out_channels=64, bilinear=True)
         
         # Slightly different sizes to test padding
+        # Dimension description: (batch_size, in_channels, height, width)
         x1 = torch.randn(2, 128, 15, 15)  # Will be upsampled to 30x30
         x2 = torch.randn(2, 128, 32, 32)  # Skip connection (should be in_channels)
         
         output = up_block(x1, x2)
         # Should match x2 size due to padding
+        # expected output shape: (batch_size, out_channels, height of skip connection, width of skip connection)
         assert output.shape == (2, 64, 32, 32)
         
     def test_up_parameter_validation(self):
@@ -194,7 +235,18 @@ class TestUp:
 
 
 class TestUNetPARROT:
-    """Test the complete UNet_PARROT model."""
+    """Test the complete UNet_PARROT model.
+    
+    What is actually tested:
+    - UNet_PARROT basic initialization with default parameters
+    - UNet_PARROT initialization with custom parameters
+    - UNet_PARROT forward pass for classification and regression tasks
+    - UNet_PARROT training, validation, and test steps
+    - UNet_PARROT parameter validation for input_channels, num_classes, problem_type, batch_size, kernel_size, first_down_channels
+    - UNet_PARROT optimizer configuration for different optimizers (SGD, AdamW)
+    - UNet_PARROT architecture consistency checks
+    - UNet_PARROT channel progression checks
+    """
     
     def test_unet_basic_initialization(self):
         """Test basic UNet_PARROT initialization."""
@@ -205,6 +257,7 @@ class TestUNetPARROT:
             batch_size=8
         )
         
+        # Check that the parameters are set correctly
         assert model.input_channels == 1
         assert model.num_classes == 2
         assert model.problem_type == 'classification'
@@ -225,7 +278,8 @@ class TestUNetPARROT:
             kernel_size=5,
             dropout=0.2
         )
-        
+
+        # Check that the parameters are set correctly
         assert model.input_channels == 3
         assert model.num_classes == 1
         assert model.problem_type == 'regression'
@@ -244,11 +298,13 @@ class TestUNetPARROT:
         )
         
         # Input must be divisible by 16
+        # Dimension description: (batch_size, in_channels, height, width)
         x = torch.randn(4, 1, 64, 64)
         
         output = model(x)
         
         # Output should have same spatial dimensions as input
+        # Dimension description: (batch_size, number of classes, height, width)
         assert output.shape == (4, 3, 64, 64)
         
     def test_unet_forward_pass_regression(self):
@@ -260,9 +316,11 @@ class TestUNetPARROT:
             batch_size=2
         )
         
+        # Input must be divisible by 16
+        # Dimension description: (batch_size, in_channels, height, width)
         x = torch.randn(2, 3, 128, 128)
         output = model(x)
-        
+        # Expected output shape: (batch_size, 1 for regression, height, width)
         assert output.shape == (2, 1, 128, 128)
         
     def test_unet_different_input_sizes(self):

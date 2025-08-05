@@ -11,6 +11,7 @@ from omegaconf import OmegaConf, DictConfig
 from parrot.encode_sequence import ParrotLightningEncoder
 from parrot.encode_sequence import TableParrotEncoder
 from parrot.encode_sequence import FunctionalParrotEncoder
+from parrot.encode_sequence import MatrixParrotEncoder
 from parrot.encode_sequence import BaseParrotEncoder
 
 # --- Temporary File Content Definitions ---
@@ -340,3 +341,518 @@ class TestParrotLightningEncoderFactory:
         # Assert that the encoding was successful and the output has the correct shape.
         assert sequence_vector is not None
         assert sequence_vector.shape == (3, 3) # (sequence_length, input_size)
+
+    def test_multi_sequence_encoding(self, encoder_data):
+        """
+        Test the multi-sequence encoding functionality.
+        """
+        encoder = ParrotLightningEncoder(encoder_data["table_config"])
+        sequences = ["ACG", "GCA", "AC"]
+        
+        # Test encode_sequences
+        encoded_list = encoder.encode_sequences(sequences)
+        assert len(encoded_list) == 3
+        assert encoded_list[0].shape == (3, 3)  # First sequence "ACG"
+        assert encoded_list[1].shape == (3, 3)  # Second sequence "GCA"
+        assert encoded_list[2].shape == (2, 3)  # Third sequence "AC"
+        
+        # Test encode_sequences_padded
+        padded_tensor = encoder.encode_sequences_padded(sequences)
+        assert padded_tensor.shape == (3, 3, 3)  # (batch_size, max_seq_len, input_size)
+        
+        # Verify padding worked correctly
+        # The third sequence should be padded with zeros in the last position
+        assert torch.all(padded_tensor[2, 2, :] == 0.0)  # Last position should be padding
+        
+        # Verify that non-padded parts match original encodings
+        assert torch.equal(padded_tensor[0], encoded_list[0])
+        assert torch.equal(padded_tensor[1], encoded_list[1])
+        assert torch.equal(padded_tensor[2, :2, :], encoded_list[2])
+
+    def test_multi_sequence_encoding_functional(self, encoder_data):
+        """
+        Test the multi-sequence encoding functionality with functional encoder.
+        """
+        encoder = ParrotLightningEncoder(encoder_data["functional_config"])
+        sequences = ["AC", "CA", "A"]
+        
+        # Test encode_sequences
+        encoded_list = encoder.encode_sequences(sequences)
+        assert len(encoded_list) == 3
+        assert encoded_list[0].shape == (2, 2)  # First sequence "AC"
+        assert encoded_list[1].shape == (2, 2)  # Second sequence "CA"
+        assert encoded_list[2].shape == (1, 2)  # Third sequence "A"
+        
+        # Test encode_sequences_padded
+        padded_tensor = encoder.encode_sequences_padded(sequences)
+        assert padded_tensor.shape == (3, 2, 2)  # (batch_size, max_seq_len, input_size)
+
+
+# --- Test Suite for MatrixParrotEncoder ---
+class TestMatrixEncoder:
+    def test_initialization_vectorial_with_gap(self):
+        """Test MatrixParrotEncoder initialization with vectorial encoding and gap character."""
+        config = OmegaConf.create({
+            "type": "matrix",
+            "alphabet": "ACG",
+            "gap_char": "*", 
+            "use_gap": True,
+            "encoding_type": "vectorial"
+        })
+        
+        encoder = MatrixParrotEncoder(config)
+        assert isinstance(encoder, BaseParrotEncoder)
+        # Base alphabet is 3 chars, so input_size = 3*3 + 1 = 10 (+ 1 for gap dimension)
+        assert len(encoder) == 10
+        assert encoder.get_alphabet() == {'A', 'C', 'G', '*'}
+        
+        # Check that gap character is always last in mappings
+        assert encoder._char_to_idx['*'] == 3  # Should be index 3 (after A=0, C=1, G=2)
+
+    def test_initialization_vectorial_without_gap(self):
+        """Test MatrixParrotEncoder initialization with vectorial encoding and no gap character."""
+        config = OmegaConf.create({
+            "type": "matrix", 
+            "alphabet": "ACG",
+            "use_gap": False,
+            "encoding_type": "vectorial"
+        })
+        
+        encoder = MatrixParrotEncoder(config)
+        assert len(encoder) == 9  # 3*3 = 9 
+        assert encoder.get_alphabet() == {'A', 'C', 'G'}
+
+    def test_initialization_numerical_with_gap(self):
+        """Test MatrixParrotEncoder initialization with numerical encoding and gap character.""" 
+        config = OmegaConf.create({
+            "type": "matrix",
+            "alphabet": "ACG",
+            "gap_char": "*",
+            "use_gap": True,
+            "encoding_type": "numerical"
+        })
+        
+        encoder = MatrixParrotEncoder(config)
+        assert len(encoder) == 1  # Numerical encoding always has input_size = 1
+        assert encoder.get_alphabet() == {'A', 'C', 'G', '*'}
+
+    def test_gap_character_not_in_initial_alphabet(self):
+        """Test that gap character is properly handled even if included in initial alphabet."""
+        config = OmegaConf.create({
+            "type": "matrix",
+            "alphabet": "ACG*",  # Gap char included in alphabet
+            "gap_char": "*",
+            "use_gap": True,
+            "encoding_type": "vectorial"
+        })
+        
+        encoder = MatrixParrotEncoder(config)
+        # Should still have correct input size: 3*3 + 1 = 10
+        assert len(encoder) == 10
+        # Gap character should still be last
+        assert encoder._char_to_idx['*'] == 3
+
+    def test_custom_gap_character_ordering(self):
+        """Test that custom gap character is always placed last regardless of alphabetical order."""
+        config = OmegaConf.create({
+            "type": "matrix",
+            "alphabet": "ZAB",  # Z would normally be last alphabetically
+            "gap_char": "A",   # But A is our gap character
+            "use_gap": True,
+            "encoding_type": "vectorial"
+        })
+        
+        encoder = MatrixParrotEncoder(config)
+        # Base alphabet should be {'Z', 'B'} (A removed as it's the gap char)
+        # So input_size = 2*2 + 1 = 5
+        assert len(encoder) == 5
+        assert encoder.get_alphabet() == {'Z', 'B', 'A'}
+        # Gap character (A) should be last despite alphabetical order
+        assert encoder._char_to_idx['A'] == 2  # Last index
+
+    def test_encode_decode_cycle_vectorial(self):
+        """Test full encode-decode cycle with vectorial encoding."""
+        config = OmegaConf.create({
+            "type": "matrix",
+            "alphabet": "AC",
+            "use_gap": False,
+            "encoding_type": "vectorial"
+        })
+        
+        encoder = MatrixParrotEncoder(config)
+        sequence = "AC" 
+        encoded = encoder.encode(sequence)
+        
+        assert isinstance(encoded, torch.Tensor)
+        assert encoded.shape == (2, 2, 4)  # (seq_len, seq_len, input_size)
+        
+        decoded = encoder.decode(encoded)
+        assert decoded == [sequence]
+
+    def test_encode_decode_cycle_numerical(self):
+        """Test full encode-decode cycle with numerical encoding."""
+        config = OmegaConf.create({
+            "type": "matrix",
+            "alphabet": "AC",
+            "use_gap": False,
+            "encoding_type": "numerical"
+        })
+        
+        encoder = MatrixParrotEncoder(config)
+        sequence = "AC"
+        encoded = encoder.encode(sequence)
+        
+        assert isinstance(encoded, torch.Tensor)
+        assert encoded.shape == (2, 2, 1)  # (seq_len, seq_len, input_size=1)
+        
+        decoded = encoder.decode(encoded)
+        assert decoded == [sequence]
+
+    def test_factory_creates_matrix_encoder(self):
+        """Test that ParrotLightningEncoder correctly creates MatrixParrotEncoder."""
+        config = OmegaConf.create({
+            "type": "matrix",
+            "alphabet": "ACG",
+            "use_gap": True,
+            "encoding_type": "vectorial"
+        })
+        
+        factory_encoder = ParrotLightningEncoder(config)
+        assert factory_encoder.encoder_type == "matrix"
+        assert len(factory_encoder) == 10  # 3*3 + 1 = 10
+
+    def test_multi_sequence_encoding_matrix(self):
+        """Test multi-sequence encoding functionality with matrix encoder."""
+        config = OmegaConf.create({
+            "type": "matrix",
+            "alphabet": "AC",
+            "use_gap": False,
+            "encoding_type": "vectorial"
+        })
+        
+        encoder = ParrotLightningEncoder(config)
+        sequences = ["AC", "CA", "A"]
+        
+        # Test encode_sequences
+        encoded_list = encoder.encode_sequences(sequences)
+        assert len(encoded_list) == 3
+        assert encoded_list[0].shape == (2, 2, 4)  # First sequence "AC"
+        assert encoded_list[1].shape == (2, 2, 4)  # Second sequence "CA"
+        assert encoded_list[2].shape == (1, 1, 4)  # Third sequence "A"
+        
+        # Test encode_sequences_padded
+        padded_tensor = encoder.encode_sequences_padded(sequences)
+        assert padded_tensor.shape == (3, 2, 2, 4)  # (batch_size, max_seq_len, max_seq_len, input_size)
+        
+        # Verify that non-padded parts match original encodings
+        assert torch.equal(padded_tensor[0], encoded_list[0])
+        assert torch.equal(padded_tensor[1], encoded_list[1])
+        assert torch.equal(padded_tensor[2, :1, :1, :], encoded_list[2])
+
+
+# --- Test Suite for Save/Load Functionality ---
+class TestEncoderSaveLoad:
+    """Test suite for save/load functionality across all encoder types."""
+    
+    def test_table_encoder_save_load_with_file(self, encoder_data, tmp_path):
+        """Test save/load cycle for TableParrotEncoder created from file."""
+        # Create original encoder
+        original_encoder = TableParrotEncoder(encoder_data["table_config"])
+        
+        # Test a sequence
+        test_sequence = "ACG"
+        original_encoded = original_encoder.encode(test_sequence)
+        original_decoded = original_encoder.decode(original_encoded)
+        
+        # Save the encoder
+        save_path = tmp_path / "table_encoder.pkl"
+        original_encoder.save(str(save_path))
+        
+        # Load the encoder
+        loaded_encoder = BaseParrotEncoder.load(str(save_path))
+        
+        # Verify the loaded encoder is the correct type
+        assert isinstance(loaded_encoder, TableParrotEncoder)
+        assert loaded_encoder.get_alphabet() == original_encoder.get_alphabet()
+        assert len(loaded_encoder) == len(original_encoder)
+        
+        # Test that encoding/decoding works the same
+        loaded_encoded = loaded_encoder.encode(test_sequence)
+        loaded_decoded = loaded_encoder.decode(loaded_encoded)
+        
+        assert torch.equal(original_encoded, loaded_encoded)
+        assert original_decoded == loaded_decoded
+
+    def test_table_encoder_save_load_alphabet_only(self, tmp_path):
+        """Test save/load cycle for TableParrotEncoder created from alphabet only."""
+        from omegaconf import OmegaConf
+        
+        # Create encoder with alphabet only (one-hot encoding)
+        config = OmegaConf.create({
+            "type": "table",
+            "alphabet": "ACGT"
+        })
+        original_encoder = TableParrotEncoder(config)
+        
+        # Test a sequence
+        test_sequence = "ACGT"
+        original_encoded = original_encoder.encode(test_sequence)
+        
+        # Save the encoder
+        save_path = tmp_path / "table_encoder_alphabet.pkl"
+        original_encoder.save(str(save_path))
+        
+        # Load the encoder
+        loaded_encoder = BaseParrotEncoder.load(str(save_path))
+        
+        # Verify the loaded encoder works the same
+        assert isinstance(loaded_encoder, TableParrotEncoder)
+        assert loaded_encoder.get_alphabet() == original_encoder.get_alphabet()
+        assert len(loaded_encoder) == len(original_encoder)
+        
+        loaded_encoded = loaded_encoder.encode(test_sequence)
+        assert torch.equal(original_encoded, loaded_encoded)
+
+    def test_functional_encoder_save_load(self, encoder_data, tmp_path):
+        """Test save/load cycle for FunctionalParrotEncoder."""
+        # Create original encoder
+        original_encoder = FunctionalParrotEncoder(encoder_data["functional_config"])
+        
+        # Test a sequence
+        test_sequence = "ACAC"
+        original_encoded = original_encoder.encode(test_sequence)
+        original_decoded = original_encoder.decode(original_encoded)
+        
+        # Save the encoder
+        save_path = tmp_path / "functional_encoder.pkl"
+        original_encoder.save(str(save_path))
+        
+        # Load the encoder
+        loaded_encoder = BaseParrotEncoder.load(str(save_path))
+        
+        # Verify the loaded encoder is the correct type
+        assert isinstance(loaded_encoder, FunctionalParrotEncoder)
+        assert loaded_encoder.get_alphabet() == original_encoder.get_alphabet()
+        assert len(loaded_encoder) == len(original_encoder)
+        assert loaded_encoder.module_path == original_encoder.module_path
+        
+        # Test that encoding/decoding works the same
+        loaded_encoded = loaded_encoder.encode(test_sequence)
+        loaded_decoded = loaded_encoder.decode(loaded_encoded)
+        
+        assert torch.equal(original_encoded, loaded_encoded)
+        assert original_decoded == loaded_decoded
+
+    def test_matrix_encoder_save_load_vectorial(self, tmp_path):
+        """Test save/load cycle for MatrixParrotEncoder with vectorial encoding."""
+        from omegaconf import OmegaConf
+        
+        # Create original encoder
+        config = OmegaConf.create({
+            "type": "matrix",
+            "alphabet": "ACG",
+            "gap_char": "*",
+            "use_gap": True,
+            "encoding_type": "vectorial"
+        })
+        original_encoder = MatrixParrotEncoder(config)
+        
+        # Test a sequence
+        test_sequence = "AC*G"
+        original_encoded = original_encoder.encode(test_sequence)
+        original_decoded = original_encoder.decode(original_encoded)
+        
+        # Save the encoder
+        save_path = tmp_path / "matrix_encoder_vectorial.pkl"
+        original_encoder.save(str(save_path))
+        
+        # Load the encoder
+        loaded_encoder = BaseParrotEncoder.load(str(save_path))
+        
+        # Verify the loaded encoder is the correct type
+        assert isinstance(loaded_encoder, MatrixParrotEncoder)
+        assert loaded_encoder.get_alphabet() == original_encoder.get_alphabet()
+        assert len(loaded_encoder) == len(original_encoder)
+        assert loaded_encoder.encoding_type == original_encoder.encoding_type
+        assert loaded_encoder.use_gap == original_encoder.use_gap
+        assert loaded_encoder.gap_char == original_encoder.gap_char
+        
+        # Test that encoding/decoding works the same
+        loaded_encoded = loaded_encoder.encode(test_sequence)
+        loaded_decoded = loaded_encoder.decode(loaded_encoded)
+        
+        assert torch.equal(original_encoded, loaded_encoded)
+        assert original_decoded == loaded_decoded
+
+    def test_matrix_encoder_save_load_numerical(self, tmp_path):
+        """Test save/load cycle for MatrixParrotEncoder with numerical encoding."""
+        from omegaconf import OmegaConf
+        
+        # Create original encoder
+        config = OmegaConf.create({
+            "type": "matrix",
+            "alphabet": "AC",
+            "use_gap": False,
+            "encoding_type": "numerical"
+        })
+        original_encoder = MatrixParrotEncoder(config)
+        
+        # Test a sequence
+        test_sequence = "ACAC"
+        original_encoded = original_encoder.encode(test_sequence)
+        original_decoded = original_encoder.decode(original_encoded)
+        
+        # Save the encoder
+        save_path = tmp_path / "matrix_encoder_numerical.pkl"
+        original_encoder.save(str(save_path))
+        
+        # Load the encoder
+        loaded_encoder = BaseParrotEncoder.load(str(save_path))
+        
+        # Verify the loaded encoder works the same
+        assert isinstance(loaded_encoder, MatrixParrotEncoder)
+        assert loaded_encoder.get_alphabet() == original_encoder.get_alphabet()
+        assert len(loaded_encoder) == len(original_encoder)
+        assert loaded_encoder.encoding_type == original_encoder.encoding_type
+        
+        loaded_encoded = loaded_encoder.encode(test_sequence)
+        loaded_decoded = loaded_encoder.decode(loaded_encoded)
+        
+        assert torch.equal(original_encoded, loaded_encoded)
+        assert original_decoded == loaded_decoded
+
+    def test_parrot_lightning_encoder_save_load(self, encoder_data, tmp_path):
+        """Test save/load cycle for ParrotLightningEncoder."""
+        # Create original encoder
+        original_encoder = ParrotLightningEncoder(encoder_data["table_config"])
+        
+        # Test a sequence
+        test_sequence = "ACG"
+        original_encoded = original_encoder.encode(test_sequence)
+        original_decoded = original_encoder.decode(original_encoded)
+        
+        # Save the encoder
+        save_path = tmp_path / "lightning_encoder.pkl"
+        original_encoder.save(str(save_path))
+        
+        # Load the encoder
+        loaded_encoder = ParrotLightningEncoder.load(str(save_path))
+        
+        # Verify the loaded encoder is the correct type
+        assert isinstance(loaded_encoder, ParrotLightningEncoder)
+        assert loaded_encoder.encoder_type == original_encoder.encoder_type
+        assert loaded_encoder.get_alphabet() == original_encoder.get_alphabet()
+        assert len(loaded_encoder) == len(original_encoder)
+        
+        # Test that encoding/decoding works the same
+        loaded_encoded = loaded_encoder.encode(test_sequence)
+        loaded_decoded = loaded_encoder.decode(loaded_encoded)
+        
+        assert torch.equal(original_encoded, loaded_encoded)
+        assert original_decoded == loaded_decoded
+
+    def test_save_config_json(self, encoder_data, tmp_path):
+        """Test saving encoder configuration to JSON."""
+        # Test with table encoder
+        encoder = TableParrotEncoder(encoder_data["table_config"])
+        config_path = tmp_path / "table_config.json"
+        
+        encoder.save_config(str(config_path))
+        
+        # Verify the file was created and contains expected content
+        assert config_path.exists()
+        
+        import json
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+        
+        assert config_data['encoder_class'] == 'TableParrotEncoder'
+        assert 'alphabet' in config_data
+        assert 'input_size' in config_data
+
+    def test_save_config_lightning_encoder(self, encoder_data, tmp_path):
+        """Test saving configuration through ParrotLightningEncoder."""
+        encoder = ParrotLightningEncoder(encoder_data["functional_config"])
+        config_path = tmp_path / "functional_config.json"
+        
+        encoder.save_config(str(config_path))
+        
+        assert config_path.exists()
+        
+        import json
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+        
+        assert config_data['encoder_class'] == 'FunctionalParrotEncoder'
+
+    def test_load_nonexistent_file(self):
+        """Test that loading from nonexistent file raises FileNotFoundError."""
+        with pytest.raises(FileNotFoundError, match="Encoder file not found"):
+            BaseParrotEncoder.load("nonexistent_file.pkl")
+
+    def test_load_corrupted_file(self, tmp_path):
+        """Test that loading corrupted file raises IOError."""
+        corrupted_path = tmp_path / "corrupted.pkl"
+        corrupted_path.write_text("This is not a valid pickle file")
+        
+        with pytest.raises(IOError, match="Failed to load encoder"):
+            BaseParrotEncoder.load(str(corrupted_path))
+
+    def test_load_invalid_encoder_class(self, tmp_path):
+        """Test that loading file with invalid encoder class raises ValueError."""
+        import pickle
+        
+        invalid_path = tmp_path / "invalid.pkl"
+        # Create a pickle file with invalid encoder class
+        invalid_data = {'encoder_class': 'NonExistentEncoder'}
+        
+        with open(invalid_path, 'wb') as f:
+            pickle.dump(invalid_data, f)
+        
+        with pytest.raises(ValueError, match="Unknown encoder class"):
+            BaseParrotEncoder.load(str(invalid_path))
+
+    def test_load_missing_encoder_class(self, tmp_path):
+        """Test that loading file without encoder class info raises ValueError."""
+        import pickle
+        
+        invalid_path = tmp_path / "missing_class.pkl"
+        # Create a pickle file without encoder class info
+        invalid_data = {'some_data': 'value'}
+        
+        with open(invalid_path, 'wb') as f:
+            pickle.dump(invalid_data, f)
+        
+        with pytest.raises(ValueError, match="Invalid encoder file: missing encoder class information"):
+            BaseParrotEncoder.load(str(invalid_path))
+
+    def test_save_io_error(self, encoder_data):
+        """Test that save operation handles IO errors gracefully."""
+        encoder = TableParrotEncoder(encoder_data["table_config"])
+        
+        # Try to save to an invalid path (directory that doesn't exist and can't be created)
+        with pytest.raises(IOError, match="Failed to save encoder"):
+            encoder.save("/invalid/path/that/cannot/exist/encoder.pkl")
+
+    def test_round_trip_preserves_state(self, encoder_data, tmp_path):
+        """Test that a complete save/load cycle preserves all encoder state."""
+        # Test with a functional encoder as it has the most complex state
+        original_encoder = FunctionalParrotEncoder(encoder_data["functional_config"])
+        
+        # Save and load
+        save_path = tmp_path / "state_test.pkl"
+        original_encoder.save(str(save_path))
+        loaded_encoder = BaseParrotEncoder.load(str(save_path))
+        
+        # Check that all important attributes are preserved
+        assert loaded_encoder.alphabet == original_encoder.alphabet
+        assert loaded_encoder.input_size == original_encoder.input_size
+        assert loaded_encoder.module_path == original_encoder.module_path
+        assert loaded_encoder.encode_fn_name == original_encoder.encode_fn_name
+        assert loaded_encoder.decode_fn_name == original_encoder.decode_fn_name
+        
+        # Test that the function callables work the same
+        test_seq = "AC"
+        original_result = original_encoder.encode(test_seq)
+        loaded_result = loaded_encoder.encode(test_seq)
+        assert torch.equal(original_result, loaded_result)

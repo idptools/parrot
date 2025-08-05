@@ -17,6 +17,8 @@ from omegaconf import DictConfig, OmegaConf
 import sys
 import os
 import importlib.util
+import pickle
+import json
 from typing import Union, List, Dict, Any, Callable, Tuple
 
 import numpy as np
@@ -361,6 +363,8 @@ class BaseParrotEncoder(ABC):
 
     This class ensures a consistent API for encoding and decoding operations,
     regardless of the underlying implementation (e.g., table-based, functional).
+
+    TODO: Implement matrix format support
     """
     @abstractmethod
     def encode(self, sequence: str) -> torch.Tensor:
@@ -406,6 +410,69 @@ class BaseParrotEncoder(ABC):
         """
         pass
 
+    def encode_sequences(self, sequences: List[str]) -> List[torch.Tensor]:
+        """
+        Encodes multiple amino acid sequence strings into PyTorch tensors.
+
+        Parameters:
+            sequences (List[str]): A list of amino acid sequences to encode.
+
+        Returns:
+            List[torch.Tensor]: A list of tensors, each representing an encoded sequence.
+        """
+        return [self.encode(sequence) for sequence in sequences]
+
+    def encode_sequences_padded(self, sequences: List[str], pad_value: float = 0.0) -> torch.Tensor:
+        """
+        Encodes multiple amino acid sequences and pads them to the same length.
+
+        Parameters:
+            sequences (List[str]): A list of amino acid sequences to encode.
+            pad_value (float): The value to use for padding. Default is 0.0.
+
+        Returns:
+            torch.Tensor: A tensor of shape (batch_size, max_seq_len, input_size) for regular encoders
+                         or (batch_size, max_seq_len, max_seq_len, input_size) for matrix encoders.
+        """
+        if not sequences:
+            raise ValueError("Cannot encode empty sequence list")
+        
+        # Encode all sequences
+        encoded_sequences = self.encode_sequences(sequences)
+        
+        # Check if this is a matrix encoder (3D tensors)
+        is_matrix_encoder = len(encoded_sequences[0].shape) == 3
+        
+        if is_matrix_encoder:
+            # For matrix encoders: (seq_len, seq_len, input_size)
+            max_seq_len = max(tensor.shape[0] for tensor in encoded_sequences)
+            input_size = encoded_sequences[0].shape[2]
+            batch_size = len(encoded_sequences)
+            
+            # Create padded tensor: (batch_size, max_seq_len, max_seq_len, input_size)
+            padded_tensor = torch.full((batch_size, max_seq_len, max_seq_len, input_size), 
+                                     pad_value, dtype=torch.float32)
+            
+            for i, tensor in enumerate(encoded_sequences):
+                seq_len = tensor.shape[0]
+                padded_tensor[i, :seq_len, :seq_len, :] = tensor
+                
+        else:
+            # For regular encoders: (seq_len, input_size)
+            max_seq_len = max(tensor.shape[0] for tensor in encoded_sequences)
+            input_size = encoded_sequences[0].shape[1]
+            batch_size = len(encoded_sequences)
+            
+            # Create padded tensor: (batch_size, max_seq_len, input_size)
+            padded_tensor = torch.full((batch_size, max_seq_len, input_size), 
+                                     pad_value, dtype=torch.float32)
+            
+            for i, tensor in enumerate(encoded_sequences):
+                seq_len = tensor.shape[0]
+                padded_tensor[i, :seq_len, :] = tensor
+        
+        return padded_tensor
+
     @staticmethod
     def _validate_sequence_chars(sequence: str, alphabet: set) -> str:
         """
@@ -429,34 +496,37 @@ class BaseParrotEncoder(ABC):
     
 
     @staticmethod
-    def _process_input_vectors(seq_vectors: Union[torch.Tensor, np.ndarray, List[np.ndarray]], input_size: int) -> List[np.ndarray]:
+    def _process_input_vectors(seq_vectors: Union[torch.Tensor, np.ndarray, List[np.ndarray]], input_size: int, is_matrix_format: bool = False) -> List[np.ndarray]:
         """
-        Helper method to normalize various input vector formats into a list of 2D NumPy arrays.
+        Helper method to normalize various input vector formats into a list of NumPy arrays.
 
         Args:
             seq_vectors (Union[torch.Tensor, np.ndarray, List[np.ndarray]]):
-                Input vectors which can be a single 2D tensor/array, a 3D batch tensor/array,
-                or a list of 2D numpy arrays.
+                Input vectors which can be a single tensor/array or a list of arrays.
             input_size (int): The expected dimension of the individual character vectors.
+                For matrix encoders, this should be the first dimension of the tensor.
+            is_matrix_format (bool): Whether the input is in matrix format (3D tensors).
 
         Returns:
-            List[np.ndarray]: A list of 2D NumPy arrays, each representing an encoded sequence.
+            List[np.ndarray]: A list of NumPy arrays, each representing an encoded sequence.
+                For regular encoders: each array is 2D (seq_len, input_size)
+                For matrix encoders: each array is 3D (seq_len, seq_len, input_size)
 
         Raises:
             TypeError: If the input type for `seq_vectors` is unsupported.
             ValueError: If the dimensions of the input vectors are incorrect.
         """
         processed_vectors: List[np.ndarray] = []
+        seq_vectors_np = None
+        
         if isinstance(seq_vectors, torch.Tensor):
             # If input is a PyTorch tensor, convert it to a NumPy array.
-            # This ensures consistent processing with NumPy operations.
             seq_vectors_np = seq_vectors.cpu().numpy()
         elif isinstance(seq_vectors, np.ndarray):
             # If input is already a NumPy array, use it directly.
             seq_vectors_np = seq_vectors
         elif isinstance(seq_vectors, list):
             # If input is a list, assume it's already a list of NumPy arrays
-            # (or convertible to them) and assign directly.
             processed_vectors = seq_vectors
             seq_vectors_np = None # Indicate that no further NumPy conversion is needed for this path
         else:
@@ -464,30 +534,445 @@ class BaseParrotEncoder(ABC):
             raise TypeError(f"Unsupported type for seq_vectors: {type(seq_vectors)}. Expected torch.Tensor, np.ndarray, or List[np.ndarray].")
 
         if seq_vectors_np is not None:
-            if seq_vectors_np.ndim == 2:
-                # If 2D (e.g., a single sequence: seq_len x input_size),
-                # add it as a single item to the processed list.
-                processed_vectors.append(seq_vectors_np)
-            elif seq_vectors_np.ndim == 3:
-                # If 3D (e.g., a batch of sequences: batch_size x seq_len x input_size),
-                # iterate through the batch dimension and add each 2D sequence.
-                for i in range(seq_vectors_np.shape[0]):
-                    processed_vectors.append(seq_vectors_np[i, :, :])
-            # If 1D, it's likely a single character vector, but decode expects sequence
+            if is_matrix_format:
+                # Matrix format handling
+                if seq_vectors_np.ndim == 3:
+                    # Single matrix: (seq_len, seq_len, input_size)
+                    processed_vectors.append(seq_vectors_np)
+                elif seq_vectors_np.ndim == 4:
+                    # Batch of matrices: (batch_size, seq_len, seq_len, input_size)
+                    for i in range(seq_vectors_np.shape[0]):
+                        processed_vectors.append(seq_vectors_np[i, :, :, :])
+                else:
+                    raise ValueError(f"Unsupported ndim for matrix format: {seq_vectors_np.ndim}. Expected 3 or 4.")
             else:
-                # Raise an error for unsupported NumPy array dimensions.
-                raise ValueError(f"Unsupported ndim for seq_vectors: {seq_vectors_np.ndim}. Expected 2 or 3.")
+                # Regular format handling
+                if seq_vectors_np.ndim == 2:
+                    # If 2D (e.g., a single sequence: seq_len x input_size),
+                    # add it as a single item to the processed list.
+                    processed_vectors.append(seq_vectors_np)
+                elif seq_vectors_np.ndim == 3:
+                    # If 3D (e.g., a batch of sequences: batch_size x seq_len x input_size),
+                    # iterate through the batch dimension and add each 2D sequence.
+                    for i in range(seq_vectors_np.shape[0]):
+                        processed_vectors.append(seq_vectors_np[i, :, :])
+                else:
+                    # Raise an error for unsupported NumPy array dimensions.
+                    raise ValueError(f"Unsupported ndim for regular format: {seq_vectors_np.ndim}. Expected 2 or 3.")
         
-        for vec in processed_vectors:
-            # Validate each processed vector: ensure it's a NumPy array, 2D,
-            # and its second dimension matches the expected input_size.
-            if not isinstance(vec, np.ndarray) or vec.ndim != 2 or vec.shape[1] != input_size:
-                raise ValueError(f"Invalid vector format. Each must be a 2D NumPy array of shape (seq_len, {input_size}). Got shape {vec.shape if hasattr(vec, 'shape') else 'N/A'}")
+        # Validate processed vectors
+        if is_matrix_format:
+            for vec in processed_vectors:
+                if not isinstance(vec, np.ndarray) or vec.ndim != 3 or vec.shape[2] != input_size:
+                    raise ValueError(f"Invalid matrix vector format. Each must be a 3D NumPy array of shape (seq_len, seq_len, {input_size}). Got shape {vec.shape if hasattr(vec, 'shape') else 'N/A'}")
+        else:
+            for vec in processed_vectors:
+                # Validate each processed vector: ensure it's a NumPy array, 2D,
+                # and its second dimension matches the expected input_size.
+                if not isinstance(vec, np.ndarray) or vec.ndim != 2 or vec.shape[1] != input_size:
+                    raise ValueError(f"Invalid vector format. Each must be a 2D NumPy array of shape (seq_len, {input_size}). Got shape {vec.shape if hasattr(vec, 'shape') else 'N/A'}")
         
         return processed_vectors
 
+    @abstractmethod
+    def _get_state_dict(self) -> Dict[str, Any]:
+        """
+        Returns a dictionary containing all the state needed to recreate this encoder.
+        Must be implemented by each concrete encoder class.
+
+        Returns:
+            Dict[str, Any]: State dictionary containing encoder configuration and data.
+        """
+        pass
+
+    @classmethod
+    @abstractmethod
+    def _from_state_dict(cls, state_dict: Dict[str, Any]) -> 'BaseParrotEncoder':
+        """
+        Creates an encoder instance from a state dictionary.
+        Must be implemented by each concrete encoder class.
+
+        Args:
+            state_dict (Dict[str, Any]): State dictionary containing encoder configuration and data.
+
+        Returns:
+            BaseParrotEncoder: The recreated encoder instance.
+        """
+        pass
+
+    def save(self, filepath: str) -> None:
+        """
+        Saves the encoder to a file using pickle serialization.
+
+        Args:
+            filepath (str): Path where the encoder should be saved.
+
+        Raises:
+            IOError: If the file cannot be written.
+        """
+        try:
+            state_dict = self._get_state_dict()
+            state_dict['encoder_class'] = self.__class__.__name__
+            
+            with open(filepath, 'wb') as f:
+                pickle.dump(state_dict, f)
+        except Exception as e:
+            raise IOError(f"Failed to save encoder to {filepath}: {e}")
+
+    @classmethod
+    def load(cls, filepath: str) -> 'BaseParrotEncoder':
+        """
+        Loads an encoder from a file.
+
+        Args:
+            filepath (str): Path to the saved encoder file.
+
+        Returns:
+            BaseParrotEncoder: The loaded encoder instance.
+
+        Raises:
+            FileNotFoundError: If the file doesn't exist.
+            IOError: If the file cannot be read or is corrupted.
+            ValueError: If the encoder type is not recognized.
+        """
+        if not os.path.isfile(filepath):
+            raise FileNotFoundError(f"Encoder file not found: {filepath}")
+        
+        try:
+            with open(filepath, 'rb') as f:
+                state_dict = pickle.load(f)
+        except Exception as e:
+            raise IOError(f"Failed to load encoder from {filepath}: {e}")
+        
+        encoder_class_name = state_dict.get('encoder_class')
+        if not encoder_class_name:
+            raise ValueError("Invalid encoder file: missing encoder class information")
+        
+        # Import the classes here to avoid forward reference issues
+        # This assumes all classes are defined in the same module
+        current_module = sys.modules[__name__]
+        
+        try:
+            encoder_class = getattr(current_module, encoder_class_name)
+        except AttributeError:
+            raise ValueError(f"Unknown encoder class: {encoder_class_name}")
+        
+        return encoder_class._from_state_dict(state_dict)
+
+    def save_config(self, filepath: str) -> None:
+        """
+        Saves only the configuration of the encoder to a JSON file.
+        This can be useful for recreating encoders with the same settings.
+
+        Args:
+            filepath (str): Path where the configuration should be saved.
+
+        Raises:
+            IOError: If the file cannot be written.
+        """
+        try:
+            state_dict = self._get_state_dict()
+            # Remove non-serializable items for JSON
+            config_dict = {k: v for k, v in state_dict.items() 
+                          if not k.startswith('_') and isinstance(v, (str, int, float, bool, list, dict))}
+            config_dict['encoder_class'] = self.__class__.__name__
+            
+            with open(filepath, 'w') as f:
+                json.dump(config_dict, f, indent=2)
+        except Exception as e:
+            raise IOError(f"Failed to save encoder config to {filepath}: {e}")
+
     
 
+class MatrixParrotEncoder(BaseParrotEncoder):
+    """
+    A concrete encoder implementation that uses a matrix format for encoding and decoding amino acid sequences.
+
+    Matrix encoding transforms a sequence of length N into a matrix of shape NxN, allowing for complex 
+    relationships between residues. The encoding scheme is defined by the alphabet and optional gap character.
+
+    On the decoding side, the diagonal of the matrix is used to decode the sequence. The encoding is always 
+    symmetric and the diagonal represents the sequence itself. The off-diagonal elements encode relationships
+    between residues.
+
+    The gap character (default '*') is useful for multidomain sequences or multiple sequences. It modifies 
+    the total number of dimensions in the embedding.
+
+    For vectorial representations:
+    - Embedding dimension = alphabet_size^2 (without gap) or alphabet_size^2 + 1 (with gap)
+    - Example: 'ACDEFGHIKLMNPQRSTVWY' (20 chars) → 400 dimensions, or 401 with gap
+
+    For numerical representations:
+    - Embedding dimension = 1
+    - Values range from 1 to alphabet_size*alphabet_size (+ 1 for gap if present)
+    - 0's are reserved for padding
+
+    Output tensor shape: (sequence_length, sequence_length, embedding_dimension)
+
+    Attributes:
+        alphabet (set): The set of allowed characters for this encoder.
+        gap_char (str): The gap character (default '*').
+        use_gap (bool): Whether gap character is included.
+        encoding_type (str): Either 'vectorial' or 'numerical'.
+        input_size (int): The embedding dimension.
+        _char_to_idx (Dict[str, int]): Mapping from characters to indices.
+        _idx_to_char (Dict[int, str]): Mapping from indices to characters.
+    """
+    
+    def __init__(self, config: DictConfig):
+        """
+        Initialize the MatrixParrotEncoder.
+
+        Args:
+            config (DictConfig): Configuration containing:
+                - alphabet (str): Required. String of allowed characters.
+                - gap_char (str, optional): Gap character. Default '*'.
+                - use_gap (bool, optional): Whether to use gap character. Default True.
+                - encoding_type (str, optional): 'vectorial' or 'numerical'. Default 'vectorial'.
+        """
+        # Extract alphabet from config
+        alphabet_str = config.get("alphabet")
+        if not alphabet_str:
+            raise ValueError("For 'matrix' encoder, 'alphabet' must be specified.")
+        # Keep the base alphabet as a list to preserve user-specified order
+        # Remove gap character if present to avoid duplication
+        alphabet_list = list(alphabet_str)
+        self.alphabet = [char for char in alphabet_list if char != config.get("gap_char", "*")]
+        
+        # Extract gap character settings
+        # Future note: will need to ensure that it integrates for this with the Sequence Dataset Object
+        # Default is to use a gap character if not specified
+        self.gap_char = config.get("gap_char", "*")
+        self.use_gap = config.get("use_gap", True)
+        
+        # Extract encoding type
+        # Default is 'vectorial' encoding
+        self.encoding_type = config.get("encoding_type", "vectorial")
+        if self.encoding_type not in ["vectorial", "numerical"]:
+            raise ValueError("encoding_type must be either 'vectorial' or 'numerical'")
+        
+        # Create character mappings - preserve user-specified order, gap character always goes last
+        self._char_to_idx = {char: idx for idx, char in enumerate(self.alphabet)}
+        self._idx_to_char = {idx: char for char, idx in self._char_to_idx.items()}
+        
+        # Add gap character as the last index if using gaps
+        if self.use_gap:
+            gap_idx = len(self.alphabet)
+            self._char_to_idx[self.gap_char] = gap_idx
+            self._idx_to_char[gap_idx] = self.gap_char
+        
+        # Calculate input size based on encoding type
+        base_alphabet_size = len(self.alphabet)
+        total_alphabet_size = base_alphabet_size + (1 if self.use_gap else 0)
+        
+        if self.encoding_type == "vectorial":
+            # For vectorial encoding, we need dimensions for all possible character pairs
+            # If using gaps, we add one extra dimension for any pair involving gap character
+            if self.use_gap:
+                self.input_size = base_alphabet_size * base_alphabet_size + 1
+            else:
+                self.input_size = base_alphabet_size * base_alphabet_size
+        else:  # numerical
+            self.input_size = 1
+
+    def encode(self, sequence: str) -> torch.Tensor:
+        """
+        Encodes an amino acid sequence string into a matrix tensor.
+
+        Args:
+            sequence (str): The amino acid sequence to encode.
+
+        Returns:
+            torch.Tensor: A tensor of shape (len(sequence), len(sequence), self.input_size)
+                          with dtype torch.float32.
+        """
+        # Validate and preprocess the input sequence
+        validated_sequence = self._validate_sequence_chars(sequence, self.get_alphabet())
+        seq_len = len(validated_sequence)
+        
+        if self.encoding_type == "vectorial":
+            # Create vectorial encoding matrix
+            matrix = torch.zeros((seq_len, seq_len, self.input_size), dtype=torch.float32)
+            
+            for i in range(seq_len):
+                for j in range(seq_len):
+                    char_i = validated_sequence[i]
+                    char_j = validated_sequence[j]
+                    
+                    if self.use_gap and (char_i == self.gap_char or char_j == self.gap_char):
+                        # Gap character gets special encoding in last dimension
+                        matrix[i, j, self.input_size - 1] = 1.0
+                    else:
+                        # Regular character pair encoding
+                        idx_i = self._char_to_idx[char_i]
+                        idx_j = self._char_to_idx[char_j]
+                        # Calculate position in flattened base_alphabet^2 space
+                        base_alphabet_size = len(self.alphabet)
+                        encoding_idx = idx_i * base_alphabet_size + idx_j
+                        matrix[i, j, encoding_idx] = 1.0
+        
+        else:  # numerical encoding
+            matrix = torch.zeros((seq_len, seq_len, 1), dtype=torch.float32)
+            
+            for i in range(seq_len):
+                for j in range(seq_len):
+                    char_i = validated_sequence[i]
+                    char_j = validated_sequence[j]
+                    
+                    if self.use_gap and (char_i == self.gap_char or char_j == self.gap_char):
+                        # Gap character gets highest numerical value (alphabet_size² + 1)
+                        matrix[i, j, 0] = len(self.alphabet) * len(self.alphabet) + 1
+                    else:
+                        # Calculate numerical encoding based on character pair
+                        idx_i = self._char_to_idx[char_i]
+                        idx_j = self._char_to_idx[char_j]
+                        # Use the same encoding index as vectorial but as numerical value
+                        base_alphabet_size = len(self.alphabet)
+                        encoding_value = idx_i * base_alphabet_size + idx_j + 1  # +1 to avoid 0
+                        matrix[i, j, 0] = encoding_value
+        
+        return matrix
+
+    def decode(self, seq_vectors: Union[torch.Tensor, np.ndarray, List[np.ndarray]]) -> List[str]:
+        """
+        Decodes one or more matrix tensors back into amino acid sequence strings.
+        Uses the diagonal of the matrix to reconstruct the sequence.
+
+        Args:
+            seq_vectors: Matrix tensors to decode.
+
+        Returns:
+            List[str]: A list of decoded sequence strings.
+        """
+        # Convert input to consistent format using the updated _process_input_vectors method
+        processed_vectors = BaseParrotEncoder._process_input_vectors(seq_vectors, self.input_size, is_matrix_format=True)
+        
+        # Decode each matrix
+        decoded_sequences = []
+        for matrix in processed_vectors:
+            decoded_sequences.append(self._decode_single_matrix(matrix))
+        
+        return decoded_sequences
+
+    def _decode_single_matrix(self, matrix: np.ndarray) -> str:
+        """
+        Decode a single matrix into a sequence string using the diagonal.
+
+        Args:
+            matrix (np.ndarray): Matrix of shape (seq_len, seq_len, input_size).
+
+        Returns:
+            str: The decoded sequence string.
+        """
+        if matrix.ndim != 3:
+            raise ValueError(f"Matrix must be 3D (seq_len, seq_len, input_size), got {matrix.ndim}D")
+        
+        seq_len, _, input_size = matrix.shape
+        if input_size != self.input_size:
+            raise ValueError(f"Matrix input_size {input_size} doesn't match encoder input_size {self.input_size}")
+        
+        sequence_chars = []
+        
+        if self.encoding_type == "vectorial":
+            base_alphabet_size = len(self.alphabet)
+            
+            for i in range(seq_len):
+                # Extract diagonal element
+                diag_vector = matrix[i, i, :]
+                
+                # Check if it's a gap character (last dimension for gaps)
+                if self.use_gap and diag_vector[-1] > 0.5:
+                    sequence_chars.append(self.gap_char)
+                else:
+                    # Find the active dimension
+                    active_idx = np.argmax(diag_vector[:-1] if self.use_gap else diag_vector)
+                    
+                    # Convert back to character indices
+                    char_i_idx = active_idx // base_alphabet_size
+                    char_j_idx = active_idx % base_alphabet_size
+                    
+                    # For diagonal elements, char_i should equal char_j
+                    # Use char_i_idx as the character index
+                    if char_i_idx < len(self._idx_to_char) and char_i_idx == char_j_idx:
+                        sequence_chars.append(self._idx_to_char[char_i_idx])
+                    else:
+                        # Fallback to gap character if index is out of range
+                        sequence_chars.append(self.gap_char if self.use_gap else 'X')
+        
+        else:  # numerical encoding
+            for i in range(seq_len):
+                # Extract diagonal element
+                diag_value = matrix[i, i, 0]
+                
+                base_alphabet_size = len(self.alphabet)
+                gap_threshold = base_alphabet_size * base_alphabet_size + 1
+                
+                if self.use_gap and diag_value >= gap_threshold:
+                    sequence_chars.append(self.gap_char)
+                else:
+                    # Convert numerical value back to character indices
+                    # Since we used idx_i * base_alphabet_size + idx_j + 1
+                    # So diag_value = idx_i * base_alphabet_size + idx_j + 1
+                    # For diagonal elements, idx_i == idx_j, so diag_value = idx_i * (base_alphabet_size + 1) + 1
+                    # Actually, for diagonal: diag_value = idx_i * base_alphabet_size + idx_i + 1 = idx_i * (base_alphabet_size + 1) + 1
+                    # So idx_i = (diag_value - 1) / (base_alphabet_size + 1)
+                    encoding_idx = int(round(diag_value - 1))
+                    char_i_idx = encoding_idx // base_alphabet_size
+                    char_j_idx = encoding_idx % base_alphabet_size
+                    
+                    # For diagonal elements, char_i should equal char_j, so use char_i_idx
+                    if char_i_idx == char_j_idx and char_i_idx in self._idx_to_char:
+                        sequence_chars.append(self._idx_to_char[char_i_idx])
+                    else:
+                        sequence_chars.append(self.gap_char if self.use_gap else 'X')
+        
+        return ''.join(sequence_chars)
+
+    def __len__(self) -> int:
+        """Returns the input_size (embedding dimension)."""
+        return self.input_size
+
+    def get_alphabet(self) -> set:
+        """Returns the set of allowed characters for this encoder."""
+        if self.use_gap:
+            return set(self.alphabet) | {self.gap_char}
+        return set(self.alphabet)
+
+    def _get_state_dict(self) -> Dict[str, Any]:
+        """Returns a dictionary containing all the state needed to recreate this encoder."""
+        return {
+            'alphabet': self.alphabet,
+            'gap_char': self.gap_char,
+            'use_gap': self.use_gap,
+            'encoding_type': self.encoding_type,
+            'input_size': self.input_size,
+            '_char_to_idx': self._char_to_idx,
+            '_idx_to_char': self._idx_to_char
+        }
+
+    @classmethod
+    def _from_state_dict(cls, state_dict: Dict[str, Any]) -> 'MatrixParrotEncoder':
+        """Creates a MatrixParrotEncoder instance from a state dictionary."""
+        # Create a DictConfig-like object from the state dict
+        from omegaconf import DictConfig
+        config = DictConfig({
+            'alphabet': ''.join(state_dict['alphabet']),
+            'gap_char': state_dict['gap_char'],
+            'use_gap': state_dict['use_gap'],
+            'encoding_type': state_dict['encoding_type']
+        })
+        
+        # Create new instance
+        encoder = cls(config)
+        
+        # Restore saved state
+        encoder.input_size = state_dict['input_size']
+        encoder._char_to_idx = state_dict['_char_to_idx']
+        encoder._idx_to_char = state_dict['_idx_to_char']
+        
+        return encoder
+
+    
 
 
 
@@ -495,6 +980,10 @@ class TableParrotEncoder(BaseParrotEncoder):
     """
     A concrete encoder implementation that uses a lookup table (TSV file)
     to encode and decode amino acid sequences.
+
+    Individual sequences are encoded as pyTorch tensors using a predefined mapping.
+    The dimensions of the encoding always follow: (num_sequences, sequence_length, input_size).
+    Where `input_size` is the dimension of the encoded vector for each character.
 
     Attributes:
         is_uniquely_decodable (bool): True if the encoding allows unique decoding, False otherwise.
@@ -629,7 +1118,7 @@ class TableParrotEncoder(BaseParrotEncoder):
         Raises:
             ValueError: If a vector cannot be decoded (not found in the reverse map).
         """
-        processed_vectors: List[np.ndarray] = BaseParrotEncoder._process_input_vectors(seq_vectors, self.input_size)
+        processed_vectors: List[np.ndarray] = BaseParrotEncoder._process_input_vectors(seq_vectors, self.input_size, is_matrix_format=False)
         decoded_sequences: List[str] = []
         for vec_np in processed_vectors:
             chars = []
@@ -650,11 +1139,56 @@ class TableParrotEncoder(BaseParrotEncoder):
         """Returns the set of allowed characters for this encoder."""
         return self.alphabet
 
+    def _get_state_dict(self) -> Dict[str, Any]:
+        """Returns a dictionary containing all the state needed to recreate this encoder."""
+        return {
+            'is_uniquely_decodable': self.is_uniquely_decodable,
+            'table_file_path': self.table_file_path,
+            'input_size': self.input_size,
+            'alphabet': list(self.alphabet),
+            '_table_encode_dict': self._table_encode_dict,
+            '_table_decode_dict': self._table_decode_dict
+        }
+
+    @classmethod
+    def _from_state_dict(cls, state_dict: Dict[str, Any]) -> 'TableParrotEncoder':
+        """Creates a TableParrotEncoder instance from a state dictionary."""
+        from omegaconf import DictConfig
+        
+        # Create a minimal config to initialize the encoder
+        if state_dict['table_file_path']:
+            config = DictConfig({
+                'table_file_path': state_dict['table_file_path'],
+                'alphabet': ''.join(state_dict['alphabet']) if state_dict['alphabet'] else None
+            })
+        else:
+            config = DictConfig({
+                'alphabet': ''.join(state_dict['alphabet'])
+            })
+        
+        # Create new instance
+        encoder = cls(config)
+        
+        # Restore saved state
+        encoder.is_uniquely_decodable = state_dict['is_uniquely_decodable']
+        encoder.input_size = state_dict['input_size']
+        encoder._table_encode_dict = state_dict['_table_encode_dict']
+        encoder._table_decode_dict = state_dict['_table_decode_dict']
+        
+        return encoder
+
 
 class FunctionalParrotEncoder(BaseParrotEncoder):
     """
     A concrete encoder implementation that uses user-provided Python functions
     for encoding and decoding sequences.
+
+    The dimensions of the encoding always follow: (num_sequences, ..., input_size).
+    Where `input_size` is the dimension of the encoded vector for each 'character'.
+    This could (num_sequences, sequence_length, input_size) for much like table encoding,
+    or (num_sequences, sequence_length, sequence_length, input_size) for matrix style encodings.
+
+    TODO: Implement matrix format support.
 
     Attributes:
         alphabet (set): The set of allowed characters for this encoder.
@@ -763,7 +1297,7 @@ class FunctionalParrotEncoder(BaseParrotEncoder):
             List[str]: A list of decoded sequence strings.
         """
         # This method reuses the same logic as the Table encoder for processing input vectors
-        processed_vectors = BaseParrotEncoder._process_input_vectors(seq_vectors, self.input_size)
+        processed_vectors = BaseParrotEncoder._process_input_vectors(seq_vectors, self.input_size, is_matrix_format=False)
         decoded_sequences: List[str] = [self._decode_callable(vec_np) for vec_np in processed_vectors]
         return decoded_sequences
 
@@ -775,18 +1309,43 @@ class FunctionalParrotEncoder(BaseParrotEncoder):
         """Returns the set of allowed characters for this encoder."""
         return self.alphabet
 
+    def _get_state_dict(self) -> Dict[str, Any]:
+        """Returns a dictionary containing all the state needed to recreate this encoder."""
+        return {
+            'alphabet': list(self.alphabet),
+            'input_size': self.input_size,
+            'module_path': self.module_path,
+            'encode_fn_name': self.encode_fn_name,
+            'decode_fn_name': self.decode_fn_name
+        }
+
+    @classmethod
+    def _from_state_dict(cls, state_dict: Dict[str, Any]) -> 'FunctionalParrotEncoder':
+        """Creates a FunctionalParrotEncoder instance from a state dictionary."""
+        from omegaconf import DictConfig
+        
+        config = DictConfig({
+            'alphabet': ''.join(state_dict['alphabet']),
+            'input_size': state_dict['input_size'],
+            'module_path': state_dict['module_path'],
+            'encode_function_name': state_dict['encode_fn_name'],
+            'decode_function_name': state_dict['decode_fn_name']
+        })
+        
+        return cls(config)
+
 
 class ParrotLightningEncoder:
     """
     A factory/dispatcher class for PARROT sequence encoders.
-    It instantiates the appropriate concrete encoder (Table-based or Functional)
+    It instantiates the appropriate concrete encoder (Table-based, Functional, or Matrix)
     based on the Hydra configuration and delegates all encoding/decoding operations to it.
 
     This class acts as a unified interface, abstracting away the specifics of
     different encoder implementations.
 
     Attributes:
-        _actual_encoder (BaseParrotEncoder): The concrete encoder instance (TableParrotEncoder or FunctionalParrotEncoder).
+        _actual_encoder (BaseParrotEncoder): The concrete encoder instance (TableParrotEncoder, FunctionalParrotEncoder, or MatrixParrotEncoder).
     """
     def __init__(self, encoder_cfg: DictConfig):
         """
@@ -797,7 +1356,7 @@ class ParrotLightningEncoder:
         """
         encoder_type = encoder_cfg.get("type")
         if not encoder_type:
-            raise ValueError("Encoder 'type' must be specified in the configuration (e.g., 'table' or 'function').")
+            raise ValueError("Encoder 'type' must be specified in the configuration (e.g., 'table', 'function', or 'matrix').")
 
         if encoder_type == "table":
             # Instantiate TableParrotEncoder if type is 'table'
@@ -805,8 +1364,11 @@ class ParrotLightningEncoder:
         elif encoder_type == "function":
             # Instantiate FunctionalParrotEncoder if type is 'function'
             self._actual_encoder: BaseParrotEncoder = FunctionalParrotEncoder(encoder_cfg)
+        elif encoder_type == "matrix":
+            # Instantiate MatrixParrotEncoder if type is 'matrix'
+            self._actual_encoder: BaseParrotEncoder = MatrixParrotEncoder(encoder_cfg)
         else:
-            raise ValueError(f"Unsupported encoder type: '{encoder_type}'. Must be 'table' or 'function'.")
+            raise ValueError(f"Unsupported encoder type: '{encoder_type}'. Must be 'table', 'function', or 'matrix'.")
 
     def encode(self, sequence: str) -> torch.Tensor:
         """Delegates the encode operation to the actual encoder."""
@@ -824,16 +1386,64 @@ class ParrotLightningEncoder:
         """Delegates the alphabet query to the actual encoder."""
         return self._actual_encoder.get_alphabet()
 
+    def encode_sequences(self, sequences: List[str]) -> List[torch.Tensor]:
+        """Delegates the multi-sequence encode operation to the actual encoder."""
+        return self._actual_encoder.encode_sequences(sequences)
+
+    def encode_sequences_padded(self, sequences: List[str], pad_value: float = 0.0) -> torch.Tensor:
+        """Delegates the padded multi-sequence encode operation to the actual encoder."""
+        return self._actual_encoder.encode_sequences_padded(sequences, pad_value)
+
     @property
     def encoder_type(self) -> str:
         """
         Returns the type of the underlying concrete encoder.
 
         Returns:
-            str: "table", "function", or "unknown".
+            str: "table", "function", "matrix", or "unknown".
         """
         if isinstance(self._actual_encoder, TableParrotEncoder):
             return "table"
         elif isinstance(self._actual_encoder, FunctionalParrotEncoder):
             return "function"
+        elif isinstance(self._actual_encoder, MatrixParrotEncoder):
+            return "matrix"
         return "unknown"
+
+    def save(self, filepath: str) -> None:
+        """
+        Saves the encoder to a file.
+
+        Args:
+            filepath (str): Path where the encoder should be saved.
+        """
+        self._actual_encoder.save(filepath)
+
+    @staticmethod
+    def load(filepath: str) -> 'ParrotLightningEncoder':
+        """
+        Loads an encoder from a file and wraps it in a ParrotLightningEncoder.
+
+        Args:
+            filepath (str): Path to the saved encoder file.
+
+        Returns:
+            ParrotLightningEncoder: The loaded encoder wrapped in a ParrotLightningEncoder.
+        """
+        # Load the underlying encoder
+        actual_encoder = BaseParrotEncoder.load(filepath)
+        
+        # Create a new ParrotLightningEncoder instance
+        lightning_encoder = object.__new__(ParrotLightningEncoder)
+        lightning_encoder._actual_encoder = actual_encoder
+        
+        return lightning_encoder
+
+    def save_config(self, filepath: str) -> None:
+        """
+        Saves only the configuration of the encoder to a JSON file.
+
+        Args:
+            filepath (str): Path where the configuration should be saved.
+        """
+        self._actual_encoder.save_config(filepath)

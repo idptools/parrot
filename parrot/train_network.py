@@ -30,6 +30,7 @@ from parrot.encode_sequence import ParrotLightningEncoder
 
 def matrix_collate(batch):
     """Collate function for matrix data (UNet)"""
+    # Extract names, matrices, and targets from the batch
     names = [item[0] for item in batch]
     matrices = [item[1].clone().detach().float() for item in batch]
     targets = [item[2] for item in batch]
@@ -150,14 +151,16 @@ def train(network, train_dataset, val_dataset, datatype, problem_type, weights_f
         # Use traditional training for BRNN
         return _train_traditional_brnn(network, train_dataset, val_dataset, datatype,
                                      problem_type, weights_file, stop_condition, device,
-                                     learn_rate, n_epochs, verbose, silent, batch_size)
+                                     learn_rate, n_epochs, verbose, silent, batch_size,
+                                     cross_validation, cv_folds)
 
 
 def _train_lightning_unet(network, train_dataset, val_dataset, datatype, problem_type,
                          weights_file, stop_condition, device, learn_rate, n_epochs,
                          verbose, silent, batch_size, cross_validation, cv_folds):
     """Train UNet using PyTorch Lightning"""
-    
+
+    # Check if cross-validation is enabled
     if cross_validation:
         return _train_with_cross_validation(network, train_dataset, val_dataset, datatype,
                                           problem_type, weights_file, device, learn_rate,
@@ -193,6 +196,9 @@ def _train_lightning_unet(network, train_dataset, val_dataset, datatype, problem
     callbacks.append(checkpoint_callback)
     
     # Early stopping if auto stop condition
+    #WARNING: This does not just perform training for n_epochs, but rather
+    # stops training if performance has not improved for n_epochs epochs.
+    # This condition only applies if you do not reach the max_epochs limit.
     if stop_condition == 'auto':
         early_stop_callback = EarlyStopping(
             monitor='epoch_val_loss',
@@ -259,7 +265,8 @@ def _train_with_cross_validation(network, full_dataset, val_dataset, datatype, p
         combined_dataset = full_dataset
     
     # Setup KFold
-    kfold = KFold(n_splits=cv_folds, shuffle=True, random_state=42)
+    # WARNING: random state is set to 42 for reproducibility, but this may not be suitable for all use cases
+    kfold = KFold(n_splits=cv_folds, shuffle=True, random_state=42) 
     
     cv_results = {
         'fold_train_losses': [],
@@ -268,9 +275,10 @@ def _train_with_cross_validation(network, full_dataset, val_dataset, datatype, p
         'mean_val_loss': 0.0,
         'std_val_loss': 0.0
     }
-    
+    # Get indices for the dataset
     dataset_indices = list(range(len(combined_dataset)))
-    
+
+    # Loop through each fold
     for fold, (train_indices, val_indices) in enumerate(kfold.split(dataset_indices)):
         if not silent:
             print(f"Training fold {fold + 1}/{cv_folds}")
@@ -333,8 +341,14 @@ def _train_with_cross_validation(network, full_dataset, val_dataset, datatype, p
 
 def _train_traditional_brnn(network, train_dataset, val_dataset, datatype, problem_type,
                            weights_file, stop_condition, device, learn_rate, n_epochs,
-                           verbose, silent, batch_size):
+                           verbose, silent, batch_size, cross_validation=False, cv_folds=5):
     """Traditional BRNN training (original implementation)"""
+    
+    # Check if cross-validation is enabled
+    if cross_validation:
+        return _train_brnn_with_cross_validation(network, train_dataset, val_dataset, datatype,
+                                               problem_type, weights_file, stop_condition, device,
+                                               learn_rate, n_epochs, verbose, silent, batch_size, cv_folds)
     
     # Setup data loaders if not already provided
     collate_fn = get_collate_function(datatype, problem_type)
@@ -460,6 +474,96 @@ def _train_traditional_brnn(network, train_dataset, val_dataset, datatype, probl
 
     # Return loss per epoch so that they can be plotted
     return avg_train_losses, avg_val_losses
+
+
+def _train_brnn_with_cross_validation(network, train_dataset, val_dataset, datatype, problem_type,
+                                     weights_file, stop_condition, device, learn_rate, n_epochs,
+                                     verbose, silent, batch_size, cv_folds):
+    """Perform cross-validation training for traditional BRNN"""
+    
+    # Import copy to create network instances for each fold
+    import copy
+    
+    # Combine train and val datasets for CV splitting
+    if isinstance(train_dataset, SequenceDataset) and isinstance(val_dataset, SequenceDataset):
+        # Combine the data from both datasets
+        combined_data = train_dataset.data + val_dataset.data
+        # Create new combined dataset
+        combined_dataset = SequenceDataset.__new__(SequenceDataset)
+        combined_dataset.data = combined_data
+        combined_dataset.encoder = train_dataset.encoder
+        combined_dataset.datatype = train_dataset.datatype
+    else:
+        # Use the training dataset for CV
+        combined_dataset = train_dataset
+    
+    # Setup KFold
+    # WARNING: random state is set to 42 for reproducibility, but this may not be suitable for all use cases
+    kfold = KFold(n_splits=cv_folds, shuffle=True, random_state=42)
+    
+    cv_results = {
+        'fold_train_losses': [],
+        'fold_val_losses': [],
+        'fold_final_val_loss': [],
+        'mean_val_loss': 0.0,
+        'std_val_loss': 0.0
+    }
+    
+    # Get indices for the dataset
+    dataset_indices = list(range(len(combined_dataset)))
+    
+    # Loop through each fold
+    for fold, (train_indices, val_indices) in enumerate(kfold.split(dataset_indices)):
+        if not silent:
+            print(f"Training fold {fold + 1}/{cv_folds}")
+        
+        # Create fold datasets
+        fold_train_data = [combined_dataset.data[i] for i in train_indices]
+        fold_val_data = [combined_dataset.data[i] for i in val_indices]
+        
+        # Create new dataset objects for this fold
+        fold_train_dataset = SequenceDataset.__new__(SequenceDataset)
+        fold_train_dataset.data = fold_train_data
+        fold_train_dataset.encoder = combined_dataset.encoder
+        fold_train_dataset.datatype = combined_dataset.datatype
+        
+        fold_val_dataset = SequenceDataset.__new__(SequenceDataset)
+        fold_val_dataset.data = fold_val_data
+        fold_val_dataset.encoder = combined_dataset.encoder
+        fold_val_dataset.datatype = combined_dataset.datatype
+        
+        # Create a new network instance for this fold (deep copy to avoid weight sharing)
+        fold_network = copy.deepcopy(network)
+        
+        # Train this fold
+        fold_weights_file = weights_file.replace('.pt', f'_fold_{fold + 1}.pt')
+        train_losses, val_losses = _train_traditional_brnn(
+            fold_network, fold_train_dataset, fold_val_dataset, datatype, problem_type,
+            fold_weights_file, stop_condition, device, learn_rate, n_epochs, False, silent,
+            batch_size, False, cv_folds  # cross_validation=False to avoid recursion
+        )
+        
+        # Store results
+        cv_results['fold_train_losses'].append(train_losses)
+        cv_results['fold_val_losses'].append(val_losses)
+        cv_results['fold_final_val_loss'].append(val_losses[-1] if val_losses else float('inf'))
+    
+    # Calculate statistics
+    final_val_losses = cv_results['fold_final_val_loss']
+    cv_results['mean_val_loss'] = np.mean(final_val_losses)
+    cv_results['std_val_loss'] = np.std(final_val_losses)
+    
+    if not silent:
+        print(f"Cross-validation complete: {cv_results['mean_val_loss']:.4f} ± {cv_results['std_val_loss']:.4f}")
+    
+    # Save the model from the best fold
+    best_fold = np.argmin(final_val_losses)
+    best_fold_weights = weights_file.replace('.pt', f'_fold_{best_fold + 1}.pt')
+    if os.path.exists(best_fold_weights):
+        import shutil
+        shutil.copy2(best_fold_weights, weights_file)
+    
+    return cv_results
 
 
 def test_labeled_data(network, test_dataset, datatype,

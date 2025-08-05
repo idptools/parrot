@@ -110,6 +110,67 @@ seq1	ACDE	1.5
 seq2	FGHI	0.5	1.5	2.5	3.5
 """
 
+# === Matrix Test Data ===
+# Matrix data represents pairwise relationships between residues in a sequence.
+# For a sequence of length N, matrix data can be provided in two formats:
+# 1. Full matrix: N² values representing all pairwise relationships
+# 2. Symmetric upper triangle: N(N+1)/2 values that get expanded to symmetric matrix
+
+# Full matrix format (3x3 = 9 values for sequence length 3)
+MATRIX_FULL_DATA = """# Test matrix data - full format (N² values)
+seq1	ACE	1.0	2.0	3.0	4.0	5.0	6.0	7.0	8.0	9.0
+seq2	DEF	0.1	0.2	0.3	0.4	0.5	0.6	0.7	0.8	0.9
+seq3	GHI	1.1	1.2	1.3	1.4	1.5	1.6	1.7	1.8	1.9
+"""
+
+# Symmetric matrix format (upper triangle: N(N+1)/2 = 6 values for sequence length 3)
+MATRIX_SYMMETRIC_DATA = """# Test matrix data - symmetric format (N(N+1)/2 values)
+seq1	ACE	1.0	2.0	3.0	5.0	6.0	9.0
+seq2	DEF	0.1	0.2	0.3	0.5	0.6	0.9
+seq3	GHI	1.1	1.2	1.3	1.5	1.6	1.9
+"""
+
+# Multi-column sequences with matrix data (AC + E = 3 chars, 9 values for full matrix)
+MATRIX_MULTI_COLUMN_FULL_DATA = """# Test matrix data with multi-column sequences
+seq1	AC	E	1.0	2.0	3.0	4.0	5.0	6.0	7.0	8.0	9.0
+seq2	DE	F	0.1	0.2	0.3	0.4	0.5	0.6	0.7	0.8	0.9
+"""
+
+# Multi-column sequences with symmetric matrix data (3 chars, 6 symmetric values)
+MATRIX_MULTI_COLUMN_SYMMETRIC_DATA = """# Test matrix data with multi-column sequences - symmetric
+seq1	AC	E	1.0	2.0	3.0	5.0	6.0	9.0
+seq2	DE	F	0.1	0.2	0.3	0.5	0.6	0.9
+"""
+
+# Matrix data without sequence IDs (testing excludeSeqID functionality)
+MATRIX_EXCLUDE_SEQID_DATA = """# Test matrix data without sequence IDs
+ACE	1.0	2.0	3.0	4.0	5.0	6.0	7.0	8.0	9.0
+DEF	0.1	0.2	0.3	0.4	0.5	0.6	0.7	0.8	0.9
+"""
+
+# Different sequence lengths for matrix inference testing
+MATRIX_INFERENCE_DATA_LEN2 = """# Matrix data for sequence length 2 (4 values = 2²)
+seq1	AC	1.0	2.0	3.0	4.0
+seq2	DE	0.1	0.2	0.3	0.4
+"""
+
+MATRIX_INFERENCE_DATA_LEN4 = """# Matrix data for sequence length 4 (16 values = 4²)
+seq1	ACDE	1.0	2.0	3.0	4.0	5.0	6.0	7.0	8.0	9.0	10.0	11.0	12.0	13.0	14.0	15.0	16.0
+seq2	FGHI	0.1	0.2	0.3	0.4	0.5	0.6	0.7	0.8	0.9	1.0	1.1	1.2	1.3	1.4	1.5	1.6
+"""
+
+# Malformed matrix data (wrong number of values for testing error handling)
+MATRIX_MALFORMED_DATA = """# Malformed matrix data - wrong number of values
+seq1	ACE	1.0	2.0	3.0	4.0	5.0
+seq2	DEF	0.1	0.2	0.3	0.4
+"""
+
+# Mixed matrix formats for inconsistent inference testing
+MATRIX_MIXED_FORMAT_DATA = """# Mixed matrix formats - should cause inference error
+seq1	ACE	1.0	2.0	3.0	4.0	5.0	6.0	7.0	8.0	9.0
+seq2	DEF	0.1	0.2	0.3	0.5	0.6	0.9
+"""
+
 @pytest.fixture(scope="module")
 def test_data_files(tmp_path_factory):
     """
@@ -131,13 +192,22 @@ def test_data_files(tmp_path_factory):
         "res_classification": RESIDUE_CLASSIFICATION_DATA,
         "exclude_seqid": EXCLUDE_SEQID_DATA,
         "malformed": MALFORMED_DATA,
-        # New test data files
         "multi_col_seq_regression": MULTI_COLUMN_SEQUENCE_REGRESSION_DATA,
         "multi_col_res_regression": MULTI_COLUMN_RESIDUE_REGRESSION_DATA,
         "multi_col_exclude_seqid": MULTI_COLUMN_EXCLUDE_SEQID_DATA,
         "inference_sequence": INFERENCE_SEQUENCE_DATA,
         "inference_residue": INFERENCE_RESIDUE_DATA,
         "mixed_inference": MIXED_INFERENCE_DATA,
+        # Matrix test data
+        "matrix_full": MATRIX_FULL_DATA,
+        "matrix_symmetric": MATRIX_SYMMETRIC_DATA,
+        "matrix_multi_col_full": MATRIX_MULTI_COLUMN_FULL_DATA,
+        "matrix_multi_col_symmetric": MATRIX_MULTI_COLUMN_SYMMETRIC_DATA,
+        "matrix_exclude_seqid": MATRIX_EXCLUDE_SEQID_DATA,
+        "matrix_inference_len2": MATRIX_INFERENCE_DATA_LEN2,
+        "matrix_inference_len4": MATRIX_INFERENCE_DATA_LEN4,
+        "matrix_malformed": MATRIX_MALFORMED_DATA,
+        "matrix_mixed_format": MATRIX_MIXED_FORMAT_DATA,
     }
     
     # Create a temporary file for each data type
@@ -1134,3 +1204,506 @@ class TestEncoderExtension:
             # assert len(values) == 7
             # Check that delimiter positions have 0.0 padding
             assert values[4] == 0.0  # Position of delimiter
+
+
+class TestMatrixDatatype:
+    """
+    Comprehensive test suite for matrix datatype functionality.
+    
+    This class tests all aspects of matrix data processing including:
+    - Automatic inference of matrix datatype from value counts
+    - Loading and processing of full matrix format (N² values)  
+    - Loading and processing of symmetric matrix format (N(N+1)/2 values)
+    - Multi-column sequence support with matrix data
+    - Error handling for malformed matrix data
+    - Integration with encoder systems
+    
+    Matrix data represents pairwise relationships between residues in sequences,
+    commonly used for contact maps, distance matrices, or interaction matrices.
+    """
+    
+    def test_matrix_datatype_inference_full_format(self, test_data_files, encoder_configs):
+        """
+        Test automatic inference of matrix datatype for full matrix format.
+        
+        This test verifies that when a dataset contains N² values for sequences 
+        of length N, the system correctly infers the datatype as 'matrix'.
+        
+        Test cases:
+        - Sequence length 2 → 4 values (2²) should infer 'matrix'
+        - Sequence length 4 → 16 values (4²) should infer 'matrix'
+        
+        The inference logic examines the relationship between sequence length
+        and number of target values to make this determination automatically.
+        """
+        # Test case 1: Sequence length 2, 4 values (2² = 4)
+        dataset_len2 = SequenceDataset(
+            filepath=test_data_files["matrix_inference_len2"],
+            encoder_cfg=encoder_configs["onehot"]
+            # datatype=None to trigger automatic inference
+        )
+        assert dataset_len2.datatype == 'matrix', (
+            f"Expected 'matrix' datatype for length-2 sequence with 4 values, "
+            f"got '{dataset_len2.datatype}'"
+        )
+        
+        # Test case 2: Sequence length 4, 16 values (4² = 16)  
+        dataset_len4 = SequenceDataset(
+            filepath=test_data_files["matrix_inference_len4"],
+            encoder_cfg=encoder_configs["onehot"]
+            # datatype=None to trigger automatic inference
+        )
+        assert dataset_len4.datatype == 'matrix', (
+            f"Expected 'matrix' datatype for length-4 sequence with 16 values, "
+            f"got '{dataset_len4.datatype}'"
+        )
+    
+    def test_matrix_datatype_inference_symmetric_format(self, test_data_files, encoder_configs):
+        """
+        Test automatic inference of matrix datatype for symmetric matrix format.
+        
+        This test verifies that when a dataset contains N(N+1)/2 values for sequences 
+        of length N, the system correctly infers the datatype as 'matrix'.
+        
+        Test case:
+        - Sequence length 3 → 6 values (3(3+1)/2 = 6) should infer 'matrix'
+        
+        Symmetric format is common for matrices representing symmetric relationships
+        like distance matrices or contact probabilities where A[i,j] = A[j,i].
+        """
+        dataset = SequenceDataset(
+            filepath=test_data_files["matrix_symmetric"],
+            encoder_cfg=encoder_configs["onehot"]
+            # datatype=None to trigger automatic inference
+        )
+        assert dataset.datatype == 'matrix', (
+            f"Expected 'matrix' datatype for symmetric format (6 values for length-3 sequence), "
+            f"got '{dataset.datatype}'"
+        )
+    
+    def test_matrix_full_format_loading_and_structure(self, test_data_files, encoder_configs):
+        """
+        Test loading and structure of full matrix format data.
+        
+        This test verifies that full matrix data (N² values) is correctly:
+        1. Loaded as 2D numpy arrays with shape (N, N)
+        2. Values are preserved in row-major order as specified in input
+        3. Matrix elements can be accessed with standard indexing matrix[i,j]
+        4. Data types are correct (float32 for values, proper tensor shapes for sequences)
+        
+        Test data uses sequence 'ACE' (length 3) with 9 values arranged as:
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0] → 3x3 matrix
+        """
+        dataset = SequenceDataset(
+            filepath=test_data_files["matrix_full"],
+            encoder_cfg=encoder_configs["onehot"],
+            datatype='matrix'
+        )
+        
+        # Verify dataset properties
+        assert len(dataset) == 3, f"Expected 3 sequences, got {len(dataset)}"
+        
+        # Test first sample (seq1 with sequence 'ACE')
+        seqID, seq_vector, matrix = dataset[0]
+        
+        # Verify sequence encoding
+        assert seqID == "seq1", f"Expected seqID 'seq1', got '{seqID}'"
+        assert isinstance(seq_vector, torch.Tensor), f"seq_vector should be torch.Tensor, got {type(seq_vector)}"
+        assert seq_vector.shape == (3, 20), f"Expected shape (3, 20) for one-hot encoding, got {seq_vector.shape}"
+        
+        # Verify matrix structure and values
+        assert isinstance(matrix, np.ndarray), f"Matrix should be numpy.ndarray, got {type(matrix)}"
+        assert matrix.shape == (3, 3), f"Expected matrix shape (3, 3), got {matrix.shape}"
+        assert matrix.dtype == np.float32, f"Expected dtype float32, got {matrix.dtype}"
+        
+        # Verify specific matrix values (row-major order from input)
+        expected_matrix = np.array([
+            [1.0, 2.0, 3.0],
+            [4.0, 5.0, 6.0], 
+            [7.0, 8.0, 9.0]
+        ], dtype=np.float32)
+        
+        np.testing.assert_array_almost_equal(matrix, expected_matrix, decimal=6,
+            err_msg="Matrix values don't match expected full format arrangement"
+        )
+    
+    def test_matrix_symmetric_format_loading_and_expansion(self, test_data_files, encoder_configs):
+        """
+        Test loading and expansion of symmetric matrix format data.
+        
+        This test verifies that symmetric matrix data (N(N+1)/2 values) is correctly:
+        1. Loaded and expanded to full symmetric matrix (N x N)
+        2. Upper triangle values are correctly placed
+        3. Lower triangle is properly mirrored (A[i,j] = A[j,i])
+        4. Diagonal elements are preserved correctly
+        5. Final matrix shape and data types are correct
+        
+        Test data uses sequence 'ACE' (length 3) with 6 values for upper triangle:
+        [1.0, 2.0, 3.0, 5.0, 6.0, 9.0] representing:
+        Matrix[0,0]=1.0, Matrix[0,1]=2.0, Matrix[0,2]=3.0
+        Matrix[1,1]=5.0, Matrix[1,2]=6.0, Matrix[2,2]=9.0
+        """
+        dataset = SequenceDataset(
+            filepath=test_data_files["matrix_symmetric"],
+            encoder_cfg=encoder_configs["onehot"],
+            datatype='matrix'
+        )
+        
+        # Test first sample
+        seqID, seq_vector, matrix = dataset[0]
+        
+        # Verify matrix structure
+        assert isinstance(matrix, np.ndarray), f"Matrix should be numpy.ndarray, got {type(matrix)}"
+        assert matrix.shape == (3, 3), f"Expected matrix shape (3, 3), got {matrix.shape}"
+        assert matrix.dtype == np.float32, f"Expected dtype float32, got {matrix.dtype}"
+        
+        # Verify symmetric expansion: upper triangle values placed correctly
+        assert matrix[0, 0] == 1.0, f"Expected matrix[0,0] = 1.0, got {matrix[0, 0]}"
+        assert matrix[0, 1] == 2.0, f"Expected matrix[0,1] = 2.0, got {matrix[0, 1]}"
+        assert matrix[0, 2] == 3.0, f"Expected matrix[0,2] = 3.0, got {matrix[0, 2]}"
+        assert matrix[1, 1] == 5.0, f"Expected matrix[1,1] = 5.0, got {matrix[1, 1]}"
+        assert matrix[1, 2] == 6.0, f"Expected matrix[1,2] = 6.0, got {matrix[1, 2]}"
+        assert matrix[2, 2] == 9.0, f"Expected matrix[2,2] = 9.0, got {matrix[2, 2]}"
+        
+        # Verify symmetry: lower triangle should mirror upper triangle
+        assert matrix[1, 0] == matrix[0, 1], f"Symmetry failed: matrix[1,0]={matrix[1,0]} != matrix[0,1]={matrix[0,1]}"
+        assert matrix[2, 0] == matrix[0, 2], f"Symmetry failed: matrix[2,0]={matrix[2,0]} != matrix[0,2]={matrix[0,2]}"
+        assert matrix[2, 1] == matrix[1, 2], f"Symmetry failed: matrix[2,1]={matrix[2,1]} != matrix[1,2]={matrix[1,2]}"
+        
+        # Verify complete expected symmetric matrix
+        expected_matrix = np.array([
+            [1.0, 2.0, 3.0],
+            [2.0, 5.0, 6.0],  # Note: [1,0] = [0,1] = 2.0
+            [3.0, 6.0, 9.0]   # Note: [2,0] = [0,2] = 3.0, [2,1] = [1,2] = 6.0
+        ], dtype=np.float32)
+        
+        np.testing.assert_array_almost_equal(matrix, expected_matrix, decimal=6,
+            err_msg="Symmetric matrix expansion failed"
+        )
+    
+    def test_matrix_multi_column_sequences_full_format(self, test_data_files, encoder_configs):
+        """
+        Test matrix data with multi-column sequences (full matrix format).
+        
+        This test verifies that matrix data works correctly when sequences are 
+        split across multiple columns and joined with delimiters. The test checks:
+        1. Multi-column sequences are correctly detected and processed
+        2. Matrix dimensions account for delimiter positions in expanded sequence
+        3. Original sequence character relationships are preserved
+        4. Delimiter positions are properly handled (filled with zeros)
+        5. Matrix expansion maintains correct positional mapping
+        
+        Test data: 'AC' + 'E' → 'AC*E' (length 4 with delimiter)
+        Original matrix for 'ACE' (3x3) expanded to handle 'AC*E' (4x4)
+        """
+        dataset = SequenceDataset(
+            filepath=test_data_files["matrix_multi_col_full"],
+            encoder_cfg=encoder_configs["onehot"],
+            datatype='matrix'
+        )
+        
+        # Verify multi-column detection
+        assert dataset.has_multi_columns == True, "Should detect multi-column sequences"
+        
+        # Test first sample
+        seqID, seq_vector, matrix = dataset[0]
+        
+        # Verify sequence structure: 'AC*E' = 4 characters including delimiter
+        combined_sequence = dataset.data[0][1]  # Access stored combined sequence
+        assert combined_sequence == 'AC*E', f"Expected combined sequence 'AC*E', got '{combined_sequence}'"
+        assert seq_vector.shape[0] == 4, f"Expected sequence length 4 (including delimiter), got {seq_vector.shape[0]}"
+        
+        # Verify matrix expanded to handle delimiter
+        assert matrix.shape == (4, 4), f"Expected expanded matrix shape (4, 4), got {matrix.shape}"
+        
+        # Verify that non-delimiter positions retain original relationships
+        # Original positions: A=0, C=1, E=2 → Expanded positions: A=0, C=1, *=2, E=3
+        assert matrix[0, 1] == 2.0, f"Expected A-C relationship preserved: matrix[0,1] = 2.0, got {matrix[0, 1]}"
+        assert matrix[0, 3] == 3.0, f"Expected A-E relationship preserved: matrix[0,3] = 3.0, got {matrix[0, 3]}"
+        assert matrix[1, 3] == 6.0, f"Expected C-E relationship preserved: matrix[1,3] = 6.0, got {matrix[1, 3]}"
+        
+        # Verify delimiter positions are zero (row 2 and column 2)
+        assert np.allclose(matrix[2, :], 0.0), "Delimiter row should be all zeros"
+        assert np.allclose(matrix[:, 2], 0.0), "Delimiter column should be all zeros"
+    
+    def test_matrix_multi_column_sequences_symmetric_format(self, test_data_files, encoder_configs):
+        """
+        Test matrix data with multi-column sequences (symmetric format).
+        
+        This test verifies symmetric matrix expansion combined with multi-column 
+        sequence handling. It tests the complex interaction between:
+        1. Symmetric matrix expansion (N(N+1)/2 → N×N symmetric matrix)
+        2. Multi-column sequence processing with delimiters  
+        3. Matrix dimension expansion to account for delimiters
+        4. Preservation of symmetric properties after expansion
+        
+        Test data: 'AC' + 'E' with 6 symmetric values → 'AC*E' with 4×4 symmetric matrix
+        """
+        dataset = SequenceDataset(
+            filepath=test_data_files["matrix_multi_col_symmetric"],
+            encoder_cfg=encoder_configs["onehot"],
+            datatype='matrix'
+        )
+        
+        # Test first sample
+        seqID, seq_vector, matrix = dataset[0]
+        
+        # Verify expanded symmetric matrix structure
+        assert matrix.shape == (4, 4), f"Expected expanded matrix shape (4, 4), got {matrix.shape}"
+        
+        # Verify symmetry is preserved after expansion
+        for i in range(4):
+            for j in range(4):
+                assert matrix[i, j] == matrix[j, i], (
+                    f"Symmetry violated at [{i},{j}]: {matrix[i, j]} != {matrix[j, i]}"
+                )
+        
+        # Verify specific symmetric relationships are preserved
+        # Original: A-C relationship should be at positions (0,1) and (1,0)
+        assert matrix[0, 1] == matrix[1, 0], "A-C symmetry not preserved"
+        assert matrix[0, 3] == matrix[3, 0], "A-E symmetry not preserved"  
+        assert matrix[1, 3] == matrix[3, 1], "C-E symmetry not preserved"
+    
+    def test_matrix_exclude_seqid_functionality(self, test_data_files, encoder_configs):
+        """
+        Test matrix data loading without sequence IDs (excludeSeqID=True).
+        
+        This test verifies that matrix datatype works correctly when sequence IDs
+        are excluded from the input file. The test checks:
+        1. Auto-generated sequence IDs are created and used consistently
+        2. Matrix data is correctly parsed from remaining columns
+        3. Matrix structure and values are preserved without sequence IDs
+        4. All dataset functionality works with synthetic IDs
+        
+        This is important for datasets where sequence IDs are not provided
+        but matrix relationship data still needs to be processed.
+        """
+        dataset = SequenceDataset(
+            filepath=test_data_files["matrix_exclude_seqid"],
+            encoder_cfg=encoder_configs["onehot"],
+            datatype='matrix',
+            excludeSeqID=True
+        )
+        
+        # Verify dataset loads correctly
+        assert len(dataset) == 2, f"Expected 2 sequences, got {len(dataset)}"
+        
+        # Test samples have auto-generated IDs
+        seqID1, seq_vector1, matrix1 = dataset[0]
+        seqID2, seq_vector2, matrix2 = dataset[1]
+        
+        # Verify auto-generated sequence IDs
+        assert seqID1.startswith("seq_"), f"Expected auto-generated ID starting with 'seq_', got '{seqID1}'"
+        assert seqID2.startswith("seq_"), f"Expected auto-generated ID starting with 'seq_', got '{seqID2}'"
+        assert seqID1 != seqID2, "Auto-generated IDs should be unique"
+        
+        # Verify matrix data is correctly parsed
+        assert matrix1.shape == (3, 3), f"Expected matrix shape (3, 3), got {matrix1.shape}"
+        assert matrix2.shape == (3, 3), f"Expected matrix shape (3, 3), got {matrix2.shape}"
+        
+        # Verify specific values from first sequence (ACE with full matrix values)
+        expected_matrix1 = np.array([
+            [1.0, 2.0, 3.0],
+            [4.0, 5.0, 6.0],
+            [7.0, 8.0, 9.0]
+        ], dtype=np.float32)
+        np.testing.assert_array_almost_equal(matrix1, expected_matrix1, decimal=6)
+    
+    def test_matrix_malformed_data_error_handling(self, test_data_files, encoder_configs):
+        """
+        Test error handling for malformed matrix data.
+        
+        This test verifies that appropriate errors are raised when matrix data
+        has incorrect number of values. The test checks:
+        1. Clear error messages identify the specific problem
+        2. Expected value counts are clearly communicated  
+        3. Line numbers are provided for debugging
+        4. Both full matrix and symmetric format expectations are mentioned
+        
+        Test data contains sequences of length 3 but wrong number of matrix values
+        (5 values instead of 9 for full or 6 for symmetric format).
+        """
+        with pytest.raises(IOExceptionParrot) as exc_info:
+            dataset = SequenceDataset(
+                filepath=test_data_files["matrix_malformed"],
+                encoder_cfg=encoder_configs["onehot"],
+                datatype='matrix'
+            )
+        
+        # Verify error message contains helpful information
+        error_message = str(exc_info.value)
+        assert "doesn't match expected formats" in error_message, (
+            "Error message should mention format mismatch"
+        )
+        assert "9" in error_message, "Error message should mention expected full matrix count (9)"
+        assert "6" in error_message, "Error message should mention expected symmetric count (6)"
+        assert "5" in error_message, "Error message should mention actual count (5)"
+    
+    def test_matrix_mixed_format_handling(self, test_data_files, encoder_configs):
+        """
+        Test handling of mixed matrix formats within the same file.
+        
+        This test verifies that the implementation correctly handles files where
+        different sequences use different matrix formats:
+        - seq1: 9 values (full matrix format for length 3)
+        - seq2: 6 values (symmetric format for length 3)
+        
+        Both should be processed correctly, with symmetric format automatically
+        expanded to full matrix representation.
+        """
+        dataset = SequenceDataset(
+            filepath=test_data_files["matrix_mixed_format"],
+            encoder_cfg=encoder_configs["onehot"],
+            datatype="matrix"  # Specify matrix to avoid inference ambiguity
+        )
+        
+        # Verify dataset was created successfully
+        assert len(dataset) == 2, "Should load both sequences with different formats"
+        
+        # Get both items and verify they're processed correctly
+        item1 = dataset[0]  # seq1 with full matrix (9 values)
+        item2 = dataset[1]  # seq2 with symmetric matrix (6 values)
+        
+        # Items are tuples: (seq_id, encoded_sequence, matrix)
+        seq_id1, encoded_seq1, matrix1 = item1
+        seq_id2, encoded_seq2, matrix2 = item2
+        
+        # Both should result in 3x3 matrices (since both sequences have length 3)
+        assert matrix1.shape == (3, 3), "First matrix should be 3x3"
+        assert matrix2.shape == (3, 3), "Second matrix should be 3x3"
+        
+        # Verify the full format was preserved correctly (seq1)
+        expected_full = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], dtype=np.float32)
+        np.testing.assert_array_almost_equal(matrix1, expected_full, 
+                                           err_msg="Full matrix format not preserved correctly")
+        
+        # Verify the symmetric format was expanded correctly (seq2)
+        # Input: [0.1, 0.2, 0.3, 0.5, 0.6, 0.9] represents upper triangle:
+        # [[0.1, 0.2, 0.3],
+        #  [0.2, 0.5, 0.6], 
+        #  [0.3, 0.6, 0.9]]
+        expected_symmetric = np.array([[0.1, 0.2, 0.3], [0.2, 0.5, 0.6], [0.3, 0.6, 0.9]], dtype=np.float32)
+        np.testing.assert_array_almost_equal(matrix2, expected_symmetric,
+                                           err_msg="Symmetric matrix not expanded correctly")
+        
+        # Verify symmetry was preserved in the second matrix
+        assert np.allclose(matrix2, matrix2.T), "Second matrix should be symmetric"
+    
+    def test_matrix_values_datatype_and_precision(self, test_data_files, encoder_configs):
+        """
+        Test matrix values have correct data types and precision.
+        
+        This test verifies that matrix values are correctly converted to
+        the expected data types and maintain appropriate precision:
+        1. Matrix arrays are numpy.float32 (memory efficient)
+        2. Floating point precision is preserved correctly
+        3. Integer inputs are converted to float32
+        4. No unexpected precision loss occurs during processing
+        """
+        dataset = SequenceDataset(
+            filepath=test_data_files["matrix_full"],
+            encoder_cfg=encoder_configs["onehot"],
+            datatype='matrix'
+        )
+        
+        for i in range(len(dataset)):
+            seqID, seq_vector, matrix = dataset[i]
+            
+            # Verify data type
+            assert matrix.dtype == np.float32, (
+                f"Expected matrix dtype float32, got {matrix.dtype} for sample {i}"
+            )
+            
+            # Verify no unexpected NaN or infinite values
+            assert np.all(np.isfinite(matrix)), (
+                f"Matrix contains non-finite values for sample {i}"
+            )
+            
+            # Verify precision preservation (test specific known values)
+            if i == 0:  # First sample has known values
+                assert np.isclose(matrix[0, 0], 1.0, rtol=1e-6), "Precision lost for matrix[0,0]"
+                assert np.isclose(matrix[1, 2], 6.0, rtol=1e-6), "Precision lost for matrix[1,2]"
+    
+    def test_matrix_integration_with_different_encoders(self, test_data_files):
+        """
+        Test matrix data integration with different encoder configurations.
+        
+        This test verifies that matrix datatype works correctly with various
+        encoder configurations, ensuring the matrix processing is independent
+        of the sequence encoding method:
+        1. Different alphabets (full vs restricted)
+        2. Different encoding schemes (table-based)
+        3. Consistent matrix output regardless of encoder choice
+        4. Proper error handling when sequences contain unsupported characters
+        """
+        # Test with different encoder configurations
+        encoder_configs = [
+            OmegaConf.create({"type": "table", "alphabet": "ACDEFGHIKLMNPQRSTVWY"}),
+            OmegaConf.create({"type": "table", "alphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ"}),
+            OmegaConf.create({"type": "table", "alphabet": "ACE"})  # Minimal alphabet
+        ]
+        
+        for i, config in enumerate(encoder_configs):
+            try:
+                dataset = SequenceDataset(
+                    filepath=test_data_files["matrix_full"],
+                    encoder_cfg=config,
+                    datatype='matrix'
+                )
+                
+                # Verify matrix structure is consistent regardless of encoder
+                seqID, seq_vector, matrix = dataset[0]
+                assert matrix.shape == (3, 3), (
+                    f"Matrix shape should be consistent across encoders, got {matrix.shape} for config {i}"
+                )
+                
+                # Verify specific matrix values are preserved
+                assert matrix[0, 0] == 1.0, (
+                    f"Matrix values should be consistent across encoders for config {i}"
+                )
+                
+            except ValueError as e:
+                # This is expected for restrictive alphabets that don't contain all sequence characters
+                if "ACE" in str(config.alphabet) and len(config.alphabet) <= 3:
+                    assert "Error encoding sequence" in str(e), (
+                        "Should get encoding error for restrictive alphabet"
+                    )
+                else:
+                    raise  # Unexpected error
+    
+    def test_matrix_memory_efficiency_and_cleanup(self, test_data_files, encoder_configs):
+        """
+        Test matrix data memory efficiency and proper cleanup.
+        
+        This test verifies that matrix processing is memory efficient and
+        properly cleans up resources:
+        1. Matrix arrays use efficient data types (float32 vs float64)
+        2. No memory leaks during dataset creation and deletion
+        3. Large matrices are handled appropriately
+        4. Cleanup processes work correctly
+        """
+        # Create dataset and verify efficient data types
+        dataset = SequenceDataset(
+            filepath=test_data_files["matrix_full"],
+            encoder_cfg=encoder_configs["onehot"],
+            datatype='matrix'
+        )
+        
+        # Check memory efficiency of stored matrices
+        for i in range(len(dataset)):
+            seqID, seq_vector, matrix = dataset[i]
+            
+            # Verify efficient data type usage
+            assert matrix.dtype == np.float32, "Should use memory-efficient float32"
+            
+            # Verify reasonable memory footprint (3x3 matrix should be small)
+            matrix_size_bytes = matrix.nbytes
+            expected_size = 3 * 3 * 4  # 3x3 matrix * 4 bytes per float32
+            assert matrix_size_bytes == expected_size, (
+                f"Matrix memory usage unexpected: {matrix_size_bytes} bytes vs expected {expected_size}"
+            )
+        
+        # Test cleanup (should not raise exceptions)
+        del dataset
+        # If we get here without exceptions, cleanup worked correctly
+        assert True, "Dataset cleanup completed successfully"

@@ -173,10 +173,11 @@ class SequenceDataset(Dataset):
     
     Key responsibilities:
     1. Parse various PARROT data formats (with/without sequence IDs, single/multi-column sequences)
-    2. Automatically infer data types (sequence-level vs residue-level predictions)
+    2. Automatically infer data types (sequence-level vs residue-level vs matrix predictions)
     3. Handle sequence encoding through PARROT's encoder system
     4. Manage multi-column sequence formats with proper delimiter handling
     5. Provide memory-efficient data loading for large datasets
+    6. Support matrix data formats with full (N²) or symmetric (N(N+1)/2) value arrangements
     """
     
     def __init__(self, filepath : str, encoder_cfg : DictConfig = None, 
@@ -211,9 +212,10 @@ class SequenceDataset(Dataset):
             Whether sequence IDs are excluded from the data file. This affects how
             columns are interpreted during parsing. Default is False.
         datatype : str or None
-            'sequence' for sequence-level predictions or 'residues' for residue-level
-            predictions. If None, the system will automatically infer the type by
-            examining the relationship between sequence length and number of target values.
+            'sequence' for sequence-level predictions, 'residues' for residue-level
+            predictions, or 'matrix' for matrix predictions (pairwise relationships).
+            If None, the system will automatically infer the type by examining the 
+            relationship between sequence length and number of target values.
         delimiter : str
             Delimiter for splitting file columns. None defaults to any whitespace,
             maintaining compatibility with original PARROT behavior.
@@ -236,7 +238,7 @@ class SequenceDataset(Dataset):
         self.delimiter = delimiter
         
         # Data type inference: One of PARROT's key features is automatically determining
-        # whether the data represents sequence-level or residue-level predictions.
+        # whether the data represents sequence-level, residue-level, or matrix predictions.
         # This is crucial because it affects model architecture and training procedures.
         if datatype is None:
             # Automatic inference examines the relationship between sequence length
@@ -245,8 +247,8 @@ class SequenceDataset(Dataset):
         else:
             # Manual specification allows users to override automatic detection
             # when they know their data format or when inference might be ambiguous
-            if datatype not in ['sequence', 'residues']:
-                raise ValueError(f"Invalid datatype: {datatype}. Must be 'sequence' or 'residues'")
+            if datatype not in ['sequence', 'residues', 'matrix']:
+                raise ValueError(f"Invalid datatype: {datatype}. Must be 'sequence' or 'residues' or 'matrix'")
             self.datatype = datatype
         
         # Multi-column sequence detection: PARROT supports complex formats where
@@ -373,7 +375,7 @@ class SequenceDataset(Dataset):
 
     def _infer_datatype(self):
         """
-        Automatically determine whether data represents sequence-level or residue-level predictions.
+        Automatically determine whether data represents sequence-level, residue-level, or matrix predictions.
         
         This method implements one of PARROT's most valuable features: automatic data type
         detection. By analyzing the relationship between sequence length and the number
@@ -381,6 +383,7 @@ class SequenceDataset(Dataset):
         
         1. Sequence-level data: One target value per sequence (e.g., protein function classification)
         2. Residue-level data: One target value per residue (e.g., secondary structure prediction)
+        3. Matrix data: Values representing pairwise relationships (full matrix N² or symmetric N(N+1)/2)
         
         This intelligence allows users to work with PARROT without needing to manually
         specify data formats, reducing setup complexity and potential errors.
@@ -393,6 +396,7 @@ class SequenceDataset(Dataset):
         str
             'sequence' if data appears to be sequence-level (one value per sequence)
             'residues' if data appears to be residue-level (one value per residue)
+            'matrix' if data appears to be matrix-level (N² or N(N+1)/2 values per sequence)
             
         Raises
         ------
@@ -441,6 +445,12 @@ class SequenceDataset(Dataset):
                     elif num_values == seq_length:
                         # Value count matches sequence length - likely residue-level
                         inferred_type = 'residues'
+                    elif num_values == seq_length * seq_length:
+                        # Value count matches sequence length squared - matrix format (full)
+                        inferred_type = 'matrix'
+                    elif num_values == (seq_length * (seq_length + 1)) // 2:
+                        # Value count matches upper triangle - matrix format (symmetric)
+                        inferred_type = 'matrix'
                     else:
                         # Handle complex cases like multi-column sequences
                         # Here we check if values match the total characters across all sequence parts
@@ -448,6 +458,12 @@ class SequenceDataset(Dataset):
                         if num_values == total_seq_chars:
                             # Values match total sequence characters (excluding delimiters)
                             inferred_type = 'residues'
+                        elif num_values == total_seq_chars * total_seq_chars:
+                            # Values match total sequence characters squared - matrix format (full)
+                            inferred_type = 'matrix'
+                        elif num_values == (total_seq_chars * (total_seq_chars + 1)) // 2:
+                            # Values match upper triangle of total chars - matrix format (symmetric)
+                            inferred_type = 'matrix'
                         else:
                             # Ambiguous case - continue examining more lines
                             continue
@@ -801,6 +817,124 @@ class SequenceDataset(Dataset):
         
         return np.array(padded_values, dtype=np.float32)
 
+    def _process_matrix_values(self, raw_values, seq_length):
+        """
+        Process matrix values for matrix datatype, handling both full and symmetric formats.
+        
+        Matrix data can be provided in two formats:
+        1. Full matrix: N² values representing all pairwise relationships
+        2. Symmetric upper triangle: N(N+1)/2 values, which are expanded to full symmetric matrix
+        
+        For symmetric format, values represent the upper triangle (including diagonal) 
+        and are reflected to create the full symmetric matrix where A[i,j] = A[j,i].
+        
+        Parameters
+        ----------
+        raw_values : list
+            List of float values from the data file
+        seq_length : int
+            Length of the sequence (determines matrix dimensions)
+            
+        Returns
+        -------
+        numpy.ndarray
+            2D matrix of shape (seq_length, seq_length) with dtype float32
+            
+        Raises
+        ------
+        ValueError
+            If the number of values doesn't match expected matrix formats
+        """
+        num_values = len(raw_values)
+        expected_full = seq_length * seq_length
+        expected_symmetric = (seq_length * (seq_length + 1)) // 2
+        
+        if num_values == expected_full:
+            # Full matrix format - reshape directly
+            matrix = np.array(raw_values, dtype=np.float32).reshape(seq_length, seq_length)
+            return matrix
+            
+        elif num_values == expected_symmetric:
+            # Symmetric upper triangle format - expand to full matrix
+            matrix = np.zeros((seq_length, seq_length), dtype=np.float32)
+            
+            # Fill upper triangle (including diagonal) from raw values
+            idx = 0
+            for i in range(seq_length):
+                for j in range(i, seq_length):
+                    matrix[i, j] = raw_values[idx]
+                    idx += 1
+            
+            # Reflect to lower triangle to make symmetric (A[i,j] = A[j,i])
+            for i in range(seq_length):
+                for j in range(i):
+                    matrix[i, j] = matrix[j, i]
+                    
+            return matrix
+            
+        else:
+            raise ValueError(
+                f"Number of matrix values ({num_values}) doesn't match expected formats. "
+                f"Expected {expected_full} (full matrix) or {expected_symmetric} (symmetric upper triangle) "
+                f"for sequence length {seq_length}"
+            )
+
+    def _pad_matrix_values_for_delimiters(self, raw_values, sequence_parts, combined_sequence):
+        """
+        Handle matrix values when multi-column sequences require delimiter padding.
+        
+        For matrix data with multi-column sequences, we need to account for delimiter
+        positions in the matrix dimensions. The matrix values correspond to the original
+        sequence characters, but the final matrix must match the combined sequence length
+        (including delimiters).
+        
+        Parameters
+        ----------
+        raw_values : list
+            List of matrix values corresponding to original sequence characters
+        sequence_parts : list
+            List of individual sequence parts (before joining with delimiters)
+        combined_sequence : str
+            The final sequence string with delimiters inserted
+            
+        Returns
+        -------
+        numpy.ndarray
+            Expanded matrix with padding for delimiter positions
+        """
+        total_seq_chars = sum(len(seq_part) for seq_part in sequence_parts)
+        combined_seq_length = len(combined_sequence)
+        
+        # First, create the matrix for the original sequence characters
+        original_matrix = self._process_matrix_values(raw_values, total_seq_chars)
+        
+        if combined_seq_length == total_seq_chars:
+            # No delimiters, return as-is
+            return original_matrix
+        
+        # Create expanded matrix with delimiter positions
+        expanded_matrix = np.zeros((combined_seq_length, combined_seq_length), dtype=np.float32)
+        
+        # Map positions from original matrix to expanded matrix, skipping delimiter positions
+        char_idx = 0
+        expanded_positions = []
+        
+        # Build mapping of non-delimiter positions
+        for seq_part_idx, seq_part in enumerate(sequence_parts):
+            for _ in range(len(seq_part)):
+                expanded_positions.append(char_idx)
+                char_idx += 1
+            # Skip delimiter position (except after last part)
+            if seq_part_idx < len(sequence_parts) - 1:
+                char_idx += 1
+        
+        # Copy values from original matrix to expanded matrix at non-delimiter positions
+        for i, orig_i in enumerate(expanded_positions):
+            for j, orig_j in enumerate(expanded_positions):
+                expanded_matrix[orig_i, orig_j] = original_matrix[i, j]
+        
+        return expanded_matrix
+
     def _load_data(self):
         """
         Load and parse the complete dataset with comprehensive error handling.
@@ -815,7 +949,8 @@ class SequenceDataset(Dataset):
         2. Sequence ID handling (generation or extraction)
         3. Multi-column sequence reconstruction with delimiters
         4. Target value parsing and validation
-        5. Automatic padding for residue-level data with delimiters
+        5. Automatic padding for residue-level and matrix data with delimiters
+        6. Matrix value processing for full or symmetric formats
         
         The method handles PARROT's diverse format requirements while maintaining
         data integrity and providing informative error messages for debugging.
@@ -826,7 +961,7 @@ class SequenceDataset(Dataset):
             List of tuples: (seqID, combined_sequence, values)
             - seqID: String identifier for the sequence
             - combined_sequence: Reconstructed sequence with delimiters if needed
-            - values: Float (sequence-level) or numpy array (residue-level) of target values
+            - values: Float (sequence-level), 1D numpy array (residue-level), or 2D numpy array (matrix-level) of target values
             
         Raises
         ------
@@ -873,7 +1008,7 @@ class SequenceDataset(Dataset):
                     # This is where multi-column sequences become single sequences
                     combined_sequence = self.sequence_delimiter.join(sequence_parts)
                     
-                    # Parse target values according to data type (sequence vs residue level)
+                    # Parse target values according to data type (sequence vs residue vs matrix level)
                     if self.datatype == 'sequence':
                         # Sequence-level: expect exactly one target value per sequence
                         if len(value_parts) != 1:
@@ -903,6 +1038,35 @@ class SequenceDataset(Dataset):
                                 f"for sequence data on line {line_num}. "
                                 f"Expected {total_seq_chars} (sum of sequence parts) or "
                                 f"{combined_seq_length} (combined sequence length)"
+                            )
+                    elif self.datatype == 'matrix':
+                        # Matrix-level: expect N² values (full matrix) or N(N+1)/2 values (symmetric)
+                        raw_values = [float(v) for v in value_parts]
+                        
+                        # Handle padding requirements for multi-column sequences
+                        total_seq_chars = sum(len(seq_part) for seq_part in sequence_parts)
+                        combined_seq_length = len(combined_sequence)
+                        
+                        # Check expected matrix value counts
+                        expected_full_orig = total_seq_chars * total_seq_chars
+                        expected_symmetric_orig = (total_seq_chars * (total_seq_chars + 1)) // 2
+                        expected_full_combined = combined_seq_length * combined_seq_length
+                        expected_symmetric_combined = (combined_seq_length * (combined_seq_length + 1)) // 2
+                        
+                        if len(raw_values) in [expected_full_orig, expected_symmetric_orig] and combined_seq_length > total_seq_chars:
+                            # Values correspond to original sequence characters only
+                            # Need to expand matrix for delimiter positions
+                            values = self._pad_matrix_values_for_delimiters(raw_values, sequence_parts, combined_sequence)
+                        elif len(raw_values) in [expected_full_combined, expected_symmetric_combined]:
+                            # Values already match combined sequence length - process directly
+                            values = self._process_matrix_values(raw_values, combined_seq_length)
+                        else:
+                            # Length mismatch - this indicates a data format problem
+                            raise ValueError(
+                                f"Number of matrix values ({len(raw_values)}) doesn't match expected formats "
+                                f"for sequence data on line {line_num}. "
+                                f"Expected {expected_full_orig} or {expected_symmetric_orig} (original chars) or "
+                                f"{expected_full_combined} or {expected_symmetric_combined} (combined sequence)"
                             )
                     else:
                         # This should never happen due to earlier validation
@@ -954,7 +1118,7 @@ class SequenceDataset(Dataset):
             (seqID, sequence_vector, values) where:
             - seqID: String identifier for debugging and tracking
             - sequence_vector: Encoded sequence as PyTorch tensor
-            - values: Target values (float for sequence-level, array for residue-level)
+            - values: Target values (float for sequence-level, 1D array for residue-level, 2D array for matrix-level)
             
         Raises
         ------
@@ -997,7 +1161,28 @@ class SequenceDataset(Dataset):
 
 
 def seq_regress_collate(batch):
-    """Collate function for sequence regression"""
+    """Collate function for sequence regression
+    
+    The collate function handles the formatting of the data and padding
+    for each batch. This function is designed to work with sequence-level
+    regression tasks where each sequence can have a different length.
+    Parameters
+    ----------
+    batch : list
+        A list of tuples, each containing (name, sequence_vector, target_value)
+
+    Returns
+    -------
+    tuple
+        A tuple containing:
+            - names: List of names for each sequence
+            - padded_seqs: Padded tensor of sequence vectors. Dimensions:
+                (number of sequences, max sequence length, feature size = embedding dimension)
+                Data type: float32
+            - targets: Tensor of target values. Dimensions:
+                (number of sequences,)
+                Data type: float32
+    """
     names = [item[0] for item in batch]
     seq_vectors = [item[1].clone().detach().float() for item in batch]
     targets = [item[2] for item in batch]  # Single value per sequence
@@ -1006,6 +1191,7 @@ def seq_regress_collate(batch):
     max_len = max(seq.size(0) for seq in seq_vectors)
 
     # Preallocate tensor with appropriate size and type
+    # Dimensions: (number of sequences, max sequence length, feature size = embedding dimension)
     padded_seqs = torch.zeros((len(seq_vectors), max_len, seq_vectors[0].size(1)), dtype=torch.float32)
 
     for i, seq in enumerate(seq_vectors):
@@ -1018,7 +1204,29 @@ def seq_regress_collate(batch):
 
 
 def seq_class_collate(batch):
-    """Collate function for sequence classification"""
+    """Collate function for sequence classification
+    
+    The collate function handles the formatting of the data and padding
+    for each batch. This function is designed to work with sequence-level
+    classification tasks where each sequence can have a different length.
+
+    Parameters
+    ----------
+    batch : list
+        A list of tuples, each containing (name, sequence_vector, target_class)
+
+    Returns
+    -------
+    tuple
+        A tuple containing:
+            - names: List of names for each sequence
+            - padded_seqs: Padded tensor of sequence vectors. Dimensions:
+                (number of sequences, max sequence length, feature size = embedding dimension)
+                Data type: float32
+            - targets_tensor: Tensor of target classes. Dimensions:
+                (number of sequences,)
+                Data type: long
+    """
     names = [item[0] for item in batch]
     seq_vectors = [item[1].clone().detach().float() for item in batch]
     targets = [item[2] for item in batch]  # Single class per sequence
@@ -1027,6 +1235,7 @@ def seq_class_collate(batch):
     max_len = max(seq.size(0) for seq in seq_vectors)
 
     # Preallocate tensor with appropriate size and type
+    # Dimensions: (number of sequences, max sequence length, feature size = embedding dimension)
     padded_seqs = torch.zeros((len(seq_vectors), max_len, seq_vectors[0].size(1)), dtype=torch.float32)
 
     for i, seq in enumerate(seq_vectors):
@@ -1039,7 +1248,32 @@ def seq_class_collate(batch):
 
 
 def res_regress_collate(batch):
-    """Collate function for residue regression"""
+    """Collate function for residue regression
+    
+    The collate function handles the formatting of the data and padding
+    for each batch. This function is designed to work with residue-level
+    regression tasks where each sequence can have a different length.
+    It pads sequences to the maximum length in the batch and aligns
+    targets accordingly.
+
+    Parameters
+    ----------
+    batch : list
+        A list of tuples, each containing (name, sequence_vector, target_array)
+
+    Returns
+    -------
+    tuple
+        A tuple containing:
+            - names: List of names for each sequence
+            - padded_seqs: Padded tensor of sequence vectors. Dimensions:
+                (number of sequences, max sequence length, feature size = embedding dimension)
+                Data type: float32
+            - padded_targets: Padded tensor of target arrays. Dimensions:
+                (number of sequences, max sequence length)
+                Data type: float32
+    """
+    # Extract names, sequences, and targets from the batch
     names = [item[0] for item in batch]
     seq_vectors = [item[1].clone().detach().float() for item in batch]
     target_arrays = [item[2] for item in batch]  # Array of values per sequence
@@ -1048,19 +1282,46 @@ def res_regress_collate(batch):
     max_len = max(seq.size(0) for seq in seq_vectors)
 
     # Preallocate tensors
+    # Dimensions: (number of sequences, max sequence length, feature size = embedding dimension)
     padded_seqs = torch.zeros((len(seq_vectors), max_len, seq_vectors[0].size(1)), dtype=torch.float32)
-    padded_targets = torch.zeros((len(seq_vectors), max_len), dtype=torch.float32)
+    # Dimensions: (number of sequences, max sequence length)
+    padded_targets = torch.zeros((len(seq_vectors), max_len), dtype=torch.float32) # float for regression targets
 
+    # Fill in the padded tensors
     for i, (seq, targets) in enumerate(zip(seq_vectors, target_arrays)):
         seq_len = seq.size(0)
-        padded_seqs[i, :seq_len, :] = seq.clone().detach()
-        padded_targets[i, :seq_len] = torch.tensor(targets, dtype=torch.float32)
+        padded_seqs[i, :seq_len, :] = seq.clone().detach() 
+        padded_targets[i, :seq_len] = torch.tensor(targets, dtype=torch.float32) # float for regression targets
 
     return names, padded_seqs, padded_targets
 
 
 def res_class_collate(batch):
-    """Collate function for residue classification"""
+    """Collate function for residue classification
+    
+    The collate function handles the formatting of the data and padding
+    for each batch. This function is designed to work with residue-level
+    classification tasks where each sequence can have a different length.
+    It pads sequences to the maximum length in the batch and aligns
+    targets accordingly.
+
+    Parameters
+    ----------
+    batch : list
+        A list of tuples, each containing (name, sequence_vector, target_array)
+    Returns
+    -------
+    tuple
+        A tuple containing:
+            - names: List of names for each sequence
+            - padded_seqs: Padded tensor of sequence vectors
+                Dimensions: (number of sequences, max sequence length, feature size = embedding dimension)
+                Data type: float32
+            - padded_targets: Padded tensor of target arrays
+                Dimensions: (number of sequences, max sequence length)
+                Data type: long
+    """
+    # Extract names, sequences, and targets from the batch
     names = [item[0] for item in batch]
     seq_vectors = [item[1].clone().detach().float() for item in batch]
     target_arrays = [item[2] for item in batch]  # Array of class labels per sequence
@@ -1069,13 +1330,15 @@ def res_class_collate(batch):
     max_len = max(seq.size(0) for seq in seq_vectors)
 
     # Preallocate tensors
+    # Dimensions: (number of sequences, max sequence length, feature size = embedding dimension)
     padded_seqs = torch.zeros((len(seq_vectors), max_len, seq_vectors[0].size(1)), dtype=torch.float32)
-    padded_targets = torch.zeros((len(seq_vectors), max_len), dtype=torch.long)
+    # Dimensions: (number of sequences, max sequence length)
+    padded_targets = torch.zeros((len(seq_vectors), max_len), dtype=torch.long) # long for classification targets
 
     for i, (seq, targets) in enumerate(zip(seq_vectors, target_arrays)):
         seq_len = seq.size(0)
         padded_seqs[i, :seq_len, :] = seq.clone().detach()
-        padded_targets[i, :seq_len] = torch.tensor(targets, dtype=torch.long)
+        padded_targets[i, :seq_len] = torch.tensor(targets, dtype=torch.long) # long for classification targets
 
     return names, padded_seqs, padded_targets
 
