@@ -15,16 +15,23 @@ import math
 
 import numpy as np
 
-try:
-    import GPy
-    import GPyOpt
-    from GPyOpt.methods import BayesianOptimization
-except ImportError:
-    print('Error importing GPy.')
-    print(' If trying to run parrot-optimize, make sure to use `pip install idptools-parrot[optimize]`')
-
 from parrot import train_network
 from parrot import brnn_architecture
+
+
+def _import_gpy():
+    """Lazy import of GPy/GPyOpt, raising an informative error if missing."""
+    try:
+        import GPy
+        import GPyOpt
+        from GPyOpt.methods import BayesianOptimization
+    except ImportError:
+        raise ImportError(
+            'Error importing GPy. '
+            'If trying to run parrot-optimize, make sure to use '
+            '`pip install idptools-parrot[optimize]`'
+        )
+    return BayesianOptimization
 
 
 class BayesianOptimizer(object):
@@ -241,6 +248,8 @@ class BayesianOptimizer(object):
                            [-2.0, 2, 20], [-3.3, 2, 20], [-4.0, 2, 20], [-5.0, 2, 20],
                            [-3.0, 2, 5],  [-3.0, 2, 15], [-3.0, 2, 35], [-3.0, 2, 50]])
         y_init, noise = self.initial_search(x_init)
+
+        BayesianOptimization = _import_gpy()
 
         if self.silent is False:
             print("\nInitial search results:")
