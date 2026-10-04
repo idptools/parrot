@@ -52,7 +52,7 @@ def main():
     parser.add_argument('--exclude-seq-id', dest='excludeSeqID', action='store_true',
                         help='use if data_file lacks sequence IDs in the first column of each line')
     parser.add_argument('--probabilistic-classification', dest='probabilistic_classification',
-                        action='store_true', help='Optional implementation for sequence classificaion')
+                        action='store_true', help='Optional implementation for sequence classification')
     add_device_arguments(parser)
     add_embedding_cache_argument(parser, plm.PREDICT_CACHE_DIRECTORY)
     parser.add_argument('--silent', action='store_true',

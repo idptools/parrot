@@ -464,9 +464,6 @@ class PLMEncoder(SequenceEncoder):
             embedding = self.cache.get(seq)
         return torch.from_numpy(embedding.astype(np.float32))
 
-    def decode(self, seq_vectors: list[np.ndarray]) -> list[str]:
-        raise NotImplementedError('PLM embeddings cannot be decoded back into sequences')
-
     def check_sequences(self, sequences: Iterable[str]) -> None:
         """Raise if any sequence has a character the model cannot read as one residue (see PLM_RESIDUES)."""
         check_characters(sequences, set(PLM_RESIDUES))

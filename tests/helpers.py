@@ -12,7 +12,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-import parrot
 from parrot import encode_sequence
 from parrot import hyperparameter_search as hs
 from parrot import process_input_data as pid
@@ -22,8 +21,10 @@ from parrot.architectures.classical import ClassicalModel
 from parrot.architectures.layers import GlobalContext
 from parrot.tasks import Task
 
-DATA_DIR = os.path.abspath(parrot.get_directory())
-TEST_DATA_DIR = os.path.abspath(parrot.get_directory('../tests/test_data'))
+# The example datasets in the repository's /data folder, and files made just for the tests
+REPOSITORY_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(REPOSITORY_ROOT, 'data')
+TEST_DATA_DIR = os.path.join(REPOSITORY_ROOT, 'tests', 'test_data')
 
 # Seed applied before every test (see conftest.py)
 TEST_SEED = 2020

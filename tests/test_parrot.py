@@ -27,6 +27,12 @@ def test_parrot_has_version():
     assert isinstance(parrot.__version__, str) and len(parrot.__version__) > 0
 
 
+def test_public_names_are_explicit():
+    """Everything parrot exports is listed in __all__, and nothing it merely imports (e.g. numpy) leaks out"""
+    assert all(hasattr(parrot, name) for name in parrot.__all__)
+    assert not any(hasattr(parrot, name) for name in ('np', 'torch', 'os', 'math', 'Any'))
+
+
 def test_noarg_train_call(run_cli):
     """Calling parrot-train with no arguments should return an error"""
     with pytest.raises(SystemExit):

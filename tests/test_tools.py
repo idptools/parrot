@@ -132,12 +132,6 @@ def test_print_settings(capsys):
     assert capsys.readouterr().out == ''
 
 
-def test_write_datafile(tmp_path):
-    path = str(tmp_path / 'out.tsv')
-    cli.write_datafile(path, [['id1', 'ACD', '1'], ['id2', 'EF', '0']])
-    assert pid.read_tsv_raw(path) == [['id1', 'ACD', '1'], ['id2', 'EF', '0']]
-
-
 def test_cli_validate_args():
     cli.validate_args('residues', ['residues', 'sequence'])
     with pytest.raises(Exception, match='Invalid option passed'):
@@ -207,12 +201,6 @@ def test_batch_size_warnings(capsys):
 # ..........................................................................................
 # preproc
 
-def test_are_lists_identical():
-    assert preproc.are_lists_identical(['1', '2'], ['1', '2'])
-    assert not preproc.are_lists_identical(['1', '2'], ['1', '3'])
-    assert not preproc.are_lists_identical(['1'], ['1', '2'])
-
-
 def test_recode_classes():
     lines = [['a', 'ACD', '5'], ['b', 'EFG', '9'], ['c', 'HIK', '7'], ['d', 'LMN', '5']]
     new_lines, mapping = preproc.recode_classes(lines)
@@ -253,73 +241,12 @@ def test_recode_classes_residues():
 
 
 @pytest.mark.parametrize('verbose', [False, True])
-def test_remove_sequence_duplicates(capsys, verbose):
-    lines = [['a', 'ACD', '1'], ['b', 'EFG', '0'], ['c', 'ACD', '0'], ['d', 'HIK', '1'], ['e', 'ACD', '1']]
-    new_lines = preproc.remove_sequence_duplicates(lines, verbose=verbose)
-
-    # Every copy of a duplicated sequence is removed, since we cannot know which is correct
-    assert new_lines == [['b', 'EFG', '0'], ['d', 'HIK', '1']]
-    if verbose:
-        assert 'All 3 lines containing these sequences have been removed' in capsys.readouterr().out
-
-
-@pytest.mark.parametrize('verbose', [False, True])
 def test_remove_line_duplicates(verbose):
     lines = [['a', 'ACD', '1'], ['a', 'ACD', '1'], ['a', 'ACD', '0'], ['b', 'ACD', '1'], ['c', 'EFG', '1']]
     new_lines = preproc.remove_line_duplicates(lines, verbose=verbose)
 
     # Only the exact duplicate line is removed
     assert sorted(new_lines) == sorted([['a', 'ACD', '1'], ['a', 'ACD', '0'], ['b', 'ACD', '1'], ['c', 'EFG', '1']])
-
-
-# ..........................................................................................
-# class_balancing helpers
-
-TOY_RESIDUE_LINES = [['a', 'AAAA', '0', '0', '0', '1'],
-                     ['b', 'AAA', '0', '0', '2'],
-                     ['c', 'AA', '1', '1']]
-
-
-def test_parse_class_info():
-    classes, idx2classes = class_balancing.parse_class_info(TOY_RESIDUE_LINES)
-
-    assert classes == ['0', '1', '2']
-    assert idx2classes == {0: {'0': 3, '1': 1, '2': 0}, 1: {'0': 2, '1': 0, '2': 1}, 2: {'0': 0, '1': 2, '2': 0}}
-
-
-def test_parse_class_info_ignores_missing_labels():
-    classes, idx2classes = class_balancing.parse_class_info([['a', 'AAAA', '0', 'nan', '0', '1'], ['b', 'AA', 'nan', '1']])
-
-    assert classes == ['0', '1']
-    assert idx2classes == {0: {'0': 2, '1': 1}, 1: {'0': 0, '1': 1}}
-
-
-def test_get_total_class_count():
-    classes, idx2classes = class_balancing.parse_class_info(TOY_RESIDUE_LINES)
-    total = class_balancing.get_total_class_count(classes, idx2classes)
-    assert total == {'0': 5, '1': 3, '2': 1}
-
-    updated = class_balancing.get_total_class_count(classes, idx2classes, old_total_class_count=total,
-                                                    removed_entry_dict=idx2classes[0])
-    assert updated == {'0': 2, '1': 2, '2': 1}
-    assert total == {'0': 5, '1': 3, '2': 1}  # the original is not modified
-
-    with pytest.raises(Exception):
-        class_balancing.get_total_class_count(classes, idx2classes, old_total_class_count=total)
-
-
-def test_calculate_imbalance():
-    classes, idx2classes = class_balancing.parse_class_info(TOY_RESIDUE_LINES)
-    total = class_balancing.get_total_class_count(classes, idx2classes)
-
-    assert class_balancing.calculate_imbalance(total) == 5.0
-    assert class_balancing.calculate_imbalance(total, idx_to_remove=0, idx2classes=idx2classes) == 2.0
-
-    # Removing the only line containing class '2' would make the imbalance infinite
-    assert class_balancing.calculate_imbalance(total, idx_to_remove=1, idx2classes=idx2classes) == np.inf
-
-    with pytest.raises(Exception):
-        class_balancing.calculate_imbalance(total, idx_to_remove=0)
 
 
 # ..........................................................................................
@@ -338,8 +265,10 @@ def make_imbalanced_residue_lines(n_sequences: int = 200, length: int = 12,
 
 
 def imbalance_of(lines: list[list[str]]) -> float:
-    classes, idx2classes = class_balancing.parse_class_info(lines)
-    return class_balancing.calculate_imbalance(class_balancing.get_total_class_count(classes, idx2classes))
+    """The imbalance (most / least common class) of residue-classification lines."""
+    _, counts = class_balancing.class_count_matrix(lines)
+    imbalance, _ = class_balancing.balance_scores(counts.sum(axis=0)[None, :])
+    return float(imbalance[0])
 
 
 def test_residue_class_balance_reduces_imbalance():
@@ -381,11 +310,9 @@ def test_residue_class_balance_already_balanced():
     assert len(tracker) == 1 and len(new_lines) == len(lines)
 
 
-@pytest.mark.parametrize('shuffle_data', [True, False])
-def test_residue_class_balance_keeps_input_order(shuffle_data):
+def test_residue_class_balance_keeps_input_order():
     lines = make_imbalanced_residue_lines()
-    new_lines, _ = class_balancing.run_class_balance_residues(list(lines), block_size=20, shuffle_data=shuffle_data,
-                                                              verbose=False)
+    new_lines, _ = class_balancing.run_class_balance_residues(list(lines), block_size=20, verbose=False)
 
     original_positions = [lines.index(line) for line in new_lines]
     assert len(new_lines) < len(lines)

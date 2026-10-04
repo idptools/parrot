@@ -41,11 +41,6 @@ def test_one_hot_rejects_invalid_residues(bad_sequence):
         encode_sequence.one_hot(bad_sequence)
 
 
-def test_one_hot_round_trip():
-    encoded = encode_sequence.one_hot(ALL_AMINO_ACIDS).numpy()
-    assert encode_sequence.rev_one_hot([encoded, encoded[::-1]]) == [ALL_AMINO_ACIDS, ALL_AMINO_ACIDS[::-1]]
-
-
 # ..........................................................................................
 # Biophysical encoding
 
@@ -62,23 +57,10 @@ def test_biophysics_table_is_complete():
     assert all(len(vector) == 9 for vector in encode_sequence.BIOPHYSICS.values())
 
 
-def test_biophysics_side_chain_sasa_is_unique():
-    """rev_biophysics() decodes using the side-chain SASA column, so it must be unique"""
-    side_chain_sasa = [vector[6] for vector in encode_sequence.BIOPHYSICS.values()]
-    assert len(set(side_chain_sasa)) == len(side_chain_sasa)
-
-
 @pytest.mark.parametrize('bad_sequence', ['ACXD', 'acd', 'B'])
 def test_biophysics_rejects_invalid_residues(bad_sequence):
     with pytest.raises(ValueError, match='Invalid amino acid'):
         encode_sequence.biophysics(bad_sequence)
-
-
-@pytest.mark.parametrize('dtype', [np.float64, np.float32])
-def test_biophysics_round_trip(dtype):
-    """Decoding works both on encode() output and on float32 batch tensors"""
-    encoded = encode_sequence.biophysics(ALL_AMINO_ACIDS).numpy().astype(dtype)
-    assert encode_sequence.rev_biophysics([encoded]) == [ALL_AMINO_ACIDS]
 
 
 # ..........................................................................................
@@ -102,20 +84,11 @@ def test_user_encoder_from_example_file():
     np.testing.assert_allclose(encoded[1].numpy(), [1.5, 0, 5.1, 16, 0.1, -1])
 
 
-@pytest.mark.parametrize('dtype', [np.float64, np.float32])
-def test_user_encoder_round_trip(dtype):
-    encoder = encode_sequence.UserEncoder(data_path('encoding_example.txt'))
-    encoded = encoder.encode(ALL_AMINO_ACIDS).numpy().astype(dtype)
-
-    assert encoder.decode([encoded]) == [ALL_AMINO_ACIDS]
-
-
 def test_user_encoder_nucleotides():
     encoder = encode_sequence.UserEncoder(data_path('nucleotide_encoding.txt'))
 
     assert len(encoder) == 4
     np.testing.assert_array_equal(encoder.encode('ACGT').numpy(), np.eye(4))
-    assert encoder.decode([encoder.encode('GATTACA').numpy()]) == ['GATTACA']
 
 
 def test_user_encoder_rejects_unknown_character():
@@ -149,6 +122,12 @@ def test_parse_encode_file_non_numeric(write_lines):
         encode_sequence.parse_encode_file(path)
 
 
+def test_parse_encode_file_repeated_character(write_lines):
+    path = write_lines('encoding.txt', ['A 1 0', 'C 0 1', 'A 0 0'])
+    with pytest.raises(ValueError, match="'A' is listed more than once"):
+        encode_sequence.parse_encode_file(path)
+
+
 def test_parse_encode_file_empty(write_lines):
     path = write_lines('encoding.txt', [''])
     with pytest.raises(ValueError, match='empty'):
@@ -165,7 +144,6 @@ def test_built_in_encoders(encoder_class, input_size):
 
     assert len(encoder) == input_size
     assert encoder.encode('ACD').shape == (3, input_size)
-    assert encoder.decode([encoder.encode(ALL_AMINO_ACIDS).numpy()]) == [ALL_AMINO_ACIDS]
     assert encode_sequence.encoder_from_config(encoder.to_config()).name == encoder.name
 
 
@@ -246,7 +224,6 @@ def test_standardized_encoding_round_trips(encoding):
 
     sequence = encoder.alphabet * 2
     np.testing.assert_array_equal(rebuilt.encode(sequence).numpy(), encoder.encode(sequence).numpy())
-    assert rebuilt.decode([encoder.encode(sequence).float().numpy()]) == [sequence]
 
 
 def test_saved_standardization_is_used_as_stored():

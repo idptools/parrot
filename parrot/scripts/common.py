@@ -89,7 +89,7 @@ def add_training_arguments(parser: argparse.ArgumentParser) -> None:
                         help='Do not display warnings for dataset structure')
 
     parser.add_argument('--probabilistic-classification', dest='probabilistic_classification',
-                        action='store_true', help='Optional implementation for sequence classificaion')
+                        action='store_true', help='Optional implementation for sequence classification')
     parser.add_argument('--include-figs', dest='include_figs', action='store_true',
                         help='Generate figures from training results and save to same location as network')
     parser.add_argument('--no-stats', dest='ignore_metrics', action='store_true',

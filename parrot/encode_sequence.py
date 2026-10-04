@@ -99,32 +99,6 @@ def one_hot(seq):
     return _ONE_HOT_TABLE.encode(seq)
 
 
-def rev_one_hot(seq_vectors):
-    """Decode a list of one-hot sequence vectors into amino acid sequences
-
-    Parameters
-    ----------
-    seq_vectors : list of numpy arrays
-            A list containing sequence vectors
-
-    Returns
-    -------
-    list
-            Strings of amino acid sequences
-    """
-
-    REV_ONE_HOT = 'ACDEFGHIKLMNPQRSTVWY'
-    sequences = []
-
-    for seq_vector in seq_vectors:
-        seq = []
-        for residue in seq_vector:
-            seq.append(REV_ONE_HOT[np.argmax(residue)])
-        sequences.append("".join(seq))
-
-    return sequences
-
-
 ############  Biophysical scale encoding  #############
 
 # Map each amino acid to a vector of biophysical properties
@@ -187,34 +161,6 @@ def biophysics(seq):
 _BIOPHYSICS_TABLE = LookupTable(BIOPHYSICS)
 
 
-def rev_biophysics(seq_vectors):
-    """Decode a list of biophysically-encoded sequence vectors into amino acid sequences
-
-    Parameters
-    ----------
-    seq_vectors : list of numpy arrays
-            A list containing sequence vectors
-
-    Returns
-    -------
-    list
-            Strings of amino acid sequences
-    """
-
-    REV_BIOPHYSICS = {}
-    for key, value in BIOPHYSICS.items():
-        REV_BIOPHYSICS[str(value[6])] = key
-
-    sequences = []
-    for seq_vector in seq_vectors:
-        seq = []
-        for residue in seq_vector:
-            seq.append(REV_BIOPHYSICS[str(residue[6])])
-        sequences.append("".join(seq))
-
-    return sequences
-
-
 ################## User-specified encoding ####################
 
 def parse_encode_file(file):
@@ -239,8 +185,8 @@ def parse_encode_file(file):
     Raises
     ------
     ValueError
-            If the file is empty, if the vectors are not all the same length, or
-            if any vector entry is not a number
+            If the file is empty, if the vectors are not all the same length, if
+            any vector entry is not a number, or if a character is listed twice
     """
 
     with open(file) as f:
@@ -249,18 +195,21 @@ def parse_encode_file(file):
     if len(lines) == 0:
         raise ValueError(f'Encoding file {file} is empty.')
 
-    l = len(lines[0]) - 1
-    d = {}
+    vector_length = len(lines[0]) - 1
+    table: dict[str, list[float]] = {}
     for line in lines:
-        if len(line) - 1 != l:
+        character, values = line[0], line[1:]
+        if len(values) != vector_length:
             raise ValueError('Vectors in encoding file do not have same length.')
+        if character in table:
+            raise ValueError(f"Character '{character}' is listed more than once in encoding file {file}")
 
         try:
-            d[line[0]] = [float(value) for value in line[1:]]
+            table[character] = [float(value) for value in values]
         except ValueError:
-            raise ValueError(f'Non-numeric value in encoding file for character {line[0]}: {line[1:]}') from None
+            raise ValueError(f'Non-numeric value in encoding file for character {character}: {values}') from None
 
-    return d, l
+    return table, vector_length
 
 
 def check_characters(sequences: Iterable[str], valid: set[str]) -> None:
@@ -336,11 +285,6 @@ class SequenceEncoder:
 
         check_characters(sequences, set(self.alphabet))
 
-    def decode(self, seq_vectors: list[np.ndarray]) -> list[str]:
-        """Convert a list of encoded sequences back to strings"""
-
-        raise NotImplementedError
-
     def to_config(self) -> dict[str, Any]:
         """Return a plain dictionary from which encoder_from_config() can rebuild this encoder"""
 
@@ -360,9 +304,6 @@ class OneHotEncoder(SequenceEncoder):
     def encode(self, seq: str) -> torch.Tensor:
         return one_hot(seq)
 
-    def decode(self, seq_vectors: list[np.ndarray]) -> list[str]:
-        return rev_one_hot(seq_vectors)
-
 
 class BiophysicsEncoder(SequenceEncoder):
     """Encoding of amino acids by nine biophysical scales (see biophysics())"""
@@ -376,9 +317,6 @@ class BiophysicsEncoder(SequenceEncoder):
 
     def encode(self, seq: str) -> torch.Tensor:
         return biophysics(seq)
-
-    def decode(self, seq_vectors: list[np.ndarray]) -> list[str]:
-        return rev_biophysics(seq_vectors)
 
 
 class UserEncoder(SequenceEncoder):
@@ -446,38 +384,6 @@ class UserEncoder(SequenceEncoder):
         """
 
         return self._table.encode(seq)
-
-    def decode(self, seq_vectors: list[np.ndarray]) -> list[str]:
-        """Converts a list of sequence vectors back to a list of sequences
-
-        Parameters
-        ----------
-        seq_vectors : list of numpy arrays
-                A list containing sequence vectors
-
-        Returns
-        -------
-        list
-                Strings of sequences
-        """
-
-        # Create a reverse of the encode_dict using hashing. Both sides are cast to
-        # float32 so that vectors decode correctly whether they come straight from
-        # encode() (float64) or from a batched FloatTensor (float32).
-        rev_dict = {}
-        for key, value in self.encode_dict.items():
-            value = np.array(value, dtype=np.float32)
-            rev_dict[hash(tuple(value))] = key
-
-        sequences = []
-        for seq_vector in seq_vectors:
-            seq = []
-            for residue in seq_vector:
-                residue = np.asarray(residue, dtype=np.float32)
-                seq.append(rev_dict[hash(tuple(residue))])
-            sequences.append("".join(seq))
-
-        return sequences
 
     @property
     def alphabet(self) -> str:
@@ -566,19 +472,6 @@ class StandardizedEncoder(SequenceEncoder):
 
         raw = self.base.encode(seq).numpy()
         return torch.from_numpy((raw - self.mean) / self.scale)
-
-    def decode(self, seq_vectors: list[np.ndarray]) -> list[str]:
-        """Convert encoded sequences back to strings, matching each vector to the nearest character"""
-
-        characters = self.alphabet
-        table = np.stack([self.encode(character).numpy()[0] for character in characters])
-
-        sequences = []
-        for seq_vector in seq_vectors:
-            vectors = np.asarray(seq_vector, dtype=float)
-            distances = ((vectors[:, None, :] - table[None, :, :]) ** 2).sum(axis=-1)
-            sequences.append(''.join(characters[index] for index in distances.argmin(axis=1)))
-        return sequences
 
     def to_config(self) -> dict[str, Any]:
         """The base encoding and the exact mean and scale are stored, so a saved network is self-contained"""

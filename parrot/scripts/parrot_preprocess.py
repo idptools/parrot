@@ -27,7 +27,7 @@ from datetime import datetime
 
 import numpy as np
 
-import parrot
+from parrot.package_version import PARROT_VERSION
 from parrot import process_input_data
 from parrot.tasks import Task
 from parrot.tools import class_balancing, cli, homology, kmer_similarity, preproc, validate_args
@@ -45,7 +45,7 @@ def main():
     parser.add_argument('input_data_file', help='path to tsv file with format: <idx> <sequence> <data>. This is the file that will be manipulated in some way')
     parser.add_argument('output_data_file', help='path to be written to for an output data file. Will overwrite an existing file')
     parser.add_argument('-d', '--datatype', metavar='dtype', type=str, required=True, help="REQUIRED. Format of the input data file, must be 'sequence' or 'residues'")
-    parser.add_argument("-m", "--mode", help="Must be either either 'classification' or 'regression'", type=str, required=True, metavar='dtype')
+    parser.add_argument("-m", "--mode", help="Must be either 'classification' or 'regression'", type=str, required=True, metavar='mode')
     parser.add_argument("--delimiter", help="If a non-whitespace delimiter was used in an input file, this allows the user to define an alternative character.", type=str)
     parser.add_argument("-v", "--verbose", help="Print the report of what was done as it happens", action='store_true')
     parser.add_argument("--seed", type=int, default=None, help="Random seed for a reproducible split and class balancing (default: not seeded)")
@@ -106,7 +106,7 @@ def main():
     balancing = parser.add_argument_group('class balancing (classification only)')
     balancing.add_argument("--class-balance",   help="Down-sample the more common classes so classes are balanced (only the training set, if the data are split). For residues, the balance score after each removal is written to <output>_class_balance_trace.csv next to the output file", action='store_true')
     balancing.add_argument("--cb-block-size", help="If --class-balance used with residues, the number of randomly drawn sequences considered for each removal (default 100; larger makes better choices, more slowly)", type=int, default=100)
-    balancing.add_argument("--cb-max-fraction-removed", help="If --class-balance used, defines what fraction of the data could be removed in persuit of a balanced dataset. Default = 0.25 ", type=float, default=0.25)
+    balancing.add_argument("--cb-max-fraction-removed", help="If --class-balance used, defines what fraction of the data could be removed in pursuit of a balanced dataset. Default = 0.25 ", type=float, default=0.25)
     balancing.add_argument("--cb-balance-threshold", help="If --class-balance used, defines the balance ratio (most numerous class / least numerous class) threshold used to say if a dataset is 'balanced'. Default = 1.4", type=float, default=1.4)
     balancing.add_argument("--cb-shuffle-off", help=argparse.SUPPRESS, action='store_true')  # no longer has any effect
 
@@ -118,7 +118,7 @@ def main():
     output = os.path.abspath(args.output_data_file)
     output_prefix, _ = validate_args.split_file_and_directory(output)
     report = preproc.ProcessingReport(verbose=args.verbose)
-    report.add(f'parrot-preprocess (PARROT {parrot.__version__}), {datetime.now().isoformat(timespec="seconds")}')
+    report.add(f'parrot-preprocess (PARROT {PARROT_VERSION}), {datetime.now().isoformat(timespec="seconds")}')
     report.add(f'Input: {os.path.abspath(args.input_data_file)} ({args.datatype}-mapped {args.mode})')
     classification = args.mode == 'classification'
 
@@ -187,7 +187,7 @@ def check_arguments(args):
         If the options are invalid or inconsistent
     """
     cli.validate_args(args.datatype, ['residues', 'sequence'], "Please pass either 'residues' or 'sequence' with the --datatype flag")
-    cli.validate_args(args.mode, ['classification', 'regression'], "Please passe either 'classification' or 'regression' with the --mode flag")
+    cli.validate_args(args.mode, ['classification', 'regression'], "Please pass either 'classification' or 'regression' with the --mode flag")
 
     if args.recode_classes and args.mode != 'classification':
         raise ValueError('If we are trying to recode classes the data mode must be classification')

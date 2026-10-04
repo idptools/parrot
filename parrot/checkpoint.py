@@ -25,6 +25,7 @@ import torch
 from parrot.architectures import ParrotArchitecture, build_network, get_architecture
 from parrot.architectures.registry import fill_legacy_values
 from parrot.encode_sequence import SequenceEncoder, encoder_from_config, get_encoder
+from parrot.package_version import PARROT_VERSION
 from parrot.tasks import Task
 
 # Version of the saved-network format. Increase this if the format changes.
@@ -47,12 +48,9 @@ def save_network(path: str, network: ParrotArchitecture, encoder: SequenceEncode
         The encoder the network was trained with
     """
 
-    # Imported here because parrot/__init__.py defines __version__ after importing this module
-    import parrot
-
     checkpoint = {
         FORMAT_VERSION_KEY: CHECKPOINT_FORMAT_VERSION,
-        'parrot_version': parrot.__version__,
+        'parrot_version': PARROT_VERSION,
         'architecture': network.name,
         'hyperparameters': network.hyperparameter_values,
         'input_size': network.input_size,

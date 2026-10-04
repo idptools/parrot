@@ -3,7 +3,7 @@ import random
 import numpy as np
 import torch
 
-import parrot
+from parrot.package_version import PARROT_VERSION
 
 
 def set_random_seed(seed):
@@ -85,7 +85,7 @@ def print_startup(program_name, silent, print_parrot=False):
         print(r"|            /                    |")
         print(r"...................................")
 
-    print(f'\n{program_name} (version {parrot.__version__})')
+    print(f'\n{program_name} (version {PARROT_VERSION})')
     print("...................................")
     print(f'Developed by Dan Griffith\n   Holehouse lab, WUSTL')
     print("")
@@ -131,33 +131,6 @@ def print_settings(silent, buffer_length=14, **kwargs):
         name_buffered = strbuffer(name)
         print(f"{name_buffered}: {kwargs[name]}")
 
-
-
-# .................................................................
-#
-#
-def write_datafile(filename, outdata):
-    """
-    Function that writes out a parrot datafile, where outdata must
-    be a list of lists and each sub-element is joined on a whitespace
-
-    Parameters
-    --------------
-    filename : str
-        The name of the file to be written to
-
-    outdata : list
-        A list of lists (e.g. lines in parrot-preprocess)
-
-    Returns
-    ---------
-    None
-        No returns but the outdata is written to the current file
-
-    """
-    with open(filename,'w') as fh:
-        for line in outdata:
-            fh.write(" ".join(line)+"\n")
 
 
 # .................................................................

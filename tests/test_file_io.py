@@ -1,10 +1,10 @@
 import pytest
-import parrot
+
 from parrot import process_input_data
 from parrot.parrot_exceptions import IOExceptionParrot
 
-datapath = parrot.get_directory()
-test_datapath = parrot.get_directory('../tests/test_data')
+from tests.helpers import DATA_DIR as datapath
+from tests.helpers import TEST_DATA_DIR as test_datapath
 
 
 

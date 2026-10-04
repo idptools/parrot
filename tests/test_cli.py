@@ -283,7 +283,7 @@ def test_train_other_encodings(run_cli, tmp_path, encoding, data_file, datatype,
     run_train(run_cli, data_path(data_file), tmp_path / 'net.pt', datatype, num_classes,
               '--encode', encode_argument, '--silent')
 
-    # Sequences are decoded back from their encoding when writing predictions
+    # Predictions are written with the original sequences
     original_sequences = {line[1] for line in pid.read_tsv_raw(data_path(data_file))}
     predicted_sequences = {line.split()[1] for line in read_lines(tmp_path / 'net_predictions.tsv')}
     assert predicted_sequences <= original_sequences
