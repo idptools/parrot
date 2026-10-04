@@ -11,6 +11,7 @@ import pytest
 import torch
 
 from parrot import hyperparameter_search as hs
+from parrot import tpe_sampler
 from parrot import train_network
 from parrot.architectures import HyperParameter
 from parrot.tasks import Task
@@ -145,7 +146,7 @@ def test_tpe_treats_failed_configurations_as_bad():
     losses = np.linspace(1, 2, 20)
     losses[:5] = math.inf
     candidates = hs.TPESampler(space, rng).suggest(points, losses)
-    assert np.all(np.isfinite(candidates)) and candidates.shape == (hs.CANDIDATES_PER_SUGGESTION, 3)
+    assert np.all(np.isfinite(candidates)) and candidates.shape == (tpe_sampler.CANDIDATES_PER_SUGGESTION, 3)
 
 
 # ..........................................................................................

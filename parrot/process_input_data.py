@@ -24,7 +24,7 @@ from torch.utils.data import DataLoader, Dataset, Sampler
 
 from parrot import parrot_exceptions
 from parrot.encode_sequence import OneHotEncoder, SequenceEncoder
-from parrot.tasks import Task
+from parrot.tasks import VALID_DATATYPES, Task
 from parrot.tools import dataset_warnings
 
 # Text used in residue-mapped datafiles for a residue with no label (e.g. a residue
@@ -106,7 +106,7 @@ def read_tsv_raw(tsvfile: str, delimiter: str | None = None) -> list[list[str]]:
     return lines
 
 
-def __parse_lines(lines: list[list[str]], datatype: str, validate: bool = True) -> list[Sample]:
+def parse_lines(lines: list[list[str]], datatype: str) -> list[Sample]:
     """Convert the fields of each datafile line into [id, sequence, value(s)]
 
     For residue-mapped data, individual residue values may be 'nan' to mark a
@@ -118,8 +118,6 @@ def __parse_lines(lines: list[list[str]], datatype: str, validate: bool = True) 
         Output from read_tsv_raw()
     datatype : str
         'residues' (a value per residue) or 'sequence' (a single value)
-    validate : bool
-        If True, ensure the number of residue values equals the number of residues
 
     Returns
     -------
@@ -130,53 +128,110 @@ def __parse_lines(lines: list[list[str]], datatype: str, validate: bool = True) 
     Raises
     ------
     IOExceptionParrot
-        If a line cannot be parsed. The line number and offending line are reported.
+        For the first line that cannot be parsed, saying which data line it is
+        (counting only non-empty, non-comment lines), what is wrong with it, and
+        what it contains
     """
 
-    if datatype not in ['residues', 'sequence']:
-        raise ValueError('Invalid datatype. Must be "residues" or "sequence".')
+    if datatype not in VALID_DATATYPES:
+        raise ValueError(f"Invalid datatype '{datatype}': must be one of {', '.join(VALID_DATATYPES)}")
 
     data: list[Sample] = []
-    line_number = 0
-    line: list[str] = []
-    try:
-        for line_number, line in enumerate(lines, start=1):
-
-            if datatype == 'residues':
-                # Missing labels ('nan') are allowed for individual residues, but every
-                # sequence needs at least one label, and infinite values are never valid
-                residue_data = np.array(line[2:], dtype=float)
-                if np.any(np.isinf(residue_data)):
-                    raise ValueError('Residue values must be finite numbers or nan (missing), not inf.')
-                if len(residue_data) > 0 and np.all(np.isnan(residue_data)):
-                    raise ValueError('Every residue label of this sequence is missing (nan).')
-
-                data.append([line[0], line[1], residue_data])
-
-            else:
-                # Exactly one value is expected; extra columns usually mean a residues-
-                # formatted file was passed with --datatype sequence.
-                if len(line) != 3:
-                    raise ValueError(f'Expected 3 columns (id, sequence, value) but found {len(line)}.')
-
-                sequence_value = float(line[2])
-                if not np.isfinite(sequence_value):
-                    raise ValueError('Sequence values must be finite numbers (no NaN or inf).')
-
-                data.append([line[0], line[1], sequence_value])
-
-    except Exception as e:
-        print('Excecption raised on parsing input file...')
-        print(e)
-        print('')
-        raise parrot_exceptions.IOExceptionParrot(f"Input data is not correctly formatted for datatype '{datatype}'.\nMake sure your datafile does not have empty lines at the end of the file.\nError on line {line_number}:\n{line}")
-
-    if validate and datatype == 'residues':
-        for line_number, sample in enumerate(data, start=1):
-            if len(sample[1]) != len(sample[2]):
-                raise parrot_exceptions.IOExceptionParrot(f"Input data is not correctly formatted for datatype '{datatype}'.\nInconsistent number of residue values and residues. Error on line {line_number}:\n{sample}")
-
+    for line_number, fields in enumerate(lines, start=1):
+        try:
+            data.append(parse_line(fields, datatype))
+        except ValueError as error:
+            raise parrot_exceptions.IOExceptionParrot(
+                f"Data line {line_number} is not valid {datatype}-mapped data: {error}\n  {' '.join(fields)}") from error
     return data
+
+
+def parse_line(fields: list[str], datatype: str) -> Sample:
+    """Convert the fields of one datafile line into [id, sequence, value(s)]
+
+    Parameters
+    ----------
+    fields : list of str
+        The line split into fields: ID, sequence, then the value(s)
+    datatype : str
+        'residues' (a value per residue) or 'sequence' (a single value)
+
+    Returns
+    -------
+    list
+        [id, sequence, value(s)]: a float for sequence-mapped data, or a numpy
+        array of floats (NaN for a missing label) for residue-mapped data
+
+    Raises
+    ------
+    ValueError
+        Saying what is wrong with the line
+    """
+    if len(fields) < 3:
+        raise ValueError(f'expected an ID, a sequence and its value(s), but found {len(fields)} column(s)')
+
+    sequence_id, sequence, values = fields[0], fields[1], fields[2:]
+    if datatype == 'residues':
+        return [sequence_id, sequence, parse_residue_values(values, sequence)]
+    return [sequence_id, sequence, parse_sequence_value(values)]
+
+
+def parse_residue_values(values: list[str], sequence: str) -> np.ndarray:
+    """Convert a residue-mapped line's values to numbers: one per residue, 'nan' for a residue with no label
+
+    Parameters
+    ----------
+    values : list of str
+        The line's values
+    sequence : str
+        The line's sequence
+
+    Returns
+    -------
+    numpy array of float
+
+    Raises
+    ------
+    ValueError
+        If a value is not a number, the number of values differs from the
+        number of residues, a value is infinite, or every value is missing
+    """
+    numbers = np.array(values, dtype=float)
+    if len(numbers) != len(sequence):
+        raise ValueError(f'inconsistent number of residue values and residues ({len(numbers)} values for a '
+                         f'sequence of {len(sequence)} residues)')
+    if np.any(np.isinf(numbers)):
+        raise ValueError('residue values must be finite numbers or nan (missing), not inf')
+    if np.all(np.isnan(numbers)):
+        raise ValueError('every residue label of this sequence is missing (nan)')
+    return numbers
+
+
+def parse_sequence_value(values: list[str]) -> float:
+    """Convert a sequence-mapped line's value to a number
+
+    Parameters
+    ----------
+    values : list of str
+        The line's values (exactly one is expected)
+
+    Returns
+    -------
+    float
+
+    Raises
+    ------
+    ValueError
+        If there is not exactly one value, or it is not a finite number
+    """
+    # Extra columns usually mean a residue-mapped file was given with --datatype sequence
+    if len(values) != 1:
+        raise ValueError(f'expected one value per sequence but found {len(values)} (is this residue-mapped data?)')
+
+    value = float(values[0])
+    if not np.isfinite(value):
+        raise ValueError('sequence values must be finite numbers (no nan or inf)')
+    return value
 
 
 def parse_file(tsvfile: str, task: Task, exclude_seq_id: bool = False, ignore_warnings: bool = False) -> list[Sample]:
@@ -211,27 +266,25 @@ def parse_file(tsvfile: str, task: Task, exclude_seq_id: bool = False, ignore_wa
 
     Raises
     ------
-    ValueError
-        If any class label is not an integer in the range [0, num_classes - 1]
+    IOExceptionParrot
+        If the file has no data lines, a line cannot be parsed, or a class label
+        is not an integer in the range [0, num_classes - 1]
     """
 
     lines = read_tsv_raw(tsvfile)
+    if not lines:
+        raise parrot_exceptions.IOExceptionParrot(f'Datafile {tsvfile} contains no data lines')
 
     # Add a dummy seqID if none are provided
     if exclude_seq_id:
         for line in lines:
             line.insert(0, '')
 
-    data = __parse_lines(lines, task.datatype)
+    data = parse_lines(lines, task.datatype)
 
+    # The warnings run before class labels are converted, because they read missing labels as NaN
     if not ignore_warnings:
-        dataset_warnings.check_duplicate_sequences(data)
-        if task.per_residue:
-            dataset_warnings.report_missing_residue_labels(data)
-        if task.is_classification:
-            dataset_warnings.check_class_imbalance(data)
-        else:
-            dataset_warnings.check_regression_imbalance(data)
+        dataset_warnings.warn_about_dataset(data, task)
 
     if task.is_classification:
         for sample in data:
@@ -258,7 +311,7 @@ def _validate_class_labels(sample: Sample, task: Task) -> int | list[int]:
 
     Raises
     ------
-    ValueError
+    IOExceptionParrot
         If any label is not a whole number in the range [0, num_classes - 1].
         Labels are never silently truncated (e.g. 1.5 is not turned into 1).
     """
@@ -268,10 +321,13 @@ def _validate_class_labels(sample: Sample, task: Task) -> int | list[int]:
     present = labels[~missing]
 
     if np.any(present != np.round(present)):
-        raise ValueError(f"Invalid class label on entry {sample[0]}.\nClass labels must be integers, got {sample[2]}")
+        raise parrot_exceptions.IOExceptionParrot(
+            f'Invalid class label on entry {sample[0]}.\nClass labels must be integers, got {sample[2]}')
 
     if np.any(present < 0) or np.any(present >= task.num_classes):
-        raise ValueError(f"Invalid class label on entry {sample[0]}.\nClass labels must be between 0 and {task.num_classes - 1}, got {sample[2]}")
+        raise parrot_exceptions.IOExceptionParrot(
+            f'Invalid class label on entry {sample[0]}.\nClass labels must be between 0 and {task.num_classes - 1}, '
+            f'got {sample[2]}')
 
     integer_labels = [IGNORED_CLASS_LABEL if is_missing else int(label) for label, is_missing in zip(labels, missing)]
     if task.per_residue:
@@ -627,48 +683,44 @@ def make_dataloader(dataset: SequenceDataset, task: Task, batch_size: int, shuff
 # .................................................................
 # Splitting data
 
-def vector_split(v: np.ndarray, fraction: float) -> tuple[np.ndarray, np.ndarray]:
-    """Split a vector randomly by a specified proportion
-
-    Randomly divide the values of a vector into two, non-overlapping smaller
-    vectors. The proportions of the two vectors will be `fraction` and
-    (1 - `fraction`).
+def vector_split(values: np.ndarray, fraction: float) -> tuple[np.ndarray, np.ndarray]:
+    """Split the values of a vector at random into two non-overlapping parts
 
     Parameters
     ----------
-    v : numpy array
-        The vector to divide
+    values : numpy array
+        The (unique) values to divide, e.g. sample indices
     fraction : float
-        Size proportion for the returned vectors. Should be in the range [0-1].
+        Fraction of the values in the first part, between 0 and 1
 
     Returns
     -------
     numpy array
-        a sorted subset of `v` of length `fraction` * len(v) (rounding up)
+        A sorted, random `fraction` of the values (rounding the number up)
     numpy array
-        the remaining (1-`fraction`) * len(v) values of `v`
+        The rest of the values, sorted
     """
 
     # Subtract a tiny tolerance before rounding up so that floating-point noise
     # (e.g. 1 - 0.1 - 0.3 = 0.6000000000000001) cannot push an exact size up by one
-    segment1_size = math.ceil(fraction*len(v) - SPLIT_SIZE_TOLERANCE)
-    segment1 = np.random.choice(v, size=segment1_size, replace=False)
-    segment1.sort()
-    segment2 = np.setdiff1d(v, segment1, assume_unique=True)
-    return segment1, segment2
+    first_size = math.ceil(fraction * len(values) - SPLIT_SIZE_TOLERANCE)
+    first = np.random.choice(values, size=first_size, replace=False)
+    first.sort()
+    rest = np.setdiff1d(values, first, assume_unique=True)
+    return first, rest
 
 
-def random_split_indices(num_samples: int, percent_val: float,
-                         percent_test: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def random_split_indices(num_samples: int, val_fraction: float,
+                         test_fraction: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Randomly assign sample indices to training, validation and test sets
 
     Parameters
     ----------
     num_samples : int
         Total number of samples
-    percent_val : float
+    val_fraction : float
         Fraction of samples for the validation set
-    percent_test : float
+    test_fraction : float
         Fraction of samples for the test set. The training set gets the rest.
 
     Returns
@@ -677,12 +729,11 @@ def random_split_indices(num_samples: int, percent_val: float,
         Sorted (training, validation, test) indices
     """
 
-    percent_train = 1 - percent_val - percent_test
-    training_samples, val_test_samples = vector_split(np.arange(num_samples), percent_train)
+    train_fraction = 1 - val_fraction - test_fraction
+    training_samples, val_test_samples = vector_split(np.arange(num_samples), train_fraction)
 
-    # Repeat procedure to split val and test sets
-    val_test_fraction = percent_val / (percent_val + percent_test)
-    val_samples, test_samples = vector_split(val_test_samples, val_test_fraction)
+    # Then divide what is left between the validation and test sets
+    val_samples, test_samples = vector_split(val_test_samples, val_fraction / (val_fraction + test_fraction))
 
     return training_samples, val_samples, test_samples
 
@@ -793,7 +844,8 @@ def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, spl
         Split-file assigning samples to sets. If None (default) samples are
         assigned randomly using `percent_val` and `percent_test`.
     percent_val, percent_test : float, optional
-        Fractions of the data assigned to the validation and test sets when no
+        Fractions (not percentages; the names are kept from earlier versions of
+        PARROT) of the data assigned to the validation and test sets when no
         split-file is given (default 0.15 each)
     ignore_warnings : bool, optional
         If True, do not print dataset warnings

@@ -167,13 +167,13 @@ def test_class_imbalance_warning(capsys, counts, expected):
 
 
 def test_regression_warnings(capsys):
-    dataset_warnings.check_regression_imbalance([['x', 'A', value] for value in [-1.0, 0.0, 1.0, 0.5, -0.5]])
+    dataset_warnings.check_regression_values([['x', 'A', value] for value in [-1.0, 0.0, 1.0, 0.5, -0.5]])
     assert capsys.readouterr().out == ''
 
-    dataset_warnings.check_zero_centered(np.array([10.0, 11.0, 12.0]))
+    dataset_warnings.check_mean(np.array([10.0, 11.0, 12.0]))
     assert 'not centered around zero' in capsys.readouterr().out
 
-    dataset_warnings.check_low_std(np.array([-20.0, 0.0, 20.0]))
+    dataset_warnings.check_spread(np.array([-20.0, 0.0, 20.0]))
     assert 'large variance' in capsys.readouterr().out
 
     dataset_warnings.check_skew(np.array([0.0] * 20 + [10.0]))
@@ -186,16 +186,6 @@ def test_regression_warnings(capsys):
     dataset_warnings.check_skew(np.array([1.0, 2.0, 3.0, 4.0, 5.0]))
     assert capsys.readouterr().out == ''
 
-
-def test_batch_size_warnings(capsys):
-    dataset_warnings.eval_batch_size(32, 1000)
-    assert capsys.readouterr().out == ''
-
-    dataset_warnings.eval_batch_size(1024, 100000)
-    assert 'very large batch size' in capsys.readouterr().out
-
-    dataset_warnings.eval_batch_size(32, 200)
-    assert 'large relative to the number of samples' in capsys.readouterr().out
 
 
 # ..........................................................................................

@@ -51,7 +51,13 @@ import numpy as np
 import torch
 
 from parrot.devices import full_float32_precision
-from parrot.encode_sequence import SequenceEncoder, check_characters
+from parrot.sequence_encoder import SequenceEncoder, check_characters
+
+# The two families of models, which are loaded and run through different packages
+ESM2_FAMILY = 'esm2'
+ESMC_FAMILY = 'esmc'
+PLM_FAMILIES = (ESM2_FAMILY, ESMC_FAMILY)
+
 
 @dataclass(frozen=True)
 class PLMModel:
@@ -74,6 +80,11 @@ class PLMModel:
     embedding_size: int
     max_window: int
 
+    def __post_init__(self) -> None:
+        """Check the family is one PARROT can load, so a mistake in the model list fails as soon as it is read."""
+        if self.family not in PLM_FAMILIES:
+            raise ValueError(f"Unknown protein language model family '{self.family}': must be one of {PLM_FAMILIES}")
+
 
 # ESM-2 was trained on crops of 1,024 tokens: up to 1,022 residues plus the start and
 # end tokens (Lin et al. 2023)
@@ -86,14 +97,14 @@ ESMC_MAX_WINDOW = 2046
 # Every supported model. ESM-2 embedding sizes: Lin et al. 2023, Table S1; ESM C
 # widths: the ESM Cambrian blog.
 PLM_MODELS = {
-    'esm2_t6_8M_UR50D': PLMModel('esm2', 320, ESM2_MAX_WINDOW),
-    'esm2_t12_35M_UR50D': PLMModel('esm2', 480, ESM2_MAX_WINDOW),
-    'esm2_t30_150M_UR50D': PLMModel('esm2', 640, ESM2_MAX_WINDOW),
-    'esm2_t33_650M_UR50D': PLMModel('esm2', 1280, ESM2_MAX_WINDOW),
-    'esm2_t36_3B_UR50D': PLMModel('esm2', 2560, ESM2_MAX_WINDOW),
-    'esm2_t48_15B_UR50D': PLMModel('esm2', 5120, ESM2_MAX_WINDOW),
-    'esmc_300m': PLMModel('esmc', 960, ESMC_MAX_WINDOW),
-    'esmc_600m': PLMModel('esmc', 1152, ESMC_MAX_WINDOW),
+    'esm2_t6_8M_UR50D': PLMModel(ESM2_FAMILY, 320, ESM2_MAX_WINDOW),
+    'esm2_t12_35M_UR50D': PLMModel(ESM2_FAMILY, 480, ESM2_MAX_WINDOW),
+    'esm2_t30_150M_UR50D': PLMModel(ESM2_FAMILY, 640, ESM2_MAX_WINDOW),
+    'esm2_t33_650M_UR50D': PLMModel(ESM2_FAMILY, 1280, ESM2_MAX_WINDOW),
+    'esm2_t36_3B_UR50D': PLMModel(ESM2_FAMILY, 2560, ESM2_MAX_WINDOW),
+    'esm2_t48_15B_UR50D': PLMModel(ESM2_FAMILY, 5120, ESM2_MAX_WINDOW),
+    'esmc_300m': PLMModel(ESMC_FAMILY, 960, ESMC_MAX_WINDOW),
+    'esmc_600m': PLMModel(ESMC_FAMILY, 1152, ESMC_MAX_WINDOW),
 }
 
 # Hugging Face organisation that publishes the ESM-2 models
@@ -118,6 +129,10 @@ PLM_RESIDUES = 'ABCDEFGHIKLMNOPQRSTUVWXYZ'
 
 # Maximum residues (padding included) the PLM processes at once; bounds GPU memory
 MAX_TOKENS_PER_BATCH = 16_000
+
+# When filling a cache, embeddings are written after every this many residues (50 batches' worth), so an
+# interrupted run keeps most of its work
+RESIDUES_PER_CACHE_WRITE = 50 * MAX_TOKENS_PER_BATCH
 
 # Refuse to start embedding unless the disk has this many times the estimated space free
 DISK_SPACE_SAFETY_FACTOR = 1.25
@@ -249,7 +264,7 @@ class EmbeddingCache:
         import h5py
 
         self.directory.mkdir(parents=True, exist_ok=True)
-        self._close_reader()
+        self.close()
         with self._lock(), h5py.File(self.path, 'a') as store:
             if 'model' not in store.attrs:
                 store.attrs['model'] = self.model_name
@@ -289,7 +304,8 @@ class EmbeddingCache:
             self._reader = h5py.File(self.path, 'r')
         return self._reader
 
-    def _close_reader(self) -> None:
+    def close(self) -> None:
+        """Close the file handle kept open for reading (it is reopened when next needed)."""
         if self._reader is not None:
             self._reader.close()
             self._reader = None
@@ -334,7 +350,7 @@ def write_cache_readme(directory: Path, program: str) -> None:
         known = PLM_MODELS.get(model_name)
         cache = EmbeddingCache(directory, model_name, known.embedding_size if known is not None else 0)
         num_sequences, num_residues, num_bytes = cache.summary()
-        cache._close_reader()
+        cache.close()
         total_bytes += num_bytes
         rows.append(f'| `{path.name}` | {model_name} | {cache.embedding_size} | {num_sequences:,} | {num_residues:,} | '
                     f'{human_size(num_bytes)} |')
@@ -373,7 +389,7 @@ The size is about (number of residues) x (values per residue) x 2 bytes.
 # The encoder
 
 class PLMEncoder(SequenceEncoder):
-    """Encode residues by their embeddings from a protein language model (ESM-2)
+    """Encode residues by their embeddings from a protein language model (ESM-2 or ESM C)
 
     Before sequences are encoded in bulk, prepare() embeds every sequence not
     yet in the cache. encode() then reads embeddings from the cache, or, with no
@@ -422,14 +438,15 @@ class PLMEncoder(SequenceEncoder):
 
     @property
     def alphabet(self) -> str:
+        """Not defined: a PLM embeds each residue in context (check_sequences() uses PLM_RESIDUES instead)."""
         raise NotImplementedError('A PLM embeds each residue in context, so it has no per-character table')
 
     def to_config(self) -> dict[str, Any]:
         """Everything needed to embed new sequences exactly as the training sequences were"""
-        if self.model_info.family == 'esm2':
+        if self.model_info.family == ESM2_FAMILY:
             source = f'huggingface:{HUGGINGFACE_ORGANISATION}/{self.name}'
             representation = 'final layer after the final layer norm (last_hidden_state), start and end tokens removed'
-        else:
+        else:  # ESM C, the only other family (see PLMModel)
             source = f'evolutionaryscale-esm:{self.name}'
             representation = 'final layer after the final layer norm (ESMCOutput.embeddings), start and end tokens removed'
         return {'name': PLM_CONFIG_NAME, 'model': self.name, 'source': source, 'representation': representation,
@@ -517,7 +534,15 @@ class PLMEncoder(SequenceEncoder):
         write_cache_readme(self.cache.directory, program)
 
     def _embed_into_cache(self, sequences: list[str], silent: bool) -> None:
-        """Embed sequences in groups, writing each group to the cache as it finishes."""
+        """Embed sequences in groups, writing each group to the cache as it finishes
+
+        Parameters
+        ----------
+        sequences : list of str
+            Sequences not yet in the cache
+        silent : bool
+            If True, print no progress
+        """
         assert self.cache is not None
         total_residues = sum(len(sequence) for sequence in sequences)
         done_residues = 0
@@ -526,27 +551,13 @@ class PLMEncoder(SequenceEncoder):
         self._load_model()
         start = last_report = time.monotonic()
 
-        # Groups of similar-length sequences, so batches waste little padding and progress
-        # is saved regularly
-        by_length = sorted(sequences, key=len)
-        group: list[str] = []
-        group_residues = 0
-        for index, sequence in enumerate(by_length):
-            group.append(sequence)
-            group_residues += len(sequence)
-            if group_residues < 50 * MAX_TOKENS_PER_BATCH and index < len(by_length) - 1:
-                continue
-
+        for group in cache_write_groups(sequences, RESIDUES_PER_CACHE_WRITE):
             self.cache.write(self.embed(group))
-            done_residues += group_residues
-            group, group_residues = [], 0
+            done_residues += sum(len(sequence) for sequence in group)
 
             now = time.monotonic()
             if not silent and (now - last_report > PROGRESS_INTERVAL_SECONDS or done_residues == total_residues):
-                rate = done_residues / max(now - start, 1e-9)
-                remaining = (total_residues - done_residues) / rate
-                print(f'  embedded {done_residues:,} of {total_residues:,} residues ({rate:,.0f} residues/s, '
-                      f'about {remaining / 60:.1f} min left)')
+                print_embedding_progress(done_residues, total_residues, now - start)
                 last_report = now
 
     @full_float32_precision()
@@ -566,9 +577,11 @@ class PLMEncoder(SequenceEncoder):
         self.check_sequences(sequences)
         unique = list(dict.fromkeys(sequences))
 
-        # Cut every sequence into the windows that cover it
-        pieces = [(sequence, start, sequence[start:start + self.window])
-                  for sequence in unique for start in window_starts(len(sequence), self.window, self.overlap)]
+        # Cut every sequence into the windows that cover it: (sequence, start of the window, window) pieces
+        pieces = []
+        for sequence in unique:
+            for start in window_starts(len(sequence), self.window, self.overlap):
+                pieces.append((sequence, start, sequence[start:start + self.window]))
 
         sums = {sequence: np.zeros((len(sequence), self.input_size), dtype=np.float32) for sequence in unique}
         counts = {sequence: np.zeros((len(sequence), 1), dtype=np.float32) for sequence in unique}
@@ -594,10 +607,10 @@ class PLMEncoder(SequenceEncoder):
         model, tokenizer = self._load_model()
         tokens = tokenizer(chunks, return_tensors='pt', padding=True)['input_ids'].to(self.device)
         with torch.no_grad():
-            if self.model_info.family == 'esm2':
+            if self.model_info.family == ESM2_FAMILY:
                 hidden = model(input_ids=tokens, attention_mask=tokens != tokenizer.pad_token_id).last_hidden_state
             else:
-                # ESM C masks padding itself, from the pad token
+                # ESM C (the only other family) masks padding itself, from the pad token
                 hidden = model(sequence_tokens=tokens).embeddings
 
         outputs = []
@@ -609,9 +622,9 @@ class PLMEncoder(SequenceEncoder):
     def _load_model(self) -> tuple[Any, Any]:
         """Load the PLM and its tokenizer (once)."""
         if self._model is None:
-            if self.model_info.family == 'esm2':
+            if self.model_info.family == ESM2_FAMILY:
                 self._model, self._tokenizer = self._load_esm2()
-            else:
+            else:  # ESM C, the only other family (see PLMModel)
                 self._model, self._tokenizer = self._load_esmc()
             self._model = self._model.float().to(self.device).eval()
         return self._model, self._tokenizer
@@ -644,6 +657,52 @@ class PLMEncoder(SequenceEncoder):
         if width != self.input_size:
             raise ValueError(f'{self.name} has embedding size {width}, expected {self.input_size}')
         return model, model.tokenizer
+
+
+def cache_write_groups(sequences: list[str], residues_per_group: int) -> list[list[str]]:
+    """Divide sequences into groups of similar length with about `residues_per_group` residues each
+
+    Grouping sequences of similar length means their batches waste little
+    padding; writing each group as it finishes saves progress regularly.
+
+    Parameters
+    ----------
+    sequences : list of str
+    residues_per_group : int
+        A group is closed once it has at least this many residues
+
+    Returns
+    -------
+    list of list of str
+        The groups, shortest sequences first
+    """
+    groups: list[list[str]] = [[]]
+    group_residues = 0
+    for sequence in sorted(sequences, key=len):
+        if group_residues >= residues_per_group:
+            groups.append([])
+            group_residues = 0
+        groups[-1].append(sequence)
+        group_residues += len(sequence)
+    return [group for group in groups if group]
+
+
+def print_embedding_progress(done_residues: int, total_residues: int, elapsed_seconds: float) -> None:
+    """Print how many residues have been embedded, how fast, and roughly how long the rest will take
+
+    Parameters
+    ----------
+    done_residues, total_residues : int
+        Residues embedded so far, and in total
+    elapsed_seconds : float
+        Time spent embedding so far
+    """
+    message = f'  embedded {done_residues:,} of {total_residues:,} residues'
+    if elapsed_seconds > 0:
+        rate = done_residues / elapsed_seconds
+        remaining_minutes = (total_residues - done_residues) / rate / 60
+        message += f' ({rate:,.0f} residues/s, about {remaining_minutes:.1f} min left)'
+    print(message)
 
 
 def token_batches(pieces: list[tuple[str, int, str]], max_tokens: int) -> list[list[tuple[str, int, str]]]:

@@ -103,6 +103,18 @@ hyperparameter_search.py
 .. automodule:: parrot.hyperparameter_search
    :members:
 
+search_space.py
+---------------
+
+.. automodule:: parrot.search_space
+   :members:
+
+tpe_sampler.py
+--------------
+
+.. automodule:: parrot.tpe_sampler
+   :members:
+
 tools.homology
 --------------
 

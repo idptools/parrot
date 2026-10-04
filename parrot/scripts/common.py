@@ -35,6 +35,12 @@ from parrot.tools import cli, dataset_warnings, validate_args
 # Default proportions of the data used for training, validation and testing
 DEFAULT_SET_FRACTIONS = [0.7, 0.15, 0.15]
 
+# Batch sizes above this are very large for the datasets PARROT is used with, and may lower accuracy (rule of thumb)
+LARGE_BATCH_SIZE = 512
+
+# Fewer batches than this per epoch give the optimizer few updates per epoch (rule of thumb)
+MIN_BATCHES_PER_EPOCH = 10
+
 
 # .................................................................
 # Arguments
@@ -433,6 +439,26 @@ class TrainingRun:
         save_network(self.network_file, network, self.encoder)
 
 
+def warn_about_batch_size(batch_size: int, num_training_sequences: int) -> None:
+    """Warn if the batch size is very large, or large relative to the training set
+
+    Parameters
+    ----------
+    batch_size : int
+        Sequences per batch
+    num_training_sequences : int
+        Sequences in the training set (or in one cross-validation fold's training set)
+    """
+    if batch_size > LARGE_BATCH_SIZE:
+        dataset_warnings.print_warning('WARNING: Using a very large batch size.',
+                                       ['', 'This may decrease model accuracy.', ''])
+
+    if num_training_sequences // batch_size <= MIN_BATCHES_PER_EPOCH:
+        dataset_warnings.print_warning(
+            'WARNING: Batch size is large relative to the number of samples in the training set.',
+            ['', 'This may decrease training efficiency.', ''])
+
+
 def prepare_training_run(args: argparse.Namespace, n_folds: int | None = None) -> TrainingRun:
     """Validate the shared arguments, then load and split the data
 
@@ -497,7 +523,7 @@ def prepare_training_run(args: argparse.Namespace, n_folds: int | None = None) -
         cv_sets, train_set, val_set, test_set = pid.split_data_cv(data_file, task, n_folds=n_folds, **split_arguments)
 
     if not ignore_warnings:
-        dataset_warnings.eval_batch_size(args.batch, len(cv_sets[0][0]) if cv_sets else len(train_set))
+        warn_about_batch_size(args.batch, len(cv_sets[0][0]) if cv_sets else len(train_set))
 
     # Check every sequence now, so a bad residue in (say) the test set fails before training rather than after
     every_sequence = train_set.sequences + val_set.sequences + test_set.sequences

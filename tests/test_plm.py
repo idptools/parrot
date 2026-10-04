@@ -77,6 +77,15 @@ def test_short_sequences_have_one_window():
     assert plm.window_starts(500, 1022, 256) == [0]
 
 
+def test_cache_write_groups_hold_every_sequence_in_length_order():
+    sequences = ['A' * length for length in (5, 1, 8, 3, 2, 9)]
+    groups = plm.cache_write_groups(sequences, residues_per_group=10)
+
+    assert [sequence for group in groups for sequence in group] == sorted(sequences, key=len)
+    # A group closes as soon as it reaches 10 residues (1 + 2 + 3 + 5), and the last holds what is left (8 + 9)
+    assert [sum(len(sequence) for sequence in group) for group in groups] == [11, 17]
+
+
 def test_token_batches_respect_the_budget():
     pieces = [('s', 0, 'A' * length) for length in sorted([5, 7, 7, 10, 30, 31, 60, 200])]
     batches = plm.token_batches(pieces, max_tokens=64)

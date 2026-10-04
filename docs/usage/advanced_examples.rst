@@ -80,7 +80,21 @@ Sometimes, a random partition into training/val/test sets is acceptable, but it 
 
 "Encoding" in the context of PARROT refers to the process of converting a sequence of amino acids into computer-readable numeric vectors. By default, PARROT utilizes *one-hot* encoding, which represents each amino acid as a vector with 19 zeros and a single 1, where the position of the 1 determines its identity. However, users can change how amino acids are encoded using the ``--encode`` flag. 
 
-In addition to one-hot encoding, encoding using biophysical scales (vector of properties like charge, hydrophobicity, molecular weight, etc.) is also hard-coded into PARROT. Machine learning using biophysical encoding and can be carried out by providing 'biophysics' after this flag.
+In addition to one-hot encoding, encoding using biophysical scales is also built into PARROT, by providing 'biophysics' after this flag. Each amino acid is described by its value on nine scales (``BIOPHYSICAL_SCALES`` in ``parrot/encode_sequence.py``):
+
+==========================  ============================  ===============================================================
+Scale                       Units                         What it measures
+==========================  ============================  ===============================================================
+hydrophobicity              Kyte-Doolittle units          Kyte & Doolittle (1982) hydropathy scale (J Mol Biol 157:105)
+charge                      elementary charges            formal side-chain charge: -1 for D and E, +1 for K, R and H
+isoelectric point           pH units                      isoelectric point of the free amino acid
+molecular weight            g/mol                         molecular weight of the free amino acid
+aromatic                    1 or 0                        1 for F, W and Y
+hydrogen bonding            1 or 0                        1 for side chains that can form hydrogen bonds
+side-chain SASA             square angstroms              side-chain solvent-accessible surface area in ACE-X-NME
+backbone SASA               square angstroms              backbone solvent-accessible surface area in ACE-X-NME
+solvation free energy       (not recorded)                free energy of solvation of the side chain
+==========================  ============================  ===============================================================
 
 .. code-block:: bash
 

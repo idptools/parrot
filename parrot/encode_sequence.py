@@ -1,6 +1,20 @@
 """
-File containing functions and encoder objects for converting a string of amino
-acids (or any other alphabet, via a user encoding file) into numeric vectors.
+Encoding sequences as numbers: one vector per residue.
+
+The built-in encodings are per-amino-acid tables, where every residue of a
+given amino acid gets the same vector:
+
+- 'onehot': 20 values, a single 1 marking which amino acid it is;
+- 'biophysics': nine biophysical scales (see BIOPHYSICAL_SCALES);
+- a user encoding file, which can encode any alphabet (see parse_encode_file());
+
+and any of these can be standardized (see StandardizedEncoder). Protein
+language model embeddings, where a residue's vector depends on the whole
+sequence, are in plm.py. get_encoder() builds any of them from the name used on
+the command line, and encoder_from_config() rebuilds one saved with a network.
+
+one_hot(), biophysics() and UserEncoder are kept from earlier versions of
+PARROT, which other packages use.
 
 .............................................................................
 parrot was developed by the Holehouse lab
@@ -9,16 +23,23 @@ parrot was developed by the Holehouse lab
 Question/comments/concerns? Raise an issue on github:
 https://github.com/idptools/parrot
 
-Licensed under the MIT license. 
+Licensed under the MIT license.
 """
 
 import os
 import warnings
-from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import torch
+
+from parrot import plm
+from parrot.sequence_encoder import STANDARD_AMINO_ACIDS, SequenceEncoder, check_characters  # noqa: F401
+
+# Bytes run from 0 to 255; characters that fit in one byte are looked up by their byte value
+NUM_BYTE_VALUES = 256
+
 
 class LookupTable:
     """Encodes a sequence by looking up every character's vector at once
@@ -47,13 +68,21 @@ class LookupTable:
         self._row = {character: row for row, character in enumerate(characters)}
 
         # Characters that are single bytes in Latin-1 (every amino acid letter) are looked up by byte value
-        self._byte_row = np.full(256, -1, dtype=np.int64)
+        self._byte_row = np.full(NUM_BYTE_VALUES, -1, dtype=np.int64)
         for character, row in self._row.items():
-            if len(character) == 1 and ord(character) < 256:
+            if len(character) == 1 and ord(character) < NUM_BYTE_VALUES:
                 self._byte_row[ord(character)] = row
 
     def encode(self, seq: str) -> torch.Tensor:
         """Encode a sequence as a float64 [len(seq) X vector length] tensor
+
+        Parameters
+        ----------
+        seq : str
+
+        Returns
+        -------
+        torch.Tensor
 
         Raises
         ------
@@ -70,100 +99,146 @@ class LookupTable:
         return torch.from_numpy(self.vectors[rows])
 
 
-ONE_HOT = { 'A': 0, 'C': 1, 'D': 2, 'E': 3, 'F': 4, 'G': 5, 'H': 6, 
-            'I': 7, 'K': 8, 'L': 9, 'M': 10, 'N': 11, 'P': 12, 'Q': 13, 
-            'R': 14, 'S': 15, 'T': 16, 'V': 17, 'W': 18, 'Y': 19 }
+# .................................................................
+# One-hot encoding
 
-_ONE_HOT_TABLE = LookupTable({amino_acid: np.eye(20)[index] for amino_acid, index in ONE_HOT.items()})
+# The position of each amino acid's 1 in its one-hot vector
+ONE_HOT = {amino_acid: index for index, amino_acid in enumerate(STANDARD_AMINO_ACIDS)}
 
-def one_hot(seq):
+_ONE_HOT_TABLE = LookupTable({amino_acid: np.eye(len(ONE_HOT))[index] for amino_acid, index in ONE_HOT.items()})
+
+
+def one_hot(seq: str) -> torch.Tensor:
     """Convert an amino acid sequence to a PyTorch tensor of one-hot vectors
 
     Each amino acid is represented by a length 20 vector with a single 1 and
-    19 0's Inputing a sequence with a nono-canonical amino acid letter will
-    cause the program to exit.
-
-    E.g. Glutamic acid (E) is encoded: [0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+    19 0's, in the order of ONE_HOT. E.g. glutamic acid (E) is encoded as
+    [0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0].
 
     Parameters
     ----------
     seq : str
-            An uppercase sequence of amino acids (single letter code)
+        An uppercase sequence of the 20 standard amino acids (single letter code)
 
     Returns
     -------
-    torch.IntTensor
-            a PyTorch tensor representing the encoded sequence
-    """
+    torch.Tensor
+        float64 [len(seq) X 20] tensor
 
+    Raises
+    ------
+    ValueError
+        If the sequence contains anything other than the 20 standard amino acids
+    """
     return _ONE_HOT_TABLE.encode(seq)
 
 
-############  Biophysical scale encoding  #############
+# .................................................................
+# Biophysical encoding
 
-# Map each amino acid to a vector of biophysical properties
-# 0: Hydrophobicity
-# 1: Charge
-# 2: pI
-# 3: Molecular weight (g/mol)
-# 4: Aromatic amino acid
-# 5: Capable of hydrogen bonding
-# 6: Side chain SASA (measured from ACE-XX-NME dipeptide)
-# 7: Backbone SASA (measured from ACE-XX-NME dipeptide)
-# 8: Free energy of solvation
-BIOPHYSICS = {  'A': [1.8,  0,  6.0,  89.1, 0, 0,  75.8,  76.1,    1.9],
-                'C': [2.5,  0,  5.1, 121.2, 0, 0, 115.4,  67.9,   -1.2],
-                'D': [-3.5, -1,  2.8, 133.1, 0, 1, 130.3,  71.8, -107.3],
-                'E': [-3.5, -1,  3.2, 147.1, 0, 1, 161.8,  68.1, -107.3],
-                'F': [2.8,  0,  5.5, 165.2, 1, 0, 209.4,  66.0,   -0.8],
-                'G': [-0.4,  0,  6.0,  75.1, 0, 0,   0.0, 115.0,    0.0],
-                'H': [-3.2,  1,  7.6, 155.2, 0, 1, 180.8,  67.5,  -52.7],  # Avg of HIP and HIE
-                'I': [4.5,  0,  6.0, 131.2, 0, 0, 172.7,  60.3,    2.2],
-                'K': [-3.9,  1,  9.7, 146.2, 0, 1, 205.9,  68.7, -100.9],
-                'L': [3.8,  0,  6.0, 131.2, 0, 0, 172.0,  64.5,    2.3],
-                'M': [1.9,  0,  5.7, 149.2, 0, 0, 184.8,  67.8,   -1.4],
-                'N': [-3.5,  0,  5.4, 132.1, 0, 1, 142.7,  66.8,   -9.7],
-                'P': [-1.6,  0,  6.3, 115.1, 0, 0, 134.3,  55.8,    2.0],
-                'Q': [-3.5,  0,  5.7, 146.2, 0, 1, 173.3,  66.6,   -9.4],
-                'R': [-4.5,  1, 10.8, 174.2, 0, 1, 236.5,  66.7, -100.9],
-                'S': [-0.8,  0,  5.7, 105.1, 0, 1,  95.9,  72.9,   -5.1],
-                'T': [-0.7,  0,  5.6, 119.1, 0, 1, 130.9,  64.1,   -5.0],
-                'V': [4.2,  0,  6.0, 117.1, 0, 0, 143.1,  61.7,    2.0],
-                'W': [-0.9,  0,  5.9, 204.2, 1, 1, 254.6,  64.3,   -5.9],
-                'Y': [-1.3,  0,  5.7, 181.2, 1, 1, 222.5,  71.9,   -6.1]
-                }
+@dataclass(frozen=True)
+class BiophysicalScale:
+    """One of the scales the 'biophysics' encoding describes each amino acid by
 
-def biophysics(seq):
-    """Convert an amino acid sequence to a PyTorch tensor with biophysical encoding
-
-    Each amino acid is represented by a length 9 vector with each value representing
-    a biophysical property. The nine encoded biophysical scales are Kyte-Doolittle
-    hydrophobicity, charge, isoelectric point, molecular weight, aromaticity, 
-    h-bonding ability, side chain solvent accessible surface area, backbone SASA, and 
-    free energy of solvation. Inputing a sequence with a nono-canonical amino acid 
-    letter will cause the program to exit.
-
-    E.g. Glutamic acid (E) is: [-3.5, -1,  3.2, 147.1, 0, 1, 161.8,  68.1, -107.3]
-
-    Parameters
+    Attributes
     ----------
-    seq : str
-            An uppercase sequence of amino acids (single letter code)
-
-    Returns
-    -------
-    torch.FloatTensor
-            a PyTorch tensor representing the encoded sequence
+    name : str
+        Short name of the scale
+    units : str
+        Units of its values
+    description : str
+        What it measures, and where the values come from
     """
-    return _BIOPHYSICS_TABLE.encode(seq)
 
+    name: str
+    units: str
+    description: str
+
+
+# The nine scales, in the order of the values in BIOPHYSICS. The source of the last three was not recorded
+# when the table was added to PARROT.
+BIOPHYSICAL_SCALES = (
+    BiophysicalScale('hydrophobicity', 'Kyte-Doolittle hydropathy units',
+                     'Kyte & Doolittle (1982) hydropathy scale (J Mol Biol 157:105-132)'),
+    BiophysicalScale('charge', 'elementary charges',
+                     'formal side-chain charge: -1 for D and E, +1 for K and R, and +1 for H (histidine is counted '
+                     'as charged)'),
+    BiophysicalScale('isoelectric_point', 'pH units', 'isoelectric point of the free amino acid'),
+    BiophysicalScale('molecular_weight', 'g/mol', 'molecular weight of the free amino acid'),
+    BiophysicalScale('aromatic', '1 or 0', '1 for the aromatic amino acids F, W and Y'),
+    BiophysicalScale('hydrogen_bonding', '1 or 0',
+                     '1 for side chains that can form hydrogen bonds (D, E, H, K, N, Q, R, S, T, W and Y)'),
+    BiophysicalScale('side_chain_sasa', 'square angstroms',
+                     'side-chain solvent-accessible surface area, measured in ACE-X-NME dipeptides (source not '
+                     'recorded)'),
+    BiophysicalScale('backbone_sasa', 'square angstroms',
+                     'backbone solvent-accessible surface area, measured in ACE-X-NME dipeptides (source not '
+                     'recorded)'),
+    BiophysicalScale('solvation_free_energy', 'units not recorded',
+                     'free energy of solvation of the side chain (source not recorded)'),
+)
+
+# Each amino acid's value on each scale of BIOPHYSICAL_SCALES. The histidine row was recorded as the average
+# of its protonated (HIP) and neutral (HIE) forms.
+#              hydro- charge  pI    mol.   arom- H-bond side-chain backbone solvation
+#              phobic                weight atic          SASA       SASA     free energy
+BIOPHYSICS = {'A': [1.8, 0, 6.0, 89.1, 0, 0, 75.8, 76.1, 1.9],
+              'C': [2.5, 0, 5.1, 121.2, 0, 0, 115.4, 67.9, -1.2],
+              'D': [-3.5, -1, 2.8, 133.1, 0, 1, 130.3, 71.8, -107.3],
+              'E': [-3.5, -1, 3.2, 147.1, 0, 1, 161.8, 68.1, -107.3],
+              'F': [2.8, 0, 5.5, 165.2, 1, 0, 209.4, 66.0, -0.8],
+              'G': [-0.4, 0, 6.0, 75.1, 0, 0, 0.0, 115.0, 0.0],
+              'H': [-3.2, 1, 7.6, 155.2, 0, 1, 180.8, 67.5, -52.7],
+              'I': [4.5, 0, 6.0, 131.2, 0, 0, 172.7, 60.3, 2.2],
+              'K': [-3.9, 1, 9.7, 146.2, 0, 1, 205.9, 68.7, -100.9],
+              'L': [3.8, 0, 6.0, 131.2, 0, 0, 172.0, 64.5, 2.3],
+              'M': [1.9, 0, 5.7, 149.2, 0, 0, 184.8, 67.8, -1.4],
+              'N': [-3.5, 0, 5.4, 132.1, 0, 1, 142.7, 66.8, -9.7],
+              'P': [-1.6, 0, 6.3, 115.1, 0, 0, 134.3, 55.8, 2.0],
+              'Q': [-3.5, 0, 5.7, 146.2, 0, 1, 173.3, 66.6, -9.4],
+              'R': [-4.5, 1, 10.8, 174.2, 0, 1, 236.5, 66.7, -100.9],
+              'S': [-0.8, 0, 5.7, 105.1, 0, 1, 95.9, 72.9, -5.1],
+              'T': [-0.7, 0, 5.6, 119.1, 0, 1, 130.9, 64.1, -5.0],
+              'V': [4.2, 0, 6.0, 117.1, 0, 0, 143.1, 61.7, 2.0],
+              'W': [-0.9, 0, 5.9, 204.2, 1, 1, 254.6, 64.3, -5.9],
+              'Y': [-1.3, 0, 5.7, 181.2, 1, 1, 222.5, 71.9, -6.1]}
+
+assert all(len(values) == len(BIOPHYSICAL_SCALES) for values in BIOPHYSICS.values())
 
 _BIOPHYSICS_TABLE = LookupTable(BIOPHYSICS)
 
 
-################## User-specified encoding ####################
+def biophysics(seq: str) -> torch.Tensor:
+    """Convert an amino acid sequence to a PyTorch tensor with biophysical encoding
 
-def parse_encode_file(file):
+    Each amino acid is represented by its values on the nine scales of
+    BIOPHYSICAL_SCALES: Kyte-Doolittle hydrophobicity, charge, isoelectric
+    point, molecular weight, aromaticity, hydrogen-bonding ability, side-chain
+    and backbone solvent-accessible surface area, and free energy of solvation.
+    E.g. glutamic acid (E) is [-3.5, -1, 3.2, 147.1, 0, 1, 161.8, 68.1, -107.3].
+
+    Parameters
+    ----------
+    seq : str
+        An uppercase sequence of the 20 standard amino acids (single letter code)
+
+    Returns
+    -------
+    torch.Tensor
+        float64 [len(seq) X 9] tensor
+
+    Raises
+    ------
+    ValueError
+        If the sequence contains anything other than the 20 standard amino acids
+    """
+    return _BIOPHYSICS_TABLE.encode(seq)
+
+
+# .................................................................
+# User-specified encoding
+
+def parse_encode_file(file: str) -> tuple[dict[str, list[float]], int]:
     """Convert an encoding file into a character-to-vector dictionary
 
     Each non-empty line of the file should contain a single character followed
@@ -173,20 +248,20 @@ def parse_encode_file(file):
     Parameters
     ----------
     file : str
-            Path to the encoding file
+        Path to the encoding file
 
     Returns
     -------
     dict
-            Maps each character to its encoding vector (a list of floats)
+        Maps each character to its encoding vector (a list of floats)
     int
-            The length of the encoding vectors
+        The length of the encoding vectors
 
     Raises
     ------
     ValueError
-            If the file is empty, if the vectors are not all the same length, if
-            any vector entry is not a number, or if a character is listed twice
+        If the file is empty, if the vectors are not all the same length, if
+        any vector entry is not a number, or if a character is listed twice
     """
 
     with open(file) as f:
@@ -212,96 +287,22 @@ def parse_encode_file(file):
     return table, vector_length
 
 
-def check_characters(sequences: Iterable[str], valid: set[str]) -> None:
-    """Raise if any sequence contains a character outside `valid`
-
-    Parameters
-    ----------
-    sequences : iterable of str
-        Sequences to check
-    valid : set of str
-        The characters allowed
-
-    Raises
-    ------
-    ValueError
-        For the first sequence with a character outside `valid`
-    """
-    for sequence in dict.fromkeys(sequences):
-        invalid = set(sequence) - valid
-        if invalid:
-            shown = sequence if len(sequence) <= 60 else sequence[:57] + '...'
-            raise ValueError(f'Invalid amino acid detected: {sorted(invalid)[0]} (in sequence {shown})')
-
-
-################## Encoder objects ####################
-#
-# Everything outside this module works with a SequenceEncoder object rather than
-# with the functions above, so a new encoding (e.g. a learned embedding) only
-# needs a new SequenceEncoder subclass and an entry in get_encoder().
-
-class SequenceEncoder:
-    """Base class for objects that convert sequences to numeric vectors
-
-    Attributes
-    ----------
-    name : str
-            Short name of the encoding, stored when a network is saved
-    input_size : int
-            Length of the vector each residue is encoded as
-    """
-
-    name: str = ''
-    input_size: int = 0
-
-    def __len__(self) -> int:
-        """Get length of encoding scheme"""
-
-        return self.input_size
-
-    @property
-    def alphabet(self) -> str:
-        """Every character this encoding defines a vector for"""
-
-        raise NotImplementedError
-
-    def encode(self, seq: str) -> torch.Tensor:
-        """Convert a sequence into a [len(seq) X input_size] tensor"""
-
-        raise NotImplementedError
-
-    def check_sequences(self, sequences: Iterable[str]) -> None:
-        """Raise if any sequence contains a character this encoding cannot encode
-
-        Checking every sequence before training or predicting reports a bad
-        residue straight away, rather than when its sequence is first encoded
-        (for a test-set sequence, only after training has finished).
-
-        Raises
-        ------
-        ValueError
-            For the first sequence with a character outside the alphabet
-        """
-
-        check_characters(sequences, set(self.alphabet))
-
-    def to_config(self) -> dict[str, Any]:
-        """Return a plain dictionary from which encoder_from_config() can rebuild this encoder"""
-
-        return {'name': self.name}
-
+# .................................................................
+# Encoder objects (see sequence_encoder.SequenceEncoder)
 
 class OneHotEncoder(SequenceEncoder):
-    """One-hot encoding of the 20 canonical amino acids (see one_hot())"""
+    """One-hot encoding of the 20 standard amino acids (see one_hot())"""
 
     name = 'onehot'
     input_size = len(ONE_HOT)
 
     @property
     def alphabet(self) -> str:
+        """The 20 standard amino acids."""
         return ''.join(ONE_HOT)
 
     def encode(self, seq: str) -> torch.Tensor:
+        """See one_hot()."""
         return one_hot(seq)
 
 
@@ -309,13 +310,15 @@ class BiophysicsEncoder(SequenceEncoder):
     """Encoding of amino acids by nine biophysical scales (see biophysics())"""
 
     name = 'biophysics'
-    input_size = len(BIOPHYSICS['A'])
+    input_size = len(BIOPHYSICAL_SCALES)
 
     @property
     def alphabet(self) -> str:
+        """The 20 standard amino acids."""
         return ''.join(BIOPHYSICS)
 
     def encode(self, seq: str) -> torch.Tensor:
+        """See biophysics()."""
         return biophysics(seq)
 
 
@@ -328,12 +331,12 @@ class UserEncoder(SequenceEncoder):
     Attributes
     ----------
     encode_file : str or None
-            A path to the file that describes the encoding scheme, or None if
-            the scheme was given as a dictionary
+        A path to the file that describes the encoding scheme, or None if
+        the scheme was given as a dictionary
     encode_dict : dict
-            A dictionary that maps each character to a numeric vector
+        A dictionary that maps each character to a numeric vector
     input_size : int
-            The length of the encoding vector used for each character
+        The length of the encoding vector used for each character
     """
 
     name = 'user'
@@ -343,10 +346,10 @@ class UserEncoder(SequenceEncoder):
         Parameters
         ----------
         encode_file : str, optional
-                A path to a file that describes the encoding scheme
+            A path to a file that describes the encoding scheme
         table : dict, optional
-                Maps each character to its encoding vector. Exactly one of
-                `encode_file` and `table` must be given.
+            Maps each character to its encoding vector. Exactly one of
+            `encode_file` and `table` must be given.
         """
 
         if (encode_file is None) == (table is None):
@@ -375,25 +378,27 @@ class UserEncoder(SequenceEncoder):
         Parameters
         ----------
         seq : str
-                A sequence made up of characters defined in the encoding scheme
+            A sequence made up of characters defined in the encoding scheme
 
         Returns
         -------
-        torch.DoubleTensor
-                a [len(seq) X input_size] tensor representing the encoded sequence
+        torch.Tensor
+            float64 [len(seq) X input_size] tensor
         """
-
         return self._table.encode(seq)
 
     @property
     def alphabet(self) -> str:
+        """Every character the encoding file defines."""
         return ''.join(self.encode_dict)
 
     def to_config(self) -> dict[str, Any]:
         """The encoding table is stored in full so a saved network does not depend on the original file"""
-
         return {'name': self.name, 'table': self.encode_dict}
 
+
+# .................................................................
+# Standardized encodings
 
 # Name stored in a saved network's encoding config for a standardized encoding
 STANDARDIZED_NAME = 'standardized'
@@ -427,13 +432,13 @@ class StandardizedEncoder(SequenceEncoder):
     Attributes
     ----------
     base : SequenceEncoder
-            The encoding being standardized
+        The encoding being standardized
     mean, scale : numpy arrays
-            Per-feature mean and standard deviation subtracted and divided by
+        Per-feature mean and standard deviation subtracted and divided by
     name : str
-            'standardized <base name>', for display
+        'standardized <base name>', for display (the saved name is 'standardized')
     input_size : int
-            Same as the base encoding
+        Same as the base encoding
     """
 
     def __init__(self, base: SequenceEncoder, mean: list[float] | None = None,
@@ -442,11 +447,11 @@ class StandardizedEncoder(SequenceEncoder):
         Parameters
         ----------
         base : SequenceEncoder
-                The encoding to standardize
+            The encoding to standardize
         mean, scale : list of float, optional
-                Per-feature mean and scale, as stored in a saved network. If
-                omitted (the usual case) they are computed from the base
-                encoding's table.
+            Per-feature mean and scale, as stored in a saved network. If
+            omitted (the usual case) they are computed from the base
+            encoding's table.
         """
 
         if (mean is None) != (scale is None):
@@ -465,17 +470,16 @@ class StandardizedEncoder(SequenceEncoder):
 
     @property
     def alphabet(self) -> str:
+        """The base encoding's alphabet."""
         return self.base.alphabet
 
     def encode(self, seq: str) -> torch.Tensor:
-        """Encode with the base encoding, then standardize every feature"""
-
+        """Encode with the base encoding, then standardize every feature (float64)."""
         raw = self.base.encode(seq).numpy()
         return torch.from_numpy((raw - self.mean) / self.scale)
 
     def to_config(self) -> dict[str, Any]:
         """The base encoding and the exact mean and scale are stored, so a saved network is self-contained"""
-
         return {'name': STANDARDIZED_NAME, 'base': self.base.to_config(),
                 'mean': self.mean.tolist(), 'scale': self.scale.tolist()}
 
@@ -486,15 +490,15 @@ def standardization_parameters(encoder: SequenceEncoder) -> tuple[np.ndarray, np
     Parameters
     ----------
     encoder : SequenceEncoder
-            The encoding to standardize
+        The encoding to standardize
 
     Returns
     -------
     mean : numpy array
-            Mean of each feature across the characters the encoding defines
+        Mean of each feature across the characters the encoding defines
     scale : numpy array
-            Population standard deviation of each feature, or 1 for a feature
-            that is constant across the alphabet (with a warning)
+        Population standard deviation of each feature, or 1 for a feature
+        that is constant across the alphabet (with a warning)
     """
 
     table = np.stack([encoder.encode(character).numpy()[0] for character in encoder.alphabet])
@@ -510,6 +514,9 @@ def standardization_parameters(encoder: SequenceEncoder) -> tuple[np.ndarray, np
     return mean, np.where(constant, 1.0, standard_deviation)
 
 
+# .................................................................
+# Choosing an encoding
+
 # Encodings that can be selected by name; anything else is treated as a path to an encoding file
 BUILT_IN_ENCODERS: dict[str, type[SequenceEncoder]] = {OneHotEncoder.name: OneHotEncoder,
                                                        BiophysicsEncoder.name: BiophysicsEncoder}
@@ -521,13 +528,13 @@ def get_encoder(encoding: str, standardize: bool = False) -> SequenceEncoder:
     Parameters
     ----------
     encoding : str
-            'onehot', 'biophysics', the name of a protein language model (e.g.
-            'esm2_t12_35M_UR50D'; see parrot.plm), or the path to a user
-            encoding file
+        'onehot', 'biophysics', the name of a protein language model (e.g.
+        'esm2_t12_35M_UR50D'; see parrot.plm), or the path to a user
+        encoding file
     standardize : bool, optional
-            If True, standardize every feature of the encoding across its
-            alphabet (see StandardizedEncoder). Not available for protein
-            language models.
+        If True, standardize every feature of the encoding across its
+        alphabet (see StandardizedEncoder). Not available for protein
+        language models.
 
     Returns
     -------
@@ -536,11 +543,8 @@ def get_encoder(encoding: str, standardize: bool = False) -> SequenceEncoder:
     Raises
     ------
     FileNotFoundError
-            If `encoding` is not a built-in name and no such file exists
+        If `encoding` is not a built-in name and no such file exists
     """
-
-    # Imported here because parrot.plm builds on this module
-    from parrot import plm
 
     if plm.is_plm_encoding(encoding):
         if standardize:
@@ -568,14 +572,17 @@ def encoder_from_config(config: dict[str, Any]) -> SequenceEncoder:
     Parameters
     ----------
     config : dict
-            Encoder description, as stored in a saved network
+        Encoder description, as stored in a saved network
 
     Returns
     -------
     SequenceEncoder
-    """
 
-    from parrot import plm
+    Raises
+    ------
+    ValueError
+        If the saved encoding is not one PARROT knows
+    """
 
     if config['name'] == plm.PLM_CONFIG_NAME:
         return plm.encoder_from_plm_config(config)

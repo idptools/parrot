@@ -1,6 +1,12 @@
 """
-Module with functions for checking if dataset meets common heuristics. Writes
-warnings to console.
+Checks of a dataset against common rules of thumb, printing a warning for each
+one it breaks: duplicated sequences, imbalanced classes, and regression values
+that are far from zero, widely spread or skewed. None of these stops PARROT
+from training; they point out data that may train poorly or give misleading
+test results.
+
+The thresholds are rules of thumb rather than hard limits, chosen to flag
+data worth a second look.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -9,183 +15,225 @@ idptools-parrot was developed by the Holehouse lab
 Question/comments/concerns? Raise an issue on github:
 https://github.com/idptools/parrot
 
-Licensed under the MIT license. 
+Licensed under the MIT license.
 """
+
+from collections import Counter
+from typing import Any
 
 import numpy as np
 from scipy.stats import skew
 
-# Duplicate sequences:
-def check_duplicate_sequences(d):
-    """
-    Function that checks for duplicate sequences in the dataset.
+from parrot.tasks import Task
+
+# Classes count as balanced while the most common class has at most this many members per member of the least
+# common class; parrot-preprocess --class-balance aims for the same ratio by default
+BALANCED_CLASS_RATIO = 1.4
+
+# Beyond this ratio, the imbalance is severe enough that classification is not recommended
+SEVERE_CLASS_RATIO = 2.5
+
+# Regression values whose mean is at least this far from zero, or whose standard deviation is larger than this
+# (in the units of the data), train less efficiently than standardized values
+LARGE_MEAN = 5.0
+LARGE_STANDARD_DEVIATION = 5.0
+
+# A skewness larger than this (in either direction) is conventionally "highly skewed" (Bulmer 1979,
+# Principles of Statistics)
+LARGE_SKEWNESS = 1.0
+
+# Width of the line of '#' framing each warning
+BANNER_WIDTH = 45
+
+
+def warn_about_dataset(data: list[list[Any]], task: Task) -> None:
+    """Run every check that applies to a dataset, printing a warning for each problem found
 
     Parameters
-    ------------
-    d : list
-        d is the parsed data from parrot.process_input_data.parse_file(). It is a 
-
-    Returns
-    -----------
-    None
-        No return but prints a warning if duplicate sequences are found
-
-
+    ----------
+    data : list
+        Parsed [seqID, sequence, value(s)] samples, before class labels are
+        converted to integers (so missing labels are NaN)
+    task : Task
+        The task the data is for
     """
-    seen = set()
-    nonuniq = set()
-
-    # cycle over every sequence in the file
-    for x in d:
-
-        # x[1] is the actual amino acid sequence
-        if x[1] not in seen:
-            seen.add(x[1])
-        else:
-            nonuniq.add(x[1])
-
-    nonuniq = list(nonuniq)
-    if len(nonuniq) > 0:
-        print("\n#############################################")
-        print("WARNING: Duplicate sequences detected in dataset.\n")
-        print("Duplicated sequences:")
-        for seq in nonuniq:
-            print(f'Duplicate found: {seq}')
-        print()
-        print("This may cause overfitting or overestimation of performance.\n")
-        print("#############################################\n")
+    check_duplicate_sequences(data)
+    if task.per_residue:
+        report_missing_residue_labels(data)
+    if task.is_classification:
+        check_class_imbalance(data)
+    else:
+        check_regression_values(data)
 
 
-
-def report_missing_residue_labels(d):
-    """
-    Function that reports how many residue labels are missing (nan) in a residue-mapped
-    dataset. Missing labels are ignored during training and evaluation.
+def print_warning(heading: str, details: list[str]) -> None:
+    """Print a warning framed by lines of '#' so it stands out from the rest of the output
 
     Parameters
-    ------------
-    d : list
-        d is the parsed data from parrot.process_input_data.parse_file(), before class
-        labels are converted to integers (so missing labels are NaN).
+    ----------
+    heading : str
+        One-line summary, e.g. 'WARNING: Dataset is skewed.'
+    details : list of str
+        Lines explaining the problem and what it may cause
+    """
+    print('\n' + '#' * BANNER_WIDTH)
+    print(heading + '\n')
+    for line in details:
+        print(line)
+    print('#' * BANNER_WIDTH + '\n')
+
+
+def all_values(data: list[list[Any]]) -> np.ndarray:
+    """Every value in a dataset (residue values pooled across sequences), leaving out missing (NaN) labels.
+
+    Parameters
+    ----------
+    data : list
+        Parsed [seqID, sequence, value(s)] samples
 
     Returns
-    -----------
-    None
-        No return but prints a summary if any labels are missing
+    -------
+    numpy array of float
     """
-    all_values = np.hstack([np.asarray(x[2], dtype=float) for x in d])
-    num_missing = int(np.sum(np.isnan(all_values)))
+    values = np.hstack([np.asarray(sample[2], dtype=float) for sample in data])
+    return values[~np.isnan(values)]
+
+
+# .................................................................
+# Every dataset
+
+def check_duplicate_sequences(data: list[list[Any]]) -> None:
+    """Warn about sequences that appear more than once
+
+    A sequence in both the training and test sets makes test performance look
+    better than it is.
+
+    Parameters
+    ----------
+    data : list
+        Parsed [seqID, sequence, value(s)] samples
+    """
+    counts = Counter(sample[1] for sample in data)
+    duplicated = [sequence for sequence, count in counts.items() if count > 1]
+    if not duplicated:
+        return
+
+    print_warning('WARNING: Duplicate sequences detected in dataset.',
+                  ['Duplicated sequences:'] + [f'Duplicate found: {sequence}' for sequence in duplicated]
+                  + ['', 'This may cause overfitting or overestimation of performance.', ''])
+
+
+def report_missing_residue_labels(data: list[list[Any]]) -> None:
+    """Report how many residue labels are missing (nan) in residue-mapped data
+
+    Missing labels are ignored during training and evaluation.
+
+    Parameters
+    ----------
+    data : list
+        Parsed [seqID, sequence, values] samples, before class labels are
+        converted to integers (so missing labels are NaN)
+    """
+    missing_per_sequence = [int(np.sum(np.isnan(np.asarray(sample[2], dtype=float)))) for sample in data]
+    num_missing = sum(missing_per_sequence)
     if num_missing == 0:
         return
 
-    num_sequences_with_missing = sum(bool(np.any(np.isnan(np.asarray(x[2], dtype=float)))) for x in d)
-    print("\n#############################################")
-    print("NOTE: Some residues have no label (nan).\n")
-    print(f"{num_missing} of {len(all_values)} residue labels ({np.around(100*num_missing/len(all_values), 1)}%) "
-          f"are missing, in {num_sequences_with_missing} of {len(d)} sequences.")
-    print("These residues are ignored when training and evaluating.\n")
-    print("#############################################\n")
+    num_labels = sum(len(sample[2]) for sample in data)
+    sequences_with_missing = sum(count > 0 for count in missing_per_sequence)
+    print_warning('NOTE: Some residues have no label (nan).',
+                  [f'{num_missing} of {num_labels} residue labels ({np.around(100 * num_missing / num_labels, 1)}%) '
+                   f'are missing, in {sequences_with_missing} of {len(data)} sequences.',
+                   'These residues are ignored when training and evaluating.', ''])
 
 
-# Imbalanced classification dataset:
-def check_class_imbalance(d):
-    all_labels = np.hstack([x[2] for x in d]).astype(float)
-    all_labels = all_labels[~np.isnan(all_labels)]  # missing residue labels are not a class
-    label_counts = {}
-    for label in all_labels:
-        if label in label_counts:
-            label_counts[label] += 1
-        else:
-            label_counts[label] = 1
+# .................................................................
+# Classification
 
-    # Check for class imbalance:
-    # Balanced = 1:1 - 1:1.4
-    # Slight imbalance = 1:1.4 - 1:2.5
-    # Severe imbalance = 1:2.5+
-    # (These divisions are arbitrary)
-    min_count = min(list(label_counts.values()))
-    max_count = max(list(label_counts.values()))
-    total_counts = np.sum(list(label_counts.values()))
-    ratio = max_count / min_count
+def check_class_imbalance(data: list[list[Any]]) -> None:
+    """Warn if some classes are much more common than others
 
-    # Slight imbalance
-    if 1.4 < ratio <= 2.5:
-        print("\n#############################################")
-        print("WARNING: Slight class imbalance detected in dataset.\n")
-        print("Class frequencies:")
-        for label, count in label_counts.items():
-            print(f'  {int(label)} : {np.around(100*count/total_counts, 1)}%')
-        print()
-        print("This may skew predictions towards overrepresented classes.\n")
-        print("#############################################\n")
+    The imbalance is the ratio of the most to the least common class: up to
+    BALANCED_CLASS_RATIO is balanced, up to SEVERE_CLASS_RATIO slightly
+    imbalanced, and beyond that severely imbalanced.
 
-    # Severe imbalance
-    elif 2.5 < ratio:
-        print("\n#############################################")
-        print("WARNING: Severe class imbalance detected in dataset.\n")
-        print("Class frequencies:")
-        for label, count in label_counts.items():
-            print(f'  {int(label)} : {np.around(100*count/total_counts, 1)}%')
-        print()
-        print("Predictions will be strongly skewed towards overrepresented classes.")
-        print("Classification not recommended with current dataset.\n")
-        print("#############################################\n")
+    Parameters
+    ----------
+    data : list
+        Parsed [seqID, sequence, label(s)] samples (missing labels as NaN)
+    """
+    counts = Counter(all_values(data))
+    ratio = max(counts.values()) / min(counts.values())
+    if ratio <= BALANCED_CLASS_RATIO:
+        return
 
-# Distribution of regression values
-def check_regression_imbalance(d):
-    vals = np.hstack([x[2] for x in d]).astype(float)
-    vals = vals[~np.isnan(vals)]  # missing residue labels
-    check_zero_centered(vals)
-    check_low_std(vals)
-    check_skew(vals)
+    total = sum(counts.values())
+    frequencies = ['Class frequencies:'] + [f'  {int(label)} : {np.around(100 * count / total, 1)}%'
+                                            for label, count in counts.items()] + ['']
+    if ratio <= SEVERE_CLASS_RATIO:
+        print_warning('WARNING: Slight class imbalance detected in dataset.',
+                      frequencies + ['This may skew predictions towards overrepresented classes.', ''])
+    else:
+        print_warning('WARNING: Severe class imbalance detected in dataset.',
+                      frequencies + ['Predictions will be strongly skewed towards overrepresented classes.',
+                                     'Classification not recommended with current dataset.', ''])
 
-# Regression mean location
-def check_zero_centered(v):
-    # Using [-5, 5] is arbitrary, but seems to do the trick
-    if np.mean(v) <= -5 or np.mean(v) >= 5:
-        print("\n#############################################")
-        print("WARNING: Dataset not centered around zero.\n")
-        print(f"Data mean: {np.around(v.mean(), 2)}")
-        print()
-        print("This may decrease training efficiency.\n")
-        print("#############################################\n")
 
-# Regression standard deviation magnitude
-def check_low_std(v):
-    # Using >5 is arbitrary, but seems to do the trick
-    if np.std(v) > 5:
-        print("\n#############################################")
-        print("WARNING: Dataset has large variance\n")
-        print(f"Data standard deviation: {np.around(np.std(v), 2)}")
-        print()
-        print("This may decrease training efficiency.")
-        print("Consider standardizing your dataset.\n")
-        print("#############################################\n")       
+# .................................................................
+# Regression
 
-# Regression distribution of values
-def check_skew(v):
-    # Strongly skewed in either direction (a long tail of high or of low values)
-    s = skew(v)
-    if abs(s) > 1:
-        print("\n#############################################")
-        print("WARNING: Dataset is skewed.\n")
-        print(f"Skewness: {np.around(s, 2)}")
-        print()
-        print("This may cause model bias.\n")
-        print("#############################################\n")
+def check_regression_values(data: list[list[Any]]) -> None:
+    """Warn if regression values are far from zero, widely spread or skewed
 
-# Batch size vs dataset size:
-def eval_batch_size(batch, n_samples):
-    if batch > 512:
-        print("\n#############################################")
-        print("WARNING: Using a very large batch size.\n")
-        print()
-        print("This may decrease model accuracy.\n")
-        print("#############################################\n")
+    Parameters
+    ----------
+    data : list
+        Parsed [seqID, sequence, value(s)] samples (missing labels as NaN)
+    """
+    values = all_values(data)
+    check_mean(values)
+    check_spread(values)
+    check_skew(values)
 
-    if n_samples // batch <= 10:
-        print("\n#############################################")
-        print("WARNING: Batch size is large relative to the number of samples in the training set.\n")
-        print()
-        print("This may decrease training efficiency.\n")
-        print("#############################################\n")
+
+def check_mean(values: np.ndarray) -> None:
+    """Warn if the mean is LARGE_MEAN or more from zero.
+
+    Parameters
+    ----------
+    values : numpy array
+        Every regression value
+    """
+    mean = np.mean(values)
+    if abs(mean) >= LARGE_MEAN:
+        print_warning('WARNING: Dataset not centered around zero.',
+                      [f'Data mean: {np.around(mean, 2)}', '', 'This may decrease training efficiency.', ''])
+
+
+def check_spread(values: np.ndarray) -> None:
+    """Warn if the standard deviation is larger than LARGE_STANDARD_DEVIATION.
+
+    Parameters
+    ----------
+    values : numpy array
+        Every regression value
+    """
+    standard_deviation = np.std(values)
+    if standard_deviation > LARGE_STANDARD_DEVIATION:
+        print_warning('WARNING: Dataset has large variance',
+                      [f'Data standard deviation: {np.around(standard_deviation, 2)}', '',
+                       'This may decrease training efficiency.', 'Consider standardizing your dataset.', ''])
+
+
+def check_skew(values: np.ndarray) -> None:
+    """Warn if the values are strongly skewed (a long tail of high or of low values).
+
+    Parameters
+    ----------
+    values : numpy array
+        Every regression value
+    """
+    skewness = skew(values)
+    if abs(skewness) > LARGE_SKEWNESS:
+        print_warning('WARNING: Dataset is skewed.',
+                      [f'Skewness: {np.around(skewness, 2)}', '', 'This may cause model bias.', ''])

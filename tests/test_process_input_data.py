@@ -18,7 +18,7 @@ from tests.helpers import data_path
 
 # Module-level double-underscore functions are not name-mangled, but fetching it
 # explicitly makes it obvious this is a private helper being tested
-parse_lines = getattr(pid, '__parse_lines')
+parse_lines = pid.parse_lines
 
 
 # ..........................................................................................
@@ -51,13 +51,45 @@ def test_parse_lines_invalid_datatype():
 
 
 def test_parse_lines_residue_count_mismatch():
-    with pytest.raises(IOExceptionParrot, match='Inconsistent number'):
+    with pytest.raises(IOExceptionParrot, match='inconsistent number of residue values and residues'):
         parse_lines([['id1', 'ACD', '1', '2']], datatype='residues')
 
 
-def test_parse_lines_residue_count_mismatch_not_validated():
-    data = parse_lines([['id1', 'ACD', '1', '2']], datatype='residues', validate=False)
-    assert len(data[0][2]) == 2
+def test_parse_errors_say_which_line_and_what_is_wrong():
+    """The message names the data line, the problem and the line's contents, and keeps the original error"""
+    lines = [['id1', 'ACD', '1', '2', '3'], ['id2', 'ACDE', '1', '2', 'x', '4']]
+    with pytest.raises(IOExceptionParrot) as raised:
+        parse_lines(lines, datatype='residues')
+
+    message = str(raised.value)
+    assert 'Data line 2' in message and "could not convert string to float: 'x'" in message
+    assert 'id2 ACDE 1 2 x 4' in message
+    assert isinstance(raised.value.__cause__, ValueError)
+
+
+def test_parse_errors_print_nothing(capsys):
+    with pytest.raises(IOExceptionParrot):
+        parse_lines([['id1', 'ACD', 'one']], datatype='sequence')
+    assert capsys.readouterr().out == ''
+
+
+def test_parse_lines_needs_a_value(capsys):
+    with pytest.raises(IOExceptionParrot, match='expected an ID, a sequence and its value'):
+        parse_lines([['id1', 'ACD']], datatype='sequence')
+
+
+def test_empty_datafile_is_an_error(write_lines):
+    path = write_lines('empty.tsv', ['# only a comment', ''])
+    with pytest.raises(IOExceptionParrot, match='contains no data lines'):
+        pid.parse_file(path, Task('sequence', 1))
+
+
+def test_invalid_class_labels_are_datafile_errors(write_lines):
+    """A bad label is a problem with the datafile; it is still a ValueError, as it always was"""
+    path = write_lines('labels.tsv', ['a ACD 0', 'b EFG 5'])
+    with pytest.raises(IOExceptionParrot, match='between 0 and 2'):
+        pid.parse_file(path, Task('sequence', 3), ignore_warnings=True)
+    assert issubclass(IOExceptionParrot, ValueError)
 
 
 def test_parse_lines_sequence_rejects_extra_columns():
@@ -435,7 +467,7 @@ def test_vector_split_is_reproducible_with_seed():
 
 
 def test_random_split_indices():
-    train, val, test = pid.random_split_indices(200, percent_val=0.1, percent_test=0.2)
+    train, val, test = pid.random_split_indices(200, val_fraction=0.1, test_fraction=0.2)
 
     assert (len(train), len(val), len(test)) == (140, 20, 40)
     np.testing.assert_array_equal(np.sort(np.concatenate([train, val, test])), np.arange(200))

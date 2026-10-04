@@ -185,6 +185,17 @@ def test_shared_hyperparameters_must_be_able_to_share_a_flag(second, problem):
         common.check_shared_declarations('num_layers', [first, second])
 
 
+def test_batch_size_warnings(capsys):
+    common.warn_about_batch_size(32, 1000)
+    assert capsys.readouterr().out == ''
+
+    common.warn_about_batch_size(1024, 100000)
+    assert 'very large batch size' in capsys.readouterr().out
+
+    common.warn_about_batch_size(32, 200)
+    assert 'large relative to the number of samples' in capsys.readouterr().out
+
+
 def test_shared_on_off_hyperparameters_must_share_a_default():
     on, off = HyperParameter('extra', bool, True, 'help'), HyperParameter('extra', bool, False, 'help')
     with pytest.raises(ValueError, match='different defaults'):
