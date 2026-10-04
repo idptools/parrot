@@ -1,15 +1,12 @@
 [build-system]
-
-# delete cython/numpy if not needed
-requires = ["setuptools>=61", "versioningit~=2.0", "numpy", ]
+requires = ["setuptools>=61", "versioningit~=2.0"]
 build-backend = "setuptools.build_meta"
 
 
-# define project info
 [project]
 name = "idptools-parrot"
 dynamic = ["version"]
-description = "encodes a computationally-robust bidirectional recurrent neural network (BRNN) behind an easy-to-use commandline interface. PARROT is well-suited for a variety of protein bioinformatics tasks. With only an input data file containing sequences and mapped values, the user can automatically train a network for whatever purpose. This trained network can then be applied to new, unlabeled data to generate predictions and generate biological hypotheses."
+description = "Train neural networks (bidirectional LSTMs, CNNs, U-Nets, transformers) and simple baseline models that map protein sequences to per-sequence or per-residue values, behind an easy-to-use command-line interface. With only a datafile of sequences and values, PARROT trains, optimizes and tests a network, which can then predict values for new sequences."
 authors = [
     {name = "Dan Griffith", email = "degriffith@wustl.edu"},
 	{name = "Alex Holehouse", email = "alex.holehouse@wustl.edu"}
@@ -21,16 +18,12 @@ requires-python = ">=3.11"
 
 # add in as needed. Minimum numpy/torch versions are stable releases from mid-2025;
 # numpy 2.3 is also the first numpy release that requires Python 3.11.
-dependencies = [	  
+dependencies = [
     "numpy>=2.3",
     "scipy",
-	"torch>=2.8",
-    "more-itertools",
+    "torch>=2.8",
     "scikit-learn",
     "matplotlib",
-    "seaborn",
-    "pandas",
-	
 ]
 
 [project.optional-dependencies]
@@ -44,8 +37,7 @@ optimize = []
 plm = ["transformers>=4.40", "h5py>=3.10"]
 esmc = ["esm>=3.1", "h5py>=3.10"]
 
-# define all the command-line scripts; example left, but you
-# can delete this section if none.
+# The command-line tools
 [project.scripts]
 parrot-cvsplit = "parrot.scripts.parrot_cvsplit:main"
 parrot-optimize = "parrot.scripts.parrot_optimize:main"
@@ -55,7 +47,7 @@ parrot-preprocess = "parrot.scripts.parrot_preprocess:main"
 
 [tool.setuptools]
 zip-safe = false
-include-package-data = true 
+include-package-data = true
 
 [tool.setuptools.packages.find]
 namespaces = true
@@ -72,6 +64,21 @@ parrot = [
 testpaths = ["tests"]
 pythonpath = ["."]
 
+[tool.coverage.run]
+omit = ["*/tests/*", "parrot/_version.py"]
+
+# PARROT's code is written to lines of at most 120 characters
+[tool.ruff]
+line-length = 120
+
+[tool.mypy]
+files = ["parrot"]
+
+# These packages do not ship type information
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "h5py", "transformers", "esm.*", "versioningit"]
+ignore_missing_imports = true
+
 [tool.versioningit]
 default-version = "1+unknown"
 
@@ -79,7 +86,7 @@ default-version = "1+unknown"
 distance = "{base_version}+{distance}.{vcs}{rev}"
 dirty = "{base_version}+{distance}.{vcs}{rev}.dirty"
 distance-dirty = "{base_version}+{distance}.{vcs}{rev}.dirty"
-	
+
 [tool.versioningit.vcs]
 # The method key:
 method = "git"  # <- The method name

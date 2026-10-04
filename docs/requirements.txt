@@ -1,20 +1,8 @@
-#
-####### requirements.txt #######
-#
-###### Requirements without Version Specifiers ######
+# Packages needed to build the documentation on Read the Docs (Sphinx imports PARROT to document it)
 versioningit
 sphinx_rtd_theme
 numpy
 torch
-more-itertools
 scipy
 matplotlib
-seaborn
-pandas
-GPy
-GPyOpt
 scikit-learn
-#
-###### Requirements with Version Specifiers ######
-#   See https://www.python.org/dev/peps/pep-0440/#version-specifiers
-#

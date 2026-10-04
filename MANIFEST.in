@@ -1,5 +1,6 @@
 include LICENSE
+include README.md
 include MANIFEST.in
 
-graft prot_brnn
-global-exclude *.py[cod] __pycache__ *.so
+graft parrot
+global-exclude *.py[cod] __pycache__ *.so *.ipynb
