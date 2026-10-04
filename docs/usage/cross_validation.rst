@@ -54,17 +54,17 @@ All of this could also be accomplished using a wrapper shell script. In fact, fo
     
 **Analyze CV predictions**
 
-After running all of this, you should have 10 files with test set predictions: "network[0-9]_predictions.tsv". First, we will evaluate (using Pearson's R square)each set of predictions separately and see how the networks perform on average and how much variance there is between different networks. In published work that uses cross-validation, it's typical to report this average performance (by some metric) across CV folds and the variance between folds.
+After running all of this, you should have 10 files with test set predictions: "network[0-9]_predictions.tsv". First, we will evaluate each set of predictions separately (here by the square of Pearson's R between true and predicted values) and see how the networks perform on average and how much variance there is between different networks. In published work that uses cross-validation, it's typical to report this average performance (by some metric) across CV folds and the variance between folds.
+
+.. image:: ../images/separate_CV_test_scatter.png
+  :width: 600
+
+In our run, R\ :sup:`2` ranged from 0.968 to 0.998 across the ten folds (mean 0.993, standard deviation 0.009). Since all of these networks perform well, and there is low variance between them, we can also combine each of these prediction files and see how the cumulative predictions fare:
 
 .. image:: ../images/combined_CV_test_scatter.png
   :width: 400
 
-Since all of these networks perform well, and there is low variance between predictions, we can also combine each of these prediction files and see how the cumulative predictions fare:
-
-.. image:: ../images/separate_CV_test_scatter.png
-  :width: 400
-
-There's a couple of outlier sequences, but overall it looks like our networks did great!
+Together, the predictions have R\ :sup:`2` = 0.989. There is one clear outlier, the sequence with the largest value in the dataset (VWIMYFIA, 8.75), which is predicted to be about 7.1: no other training sequence has a value that high. Otherwise our networks did great!
 
 **Train final network**
 
