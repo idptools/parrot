@@ -16,6 +16,9 @@ architectures
 .. automodule:: parrot.architectures.base
    :members:
 
+.. automodule:: parrot.architectures.hyperparameters
+   :members:
+
 .. automodule:: parrot.architectures.registry
    :members:
 
@@ -32,6 +35,9 @@ architectures
    :members:
 
 .. automodule:: parrot.architectures.unet
+   :members:
+
+.. automodule:: parrot.architectures.transformer
    :members:
 
 .. automodule:: parrot.architectures.classical

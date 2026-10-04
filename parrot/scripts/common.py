@@ -216,20 +216,17 @@ def add_hyperparameter_arguments(parser: argparse.ArgumentParser) -> None:
     Raises
     ------
     ValueError
-        If two architectures declare a hyperparameter with the same name but
-        a different type
+        If architectures declare hyperparameters with the same name that cannot
+        share a flag (see check_shared_declarations())
     """
 
     group = parser.add_argument_group('architecture hyperparameters')
     for name, declarations in hyperparameters_by_name().items():
+        check_shared_declarations(name, [hyperparameter for _, hyperparameter in declarations])
         first = declarations[0][1]
-        if any(hyperparameter.value_type is not first.value_type for _, hyperparameter in declarations):
-            raise ValueError(f"Architectures declare hyperparameter '{name}' with different types")
 
         # An on/off hyperparameter is a flag that switches it away from its default (e.g. --attention-pooling-off)
         if first.value_type is bool:
-            if any(hyperparameter.default != first.default for _, hyperparameter in declarations):
-                raise ValueError(f"Architectures declare on/off hyperparameter '{name}' with different defaults")
             architectures = ', '.join(architecture for architecture, _ in declarations)
             switch = 'turns it off (on by default)' if first.default else 'turns it on (off by default)'
             group.add_argument(first.cli_flag, *first.cli_aliases, dest=name, action='store_const',
@@ -248,6 +245,32 @@ def add_hyperparameter_arguments(parser: argparse.ArgumentParser) -> None:
                               for architecture, hyperparameter in declarations)
         group.add_argument(first.cli_flag, *first.cli_aliases, dest=name, type=first.value_type, default=None,
                            choices=choices, metavar=name, help=help_text)
+
+
+def check_shared_declarations(name: str, declarations: list[HyperParameter]) -> None:
+    """Check that the architectures declaring a hyperparameter name can share one command-line flag
+
+    Parameters
+    ----------
+    name : str
+        The hyperparameter's name
+    declarations : list of HyperParameter
+        Every architecture's declaration of it
+
+    Raises
+    ------
+    ValueError
+        If the declarations differ in type or in command-line aliases, or (for
+        on/off hyperparameters, whose flag switches away from the default) in
+        default
+    """
+    first = declarations[0]
+    if any(hyperparameter.value_type is not first.value_type for hyperparameter in declarations):
+        raise ValueError(f"Architectures declare hyperparameter '{name}' with different types")
+    if any(hyperparameter.cli_aliases != first.cli_aliases for hyperparameter in declarations):
+        raise ValueError(f"Architectures declare hyperparameter '{name}' with different command-line aliases")
+    if first.value_type is bool and any(hyperparameter.default != first.default for hyperparameter in declarations):
+        raise ValueError(f"Architectures declare on/off hyperparameter '{name}' with different defaults")
 
 
 def given_hyperparameters(args: argparse.Namespace) -> dict[str, HyperParameterValue]:

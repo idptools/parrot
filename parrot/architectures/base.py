@@ -4,9 +4,14 @@ The interface every PARROT network architecture implements.
 An architecture is a PyTorch module that takes a zero-padded batch of encoded
 sequences (plus the true length of each sequence) and returns either one output
 vector per sequence or one output vector per residue, depending on the task.
-Each architecture also declares its hyperparameters, which is what lets the
-command-line tools build flags for them and the optimiser search over them
-without knowing anything else about the architecture.
+Each architecture also declares its hyperparameters (see hyperparameters.py),
+which is what lets the command-line tools build flags for them and the
+optimiser search over them without knowing anything else about the architecture.
+
+Most architectures end the same way: per-residue features are mapped to the
+output by a linear layer, after (for sequence tasks) pooling them into one
+vector per sequence. ParrotArchitecture provides that "readout" once, in
+build_readout() and readout().
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -19,182 +24,27 @@ Licensed under the MIT license.
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 from typing import Any, ClassVar
 
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
 
+from parrot.architectures.hyperparameters import HyperParameter, HyperParameterValue
+from parrot.architectures.layers import AttentionPool, append_log_length, masked_pool
 from parrot.tasks import Task
-
-
-# The value of a hyperparameter: a number, an on/off switch, or one of a fixed set of named options
-HyperParameterValue = bool | int | float | str
-
-
-@dataclass(frozen=True)
-class HyperParameter:
-    """Declaration of a single hyperparameter.
-
-    Hyperparameters are numbers (int or float), on/off switches (bool), or text
-    with a fixed set of allowed `choices` (e.g. a pooling method).
-
-    A bool hyperparameter's command-line flag switches it away from its default:
-    '--<name>-off' for one that is on by default (e.g. '--attention-pooling-off'),
-    '--<name>' for one that is off by default.
-
-    Parameters
-    ----------
-    name : str
-        Python identifier for the hyperparameter (e.g. 'hidden_size'). The
-        command-line flag is derived from it (e.g. '--hidden-size').
-    value_type : type
-        int, float, bool or str. A str hyperparameter must declare `choices`.
-    default : int, float or str
-        Value used when none is provided. Must itself be a valid value.
-    help : str
-        One-line description shown in command-line help.
-    cli_aliases : tuple of str, optional
-        Additional command-line flags (e.g. ('-hs',)).
-    minimum : int or float, optional
-        Smallest allowed value (inclusive). None means no lower bound.
-    maximum : int or float, optional
-        Largest allowed value (inclusive). None means no upper bound.
-    choices : tuple, optional
-        The only values allowed. Required for str hyperparameters.
-    search_range : tuple of (int or float), optional
-        Inclusive (low, high) range searched by hyperparameter optimisation
-        (parrot-optimize), for numeric hyperparameters. None means the range is
-        not searched.
-    log_scale : bool, optional
-        If True the optimiser searches this hyperparameter on a log10 scale.
-    search_choices : tuple, optional
-        The values hyperparameter optimisation tries, for hyperparameters with a
-        fixed set of values (`choices`, or True/False). None means they are not
-        searched. A hyperparameter has either a search_range or search_choices.
-    legacy_value : int, float, str or bool, optional
-        The value used for networks saved before this hyperparameter existed, if
-        that differs from `default` (e.g. a feature that is now on by default
-        but that older networks did not have), so they are rebuilt exactly as
-        they were trained. None means such networks use the default.
-    """
-
-    name: str
-    value_type: type[int] | type[float] | type[str]
-    default: HyperParameterValue
-    help: str
-    cli_aliases: tuple[str, ...] = ()
-    minimum: int | float | None = None
-    maximum: int | float | None = None
-    choices: tuple[HyperParameterValue, ...] | None = None
-    search_range: tuple[int | float, int | float] | None = None
-    log_scale: bool = False
-    legacy_value: HyperParameterValue | None = None
-    search_choices: tuple[HyperParameterValue, ...] | None = None
-
-    def __post_init__(self) -> None:
-        if not self.name.isidentifier():
-            raise ValueError(f"Hyperparameter name '{self.name}' must be a valid Python identifier")
-
-        if self.value_type not in (int, float, str, bool):
-            raise ValueError(f"Hyperparameter '{self.name}' must have value_type int, float, str or bool")
-
-        if self.value_type is bool and (self.choices is not None or self.minimum is not None
-                                        or self.maximum is not None or self.search_range is not None
-                                        or self.log_scale):
-            raise ValueError(f"On/off hyperparameter '{self.name}' cannot have choices, bounds or a search range")
-
-        if self.value_type is str and self.choices is None:
-            raise ValueError(f"Text hyperparameter '{self.name}' must declare its choices")
-
-        if self.search_range is not None:
-            if self.value_type is str:
-                raise ValueError(f"Hyperparameter '{self.name}' is not numeric, so it cannot have a search range")
-            if self.search_range[0] >= self.search_range[1]:
-                raise ValueError(f"Hyperparameter '{self.name}' has an empty search range {self.search_range}")
-
-        if self.search_choices is not None:
-            if self.search_range is not None:
-                raise ValueError(f"Hyperparameter '{self.name}' cannot have both a search range and search choices")
-            if len(set(self.search_choices)) < 2:
-                raise ValueError(f"Hyperparameter '{self.name}' needs at least two search choices")
-            for choice in self.search_choices:
-                self.validate(choice)
-
-        # Catch mistakes in the declaration itself as early as possible
-        self.validate(self.default)
-        if self.legacy_value is not None:
-            self.validate(self.legacy_value)
-
-    @property
-    def cli_flag(self) -> str:
-        """The long command-line flag for this hyperparameter, e.g. '--hidden-size' or '--attention-pooling-off'."""
-        flag = '--' + self.name.replace('_', '-')
-        if self.value_type is bool and self.default:
-            return flag + '-off'
-        return flag
-
-    @property
-    def searchable(self) -> bool:
-        """True if hyperparameter optimisation should search over this hyperparameter."""
-        return self.search_range is not None or self.search_choices is not None
-
-    def validate(self, value: Any) -> HyperParameterValue:
-        """Convert a value to this hyperparameter's type and check it is allowed.
-
-        Parameters
-        ----------
-        value : int, float, str or bool
-            The value to check
-
-        Returns
-        -------
-        int, float, str or bool
-            The value converted to `value_type`
-
-        Raises
-        ------
-        ValueError
-            If the value is the wrong type, cannot be represented exactly as
-            `value_type` (e.g. 2.5 for an integer hyperparameter), is outside
-            [minimum, maximum], or is not one of `choices`.
-        """
-        if self.value_type is bool:
-            if not isinstance(value, bool):
-                raise ValueError(f"Hyperparameter '{self.name}' must be True or False, got {value!r}")
-            return value
-
-        if self.value_type is str:
-            if not isinstance(value, str):
-                raise ValueError(f"Hyperparameter '{self.name}' must be text, got {value!r}")
-            converted: HyperParameterValue = value
-        else:
-            number: int | float = int(value) if self.value_type is int else float(value)
-            if number != value:
-                raise ValueError(f"Hyperparameter '{self.name}' must be of type {self.value_type.__name__}, got {value}")
-
-            if self.minimum is not None and number < self.minimum:
-                raise ValueError(f"Hyperparameter '{self.name}' must be at least {self.minimum}, got {value}")
-            if self.maximum is not None and number > self.maximum:
-                raise ValueError(f"Hyperparameter '{self.name}' must be at most {self.maximum}, got {value}")
-            converted = number
-
-        if self.choices is not None and converted not in self.choices:
-            raise ValueError(f"Hyperparameter '{self.name}' must be one of {self.choices}, got {value!r}")
-
-        return converted
 
 
 class ParrotArchitecture(nn.Module):
     """Base class for every PARROT network architecture.
 
-    To add a new architecture, subclass this class, set the three class
-    attributes below, implement __init__ and forward, and decorate the class
-    with `parrot.architectures.register_architecture`.
+    To add a new architecture, subclass this class, set the class attributes
+    below, implement __init__ and forward, and decorate the class with
+    `parrot.architectures.register_architecture` (see docs/adding_architectures.rst).
 
     __init__ must accept `input_size` and `task` followed by one keyword argument
-    per declared hyperparameter, and must pass the hyperparameter values up to
-    this class so they are saved alongside the network weights.
+    per declared hyperparameter, and must pass every hyperparameter value up to
+    this class, which checks them and saves them alongside the network weights.
 
     forward(x, lengths) receives a zero-padded batch `x` of shape
     [batch_dim X padded_length X input_size] and the true length of each
@@ -217,7 +67,7 @@ class ParrotArchitecture(nn.Module):
         Defaults to both.
     trained_by_gradient_descent : bool
         True (default) for networks trained epoch by epoch with a learning rate.
-        False for models fitted in a single step (see architectures/classical.py).
+        False for models fitted in a single step by fit() (see classical.py).
     input_size : int
         Length of the per-residue encoding vectors.
     task : Task
@@ -246,7 +96,9 @@ class ParrotArchitecture(nn.Module):
         Raises
         ------
         ValueError
-            If the architecture does not support the task's datatype
+            If the architecture does not support the task's datatype, a declared
+            hyperparameter is missing from `hyperparameter_values` (or an
+            undeclared one is present), or a value is not allowed
         """
         if task.datatype not in self.supported_datatypes:
             raise ValueError(f"The '{self.name}' architecture only supports "
@@ -255,7 +107,39 @@ class ParrotArchitecture(nn.Module):
         super().__init__()
         self.input_size = input_size
         self.task = task
-        self.hyperparameter_values = dict(hyperparameter_values)
+        self.hyperparameter_values = self.checked_hyperparameter_values(hyperparameter_values)
+
+    @classmethod
+    def checked_hyperparameter_values(cls, values: Mapping[str, HyperParameterValue]) -> dict[str, HyperParameterValue]:
+        """Check that `values` gives exactly the declared hyperparameters, each with an allowed value.
+
+        The values are saved with the network and used to rebuild it, so a
+        hyperparameter left out here (or misspelt) would silently be rebuilt with
+        its default when the network is loaded.
+
+        Parameters
+        ----------
+        values : dict
+            Hyperparameter values, by name
+
+        Returns
+        -------
+        dict
+            The values, each converted to its declared type, in declaration order
+
+        Raises
+        ------
+        ValueError
+            If the names differ from the declared ones or a value is not allowed
+        """
+        declared = {hyperparameter.name: hyperparameter for hyperparameter in cls.hyperparameters}
+        missing = sorted(set(declared) - set(values))
+        undeclared = sorted(set(values) - set(declared))
+        if missing or undeclared:
+            raise ValueError(f"The '{cls.name}' architecture was given the wrong hyperparameters: "
+                             f"missing {missing or 'none'}, not declared {undeclared or 'none'}")
+
+        return {name: hyperparameter.validate(values[name]) for name, hyperparameter in declared.items()}
 
     @property
     def num_classes(self) -> int:
@@ -265,3 +149,114 @@ class ParrotArchitecture(nn.Module):
     def forward(self, x: torch.Tensor, lengths: torch.Tensor | None = None) -> torch.Tensor:
         """Map a batch of encoded sequences to outputs (see the class docstring)."""
         raise NotImplementedError
+
+    def fit(self, loader: DataLoader[Any]) -> None:
+        """Fit a model that is not trained by gradient descent (trained_by_gradient_descent = False) in one step.
+
+        Parameters
+        ----------
+        loader : DataLoader
+            Batches of the training data
+        """
+        raise NotImplementedError(f"The '{self.name}' architecture is trained by gradient descent, not fitted")
+
+    # ..........................................................................................
+    # The readout: from per-residue features to the network's output
+
+    def build_readout(self, num_features: int, attention_pooling: bool = False, pooling: str = 'mean',
+                      log_length: bool = False) -> None:
+        """Create the layers that map per-residue features to the network's output.
+
+        For residue-mapped tasks, a linear layer `fc` maps each residue's
+        features to its outputs. For sequence-mapped tasks, the residues are
+        first pooled into one vector per sequence, by learned attention weights
+        (`attention_pool`) if `attention_pooling` is on and otherwise by
+        `pooling`, and with `log_length` the log of the sequence length is
+        appended to that vector before `fc`. Pooling and log(length) only apply
+        to sequence tasks, so they are ignored for residue tasks.
+
+        Saved networks store the weights under the names `attention_pool` and
+        `fc`, so these names must not change. The attention pool is created
+        before `fc` so that a network built from a given random seed always
+        starts from the same weights.
+
+        Parameters
+        ----------
+        num_features : int
+            Number of features per residue
+        attention_pooling : bool, optional
+            Sequence tasks: pool residues with learned attention weights
+        pooling : str, optional
+            Sequence tasks without attention pooling: 'mean' or 'max'
+        log_length : bool, optional
+            Sequence tasks: also give `fc` log(sequence length)
+        """
+        is_sequence_task = not self.task.per_residue
+        self.pooling = pooling
+        self.uses_log_length = log_length and is_sequence_task
+        self.attention_pool = AttentionPool(num_features) if attention_pooling and is_sequence_task else None
+        self.fc = nn.Linear(num_features + int(self.uses_log_length), self.task.num_classes)
+
+    def readout(self, features: torch.Tensor, mask: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Map per-residue features to the network's output, with the layers made by build_readout().
+
+        Parameters
+        ----------
+        features : torch.Tensor
+            Per-residue features [batch_dim X padded_length X num_features]
+        mask : torch.Tensor
+            Boolean [batch_dim X padded_length] mask of real residues
+        lengths : torch.Tensor
+            True length of each sequence, on the same device as `features`
+
+        Returns
+        -------
+        torch.Tensor
+            [batch_dim X padded_length X num_classes] for residue tasks, or
+            [batch_dim X num_classes] for sequence tasks
+        """
+        if self.task.per_residue:
+            per_residue_output: torch.Tensor = self.fc(features)
+            return per_residue_output
+
+        return self.sequence_output(self.pool_residues(features, mask), lengths)
+
+    def pool_residues(self, features: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """Pool per-residue features into one vector per sequence, by attention or by `self.pooling`.
+
+        Parameters
+        ----------
+        features : torch.Tensor
+            Per-residue features [batch_dim X padded_length X num_features]
+        mask : torch.Tensor
+            Boolean [batch_dim X padded_length] mask of real residues
+
+        Returns
+        -------
+        torch.Tensor
+            [batch_dim X num_features]
+        """
+        if self.attention_pool is not None:
+            pooled: torch.Tensor = self.attention_pool(features, mask)
+            return pooled
+        return masked_pool(features, mask, self.pooling)
+
+    def sequence_output(self, summary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """The output for each sequence: `fc` applied to its summary vector (plus log(length), if used).
+
+        Parameters
+        ----------
+        summary : torch.Tensor
+            One vector per sequence [batch_dim X num_features]
+        lengths : torch.Tensor
+            True length of each sequence, on the same device as `summary`
+
+        Returns
+        -------
+        torch.Tensor
+            [batch_dim X num_classes]
+        """
+        if self.uses_log_length:
+            summary = append_log_length(summary, lengths)
+        output: torch.Tensor = self.fc(summary)
+        return output

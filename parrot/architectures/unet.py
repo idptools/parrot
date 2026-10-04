@@ -1,6 +1,7 @@
 """
-A 1D U-Net, adapted from Nick's 2D U-Net on the parrot-lightning branch
-(parrot/unet_architecture.py).
+A 1D U-Net, adapted from the 2D U-Net written by Nick (GitHub user razonickj)
+on PARROT's parrot-lightning branch (parrot/unet_architecture.py, added in
+commit fedab04).
 
 The encoder repeatedly halves the sequence length (max pooling) while doubling
 the number of channels; the decoder doubles the length back, and at each level
@@ -41,18 +42,33 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from parrot.architectures.base import HyperParameter, ParrotArchitecture
-from parrot.architectures.layers import (ATTENTION_POOLING, GLOBAL_CONTEXT, LOGLENGTH_FEEDFORWARD, POOLING_HELP,
-                                         POOLING_METHODS, AttentionPool, ChannelLayerNorm, GlobalContext, padding_mask,
-                                         resolve_lengths, sequence_features)
+from parrot.architectures.base import ParrotArchitecture
+from parrot.architectures.hyperparameters import (ATTENTION_POOLING, DROPOUT, GLOBAL_CONTEXT, KERNEL_SIZES,
+                                                  LOGLENGTH_FEEDFORWARD, POOLING, HyperParameter)
+from parrot.architectures.layers import ChannelLayerNorm, GlobalContext, channel_mask, padding_mask, resolve_lengths
 from parrot.architectures.registry import register_architecture
 from parrot.tasks import Task
 
-# Allowed convolution widths. Widths must be odd so convolutions are centred on each residue.
-KERNEL_SIZES = (3, 5, 7, 9, 11)
-
 # Ways the decoder can double the sequence length
 UPSAMPLING_METHODS = ('transposed', 'nearest')
+
+
+def ceil_divide(numerator: torch.Tensor | int, denominator: int) -> torch.Tensor | int:
+    """numerator / denominator rounded up to a whole number, for ints or integer tensors
+
+    Floor division rounds down, so dividing the negated numerator and negating
+    the result rounds up: -(-7 // 2) = -(-4) = 4.
+
+    Parameters
+    ----------
+    numerator : int or torch.Tensor
+    denominator : int
+
+    Returns
+    -------
+    int or torch.Tensor
+    """
+    return -(-numerator // denominator)
 
 
 class DoubleConv(nn.Module):
@@ -85,13 +101,13 @@ class DoubleConv(nn.Module):
         self.second_norm = ChannelLayerNorm(out_channels)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, channel_mask: torch.Tensor) -> torch.Tensor:
         """
         Parameters
         ----------
         x : torch.Tensor
             [batch_dim X in_channels X length]
-        mask : torch.Tensor
+        channel_mask : torch.Tensor
             Float [batch_dim X 1 X length] mask of real positions at this resolution
 
         Returns
@@ -99,8 +115,8 @@ class DoubleConv(nn.Module):
         torch.Tensor
             [batch_dim X out_channels X length], zero at padded positions
         """
-        x = torch.relu(self.first_norm(self.first_conv(x * mask))) * mask
-        x = torch.relu(self.second_norm(self.second_conv(x))) * mask
+        x = torch.relu(self.first_norm(self.first_conv(x * channel_mask))) * channel_mask
+        x = torch.relu(self.second_norm(self.second_conv(x))) * channel_mask
         output: torch.Tensor = self.dropout(x)
         return output
 
@@ -143,7 +159,7 @@ class Up(nn.Module):
 
         self.conv = DoubleConv(2 * out_channels, out_channels, kernel_size, dropout)
 
-    def forward(self, x: torch.Tensor, skip: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, skip: torch.Tensor, channel_mask: torch.Tensor) -> torch.Tensor:
         """
         Parameters
         ----------
@@ -151,7 +167,7 @@ class Up(nn.Module):
             [batch_dim X in_channels X length / 2]
         skip : torch.Tensor
             Encoder features [batch_dim X out_channels X length]
-        mask : torch.Tensor
+        channel_mask : torch.Tensor
             Float [batch_dim X 1 X length] mask of real positions
 
         Returns
@@ -159,7 +175,7 @@ class Up(nn.Module):
         torch.Tensor
             [batch_dim X out_channels X length]
         """
-        output: torch.Tensor = self.conv(torch.cat([skip, self.upsample(x)], dim=1), mask)
+        output: torch.Tensor = self.conv(torch.cat([skip, self.upsample(x)], dim=1), channel_mask)
         return output
 
 
@@ -167,27 +183,25 @@ class Up(nn.Module):
 class UNet(ParrotArchitecture):
     """1D U-Net (see the module docstring)
 
+    The parameter names (`input_block`, `down_blocks`, `global_context`,
+    `up_blocks`, `attention_pool`, `fc` and those inside them) are stored in
+    saved networks, so they must not change.
+
     Attributes
     ----------
     depth : int
         Number of times the sequence length is halved
-    pooling : str
-        How residue features are pooled for sequence-mapped tasks when attention pooling is off
-    loglength_feedforward : bool
-        Whether the output layer also sees log(sequence length) (sequence-mapped tasks only)
     input_block : DoubleConv
     down_blocks : torch.nn.ModuleList of DoubleConv
     global_context : GlobalContext or None
         Adds a summary of the whole sequence to every position at the deepest level, if used
     up_blocks : torch.nn.ModuleList of Up
-    attention_pool : AttentionPool or None
-        Pools residue features for sequence-mapped tasks, if attention pooling is on
-    fc : torch.nn.Linear
-        Maps the full-resolution features to outputs
+    attention_pool, fc, pooling, uses_log_length
+        The readout (see ParrotArchitecture.build_readout)
     """
 
     name = 'unet'
-    description = "1D U-Net (adapted from Nick's 2D U-Net)"
+    description = '1D U-Net (encoder-decoder convolutional network with skip connections)'
     hyperparameters = (
         HyperParameter('base_channels', int, default=16, minimum=1, search_range=(8, 64),
                        help='channels at full resolution (doubled at each level down)'),
@@ -195,11 +209,10 @@ class UNet(ParrotArchitecture):
                        help='number of times the sequence length is halved'),
         HyperParameter('kernel_size', int, default=3, help='width of each convolution', choices=KERNEL_SIZES,
                        search_choices=KERNEL_SIZES),
-        HyperParameter('dropout', float, default=0.0, help='dropout probability', minimum=0.0, maximum=1.0,
-                       search_range=(0.0, 0.5)),
+        DROPOUT,
         HyperParameter('upsampling', str, default='transposed', choices=UPSAMPLING_METHODS,
                        search_choices=UPSAMPLING_METHODS, help='how the decoder doubles the sequence length'),
-        HyperParameter('pooling', str, default='mean', choices=POOLING_METHODS, help=POOLING_HELP),
+        POOLING,
         GLOBAL_CONTEXT,
         ATTENTION_POOLING,
         LOGLENGTH_FEEDFORWARD,
@@ -240,8 +253,6 @@ class UNet(ParrotArchitecture):
                                             'global_context': global_context, 'attention_pooling': attention_pooling,
                                             'loglength_feedforward': loglength_feedforward})
         self.depth = depth
-        self.pooling = pooling
-        self.loglength_feedforward = loglength_feedforward and not task.per_residue
 
         # Channels at each level: level 0 is full resolution, level `depth` the bottleneck
         channels = [base_channels * 2 ** level for level in range(depth + 1)]
@@ -252,8 +263,8 @@ class UNet(ParrotArchitecture):
         self.global_context = GlobalContext(channels[depth]) if global_context else None
         self.up_blocks = nn.ModuleList([Up(channels[level], channels[level - 1], kernel_size, dropout, upsampling)
                                         for level in range(depth, 0, -1)])
-        self.attention_pool = AttentionPool(channels[0]) if attention_pooling and not task.per_residue else None
-        self.fc = nn.Linear(channels[0] + int(self.loglength_feedforward), task.num_classes)
+        self.build_readout(channels[0], attention_pooling=attention_pooling, pooling=pooling,
+                           log_length=loglength_feedforward)
 
     def forward(self, x: torch.Tensor, lengths: torch.Tensor | None = None) -> torch.Tensor:
         """Propagate a batch of encoded sequences through the network
@@ -273,39 +284,108 @@ class UNet(ParrotArchitecture):
         lengths = resolve_lengths(x, lengths)
         original_length = x.shape[1]
 
-        # Pad so the length can be halved `depth` times without remainder
+        # Pad so the length can be halved `depth` times without remainder. Convolutions work
+        # channels-first: [batch_dim X channels X internal_length]
         multiple = 2 ** self.depth
-        internal_length = -(-original_length // multiple) * multiple
+        internal_length = int(ceil_divide(original_length, multiple)) * multiple
         hidden = F.pad(x.transpose(1, 2), (0, internal_length - original_length))
+        masks = self.level_masks(lengths, internal_length, x.dtype)
 
-        # A position at level k summarises 2**k residues, and is real if any of them is
-        masks = []
-        for level in range(self.depth + 1):
-            level_lengths = -(-lengths // 2 ** level)
-            level_mask = padding_mask(level_lengths, internal_length // 2 ** level)
-            masks.append(level_mask.unsqueeze(1).to(x.dtype))
-
-        # Encoder: keep the features at every resolution for the skip connections
-        hidden = self.input_block(hidden, masks[0])
-        skips = [hidden]
-        for level, block in enumerate(self.down_blocks, start=1):
-            hidden = block(F.max_pool1d(hidden, 2), masks[level])
-            skips.append(hidden)
-
-        # At the bottleneck, every position also gets a summary of the whole sequence
-        if self.global_context is not None:
-            hidden = (hidden + self.global_context(hidden, masks[self.depth])) * masks[self.depth]
-
-        # Decoder: from the bottleneck back up to full resolution
-        for level, block in zip(range(self.depth - 1, -1, -1), self.up_blocks):
-            hidden = block(hidden, skips[level], masks[level])
+        level_features = self.encode(hidden, masks)
+        bottleneck = self.add_global_context(level_features[-1], masks[-1])
+        hidden = self.decode(bottleneck, level_features, masks)
 
         features = hidden[:, :, :original_length].transpose(1, 2)
-        if self.task.per_residue:
-            per_residue_output: torch.Tensor = self.fc(features)
-            return per_residue_output
+        return self.readout(features, padding_mask(lengths, original_length), lengths)
 
-        mask = padding_mask(lengths, original_length)
-        per_sequence_output: torch.Tensor = self.fc(sequence_features(features, mask, lengths, self.attention_pool,
-                                                                      self.pooling, self.loglength_feedforward))
-        return per_sequence_output
+    def level_masks(self, lengths: torch.Tensor, internal_length: int, dtype: torch.dtype) -> list[torch.Tensor]:
+        """The channel mask of real positions at every level, from full resolution (level 0) to the bottleneck
+
+        A position at level k summarises 2**k residues, and is real if any of them is.
+
+        Parameters
+        ----------
+        lengths : torch.Tensor
+            True length of each sequence
+        internal_length : int
+            The padded length at full resolution (a multiple of 2**depth)
+        dtype : torch.dtype
+            Floating-point type of the features
+
+        Returns
+        -------
+        list of torch.Tensor
+            depth + 1 float masks; the one at level k is [batch_dim X 1 X internal_length / 2**k]
+        """
+        masks = []
+        for level in range(self.depth + 1):
+            level_lengths = ceil_divide(lengths, 2 ** level)
+            assert isinstance(level_lengths, torch.Tensor)
+            masks.append(channel_mask(padding_mask(level_lengths, internal_length // 2 ** level), dtype))
+        return masks
+
+    def encode(self, hidden: torch.Tensor, masks: list[torch.Tensor]) -> list[torch.Tensor]:
+        """The encoder: features at full resolution, then at each level down (halving the length each time)
+
+        Parameters
+        ----------
+        hidden : torch.Tensor
+            Padded input [batch_dim X input_size X internal_length]
+        masks : list of torch.Tensor
+            Channel masks at every level (see level_masks())
+
+        Returns
+        -------
+        list of torch.Tensor
+            The features at every level, full resolution first and the bottleneck
+            last; all but the last become the decoder's skip connections
+        """
+        hidden = self.input_block(hidden, masks[0])
+        level_features = [hidden]
+        for level, block in enumerate(self.down_blocks, start=1):
+            hidden = block(F.max_pool1d(hidden, 2), masks[level])
+            level_features.append(hidden)
+        return level_features
+
+    def add_global_context(self, bottleneck: torch.Tensor, bottleneck_mask: torch.Tensor) -> torch.Tensor:
+        """Add a summary of the whole sequence to every bottleneck position (if global context is on)
+
+        Parameters
+        ----------
+        bottleneck : torch.Tensor
+            Features at the deepest level [batch_dim X channels X length / 2**depth]
+        bottleneck_mask : torch.Tensor
+            Channel mask of real positions at that level
+
+        Returns
+        -------
+        torch.Tensor
+            Same shape as `bottleneck`, zero at padded positions
+        """
+        if self.global_context is None:
+            return bottleneck
+        context: torch.Tensor = self.global_context(bottleneck, bottleneck_mask)
+        return (bottleneck + context) * bottleneck_mask
+
+    def decode(self, bottleneck: torch.Tensor, level_features: list[torch.Tensor],
+               masks: list[torch.Tensor]) -> torch.Tensor:
+        """The decoder: from the bottleneck back up to full resolution, joining the encoder's features at each level
+
+        Parameters
+        ----------
+        bottleneck : torch.Tensor
+            Features at the deepest level
+        level_features : list of torch.Tensor
+            The encoder's features at every level (see encode())
+        masks : list of torch.Tensor
+            Channel masks at every level
+
+        Returns
+        -------
+        torch.Tensor
+            Full-resolution features [batch_dim X base_channels X internal_length]
+        """
+        hidden = bottleneck
+        for level, block in zip(range(self.depth - 1, -1, -1), self.up_blocks):
+            hidden = block(hidden, level_features[level], masks[level])
+        return hidden

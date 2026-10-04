@@ -16,7 +16,7 @@ Licensed under the MIT license.
 import functools
 import math
 from collections.abc import Iterator, Sequence
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 import torch
@@ -455,8 +455,30 @@ def pad_targets(targets: list[Any], task: Task, padded_length: int) -> torch.Ten
     return torch.FloatTensor(padded).unsqueeze(-1)
 
 
-def collate_batch(batch: list[tuple[str, torch.Tensor, Any]],
-                  task: Task) -> tuple[list[str], torch.Tensor, torch.Tensor, torch.Tensor]:
+class Batch(NamedTuple):
+    """A padded batch of sequences, as made by collate_batch()
+
+    It unpacks like a tuple: names, vectors, targets, lengths = batch.
+
+    Attributes
+    ----------
+    names : list of str
+        The name of each sequence
+    vectors : torch.Tensor
+        Zero-padded encoded sequences (see pad_sequence_vectors())
+    targets : torch.Tensor
+        Target values or class labels (see pad_targets())
+    lengths : torch.Tensor
+        True (unpadded) length of each sequence
+    """
+
+    names: list[str]
+    vectors: torch.Tensor
+    targets: torch.Tensor
+    lengths: torch.Tensor
+
+
+def collate_batch(batch: list[tuple[str, torch.Tensor, Any]], task: Task) -> Batch:
     """Collate (name, encoded sequence, value) items into a padded batch
 
     Parameters
@@ -468,15 +490,14 @@ def collate_batch(batch: list[tuple[str, torch.Tensor, Any]],
 
     Returns
     -------
-    tuple
-        (names, zero-padded sequence vectors, targets, true sequence lengths).
-        See pad_sequence_vectors() and pad_targets() for the shapes.
+    Batch
+        The names, zero-padded sequence vectors, targets and true lengths
     """
 
     names = [item[0] for item in batch]
     padded_seq_vectors, lengths = pad_sequence_vectors([item[1] for item in batch])
     targets = pad_targets([item[2] for item in batch], task, padded_seq_vectors.shape[1])
-    return names, padded_seq_vectors, targets, lengths
+    return Batch(names, padded_seq_vectors, targets, lengths)
 
 
 class LengthBatchSampler(Sampler[list[int]]):

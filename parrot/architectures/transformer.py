@@ -38,9 +38,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from parrot.architectures.base import HyperParameter, ParrotArchitecture
-from parrot.architectures.layers import (ATTENTION_POOLING, LOGLENGTH_FEEDFORWARD, POOLING_HELP, POOLING_METHODS,
-                                         AttentionPool, padding_mask, resolve_lengths, sequence_features)
+from parrot.architectures.base import ParrotArchitecture
+from parrot.architectures.hyperparameters import (ATTENTION_POOLING, DROPOUT, LOGLENGTH_FEEDFORWARD, POOLING,
+                                                  HyperParameter)
+from parrot.architectures.layers import padding_mask, resolve_lengths, zero_padding
 from parrot.architectures.registry import register_architecture
 from parrot.tasks import Task
 
@@ -61,9 +62,12 @@ def sinusoidal_positions(length: int, dimensions: int, device: torch.device) -> 
     """[length X dimensions] sine/cosine position vectors (Vaswani et al. 2017); an odd last dimension is zero."""
     angles = torch.arange(length, device=device, dtype=torch.float32).unsqueeze(1) * \
         position_frequencies(dimensions, device)
+    num_pairs = angles.shape[1]
+
+    # Pair i fills dimensions 2i (sine) and 2i + 1 (cosine)
     positions = torch.zeros(length, dimensions, device=device)
-    positions[:, 0:2 * angles.shape[1]:2] = torch.sin(angles)
-    positions[:, 1:2 * angles.shape[1]:2] = torch.cos(angles)
+    positions[:, 0:2 * num_pairs:2] = torch.sin(angles)
+    positions[:, 1:2 * num_pairs:2] = torch.cos(angles)
     return positions
 
 
@@ -103,7 +107,7 @@ class SelfAttention(nn.Module):
     num_heads : int
     rotary : bool
         Whether queries and keys are rotated by their positions
-    dropout : float
+    dropout_probability : float
         Dropout probability applied to the attention weights
     qkv : torch.nn.Linear
         Computes the queries, keys and values of every head at once
@@ -127,7 +131,7 @@ class SelfAttention(nn.Module):
         super().__init__()
         self.num_heads = num_heads
         self.rotary = rotary
-        self.dropout = dropout
+        self.dropout_probability = dropout
         model_size = num_heads * head_size
         self.qkv = nn.Linear(model_size, 3 * model_size)
         self.output = nn.Linear(model_size, model_size)
@@ -157,7 +161,7 @@ class SelfAttention(nn.Module):
         # Every position attends only to the real residues of its own sequence
         key_mask = mask[:, None, None, :]
         attended = F.scaled_dot_product_attention(queries, keys, values, attn_mask=key_mask,
-                                                  dropout_p=self.dropout if self.training else 0.0)
+                                                  dropout_p=self.dropout_probability if self.training else 0.0)
         output: torch.Tensor = self.output(attended.transpose(1, 2).reshape(batch_size, length, model_size))
         return output
 
@@ -210,22 +214,21 @@ class TransformerBlock(nn.Module):
         """
         x = x + self.dropout(self.attention(self.attention_norm(x), mask))
         x = x + self.dropout(self.feed_forward(self.feed_forward_norm(x)))
-        output: torch.Tensor = x * mask.unsqueeze(-1).to(x.dtype)
-        return output
+        return zero_padding(x, mask)
 
 
 @register_architecture
 class Transformer(ParrotArchitecture):
     """Transformer encoder
 
+    The parameter names (`input_projection`, `blocks.N.attention.qkv` and the
+    others inside each block, `output_norm`, `attention_pool`, `fc`) are stored
+    in saved networks, so they must not change.
+
     Attributes
     ----------
     positional_encoding : str
         'rotary', 'sinusoidal' or 'none'
-    pooling : str
-        How residue features are pooled for sequence-mapped tasks when attention pooling is off
-    loglength_feedforward : bool
-        Whether the output layer also sees log(sequence length) (sequence-mapped tasks only)
     model_size : int
         Width of every residue's representation (num_heads x head_size)
     input_projection : torch.nn.Linear
@@ -233,30 +236,27 @@ class Transformer(ParrotArchitecture):
     blocks : torch.nn.ModuleList
         The transformer blocks
     output_norm : torch.nn.LayerNorm
-    attention_pool : AttentionPool or None
-        Pools residue features for sequence-mapped tasks, if attention pooling is on
-    fc : torch.nn.Linear
-        Maps features to outputs
+    attention_pool, fc, pooling, uses_log_length
+        The readout (see ParrotArchitecture.build_readout)
     """
 
     name = 'transformer'
     description = 'transformer encoder (multi-head self-attention)'
     hyperparameters = (
         HyperParameter('num_layers', int, default=2, help='number of transformer blocks', minimum=1,
-                       search_range=(1, 6)),
+                       cli_aliases=('-nl',), search_range=(1, 6)),
         HyperParameter('num_heads', int, default=4, help='number of attention heads', minimum=1,
                        search_range=(1, 8)),
         HyperParameter('head_size', int, default=16, minimum=1, search_range=(8, 64),
                        help='width of each attention head; the model width is num_heads x head_size'),
         HyperParameter('feedforward_multiplier', int, default=4, minimum=1, search_range=(1, 4),
                        help='width of the feed-forward layer in each block, as a multiple of the model width'),
-        HyperParameter('dropout', float, default=0.0, help='dropout probability', minimum=0.0, maximum=1.0,
-                       search_range=(0.0, 0.5)),
+        DROPOUT,
         HyperParameter('positional_encoding', str, default='rotary', choices=POSITIONAL_ENCODINGS,
                        search_choices=('rotary', 'sinusoidal'),
                        help="how residue positions are encoded: 'rotary' (relative), 'sinusoidal' (absolute) or "
                             "'none' (order-free)"),
-        HyperParameter('pooling', str, default='mean', choices=POOLING_METHODS, help=POOLING_HELP),
+        POOLING,
         ATTENTION_POOLING,
         LOGLENGTH_FEEDFORWARD,
     )
@@ -296,16 +296,14 @@ class Transformer(ParrotArchitecture):
                                             'pooling': pooling, 'attention_pooling': attention_pooling,
                                             'loglength_feedforward': loglength_feedforward})
         self.positional_encoding = positional_encoding
-        self.pooling = pooling
-        self.loglength_feedforward = loglength_feedforward and not task.per_residue
         self.model_size = num_heads * head_size
         self.input_projection = nn.Linear(input_size, self.model_size)
         self.blocks = nn.ModuleList([TransformerBlock(num_heads, head_size, feedforward_multiplier,
                                                       positional_encoding == 'rotary', dropout)
                                      for _ in range(num_layers)])
         self.output_norm = nn.LayerNorm(self.model_size)
-        self.attention_pool = AttentionPool(self.model_size) if attention_pooling and not task.per_residue else None
-        self.fc = nn.Linear(self.model_size + int(self.loglength_feedforward), task.num_classes)
+        self.build_readout(self.model_size, attention_pooling=attention_pooling, pooling=pooling,
+                           log_length=loglength_feedforward)
 
     def forward(self, x: torch.Tensor, lengths: torch.Tensor | None = None) -> torch.Tensor:
         """Propagate a batch of encoded sequences through the network
@@ -328,16 +326,10 @@ class Transformer(ParrotArchitecture):
         hidden = self.input_projection(x)
         if self.positional_encoding == 'sinusoidal':
             hidden = hidden + sinusoidal_positions(x.shape[1], self.model_size, x.device).to(hidden.dtype)
-        hidden = hidden * mask.unsqueeze(-1).to(hidden.dtype)
+        hidden = zero_padding(hidden, mask)
 
         for block in self.blocks:
             hidden = block(hidden, mask)
 
         features = self.output_norm(hidden)
-        if self.task.per_residue:
-            per_residue_output: torch.Tensor = self.fc(features)
-            return per_residue_output
-
-        per_sequence_output: torch.Tensor = self.fc(sequence_features(features, mask, lengths, self.attention_pool,
-                                                                      self.pooling, self.loglength_feedforward))
-        return per_sequence_output
+        return self.readout(features, mask, lengths)

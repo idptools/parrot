@@ -18,9 +18,10 @@ import torch
 
 from parrot import process_input_data as pid
 from parrot import train_network
+from parrot.architectures import HyperParameter
 from parrot.checkpoint import load_network, save_network
 from parrot.encode_sequence import get_encoder
-from parrot.scripts import parrot_cvsplit, parrot_optimize, parrot_predict, parrot_preprocess, parrot_train
+from parrot.scripts import common, parrot_cvsplit, parrot_optimize, parrot_predict, parrot_preprocess, parrot_train
 from parrot.tasks import Task
 
 from tests.helpers import EXAMPLE_TASKS, data_path, make_network
@@ -174,8 +175,25 @@ def test_train_rejects_invalid_choices(run_cli, tmp_path, flags):
         run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1, *flags)
 
 
+@pytest.mark.parametrize('second, problem', [
+    (HyperParameter('num_layers', float, 2.0, 'help', cli_aliases=('-nl',)), 'different types'),
+    (HyperParameter('num_layers', int, 2, 'help'), 'different command-line aliases'),
+])
+def test_shared_hyperparameters_must_be_able_to_share_a_flag(second, problem):
+    first = HyperParameter('num_layers', int, 1, 'help', cli_aliases=('-nl',))
+    with pytest.raises(ValueError, match=problem):
+        common.check_shared_declarations('num_layers', [first, second])
+
+
+def test_shared_on_off_hyperparameters_must_share_a_default():
+    on, off = HyperParameter('extra', bool, True, 'help'), HyperParameter('extra', bool, False, 'help')
+    with pytest.raises(ValueError, match='different defaults'):
+        common.check_shared_declarations('extra', [on, off])
+
+
 @pytest.mark.parametrize('flags', [['--architecture', 'cnn', '--dropout', '1.5'],
-                                   ['--architecture', 'composition', '--num-hidden-layers', '-1']])
+                                   ['--architecture', 'composition', '--num-hidden-layers', '-1'],
+                                   ['--architecture', 'linear', '--alpha', '0']])
 def test_train_rejects_out_of_range_values(run_cli, tmp_path, flags):
     with pytest.raises(ValueError):
         run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1, *flags)

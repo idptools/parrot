@@ -14,7 +14,8 @@ Licensed under the MIT license.
 from collections.abc import Mapping
 from typing import Any
 
-from parrot.architectures.base import HyperParameterValue, ParrotArchitecture
+from parrot.architectures.base import ParrotArchitecture
+from parrot.architectures.hyperparameters import HyperParameterValue
 from parrot.tasks import Task
 
 # Maps each architecture's name to its class. Populated by register_architecture().

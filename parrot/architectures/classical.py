@@ -46,8 +46,10 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC, SVR
 from torch.utils.data import DataLoader
 
-from parrot.architectures.base import HyperParameter, HyperParameterValue, ParrotArchitecture
-from parrot.architectures.layers import adjacent_pair_composition, mean_over_residues, padding_mask, resolve_lengths
+from parrot.architectures.base import ParrotArchitecture
+from parrot.architectures.hyperparameters import HyperParameter, HyperParameterValue
+from parrot.architectures.layers import (adjacent_pair_composition, composition_and_log_length, padding_mask,
+                                         resolve_lengths, zero_padding)
 from parrot.architectures.registry import register_architecture
 from parrot.tasks import Task
 
@@ -80,12 +82,6 @@ FEATURES_HYPERPARAMETER = HyperParameter(
 def random_state() -> int:
     """A seed for scikit-learn, drawn from NumPy's global generator so --seed makes fitting reproducible."""
     return int(np.random.randint(MAX_RANDOM_STATE))
-
-
-def require_positive(name: str, value: float) -> None:
-    """Raise a ValueError unless `value` is greater than zero."""
-    if value <= 0:
-        raise ValueError(f"Hyperparameter '{name}' must be greater than 0, got {value}")
 
 
 class ClassicalModel(ParrotArchitecture):
@@ -157,9 +153,10 @@ class ClassicalModel(ParrotArchitecture):
             length, followed (for 'dipeptides') by the adjacent-pair composition
         """
         lengths = resolve_lengths(x, lengths)
-        x = x * padding_mask(lengths, x.shape[1]).unsqueeze(-1).to(x.dtype)
+        x = zero_padding(x, padding_mask(lengths, x.shape[1]))
 
-        features = [mean_over_residues(x, lengths), torch.log(lengths.to(x.dtype)).unsqueeze(-1)]
+        # The order [composition, log length, dipeptides] is what saved models were fitted to
+        features = [composition_and_log_length(x, lengths)]
         if self.feature_set == 'dipeptides':
             features.append(adjacent_pair_composition(x, lengths))
         return torch.cat(features, dim=-1)
@@ -170,12 +167,12 @@ class ClassicalModel(ParrotArchitecture):
         Parameters
         ----------
         loader : DataLoader
-            Batches of the training data
+            Batches of the training data (process_input_data.Batch)
         """
         features, targets = [], []
-        for _, vectors, batch_targets, lengths in loader:
-            features.append(self.sequence_features(vectors, lengths))
-            targets.append(batch_targets)
+        for batch in loader:
+            features.append(self.sequence_features(batch.vectors, batch.lengths))
+            targets.append(batch.targets)
 
         training_features = torch.cat(features).double().numpy()
         training_targets = torch.cat(targets).numpy()
@@ -256,17 +253,29 @@ class LinearModel(ClassicalModel):
     name = 'linear'
     description = 'ridge or logistic regression on sequence features'
     hyperparameters = (
-        HyperParameter('alpha', float, default=1.0, search_range=(1e-3, 1e3), log_scale=True,
-                       help='strength of the L2 penalty on the coefficients (must be > 0)'),
+        HyperParameter('alpha', float, default=1.0, minimum=0, exclusive_minimum=True, search_range=(1e-3, 1e3),
+                       log_scale=True, help='strength of the L2 penalty on the coefficients (must be > 0)'),
         FEATURES_HYPERPARAMETER,
     )
 
     def __init__(self, input_size: int, task: Task, alpha: float, features: str) -> None:
-        require_positive('alpha', alpha)
+        """
+        Parameters
+        ----------
+        input_size : int
+            Length of the per-residue encoding vectors
+        task : Task
+            The task the model is for
+        alpha : float
+            Strength of the L2 penalty (> 0)
+        features : str
+            'composition' or 'dipeptides'
+        """
         super().__init__(input_size, task, {'alpha': alpha, 'features': features})
         self.alpha = alpha
 
     def make_estimator(self, num_samples: int, num_features: int) -> Any:
+        """Ridge regression, or logistic regression for classification (see ClassicalModel.make_estimator)."""
         if not self.task.is_classification:
             return Ridge(alpha=self.alpha)
 
@@ -281,12 +290,14 @@ class SupportVectorMachine(ClassicalModel):
     name = 'svm'
     description = 'support vector machine on sequence features'
     hyperparameters = (
-        HyperParameter('svm_c', float, default=1.0, search_range=(1e-2, 1e3), log_scale=True,
+        HyperParameter('svm_c', float, default=1.0, minimum=0, exclusive_minimum=True, search_range=(1e-2, 1e3),
+                       log_scale=True,
                        help='penalty on training errors (scikit-learn C, must be > 0); larger values fit the '
                             'training data more closely'),
         HyperParameter('kernel', str, default='rbf', choices=('rbf', 'linear', 'poly'), search_choices=('rbf', 'linear'),
                        help='kernel function'),
-        HyperParameter('relative_gamma', float, default=1.0, search_range=(1e-2, 1e2), log_scale=True,
+        HyperParameter('relative_gamma', float, default=1.0, minimum=0, exclusive_minimum=True,
+                       search_range=(1e-2, 1e2), log_scale=True,
                        help="kernel coefficient as a multiple of scikit-learn's default (1 / number of features); "
                             "larger values give more local, wigglier fits; not used by the linear kernel"),
         FEATURES_HYPERPARAMETER,
@@ -294,8 +305,22 @@ class SupportVectorMachine(ClassicalModel):
 
     def __init__(self, input_size: int, task: Task, svm_c: float, kernel: str, relative_gamma: float,
                  features: str) -> None:
-        require_positive('svm_c', svm_c)
-        require_positive('relative_gamma', relative_gamma)
+        """
+        Parameters
+        ----------
+        input_size : int
+            Length of the per-residue encoding vectors
+        task : Task
+            The task the model is for
+        svm_c : float
+            Penalty on training errors (> 0)
+        kernel : str
+            'rbf', 'linear' or 'poly'
+        relative_gamma : float
+            Kernel coefficient as a multiple of 1 / number of features (> 0)
+        features : str
+            'composition' or 'dipeptides'
+        """
         super().__init__(input_size, task, {'svm_c': svm_c, 'kernel': kernel, 'relative_gamma': relative_gamma,
                                             'features': features})
         self.svm_c = svm_c
@@ -303,6 +328,7 @@ class SupportVectorMachine(ClassicalModel):
         self.relative_gamma = relative_gamma
 
     def make_estimator(self, num_samples: int, num_features: int) -> Any:
+        """SVR, or SVC with class probabilities for classification (see ClassicalModel.make_estimator)."""
         # For standardised features scikit-learn's default gamma ('scale') is about 1 / num_features
         gamma = self.relative_gamma / num_features
 
@@ -327,12 +353,27 @@ class RandomForest(ClassicalModel):
     )
 
     def __init__(self, input_size: int, task: Task, num_trees: int, min_samples_leaf: int, features: str) -> None:
+        """
+        Parameters
+        ----------
+        input_size : int
+            Length of the per-residue encoding vectors
+        task : Task
+            The task the model is for
+        num_trees : int
+            Number of trees
+        min_samples_leaf : int
+            Minimum number of training sequences in each leaf
+        features : str
+            'composition' or 'dipeptides'
+        """
         super().__init__(input_size, task, {'num_trees': num_trees, 'min_samples_leaf': min_samples_leaf,
                                             'features': features})
         self.num_trees = num_trees
         self.min_samples_leaf = min_samples_leaf
 
     def make_estimator(self, num_samples: int, num_features: int) -> Any:
+        """A random forest classifier or regressor (see ClassicalModel.make_estimator)."""
         forest = RandomForestClassifier if self.task.is_classification else RandomForestRegressor
         return forest(n_estimators=self.num_trees, min_samples_leaf=self.min_samples_leaf,
                       random_state=random_state())
@@ -355,12 +396,33 @@ class KNearestNeighbors(ClassicalModel):
 
     def __init__(self, input_size: int, task: Task, num_neighbors: int, neighbor_weights: str,
                  features: str) -> None:
+        """
+        Parameters
+        ----------
+        input_size : int
+            Length of the per-residue encoding vectors
+        task : Task
+            The task the model is for
+        num_neighbors : int
+            Number of most similar training sequences used for each prediction
+        neighbor_weights : str
+            'uniform' or 'distance'
+        features : str
+            'composition' or 'dipeptides'
+        """
         super().__init__(input_size, task, {'num_neighbors': num_neighbors, 'neighbor_weights': neighbor_weights,
                                             'features': features})
         self.num_neighbors = num_neighbors
         self.neighbor_weights = neighbor_weights
 
     def make_estimator(self, num_samples: int, num_features: int) -> Any:
+        """A k-nearest-neighbours classifier or regressor (see ClassicalModel.make_estimator).
+
+        Raises
+        ------
+        ValueError
+            If there are fewer training sequences than neighbours
+        """
         if self.num_neighbors > num_samples:
             raise ValueError(f'num_neighbors ({self.num_neighbors}) is larger than the number of training '
                              f'sequences ({num_samples})')

@@ -23,9 +23,9 @@ import torch
 import torch.nn as nn
 from torch.func import functional_call
 
-from parrot.architectures.base import HyperParameter, ParrotArchitecture
-from parrot.architectures.layers import (ATTENTION_POOLING, LOGLENGTH_FEEDFORWARD, AttentionPool, append_log_length,
-                                        padding_mask, resolve_lengths)
+from parrot.architectures.base import ParrotArchitecture
+from parrot.architectures.hyperparameters import ATTENTION_POOLING, LOGLENGTH_FEEDFORWARD, HyperParameter
+from parrot.architectures.layers import padding_mask, resolve_lengths
 from parrot.architectures.registry import register_architecture
 from parrot.tasks import Task
 
@@ -92,12 +92,21 @@ def run_lstm_unpacked(lstm: nn.LSTM, x: torch.Tensor, lengths: torch.Tensor) -> 
 
     Parameters
     ----------
-    lstm, x, lengths
-        As for run_lstm()
+    lstm : torch.nn.LSTM
+        A bidirectional LSTM constructed with batch_first=True, without projections
+    x : torch.Tensor
+        Input batch in the format [batch_dim X padded_length X input_size]
+    lengths : torch.Tensor
+        The true (unpadded) length of each sequence in the batch
 
     Returns
     -------
-    As for run_lstm()
+    torch.Tensor
+        Per-position LSTM output [batch_dim X padded_length X hidden_size*2],
+        zero at padded positions
+    torch.Tensor
+        Final hidden state of each layer and direction [num_layers*2 X batch_dim X
+        hidden_size], ordered as torch.nn.LSTM orders them
     """
     if lstm.proj_size != 0 or not lstm.bidirectional or not lstm.batch_first:
         raise ValueError('run_lstm_unpacked expects a batch_first bidirectional LSTM without projections')
@@ -165,8 +174,9 @@ def reverse_within_lengths(x: torch.Tensor, lengths: torch.Tensor) -> torch.Tens
 class BRNN(ParrotArchitecture):
     """Bidirectional LSTM followed by a single fully connected layer.
 
-    The submodules are called `lstm` and `fc`; networks saved by every earlier
-    version of PARROT use exactly these parameter names, so they must not change.
+    The submodules are called `lstm` and `fc` (plus `attention_pool`, if used);
+    networks saved by every earlier version of PARROT use exactly these parameter
+    names, so they must not change.
 
     Attributes
     ----------
@@ -174,8 +184,6 @@ class BRNN(ParrotArchitecture):
         Size of the LSTM hidden vectors
     num_layers : int
         Number of stacked LSTM layers in each direction
-    loglength_feedforward : bool
-        Whether the output layer also sees log(sequence length) (sequence-mapped tasks only)
     lstm : torch.nn.LSTM
         The bidirectional LSTM layer(s)
     attention_pool : AttentionPool or None
@@ -184,6 +192,8 @@ class BRNN(ParrotArchitecture):
         states of the two directions are used instead.
     fc : torch.nn.Linear
         Fully connected layer mapping the LSTM output to the network output
+    uses_log_length : bool
+        Whether `fc` also sees log(sequence length) (sequence-mapped tasks only)
     """
 
     name = 'brnn'
@@ -221,16 +231,10 @@ class BRNN(ParrotArchitecture):
                                             'loglength_feedforward': loglength_feedforward})
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.loglength_feedforward = loglength_feedforward and not task.per_residue
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True)
 
         # *2 because the forward and reverse directions are concatenated
-        use_attention = attention_pooling and not task.per_residue
-        self.attention_pool = AttentionPool(hidden_size * 2) if use_attention else None
-
-        # *2 because the forward and reverse directions are concatenated (+1 for log(length))
-        self.fc = nn.Linear(in_features=hidden_size * 2 + int(self.loglength_feedforward),
-                            out_features=task.num_classes)
+        self.build_readout(hidden_size * 2, attention_pooling=attention_pooling, log_length=loglength_feedforward)
 
     def forward(self, x: torch.Tensor, lengths: torch.Tensor | None = None) -> torch.Tensor:
         """Propagate a batch of encoded sequences through the network
@@ -260,12 +264,9 @@ class BRNN(ParrotArchitecture):
         lengths = resolve_lengths(x, lengths)
         if self.attention_pool is not None:
             # Every residue's output contributes, weighted by learned attention
-            summary = self.attention_pool(out, padding_mask(lengths, out.shape[1]))
+            summary = self.pool_residues(out, padding_mask(lengths, out.shape[1]))
         else:
             # Final hidden state of the last layer in each direction: h_n[-2] is the
             # forward direction (after seq[n]) and h_n[-1] the reverse (after seq[0])
             summary = torch.cat((h_n[-2], h_n[-1]), dim=-1)
-        if self.loglength_feedforward:
-            summary = append_log_length(summary, lengths)
-        per_sequence_output: torch.Tensor = self.fc(summary)
-        return per_sequence_output
+        return self.sequence_output(summary, lengths)

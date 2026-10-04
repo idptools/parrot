@@ -4,8 +4,19 @@ Building blocks shared by several architectures, mostly for handling padding.
 PARROT batches sequences of different lengths by zero-padding them at the end,
 and every architecture must give the same output for a sequence however much
 padding it was given. The helpers here make that easy: build a mask of the real
-residues, re-apply it after any layer that could write into padded positions,
+residues, re-zero the padding after any layer that could write into it,
 normalise each position independently, and pool only over real residues.
+
+Tensor layouts. Batches are [batch_dim X padded_length X features]
+("residues-first"), as PARROT's data loaders produce them and as linear layers,
+attention and LSTMs expect. Convolutions work on [batch_dim X channels X
+padded_length] ("channels-first") instead. Masks follow the same split:
+
+- a padding mask is a boolean [batch_dim X padded_length] tensor, True at real
+  residues (padding_mask());
+- a channel mask is the same mask as a float [batch_dim X 1 X padded_length]
+  tensor (channel_mask()), which multiplies a channels-first tensor to zero its
+  padding.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -20,27 +31,11 @@ Licensed under the MIT license.
 import torch
 import torch.nn as nn
 
-from parrot.architectures.base import HyperParameter
+from parrot.architectures.hyperparameters import POOLING_METHODS
 
-# Ways of turning per-residue features into one vector per sequence when attention pooling is off
-POOLING_METHODS = ('mean', 'max')
 
-# Hyperparameters shared by several architectures, declared once so their flags and help agree. Each
-# is on by default; networks saved before it existed did not have it, so they are rebuilt without it.
-GLOBAL_CONTEXT = HyperParameter(
-    'global_context', bool, default=True, legacy_value=False,
-    help='add a summary of the whole sequence to every position, so every residue sees the whole sequence')
-ATTENTION_POOLING = HyperParameter(
-    'attention_pooling', bool, default=True, legacy_value=False,
-    help='sequence tasks only: pool residue features with learned attention weights (when off, --pooling is '
-         'used, or for the BRNN its final hidden states)')
-LOGLENGTH_FEEDFORWARD = HyperParameter(
-    'loglength_feedforward', bool, default=True, legacy_value=False,
-    help='sequence tasks only: also give the output layer log(sequence length)')
-
-# Help for the 'pooling' hyperparameter of architectures that also have ATTENTION_POOLING
-POOLING_HELP = "sequence tasks with attention pooling off: how residue features are pooled, 'mean' or 'max'"
-
+# ..........................................................................................
+# Lengths and masks
 
 def resolve_lengths(x: torch.Tensor, lengths: torch.Tensor | None) -> torch.Tensor:
     """Return the true length of each sequence in a batch, on the batch's device
@@ -83,6 +78,47 @@ def padding_mask(lengths: torch.Tensor, padded_length: int) -> torch.Tensor:
     return positions.unsqueeze(0) < lengths.unsqueeze(1)
 
 
+def channel_mask(mask: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
+    """Turn a boolean [batch_dim X padded_length] padding mask into a float [batch_dim X 1 X padded_length] one
+
+    Multiplying a channels-first tensor by the result zeroes its padded positions.
+
+    Parameters
+    ----------
+    mask : torch.Tensor
+        Boolean padding mask (see padding_mask())
+    dtype : torch.dtype
+        Floating-point type of the tensors the mask will multiply
+
+    Returns
+    -------
+    torch.Tensor
+        1.0 at real residues and 0.0 at padding, [batch_dim X 1 X padded_length]
+    """
+    return mask.unsqueeze(1).to(dtype)
+
+
+def zero_padding(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    """Set every padded position of a residues-first batch to zero
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        [batch_dim X padded_length X features]
+    mask : torch.Tensor
+        Boolean [batch_dim X padded_length] padding mask
+
+    Returns
+    -------
+    torch.Tensor
+        `x` with zeros at padded positions
+    """
+    return x * mask.unsqueeze(-1).to(x.dtype)
+
+
+# ..........................................................................................
+# Summaries of a whole sequence
+
 def mean_over_residues(x: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
     """Average each sequence's encoded residues (for one-hot encoding: its composition)
 
@@ -100,6 +136,42 @@ def mean_over_residues(x: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
     """
 
     return x.sum(dim=1) / lengths.unsqueeze(-1).to(x.dtype)
+
+
+def append_log_length(features: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+    """Add log(sequence length) as one more feature of each sequence
+
+    Parameters
+    ----------
+    features : torch.Tensor
+        [batch_dim X num_features]
+    lengths : torch.Tensor
+        The true length of each sequence
+
+    Returns
+    -------
+    torch.Tensor
+        [batch_dim X num_features + 1], with log(length) last
+    """
+    return torch.cat([features, torch.log(lengths.to(features.dtype)).unsqueeze(-1)], dim=-1)
+
+
+def composition_and_log_length(x: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+    """Each sequence's average encoded residue (its composition, for one-hot encoding) followed by log(length)
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        [batch_dim X padded_length X input_size], zero at padded positions
+    lengths : torch.Tensor
+        The true length of each sequence
+
+    Returns
+    -------
+    torch.Tensor
+        [batch_dim X input_size + 1]
+    """
+    return append_log_length(mean_over_residues(x, lengths), lengths)
 
 
 def adjacent_pair_composition(x: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
@@ -123,10 +195,14 @@ def adjacent_pair_composition(x: torch.Tensor, lengths: torch.Tensor) -> torch.T
         have no adjacent pairs.
     """
 
+    # pair_sums[b, d, e] = sum over positions l of x[b, l, d] * x[b, l + 1, e]
     pair_sums = torch.einsum('bld,ble->bde', x[:, :-1], x[:, 1:])
     num_pairs = (lengths - 1).clamp(min=1).to(x.dtype)
     return pair_sums.flatten(start_dim=1) / num_pairs.unsqueeze(-1)
 
+
+# ..........................................................................................
+# Pooling residue features into one vector per sequence
 
 def masked_pool(features: torch.Tensor, mask: torch.Tensor, method: str) -> torch.Tensor:
     """Pool per-residue features into one vector per sequence, ignoring padding
@@ -195,12 +271,22 @@ class AttentionPool(nn.Module):
         torch.Tensor
             [batch_dim X channels]
         """
-        weights = torch.softmax(self.score(features).squeeze(-1).masked_fill(~mask, float('-inf')), dim=1)
-        return torch.einsum('bl,blc->bc', weights, features)
+        scores = self.score(features).squeeze(-1)
 
+        # A score of -inf gives a weight of exactly zero, so padding never contributes
+        scores = scores.masked_fill(~mask, float('-inf'))
+        weights = torch.softmax(scores, dim=1)
+
+        # pooled[b, c] = sum over residues l of weights[b, l] * features[b, l, c]
+        pooled: torch.Tensor = torch.einsum('bl,blc->bc', weights, features)
+        return pooled
+
+
+# ..........................................................................................
+# Layers for channels-first (convolutional) networks
 
 class GlobalContext(nn.Module):
-    """A summary of the whole sequence, to be added to every position of a channel-first batch
+    """A summary of the whole sequence, to be added to every position of a channels-first batch
 
     The summary is the average of the features over the sequence's real
     positions, passed through a linear layer (as in global-context and
@@ -226,13 +312,13 @@ class GlobalContext(nn.Module):
         nn.init.zeros_(self.linear.weight)
         nn.init.zeros_(self.linear.bias)
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, channel_mask: torch.Tensor) -> torch.Tensor:
         """
         Parameters
         ----------
         x : torch.Tensor
             [batch_dim X channels X padded_length]
-        mask : torch.Tensor
+        channel_mask : torch.Tensor
             Float [batch_dim X 1 X padded_length] mask of real positions
 
         Returns
@@ -240,43 +326,47 @@ class GlobalContext(nn.Module):
         torch.Tensor
             [batch_dim X channels X 1], the same for every position of a sequence
         """
-        summary = (x * mask).sum(dim=-1) / mask.sum(dim=-1)
+        summary = (x * channel_mask).sum(dim=-1) / channel_mask.sum(dim=-1)
         context: torch.Tensor = self.linear(summary).unsqueeze(-1)
         return context
 
 
-def append_log_length(features: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
-    """Add log(sequence length) as one more feature of each sequence ([batch_dim X n] -> [batch_dim X n + 1])."""
-    return torch.cat([features, torch.log(lengths.to(features.dtype)).unsqueeze(-1)], dim=-1)
+class ChannelLayerNorm(nn.Module):
+    """Layer normalisation over the channels of a channels-first [batch X channels X length] tensor
 
-
-def sequence_features(features: torch.Tensor, mask: torch.Tensor, lengths: torch.Tensor,
-                      attention_pool: AttentionPool | None, pooling: str, log_length: bool) -> torch.Tensor:
-    """The vector a sequence-mapped network's output layer sees: pooled residue features, optionally plus log(length)
-
-    Parameters
-    ----------
-    features : torch.Tensor
-        Per-residue features [batch_dim X padded_length X channels]
-    mask : torch.Tensor
-        Boolean [batch_dim X padded_length] mask of real residues
-    lengths : torch.Tensor
-        True length of each sequence, on the same device as `features`
-    attention_pool : AttentionPool or None
-        Pools the residues if given; otherwise `pooling` is used
-    pooling : str
-        'mean' or 'max'
-    log_length : bool
-        Append log(sequence length)
-
-    Returns
-    -------
-    torch.Tensor
-        [batch_dim X channels] or [batch_dim X channels + 1]
+    Each position is normalised on its own, so (unlike batch normalisation)
+    padded positions and other sequences in the batch cannot affect the result.
     """
-    pooled = attention_pool(features, mask) if attention_pool is not None else masked_pool(features, mask, pooling)
-    return append_log_length(pooled, lengths) if log_length else pooled
 
+    def __init__(self, channels: int) -> None:
+        """
+        Parameters
+        ----------
+        channels : int
+            Number of channels
+        """
+        super().__init__()
+        self.norm = nn.LayerNorm(channels)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Parameters
+        ----------
+        x : torch.Tensor
+            [batch_dim X channels X length]
+
+        Returns
+        -------
+        torch.Tensor
+            Same shape as `x`, each position normalised over its channels
+        """
+        # nn.LayerNorm normalises the last dimension, so move the channels there and back
+        normalised: torch.Tensor = self.norm(x.transpose(1, 2)).transpose(1, 2)
+        return normalised
+
+
+# ..........................................................................................
+# Fully connected networks
 
 def multilayer_perceptron(input_size: int, hidden_size: int, num_hidden_layers: int, output_size: int,
                           dropout: float) -> nn.Sequential:
@@ -308,25 +398,3 @@ def multilayer_perceptron(input_size: int, hidden_size: int, num_hidden_layers: 
         layer_input_size = hidden_size
     layers.append(nn.Linear(layer_input_size, output_size))
     return nn.Sequential(*layers)
-
-
-class ChannelLayerNorm(nn.Module):
-    """Layer normalisation over the channels of a channel-first [batch X channels X length] tensor
-
-    Each position is normalised on its own, so (unlike batch normalisation)
-    padded positions and other sequences in the batch cannot affect the result.
-    """
-
-    def __init__(self, channels: int) -> None:
-        """
-        Parameters
-        ----------
-        channels : int
-            Number of channels
-        """
-        super().__init__()
-        self.norm = nn.LayerNorm(channels)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        normalised: torch.Tensor = self.norm(x.transpose(1, 2)).transpose(1, 2)
-        return normalised

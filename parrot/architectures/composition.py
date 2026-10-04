@@ -25,8 +25,10 @@ Licensed under the MIT license.
 import torch
 import torch.nn.functional as F
 
-from parrot.architectures.base import HyperParameter, ParrotArchitecture
-from parrot.architectures.layers import mean_over_residues, multilayer_perceptron, padding_mask, resolve_lengths
+from parrot.architectures.base import ParrotArchitecture
+from parrot.architectures.hyperparameters import DROPOUT, HyperParameter
+from parrot.architectures.layers import (composition_and_log_length, multilayer_perceptron, padding_mask,
+                                         resolve_lengths, zero_padding)
 from parrot.architectures.registry import register_architecture
 from parrot.tasks import Task
 
@@ -34,6 +36,8 @@ from parrot.tasks import Task
 @register_architecture
 class Composition(ParrotArchitecture):
     """Composition (plus log length) fed to a multilayer perceptron
+
+    The parameter names (`mlp.N`) are stored in saved networks, so they must not change.
 
     Attributes
     ----------
@@ -51,8 +55,7 @@ class Composition(ParrotArchitecture):
                        cli_aliases=('-hs',), minimum=1, search_range=(8, 128)),
         HyperParameter('num_hidden_layers', int, default=1, help='number of hidden layers (0 gives a linear model)',
                        minimum=0, search_range=(0, 3)),
-        HyperParameter('dropout', float, default=0.0, help='dropout probability', minimum=0.0, maximum=1.0,
-                       search_range=(0.0, 0.5)),
+        DROPOUT,
         HyperParameter('window_radius', int, default=7,
                        help='residue tasks only: residues either side of each residue in its composition window',
                        minimum=0, search_range=(1, 25)),
@@ -101,15 +104,13 @@ class Composition(ParrotArchitecture):
         """
         lengths = resolve_lengths(x, lengths)
         mask = padding_mask(lengths, x.shape[1])
-        x = x * mask.unsqueeze(-1).to(x.dtype)
+        x = zero_padding(x, mask)
 
         if self.task.per_residue:
             output: torch.Tensor = self.mlp(self.window_composition(x, mask))
             return output
 
-        composition = mean_over_residues(x, lengths)
-        log_length = torch.log(lengths.to(x.dtype)).unsqueeze(-1)
-        output = self.mlp(torch.cat([composition, log_length], dim=-1))
+        output = self.mlp(composition_and_log_length(x, lengths))
         return output
 
     def window_composition(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:

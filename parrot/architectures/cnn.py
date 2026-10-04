@@ -28,18 +28,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from parrot.architectures.base import HyperParameter, ParrotArchitecture
-from parrot.architectures.layers import (ATTENTION_POOLING, GLOBAL_CONTEXT, LOGLENGTH_FEEDFORWARD, POOLING_HELP,
-                                         POOLING_METHODS, AttentionPool, ChannelLayerNorm, GlobalContext, padding_mask,
-                                         resolve_lengths, sequence_features)
+from parrot.architectures.base import ParrotArchitecture
+from parrot.architectures.hyperparameters import (ATTENTION_POOLING, DROPOUT, GLOBAL_CONTEXT, KERNEL_SIZES,
+                                                  LOGLENGTH_FEEDFORWARD, POOLING, HyperParameter)
+from parrot.architectures.layers import ChannelLayerNorm, GlobalContext, channel_mask, padding_mask, resolve_lengths
 from parrot.architectures.registry import register_architecture
 from parrot.tasks import Task
 
 # The dilation doubles with each block and resets after this many blocks (1, 2, 4, 8, 1, 2, ...)
 DILATION_CYCLE = 4
-
-# Allowed convolution widths. Widths must be odd so convolutions are centred on each residue.
-KERNEL_SIZES = (3, 5, 7, 9, 11)
 
 
 class ResidualConvBlock(nn.Module):
@@ -78,13 +75,13 @@ class ResidualConvBlock(nn.Module):
                               padding=dilation * (kernel_size - 1) // 2)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, channel_mask: torch.Tensor) -> torch.Tensor:
         """
         Parameters
         ----------
         x : torch.Tensor
             [batch_dim X channels X padded_length], zero at padded positions
-        mask : torch.Tensor
+        channel_mask : torch.Tensor
             Float [batch_dim X 1 X padded_length] mask of real residues
 
         Returns
@@ -93,11 +90,11 @@ class ResidualConvBlock(nn.Module):
             Same shape as `x`, zero at padded positions
         """
         # Mask before the convolution so padding never leaks into real residues
-        activated = F.gelu(self.norm(x)) * mask
+        activated = F.gelu(self.norm(x)) * channel_mask
         update = self.conv(activated)
         if self.context is not None:
-            update = update + self.context(activated, mask)
-        output: torch.Tensor = (x + self.dropout(update)) * mask
+            update = update + self.context(activated, channel_mask)
+        output: torch.Tensor = (x + self.dropout(update)) * channel_mask
         return output
 
 
@@ -105,21 +102,19 @@ class ResidualConvBlock(nn.Module):
 class DilatedCNN(ParrotArchitecture):
     """Dilated residual 1D convolutional network
 
+    The parameter names (`input_projection`, `blocks.N.norm`, `blocks.N.conv`,
+    `blocks.N.context`, `output_norm`, `attention_pool`, `fc`) are stored in
+    saved networks, so they must not change.
+
     Attributes
     ----------
-    pooling : str
-        How residue features are pooled for sequence-mapped tasks when attention pooling is off
-    loglength_feedforward : bool
-        Whether the output layer also sees log(sequence length) (sequence-mapped tasks only)
     input_projection : torch.nn.Conv1d
         Maps each residue's encoding to `channels` features
     blocks : torch.nn.ModuleList
         The residual convolution blocks
     output_norm : torch.nn.LayerNorm
-    attention_pool : AttentionPool or None
-        Pools residue features for sequence-mapped tasks, if attention pooling is on
-    fc : torch.nn.Linear
-        Maps features to outputs
+    attention_pool, fc, pooling, uses_log_length
+        The readout (see ParrotArchitecture.build_readout)
     """
 
     name = 'cnn'
@@ -131,9 +126,8 @@ class DilatedCNN(ParrotArchitecture):
                        search_range=(1, 8)),
         HyperParameter('kernel_size', int, default=5, help='width of each convolution', choices=KERNEL_SIZES,
                        search_choices=KERNEL_SIZES),
-        HyperParameter('dropout', float, default=0.0, help='dropout probability', minimum=0.0, maximum=1.0,
-                       search_range=(0.0, 0.5)),
-        HyperParameter('pooling', str, default='mean', choices=POOLING_METHODS, help=POOLING_HELP),
+        DROPOUT,
+        POOLING,
         GLOBAL_CONTEXT,
         ATTENTION_POOLING,
         LOGLENGTH_FEEDFORWARD,
@@ -170,15 +164,13 @@ class DilatedCNN(ParrotArchitecture):
                                             'kernel_size': kernel_size, 'dropout': dropout, 'pooling': pooling,
                                             'global_context': global_context, 'attention_pooling': attention_pooling,
                                             'loglength_feedforward': loglength_feedforward})
-        self.pooling = pooling
-        self.loglength_feedforward = loglength_feedforward and not task.per_residue
         self.input_projection = nn.Conv1d(input_size, channels, kernel_size=1)
         self.blocks = nn.ModuleList([ResidualConvBlock(channels, kernel_size, 2 ** (i % DILATION_CYCLE), dropout,
                                                        global_context)
                                      for i in range(num_blocks)])
         self.output_norm = nn.LayerNorm(channels)
-        self.attention_pool = AttentionPool(channels) if attention_pooling and not task.per_residue else None
-        self.fc = nn.Linear(channels + int(self.loglength_feedforward), task.num_classes)
+        self.build_readout(channels, attention_pooling=attention_pooling, pooling=pooling,
+                           log_length=loglength_feedforward)
 
     def forward(self, x: torch.Tensor, lengths: torch.Tensor | None = None) -> torch.Tensor:
         """Propagate a batch of encoded sequences through the network
@@ -197,17 +189,12 @@ class DilatedCNN(ParrotArchitecture):
         """
         lengths = resolve_lengths(x, lengths)
         mask = padding_mask(lengths, x.shape[1])
-        channel_mask = mask.unsqueeze(1).to(x.dtype)
+        real_positions = channel_mask(mask, x.dtype)
 
-        hidden = self.input_projection(x.transpose(1, 2)) * channel_mask
+        # Convolutions work channels-first: [batch_dim X channels X padded_length]
+        hidden = self.input_projection(x.transpose(1, 2)) * real_positions
         for block in self.blocks:
-            hidden = block(hidden, channel_mask)
+            hidden = block(hidden, real_positions)
 
         features = self.output_norm(hidden.transpose(1, 2))
-        if self.task.per_residue:
-            per_residue_output: torch.Tensor = self.fc(features)
-            return per_residue_output
-
-        per_sequence_output: torch.Tensor = self.fc(sequence_features(features, mask, lengths, self.attention_pool,
-                                                                      self.pooling, self.loglength_feedforward))
-        return per_sequence_output
+        return self.readout(features, mask, lengths)

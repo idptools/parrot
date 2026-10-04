@@ -17,7 +17,8 @@ https://github.com/idptools/parrot
 Licensed under the MIT license.
 """
 
-from parrot.architectures.base import HyperParameter, HyperParameterValue, ParrotArchitecture
+from parrot.architectures.base import ParrotArchitecture
+from parrot.architectures.hyperparameters import HyperParameter, HyperParameterValue
 from parrot.architectures.registry import (available_architectures, build_network, get_architecture,
                                            register_architecture, resolve_hyperparameters)
 

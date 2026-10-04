@@ -103,6 +103,13 @@ def test_hyperparameter_bounds_and_choices():
         sized.validate(4)
 
 
+def test_hyperparameter_exclusive_minimum():
+    penalty = HyperParameter('alpha', float, 1.0, 'help', minimum=0, exclusive_minimum=True)
+    assert penalty.validate(1e-9) == 1e-9
+    with pytest.raises(ValueError, match='greater than 0'):
+        penalty.validate(0)
+
+
 def test_text_hyperparameter():
     pooling = HyperParameter('pooling', str, 'mean', 'help', choices=('mean', 'max'))
 
@@ -130,6 +137,7 @@ def test_searchable():
     {'value_type': bool, 'default': True, 'choices': (True, False)},
     {'value_type': bool, 'default': True, 'search_range': (0, 1)},
     {'value_type': bool, 'default': True, 'legacy_value': 'no'},
+    {'exclusive_minimum': True},                                            # exclusive minimum without a minimum
 ])
 def test_hyperparameter_rejects_invalid_declarations(kwargs):
     arguments = dict(name='hidden_size', value_type=int, default=10, help='help')
@@ -319,6 +327,23 @@ def test_architecture_declarations(test_architecture, architecture):
 
     network = build_network(architecture, 20, Task('sequence', 1))
     assert network.hyperparameter_values == resolve_hyperparameters(declared)
+
+
+def test_architectures_record_exactly_their_declared_hyperparameters(test_architecture):
+    """Values saved with a network rebuild it, so a missing or misspelt one must fail when the network is built"""
+    class ForgetfulArchitecture(test_architecture):
+        def __init__(self, input_size, task, hidden_units):
+            ParrotArchitecture.__init__(self, input_size, task, {'hidden_unit': hidden_units})
+
+    with pytest.raises(ValueError, match=r"missing \['hidden_units'\], not declared \['hidden_unit'\]"):
+        ForgetfulArchitecture(20, Task('sequence', 1), hidden_units=4)
+
+
+def test_architectures_check_hyperparameter_values_when_built_directly():
+    """Building a network without going through build_network() still checks its hyperparameters"""
+    with pytest.raises(ValueError, match="'hidden_size' must be at least 1"):
+        BRNN(20, Task('sequence', 1), hidden_size=0, num_layers=1, attention_pooling=True,
+             loglength_feedforward=True)
 
 
 @pytest.mark.parametrize('architecture', [name for name in ARCHITECTURES_UNDER_TEST if not supports(name, 'residues')])
