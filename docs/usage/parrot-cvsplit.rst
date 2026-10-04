@@ -16,6 +16,7 @@ Where *data_file* specifies the path to the whitespace-separated datafile and *o
 
     *  ``--help`` / ``-h`` : Display a help message.
     *  ``--k-folds`` / ``-k`` : Number of split-files to generate for K-fold cross-validation (default is 10). This term determines the train+validation vs test set split, as for each fold the test set will contain ~1/K of the data, while the training and validation sets combined will contain (K-1)/K. Must be a positive integer.
+    *  ``--seed`` : Integer random seed, to make the generated split-files reproducible. By default no seed is set.
     *  ``--training-fraction`` / ``-t`` : Percent of the non-test data that should be partioned into the training set for each fold (default is 0.8). This term determines the train vs validation set split, as for each fold the training set fraction will equal ~((K-1)/K) * *training-fraction* of the data, and the validation set fraction will equal ~((K-1)/K) * (1-*training-fraction*). Must be a float between 0 and 1.
 
 **Output:**

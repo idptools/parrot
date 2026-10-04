@@ -6,7 +6,10 @@ Welcome to PARROT's documentation!
    :caption: Contents:
 
    getting_started
+   usage/parrot-preprocess
    usage/parrot-train
+   usage/architectures
+   usage/plm_encodings
    usage/parrot-optimize
    usage/parrot-predict
    usage/parrot-cvsplit
@@ -14,4 +17,5 @@ Welcome to PARROT's documentation!
    usage/advanced_examples
    usage/cross_validation
    usage/ml_faqs
+   adding_architectures
    api

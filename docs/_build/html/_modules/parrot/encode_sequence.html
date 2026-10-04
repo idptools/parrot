@@ -1,87 +1,51 @@
 
 
 <!DOCTYPE html>
-<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
-<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<html class="writer-html5" lang="en" data-content_root="../../">
 <head>
-  <meta charset="utf-8">
-  
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>parrot.encode_sequence &mdash; parrot  documentation</title>
-  
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
 
   
-  
-  
-  
-
-  
-  <script type="text/javascript" src="../../_static/js/modernizr.min.js"></script>
-  
-    
-      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
-        <script src="../../_static/jquery.js"></script>
-        <script src="../../_static/underscore.js"></script>
-        <script src="../../_static/doctools.js"></script>
-        <script src="../../_static/language_data.js"></script>
-    
-    <script type="text/javascript" src="../../_static/js/theme.js"></script>
-
-    
-
-  
-  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" /> 
 </head>
 
-<body class="wy-body-for-nav">
-
-   
+<body class="wy-body-for-nav"> 
   <div class="wy-grid-for-nav">
-    
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-          
 
           
-            <a href="../../index.html" class="icon icon-home"> parrot
           
-
-          
+          <a href="../../index.html" class="icon icon-home">
+            parrot
           </a>
-
-          
-            
-            
-          
-
-          
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
 </div>
-
-          
-        </div>
-
-        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
-          
-            
-            
-              
-            
-            
-              <p class="caption"><span class="caption-text">Contents:</span></p>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../getting_started.html">Getting Started with PARROT</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-preprocess.html">parrot-preprocess</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-train.html">parrot-train</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/architectures.html">Architectures</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/plm_encodings.html">Protein language model encodings</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-optimize.html">parrot-optimize</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-predict.html">parrot-predict</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-cvsplit.html">parrot-cvsplit</a></li>
@@ -89,72 +53,38 @@
 <li class="toctree-l1"><a class="reference internal" href="../../usage/advanced_examples.html">Advanced Examples:</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/cross_validation.html">Evaluating a Network with Cross-Validation:</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/ml_faqs.html">Machine Learning Resources:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../adding_architectures.html">Adding a new architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../api.html">Module Documentation</a></li>
 </ul>
 
-            
-          
         </div>
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
-
-      
-      <nav class="wy-nav-top" aria-label="top navigation">
-        
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="../../index.html">parrot</a>
-        
       </nav>
 
-
       <div class="wy-nav-content">
-        
         <div class="rst-content">
-        
-          
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div role="navigation" aria-label="breadcrumbs navigation">
-
+          <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-    
-      <li><a href="../../index.html">Docs</a> &raquo;</li>
-        
-          <li><a href="../index.html">Module code</a> &raquo;</li>
-        
-      <li>parrot.encode_sequence</li>
-    
-    
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">parrot.encode_sequence</li>
       <li class="wy-breadcrumbs-aside">
-        
       </li>
-    
   </ul>
-
-  
   <hr/>
 </div>
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
-            
+             
   <h1>Source code for parrot.encode_sequence</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">File containing functions for encoding a string of amino acids into a numeric vector.</span>
+<span class="sd">File containing functions and encoder objects for converting a string of amino</span>
+<span class="sd">acids (or any other alphabet, via a user encoding file) into numeric vectors.</span>
 
 <span class="sd">.............................................................................</span>
 <span class="sd">parrot was developed by the Holehouse lab</span>
@@ -166,18 +96,80 @@
 <span class="sd">Licensed under the MIT license. </span>
 <span class="sd">&quot;&quot;&quot;</span>
 
-<span class="kn">import</span> <span class="nn">sys</span>
-<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterable</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
 
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+
+<div class="viewcode-block" id="LookupTable">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.LookupTable">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">LookupTable</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encodes a sequence by looking up every character&#39;s vector at once</span>
+
+<span class="sd">    Much faster than encoding character by character in Python (about 3x for</span>
+<span class="sd">    one-hot encoding), which matters because sequences are encoded every time</span>
+<span class="sd">    they are used: every epoch in training, and for every prediction.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    vectors : numpy array</span>
+<span class="sd">        [number of characters X vector length] float64 table, one row per character</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        table : dict</span>
+<span class="sd">            Maps each character to its vector</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">characters</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vectors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">table</span><span class="p">[</span><span class="n">character</span><span class="p">]</span> <span class="k">for</span> <span class="n">character</span> <span class="ow">in</span> <span class="n">characters</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">vectors</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">vectors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vectors</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">characters</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_row</span> <span class="o">=</span> <span class="p">{</span><span class="n">character</span><span class="p">:</span> <span class="n">row</span> <span class="k">for</span> <span class="n">row</span><span class="p">,</span> <span class="n">character</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">characters</span><span class="p">)}</span>
+
+        <span class="c1"># Characters that are single bytes in Latin-1 (every amino acid letter) are looked up by byte value</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_byte_row</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">character</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_row</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">character</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">ord</span><span class="p">(</span><span class="n">character</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">256</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_byte_row</span><span class="p">[</span><span class="nb">ord</span><span class="p">(</span><span class="n">character</span><span class="p">)]</span> <span class="o">=</span> <span class="n">row</span>
+
+<div class="viewcode-block" id="LookupTable.encode">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.LookupTable.encode">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode a sequence as a float64 [len(seq) X vector length] tensor</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        ValueError</span>
+<span class="sd">            If the sequence contains a character that is not in the table</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_byte_row</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">frombuffer</span><span class="p">(</span><span class="n">seq</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;latin-1&#39;</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)]</span>
+        <span class="k">except</span> <span class="ne">UnicodeEncodeError</span><span class="p">:</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">character</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">character</span> <span class="ow">in</span> <span class="n">seq</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">rows</span><span class="o">.</span><span class="n">size</span> <span class="ow">and</span> <span class="n">rows</span><span class="o">.</span><span class="n">min</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Invalid amino acid detected: &#39;</span> <span class="o">+</span> <span class="n">seq</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">rows</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">))])</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vectors</span><span class="p">[</span><span class="n">rows</span><span class="p">])</span></div>
+</div>
+
+
 
 <span class="n">ONE_HOT</span> <span class="o">=</span> <span class="p">{</span> <span class="s1">&#39;A&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;C&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;D&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="s1">&#39;E&#39;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s1">&#39;F&#39;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span> <span class="s1">&#39;G&#39;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span> 
             <span class="s1">&#39;I&#39;</span><span class="p">:</span> <span class="mi">7</span><span class="p">,</span> <span class="s1">&#39;K&#39;</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span> <span class="s1">&#39;L&#39;</span><span class="p">:</span> <span class="mi">9</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span> <span class="s1">&#39;N&#39;</span><span class="p">:</span> <span class="mi">11</span><span class="p">,</span> <span class="s1">&#39;P&#39;</span><span class="p">:</span> <span class="mi">12</span><span class="p">,</span> <span class="s1">&#39;Q&#39;</span><span class="p">:</span> <span class="mi">13</span><span class="p">,</span> 
             <span class="s1">&#39;R&#39;</span><span class="p">:</span> <span class="mi">14</span><span class="p">,</span> <span class="s1">&#39;S&#39;</span><span class="p">:</span> <span class="mi">15</span><span class="p">,</span> <span class="s1">&#39;T&#39;</span><span class="p">:</span> <span class="mi">16</span><span class="p">,</span> <span class="s1">&#39;V&#39;</span><span class="p">:</span> <span class="mi">17</span><span class="p">,</span> <span class="s1">&#39;W&#39;</span><span class="p">:</span> <span class="mi">18</span><span class="p">,</span> <span class="s1">&#39;Y&#39;</span><span class="p">:</span> <span class="mi">19</span> <span class="p">}</span>
 
-<div class="viewcode-block" id="one_hot"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.one_hot">[docs]</a><span class="k">def</span> <span class="nf">one_hot</span><span class="p">(</span><span class="n">seq</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Convert an amino acid sequence to a PyTorch tensor of one-hot vectors</span>
+<span class="n">_ONE_HOT_TABLE</span> <span class="o">=</span> <span class="n">LookupTable</span><span class="p">({</span><span class="n">amino_acid</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">20</span><span class="p">)[</span><span class="n">index</span><span class="p">]</span> <span class="k">for</span> <span class="n">amino_acid</span><span class="p">,</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">ONE_HOT</span><span class="o">.</span><span class="n">items</span><span class="p">()})</span>
+
+<div class="viewcode-block" id="one_hot">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.one_hot">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">one_hot</span><span class="p">(</span><span class="n">seq</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert an amino acid sequence to a PyTorch tensor of one-hot vectors</span>
 
 <span class="sd">    Each amino acid is represented by a length 20 vector with a single 1 and</span>
 <span class="sd">    19 0&#39;s Inputing a sequence with a nono-canonical amino acid letter will</span>
@@ -196,19 +188,14 @@
 <span class="sd">            a PyTorch tensor representing the encoded sequence</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="n">l</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span>
-    <span class="n">m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">l</span><span class="p">,</span> <span class="mi">20</span><span class="p">))</span>
-    <span class="k">try</span><span class="p">:</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">l</span><span class="p">):</span>
-            <span class="n">m</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">ONE_HOT</span><span class="p">[</span><span class="n">seq</span><span class="p">[</span><span class="n">i</span><span class="p">]]]</span> <span class="o">=</span> <span class="mi">1</span>
-    <span class="k">except</span><span class="p">:</span>
-        <span class="n">error_str</span> <span class="o">=</span> <span class="s1">&#39;Invalid amino acid detected: &#39;</span> <span class="o">+</span> <span class="n">seq</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">error_str</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">m</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_ONE_HOT_TABLE</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="rev_one_hot"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.rev_one_hot">[docs]</a><span class="k">def</span> <span class="nf">rev_one_hot</span><span class="p">(</span><span class="n">seq_vectors</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Decode a list of one-hot sequence vectors into amino acid sequences</span>
+
+<div class="viewcode-block" id="rev_one_hot">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.rev_one_hot">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">rev_one_hot</span><span class="p">(</span><span class="n">seq_vectors</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Decode a list of one-hot sequence vectors into amino acid sequences</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -231,6 +218,7 @@
         <span class="n">sequences</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">seq</span><span class="p">))</span>
 
     <span class="k">return</span> <span class="n">sequences</span></div>
+
 
 
 <span class="c1">############  Biophysical scale encoding  #############</span>
@@ -267,8 +255,10 @@
                 <span class="s1">&#39;Y&#39;</span><span class="p">:</span> <span class="p">[</span><span class="o">-</span><span class="mf">1.3</span><span class="p">,</span>  <span class="mi">0</span><span class="p">,</span>  <span class="mf">5.7</span><span class="p">,</span> <span class="mf">181.2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">222.5</span><span class="p">,</span>  <span class="mf">71.9</span><span class="p">,</span>   <span class="o">-</span><span class="mf">6.1</span><span class="p">]</span>
                 <span class="p">}</span>
 
-<div class="viewcode-block" id="biophysics"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.biophysics">[docs]</a><span class="k">def</span> <span class="nf">biophysics</span><span class="p">(</span><span class="n">seq</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Convert an amino acid sequence to a PyTorch tensor with biophysical encoding</span>
+<div class="viewcode-block" id="biophysics">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.biophysics">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">biophysics</span><span class="p">(</span><span class="n">seq</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert an amino acid sequence to a PyTorch tensor with biophysical encoding</span>
 
 <span class="sd">    Each amino acid is represented by a length 9 vector with each value representing</span>
 <span class="sd">    a biophysical property. The nine encoded biophysical scales are Kyte-Doolittle</span>
@@ -289,19 +279,17 @@
 <span class="sd">    torch.FloatTensor</span>
 <span class="sd">            a PyTorch tensor representing the encoded sequence</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">l</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span>
-    <span class="n">m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">l</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">BIOPHYSICS</span><span class="p">[</span><span class="s1">&#39;A&#39;</span><span class="p">])))</span>
-    <span class="k">try</span><span class="p">:</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">l</span><span class="p">):</span>
-            <span class="n">m</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">BIOPHYSICS</span><span class="p">[</span><span class="n">seq</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span>
-    <span class="k">except</span><span class="p">:</span>
-        <span class="n">error_str</span> <span class="o">=</span> <span class="s1">&#39;Invalid amino acid detected: &#39;</span> <span class="o">+</span> <span class="n">seq</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">error_str</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">m</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_BIOPHYSICS_TABLE</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="rev_biophysics"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.rev_biophysics">[docs]</a><span class="k">def</span> <span class="nf">rev_biophysics</span><span class="p">(</span><span class="n">seq_vectors</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Decode a list of biophysically-encoded sequence vectors into amino acid sequences</span>
+
+<span class="n">_BIOPHYSICS_TABLE</span> <span class="o">=</span> <span class="n">LookupTable</span><span class="p">(</span><span class="n">BIOPHYSICS</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="rev_biophysics">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.rev_biophysics">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">rev_biophysics</span><span class="p">(</span><span class="n">seq_vectors</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Decode a list of biophysically-encoded sequence vectors into amino acid sequences</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -328,84 +316,287 @@
     <span class="k">return</span> <span class="n">sequences</span></div>
 
 
+
 <span class="c1">################## User-specified encoding ####################</span>
 
-<div class="viewcode-block" id="parse_encode_file"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.parse_encode_file">[docs]</a><span class="k">def</span> <span class="nf">parse_encode_file</span><span class="p">(</span><span class="n">file</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Helper function to convert an encoding file into key:value dictionary&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="parse_encode_file">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.parse_encode_file">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">parse_encode_file</span><span class="p">(</span><span class="n">file</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert an encoding file into a character-to-vector dictionary</span>
+
+<span class="sd">    Each non-empty line of the file should contain a single character followed</span>
+<span class="sd">    by the whitespace-separated numbers that make up its encoding vector. Blank</span>
+<span class="sd">    lines are ignored.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    file : str</span>
+<span class="sd">            Path to the encoding file</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    dict</span>
+<span class="sd">            Maps each character to its encoding vector (a list of floats)</span>
+<span class="sd">    int</span>
+<span class="sd">            The length of the encoding vectors</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    ValueError</span>
+<span class="sd">            If the file is empty, if the vectors are not all the same length, or</span>
+<span class="sd">            if any vector entry is not a number</span>
+<span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">file</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-        <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">f</span><span class="p">]</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">f</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Encoding file </span><span class="si">{</span><span class="n">file</span><span class="si">}</span><span class="s1"> is empty.&#39;</span><span class="p">)</span>
 
     <span class="n">l</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span>
     <span class="n">d</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">:</span>
-        <span class="n">d</span><span class="p">[</span><span class="n">line</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">line</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
-
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">line</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">!=</span> <span class="n">l</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Vectors in encoding file do not have same length.&#39;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">d</span><span class="p">[</span><span class="n">line</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">line</span><span class="p">[</span><span class="mi">1</span><span class="p">:]]</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Non-numeric value in encoding file for character </span><span class="si">{</span><span class="n">line</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s1">: </span><span class="si">{</span><span class="n">line</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
 
     <span class="k">return</span> <span class="n">d</span><span class="p">,</span> <span class="n">l</span></div>
 
 
-<div class="viewcode-block" id="UserEncoder"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.UserEncoder">[docs]</a><span class="k">class</span> <span class="nc">UserEncoder</span><span class="p">():</span>
-    <span class="sd">&quot;&quot;&quot;User-specified amino acid-to-vector encoding scheme object</span>
+
+<div class="viewcode-block" id="check_characters">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.check_characters">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">check_characters</span><span class="p">(</span><span class="n">sequences</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">valid</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raise if any sequence contains a character outside `valid`</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    sequences : iterable of str</span>
+<span class="sd">        Sequences to check</span>
+<span class="sd">    valid : set of str</span>
+<span class="sd">        The characters allowed</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    ValueError</span>
+<span class="sd">        For the first sequence with a character outside `valid`</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">sequence</span> <span class="ow">in</span> <span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="n">sequences</span><span class="p">):</span>
+        <span class="n">invalid</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">sequence</span><span class="p">)</span> <span class="o">-</span> <span class="n">valid</span>
+        <span class="k">if</span> <span class="n">invalid</span><span class="p">:</span>
+            <span class="n">shown</span> <span class="o">=</span> <span class="n">sequence</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">sequence</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">60</span> <span class="k">else</span> <span class="n">sequence</span><span class="p">[:</span><span class="mi">57</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;...&#39;</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Invalid amino acid detected: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">invalid</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s1"> (in sequence </span><span class="si">{</span><span class="n">shown</span><span class="si">}</span><span class="s1">)&#39;</span><span class="p">)</span></div>
+
+
+
+<span class="c1">################## Encoder objects ####################</span>
+<span class="c1">#</span>
+<span class="c1"># Everything outside this module works with a SequenceEncoder object rather than</span>
+<span class="c1"># with the functions above, so a new encoding (e.g. a learned embedding) only</span>
+<span class="c1"># needs a new SequenceEncoder subclass and an entry in get_encoder().</span>
+
+<div class="viewcode-block" id="SequenceEncoder">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.SequenceEncoder">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SequenceEncoder</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Base class for objects that convert sequences to numeric vectors</span>
 
 <span class="sd">    Attributes</span>
 <span class="sd">    ----------</span>
-<span class="sd">    encode_file : str</span>
-<span class="sd">            A path to a file that describes the encoding scheme</span>
-<span class="sd">    encode_dict : dict</span>
-<span class="sd">            A dictionary that maps each amino acid to a numeric vector</span>
+<span class="sd">    name : str</span>
+<span class="sd">            Short name of the encoding, stored when a network is saved</span>
 <span class="sd">    input_size : int</span>
-<span class="sd">            The length of the encoding vector used for each amino acid</span>
+<span class="sd">            Length of the vector each residue is encoded as</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">encode_file</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        encode_file : str</span>
-<span class="sd">                A path to a file that describes the encoding scheme</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+    <span class="n">input_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">encode_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">encode_file</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encode_file</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="s1">&#39;Encoding file does not exist.&#39;</span><span class="p">)</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">encode_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_size</span> <span class="o">=</span> <span class="n">parse_encode_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encode_file</span><span class="p">)</span>
-
-    <span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Get length of encoding scheme&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get length of encoding scheme&quot;&quot;&quot;</span>
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_size</span>
 
-<div class="viewcode-block" id="UserEncoder.encode"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.UserEncoder.encode">[docs]</a>    <span class="k">def</span> <span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Convert an amino acid sequence into this encoding scheme</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">alphabet</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Every character this encoding defines a vector for&quot;&quot;&quot;</span>
+
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span>
+
+<div class="viewcode-block" id="SequenceEncoder.encode">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.SequenceEncoder.encode">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a sequence into a [len(seq) X input_size] tensor&quot;&quot;&quot;</span>
+
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+
+
+<div class="viewcode-block" id="SequenceEncoder.check_sequences">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.SequenceEncoder.check_sequences">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">check_sequences</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sequences</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Raise if any sequence contains a character this encoding cannot encode</span>
+
+<span class="sd">        Checking every sequence before training or predicting reports a bad</span>
+<span class="sd">        residue straight away, rather than when its sequence is first encoded</span>
+<span class="sd">        (for a test-set sequence, only after training has finished).</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        ValueError</span>
+<span class="sd">            For the first sequence with a character outside the alphabet</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">check_characters</span><span class="p">(</span><span class="n">sequences</span><span class="p">,</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">alphabet</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="SequenceEncoder.decode">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.SequenceEncoder.decode">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq_vectors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a list of encoded sequences back to strings&quot;&quot;&quot;</span>
+
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+
+
+<div class="viewcode-block" id="SequenceEncoder.to_config">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.SequenceEncoder.to_config">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_config</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a plain dictionary from which encoder_from_config() can rebuild this encoder&quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">}</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OneHotEncoder">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.OneHotEncoder">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">OneHotEncoder</span><span class="p">(</span><span class="n">SequenceEncoder</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One-hot encoding of the 20 canonical amino acids (see one_hot())&quot;&quot;&quot;</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;onehot&#39;</span>
+    <span class="n">input_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ONE_HOT</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">alphabet</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">ONE_HOT</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OneHotEncoder.encode">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.OneHotEncoder.encode">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">one_hot</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="OneHotEncoder.decode">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.OneHotEncoder.decode">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq_vectors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="n">rev_one_hot</span><span class="p">(</span><span class="n">seq_vectors</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="BiophysicsEncoder">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.BiophysicsEncoder">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">BiophysicsEncoder</span><span class="p">(</span><span class="n">SequenceEncoder</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encoding of amino acids by nine biophysical scales (see biophysics())&quot;&quot;&quot;</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;biophysics&#39;</span>
+    <span class="n">input_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">BIOPHYSICS</span><span class="p">[</span><span class="s1">&#39;A&#39;</span><span class="p">])</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">alphabet</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">BIOPHYSICS</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BiophysicsEncoder.encode">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.BiophysicsEncoder.encode">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">biophysics</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="BiophysicsEncoder.decode">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.BiophysicsEncoder.decode">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq_vectors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="n">rev_biophysics</span><span class="p">(</span><span class="n">seq_vectors</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="UserEncoder">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.UserEncoder">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">UserEncoder</span><span class="p">(</span><span class="n">SequenceEncoder</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;User-specified character-to-vector encoding scheme</span>
+
+<span class="sd">    The scheme is read from an encoding file (see parse_encode_file()) or given</span>
+<span class="sd">    directly as a dictionary, which is how it is restored from a saved network.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    encode_file : str or None</span>
+<span class="sd">            A path to the file that describes the encoding scheme, or None if</span>
+<span class="sd">            the scheme was given as a dictionary</span>
+<span class="sd">    encode_dict : dict</span>
+<span class="sd">            A dictionary that maps each character to a numeric vector</span>
+<span class="sd">    input_size : int</span>
+<span class="sd">            The length of the encoding vector used for each character</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;user&#39;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">encode_file</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        encode_file : str, optional</span>
+<span class="sd">                A path to a file that describes the encoding scheme</span>
+<span class="sd">        table : dict, optional</span>
+<span class="sd">                Maps each character to its encoding vector. Exactly one of</span>
+<span class="sd">                `encode_file` and `table` must be given.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">encode_file</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="n">table</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Provide exactly one of an encoding file or an encoding table.&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">encode_file</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">encode_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">encode_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">encode_file</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encode_file</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="s1">&#39;Encoding file does not exist.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">encode_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_size</span> <span class="o">=</span> <span class="n">parse_encode_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encode_file</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">table</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">encode_file</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">encode_dict</span> <span class="o">=</span> <span class="p">{</span><span class="n">character</span><span class="p">:</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">vector</span><span class="p">]</span> <span class="k">for</span> <span class="n">character</span><span class="p">,</span> <span class="n">vector</span> <span class="ow">in</span> <span class="n">table</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+            <span class="n">vector_lengths</span> <span class="o">=</span> <span class="p">{</span><span class="nb">len</span><span class="p">(</span><span class="n">vector</span><span class="p">)</span> <span class="k">for</span> <span class="n">vector</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">encode_dict</span><span class="o">.</span><span class="n">values</span><span class="p">()}</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">vector_lengths</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Vectors in encoding table do not have same length.&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">input_size</span> <span class="o">=</span> <span class="n">vector_lengths</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_table</span> <span class="o">=</span> <span class="n">LookupTable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encode_dict</span><span class="p">)</span>
+
+<div class="viewcode-block" id="UserEncoder.encode">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.UserEncoder.encode">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a sequence into this encoding scheme</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        seq : str</span>
-<span class="sd">                An uppercase sequence of amino acids (single letter code)</span>
+<span class="sd">                A sequence made up of characters defined in the encoding scheme</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
-<span class="sd">        torch.FloatTensor</span>
-<span class="sd">                a PyTorch tensor representing the encoded sequence</span>
+<span class="sd">        torch.DoubleTensor</span>
+<span class="sd">                a [len(seq) X input_size] tensor representing the encoded sequence</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
-        <span class="n">l</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span>
-        <span class="n">m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">l</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_size</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_table</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span></div>
 
-        <span class="k">try</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">l</span><span class="p">):</span>
-                <span class="n">m</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">encode_dict</span><span class="p">[</span><span class="n">seq</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span>
-        <span class="k">except</span><span class="p">:</span>
-            <span class="n">error_str</span> <span class="o">=</span> <span class="s1">&#39;Invalid amino acid detected: &#39;</span> <span class="o">+</span> <span class="n">seq</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">error_str</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">m</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="UserEncoder.decode"><a class="viewcode-back" href="../../api.html#parrot.encode_sequence.UserEncoder.decode">[docs]</a>    <span class="k">def</span> <span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq_vectors</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Converts a list of sequence vectors back to a list of protein sequences</span>
+<div class="viewcode-block" id="UserEncoder.decode">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.UserEncoder.decode">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq_vectors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts a list of sequence vectors back to a list of sequences</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -415,10 +606,12 @@
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        list</span>
-<span class="sd">                Strings of amino acid sequences</span>
+<span class="sd">                Strings of sequences</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
-        <span class="c1"># Create a reverse of the encode_dict using hashing</span>
+        <span class="c1"># Create a reverse of the encode_dict using hashing. Both sides are cast to</span>
+        <span class="c1"># float32 so that vectors decode correctly whether they come straight from</span>
+        <span class="c1"># encode() (float64) or from a batched FloatTensor (float32).</span>
         <span class="n">rev_dict</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">encode_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="n">value</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
@@ -428,49 +621,283 @@
         <span class="k">for</span> <span class="n">seq_vector</span> <span class="ow">in</span> <span class="n">seq_vectors</span><span class="p">:</span>
             <span class="n">seq</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">residue</span> <span class="ow">in</span> <span class="n">seq_vector</span><span class="p">:</span>
+                <span class="n">residue</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">residue</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
                 <span class="n">seq</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rev_dict</span><span class="p">[</span><span class="nb">hash</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">residue</span><span class="p">))])</span>
             <span class="n">sequences</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">seq</span><span class="p">))</span>
 
-        <span class="k">return</span> <span class="n">sequences</span></div></div>
+        <span class="k">return</span> <span class="n">sequences</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">alphabet</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encode_dict</span><span class="p">)</span>
+
+<div class="viewcode-block" id="UserEncoder.to_config">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.UserEncoder.to_config">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_config</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The encoding table is stored in full so a saved network does not depend on the original file&quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;table&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">encode_dict</span><span class="p">}</span></div>
+</div>
+
+
+
+<span class="c1"># Name stored in a saved network&#39;s encoding config for a standardized encoding</span>
+<span class="n">STANDARDIZED_NAME</span> <span class="o">=</span> <span class="s1">&#39;standardized&#39;</span>
+
+<span class="c1"># A feature whose standard deviation across the alphabet is at most this fraction of</span>
+<span class="c1"># its typical magnitude is treated as constant (it carries no information)</span>
+<span class="n">CONSTANT_FEATURE_TOLERANCE</span> <span class="o">=</span> <span class="mf">1e-12</span>
+
+
+<div class="viewcode-block" id="StandardizedEncoder">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.StandardizedEncoder">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StandardizedEncoder</span><span class="p">(</span><span class="n">SequenceEncoder</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Another encoding with every feature standardized (z-scored) across its alphabet</span>
+
+<span class="sd">    Each feature (column) of the base encoding&#39;s table is shifted and scaled so</span>
+<span class="sd">    that, across the characters the encoding defines (the 20 amino acids for the</span>
+<span class="sd">    built-in encodings), it has mean 0 and standard deviation 1:</span>
+
+<span class="sd">        standardized value = (value - mean of the feature) / standard deviation of the feature</span>
+
+<span class="sd">    with the population standard deviation (the alphabet is the whole set of</span>
+<span class="sd">    characters, not a sample of it). Features of very different sizes, such as</span>
+<span class="sd">    molecular weight (~100-200 g/mol) and an aromatic flag (0 or 1), then</span>
+<span class="sd">    contribute equally to a network&#39;s first layer at the start of training, and</span>
+<span class="sd">    centred inputs make gradient descent better conditioned (LeCun, Bottou, Orr</span>
+<span class="sd">    &amp; Mueller 1998, &quot;Efficient BackProp&quot;, in Neural Networks: Tricks of the</span>
+<span class="sd">    Trade, LNCS 1524:9-50). The information in the encoding is unchanged: this</span>
+<span class="sd">    is the same linear transformation for every residue.</span>
+
+<span class="sd">    A feature that is the same for every character carries no information; it</span>
+<span class="sd">    is centred to 0 and left unscaled, with a warning.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    base : SequenceEncoder</span>
+<span class="sd">            The encoding being standardized</span>
+<span class="sd">    mean, scale : numpy arrays</span>
+<span class="sd">            Per-feature mean and standard deviation subtracted and divided by</span>
+<span class="sd">    name : str</span>
+<span class="sd">            &#39;standardized &lt;base name&gt;&#39;, for display</span>
+<span class="sd">    input_size : int</span>
+<span class="sd">            Same as the base encoding</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">base</span><span class="p">:</span> <span class="n">SequenceEncoder</span><span class="p">,</span> <span class="n">mean</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">scale</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        base : SequenceEncoder</span>
+<span class="sd">                The encoding to standardize</span>
+<span class="sd">        mean, scale : list of float, optional</span>
+<span class="sd">                Per-feature mean and scale, as stored in a saved network. If</span>
+<span class="sd">                omitted (the usual case) they are computed from the base</span>
+<span class="sd">                encoding&#39;s table.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">mean</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">)</span> <span class="o">!=</span> <span class="p">(</span><span class="n">scale</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Provide both or neither of the standardization mean and scale.&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">base</span> <span class="o">=</span> <span class="n">base</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">STANDARDIZED_NAME</span><span class="si">}</span><span class="s1"> </span><span class="si">{</span><span class="n">base</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s1">&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">input_size</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">input_size</span>
+        <span class="k">if</span> <span class="n">mean</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">scale</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="n">standardization_parameters</span><span class="p">(</span><span class="n">base</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mean</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">scale</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input_size</span><span class="p">,)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input_size</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Standardization parameters must have </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">input_size</span><span class="si">}</span><span class="s1"> values each.&#39;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">alphabet</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">base</span><span class="o">.</span><span class="n">alphabet</span>
+
+<div class="viewcode-block" id="StandardizedEncoder.encode">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.StandardizedEncoder.encode">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode with the base encoding, then standardize every feature&quot;&quot;&quot;</span>
+
+        <span class="n">raw</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">base</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">((</span><span class="n">raw</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="StandardizedEncoder.decode">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.StandardizedEncoder.decode">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seq_vectors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert encoded sequences back to strings, matching each vector to the nearest character&quot;&quot;&quot;</span>
+
+        <span class="n">characters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">alphabet</span>
+        <span class="n">table</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">character</span><span class="p">)</span><span class="o">.</span><span class="n">numpy</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">character</span> <span class="ow">in</span> <span class="n">characters</span><span class="p">])</span>
+
+        <span class="n">sequences</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">seq_vector</span> <span class="ow">in</span> <span class="n">seq_vectors</span><span class="p">:</span>
+            <span class="n">vectors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">seq_vector</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+            <span class="n">distances</span> <span class="o">=</span> <span class="p">((</span><span class="n">vectors</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">table</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:])</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">sequences</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">characters</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">distances</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="n">sequences</span></div>
+
+
+<div class="viewcode-block" id="StandardizedEncoder.to_config">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.StandardizedEncoder.to_config">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_config</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The base encoding and the exact mean and scale are stored, so a saved network is self-contained&quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">STANDARDIZED_NAME</span><span class="p">,</span> <span class="s1">&#39;base&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">base</span><span class="o">.</span><span class="n">to_config</span><span class="p">(),</span>
+                <span class="s1">&#39;mean&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="s1">&#39;scale&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="o">.</span><span class="n">tolist</span><span class="p">()}</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="standardization_parameters">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.standardization_parameters">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">standardization_parameters</span><span class="p">(</span><span class="n">encoder</span><span class="p">:</span> <span class="n">SequenceEncoder</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Per-feature mean and standard deviation of an encoding across its alphabet</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    encoder : SequenceEncoder</span>
+<span class="sd">            The encoding to standardize</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    mean : numpy array</span>
+<span class="sd">            Mean of each feature across the characters the encoding defines</span>
+<span class="sd">    scale : numpy array</span>
+<span class="sd">            Population standard deviation of each feature, or 1 for a feature</span>
+<span class="sd">            that is constant across the alphabet (with a warning)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">table</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">character</span><span class="p">)</span><span class="o">.</span><span class="n">numpy</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">character</span> <span class="ow">in</span> <span class="n">encoder</span><span class="o">.</span><span class="n">alphabet</span><span class="p">])</span>
+    <span class="n">mean</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">standard_deviation</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="n">typical_size</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">table</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">constant</span> <span class="o">=</span> <span class="n">standard_deviation</span> <span class="o">&lt;=</span> <span class="n">CONSTANT_FEATURE_TOLERANCE</span> <span class="o">*</span> <span class="n">typical_size</span>
+    <span class="k">if</span> <span class="n">constant</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Encoding feature(s) </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">flatnonzero</span><span class="p">(</span><span class="n">constant</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span><span class="si">}</span><span class="s1"> have the same value for every &#39;</span>
+                      <span class="s1">&#39;character, so they carry no information; standardizing sets them to 0.&#39;</span><span class="p">,</span> <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">mean</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">constant</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">standard_deviation</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># Encodings that can be selected by name; anything else is treated as a path to an encoding file</span>
+<span class="n">BUILT_IN_ENCODERS</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">[</span><span class="n">SequenceEncoder</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span><span class="n">OneHotEncoder</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">OneHotEncoder</span><span class="p">,</span>
+                                                       <span class="n">BiophysicsEncoder</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">BiophysicsEncoder</span><span class="p">}</span>
+
+
+<div class="viewcode-block" id="get_encoder">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.get_encoder">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_encoder</span><span class="p">(</span><span class="n">encoding</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">standardize</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SequenceEncoder</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build the encoder described by a command-line style encoding string</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    encoding : str</span>
+<span class="sd">            &#39;onehot&#39;, &#39;biophysics&#39;, the name of a protein language model (e.g.</span>
+<span class="sd">            &#39;esm2_t12_35M_UR50D&#39;; see parrot.plm), or the path to a user</span>
+<span class="sd">            encoding file</span>
+<span class="sd">    standardize : bool, optional</span>
+<span class="sd">            If True, standardize every feature of the encoding across its</span>
+<span class="sd">            alphabet (see StandardizedEncoder). Not available for protein</span>
+<span class="sd">            language models.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    SequenceEncoder</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    FileNotFoundError</span>
+<span class="sd">            If `encoding` is not a built-in name and no such file exists</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Imported here because parrot.plm builds on this module</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">parrot</span><span class="w"> </span><span class="kn">import</span> <span class="n">plm</span>
+
+    <span class="k">if</span> <span class="n">plm</span><span class="o">.</span><span class="n">is_plm_encoding</span><span class="p">(</span><span class="n">encoding</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">standardize</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;--standardize-encoding cannot be used with a protein language model encoding: &#39;</span>
+                             <span class="s1">&#39;PLM embeddings depend on each residue</span><span class="se">\&#39;</span><span class="s1">s context, so there is no per-amino-acid &#39;</span>
+                             <span class="s1">&#39;table to standardize&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">plm</span><span class="o">.</span><span class="n">PLMEncoder</span><span class="p">(</span><span class="n">encoding</span><span class="p">)</span>
+
+    <span class="n">encoder</span><span class="p">:</span> <span class="n">SequenceEncoder</span>
+    <span class="k">if</span> <span class="n">encoding</span> <span class="ow">in</span> <span class="n">BUILT_IN_ENCODERS</span><span class="p">:</span>
+        <span class="n">encoder</span> <span class="o">=</span> <span class="n">BUILT_IN_ENCODERS</span><span class="p">[</span><span class="n">encoding</span><span class="p">]()</span>
+    <span class="k">elif</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">encoding</span><span class="p">):</span>
+        <span class="n">encoder</span> <span class="o">=</span> <span class="n">UserEncoder</span><span class="p">(</span><span class="n">encoding</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Encoding file does not exist: &#39;</span><span class="si">{</span><span class="n">encoding</span><span class="si">}</span><span class="s2">&#39; (built-in encodings are &quot;</span>
+                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">BUILT_IN_ENCODERS</span><span class="p">)</span><span class="si">}</span><span class="s2">; protein language models are &quot;</span>
+                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">plm</span><span class="o">.</span><span class="n">PLM_MODELS</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">StandardizedEncoder</span><span class="p">(</span><span class="n">encoder</span><span class="p">)</span> <span class="k">if</span> <span class="n">standardize</span> <span class="k">else</span> <span class="n">encoder</span></div>
+
+
+
+<div class="viewcode-block" id="encoder_from_config">
+<a class="viewcode-back" href="../../api.html#parrot.encode_sequence.encoder_from_config">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">encoder_from_config</span><span class="p">(</span><span class="n">config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">SequenceEncoder</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Rebuild an encoder from the dictionary written by SequenceEncoder.to_config()</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    config : dict</span>
+<span class="sd">            Encoder description, as stored in a saved network</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    SequenceEncoder</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">parrot</span><span class="w"> </span><span class="kn">import</span> <span class="n">plm</span>
+
+    <span class="k">if</span> <span class="n">config</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">plm</span><span class="o">.</span><span class="n">PLM_CONFIG_NAME</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">plm</span><span class="o">.</span><span class="n">encoder_from_plm_config</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">config</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">STANDARDIZED_NAME</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">StandardizedEncoder</span><span class="p">(</span><span class="n">encoder_from_config</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s1">&#39;base&#39;</span><span class="p">]),</span> <span class="n">mean</span><span class="o">=</span><span class="n">config</span><span class="p">[</span><span class="s1">&#39;mean&#39;</span><span class="p">],</span> <span class="n">scale</span><span class="o">=</span><span class="n">config</span><span class="p">[</span><span class="s1">&#39;scale&#39;</span><span class="p">])</span>
+
+    <span class="k">if</span> <span class="n">config</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">UserEncoder</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">UserEncoder</span><span class="p">(</span><span class="n">table</span><span class="o">=</span><span class="n">config</span><span class="p">[</span><span class="s1">&#39;table&#39;</span><span class="p">])</span>
+
+    <span class="k">if</span> <span class="n">config</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">BUILT_IN_ENCODERS</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown encoding &#39;</span><span class="si">{</span><span class="n">config</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39; in saved network&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">BUILT_IN_ENCODERS</span><span class="p">[</span><span class="n">config</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]]()</span></div>
+
 </pre></div>
 
            </div>
-           
           </div>
           <footer>
-  
 
   <hr/>
 
   <div role="contentinfo">
-    <p>
-        &copy; Copyright 2020, Holehouse Lab. Project structure based on the Computational Molecular Science Python Cookiecutter version 1.3
-
-    </p>
+    <p>&#169; Copyright 2020, Holehouse Lab. Project structure based on the Computational Molecular Science Python Cookiecutter version 1.3.</p>
   </div>
-  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
 
 </footer>
-
         </div>
       </div>
-
     </section>
-
   </div>
-  
-
-
-  <script type="text/javascript">
+  <script>
       jQuery(function () {
           SphinxRtdTheme.Navigation.enable(true);
       });
-  </script>
-
-  
-  
-    
-   
+  </script> 
 
 </body>
 </html>

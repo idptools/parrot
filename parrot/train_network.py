@@ -1,5 +1,10 @@
 """
-Core training module of PARROT
+Core training module of PARROT: training any registered architecture, evaluating
+it on labeled data and making predictions on new sequences.
+
+Nothing in this module depends on which architecture is being used; networks
+only need to follow the ParrotArchitecture interface (see
+parrot/architectures/base.py).
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -8,414 +13,576 @@ idptools-parrot was developed by the Holehouse lab
 Question/comments/concerns? Raise an issue on github:
 https://github.com/idptools/parrot
 
-Licensed under the MIT license. 
+Licensed under the MIT license.
 """
 
+import itertools
+from collections.abc import Callable
+from dataclasses import dataclass
+
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-import numpy as np
+from scipy.special import softmax
+from torch.utils.data import DataLoader
 
-from parrot import brnn_plot
-from parrot import encode_sequence
+from parrot import process_input_data as pid
+from parrot.architectures import HyperParameter, ParrotArchitecture
+from parrot.devices import full_float32_precision
+from parrot.architectures.classical import ClassicalModel
+from parrot.architectures.layers import padding_mask
+from parrot.encode_sequence import SequenceEncoder
+from parrot.tasks import Task
+
+# The learning rate is the one hyperparameter shared by every architecture
+LEARNING_RATE = HyperParameter('learning_rate', float, default=0.001, help='initial learning rate',
+                               search_range=(1e-5, 1e-2), log_scale=True)
+
+# With --stop auto, the validation loss must fall by at least this fraction relative
+# to every recent epoch to count as still improving
+AUTO_STOP_RELATIVE_IMPROVEMENT = 0.005
+
+# How often (in epochs) the validation loss is printed when not in verbose mode
+PRINT_EVERY_N_EPOCHS = 5
 
 
-def train(network, train_loader, val_loader, datatype, problem_type, weights_file,
-          stop_condition, device, learn_rate, n_epochs, verbose=False, silent=False):
-    """Train a BRNN and save the best performing network weights
+# .................................................................
+# Losses
 
-    Train the network on a training set, and every epoch evaluate its performance on
-    a validation set. Save the network weights that acheive the best performance on
-    the validation set.
+def build_loss_criterion(task: Task) -> nn.Module:
+    """Build the loss function used for training, validation and testing
 
-    User must specify the machine learning tast (`problem_type`) and the format of
-    the data (`datatype`). Additionally, this function requires the learning rate
-    hyperparameter and the number of epochs of training. The other hyperparameters, 
-    number of hidden layers and hidden vector size, are implictly included on the 
-    the provided network.
-
-    The user may specify if they want to train the network for a set number of
-    epochs or until an automatic stopping condition is reached with the argument
-    `stop_condition`. Depending on the stopping condition used, the `n_epochs`
-    argument will have a different role.
+    Losses are summed over every sequence (and, for residue-mapped data, every
+    real residue) in a batch. Callers divide the accumulated total by the number
+    of sequences, so all reported losses are average loss per sequence.
 
     Parameters
     ----------
-    network : PyTorch network object
-            A BRNN network with the desired architecture
-    train_loader : PyTorch DataLoader object
-            A DataLoader containing the sequences and targets of the training set
-    val_loader : PyTorch DataLoader object
-            A DataLoader containing the sequences and targets of the validation set
-    datatype : str
-            The format of values in the dataset. Should be 'sequence' for datasets
-            with a single value (or class label) per sequence, or 'residues' for
-            datasets with values (or class labels) for every residue in a sequence.
-    problem_type : str
-            The machine learning task--should be either 'regression' or
-            'classification'.
-    weights_file : str
-            A path to the location where the best_performing network weights will be
-            saved
-    stop_condition : str
-            Determines when to conclude network training. If 'iter', then the network
-            will train for `n_epochs` epochs, then stop. If 'auto' then the network
-            will train for at least `n_epochs` epochs, then begin assessing whether
-            performance has sufficiently stagnated. If the performance plateaus for
-            `n_epochs` consecutive epochs, then training will stop.
-    device : str
-            Location of where training will take place--should be either 'cpu' or
-            'cuda' (GPU). If available, training on GPU is typically much faster.
-    learn_rate : float
-            Initial learning rate of network training. The training process is
-            controlled by the Adam optimization algorithm, so this learning rate
-            will tend to decrease as training progresses.
-    n_epochs : int
-            Number of epochs to train for, or required to have stagnated performance
-            for, depending on `stop_condition`.
-    verbose : bool, optional
-            If true, causes training updates to be written every epoch, rather than
-            every 5 epochs.
-    silent : bool, optional
-            If true, causes not training updates to be written to standard out.
+    task : Task
+        The task being trained
 
     Returns
     -------
-    list
-            A list of the average training set losses achieved at each epoch
-    list
-            A list of the average validation set losses achieved at each epoch
+    torch.nn.Module
+        MSE for residue regression, L1 for sequence regression, and cross-
+        entropy for classification. The cross-entropy loss ignores padded
+        residues and residues with missing labels, which carry the label
+        IGNORED_CLASS_LABEL.
     """
 
-    # Set optimizer
-    optimizer = torch.optim.Adam(network.parameters(), lr=learn_rate)
-
-    # Set loss criteria
-    if problem_type == 'regression':
-        if datatype == 'residues':
-            criterion = nn.MSELoss(reduction='sum')
-        elif datatype == 'sequence':
-            criterion = nn.L1Loss(reduction='sum')
-    elif problem_type == 'classification':
-        criterion = nn.CrossEntropyLoss(reduction='sum')
-
-    network = network.float()
-    total_step = len(train_loader)
-    min_val_loss = np.inf
-    avg_train_losses = []
-    avg_val_losses = []
-
-    if stop_condition == 'auto':
-        min_epochs = n_epochs
-        # Set to some arbitrarily large number of iterations -- will stop automatically
-        n_epochs = 20000000
-        last_decrease = 0
-
-    # Train the model - evaluate performance on val set every epoch
-    end_training = False
-    for epoch in range(n_epochs):  # Main loop
-
-        # Initialize training and testing loss for epoch
-        train_loss = 0
-        val_loss = 0
-
-        # Iterate over batches
-        for i, (names, vectors, targets) in enumerate(train_loader):
-            vectors = vectors.to(device)
-            targets = targets.to(device)
-
-            # Forward pass
-            outputs = network(vectors.float())
-
-            if problem_type == 'regression':
-                loss = criterion(outputs, targets.float())
-            else:
-                if datatype == 'residues':
-                    outputs = outputs.permute(0, 2, 1)
-                loss = criterion(outputs, targets.long())
-
-            train_loss += loss.data.item()
-
-            # Backward and optimize
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        for names, vectors, targets in val_loader:
-            vectors = vectors.to(device)
-            targets = targets.to(device)
-
-            # Forward pass
-            outputs = network(vectors.float())
-            if problem_type == 'regression':
-                loss = criterion(outputs, targets.float())
-            else:
-                if datatype == 'residues':
-                    outputs = outputs.permute(0, 2, 1)
-                loss = criterion(outputs, targets.long())
-
-            # Increment val loss
-            val_loss += loss.data.item()
-
-        # Avg loss:
-        train_loss /= len(train_loader.dataset)
-        val_loss /= len(val_loader.dataset)
-
-        signif_decrease = True
-        if stop_condition == 'auto' and epoch > min_epochs - 1:
-            # Check to see if loss has stopped decreasing
-            last_epochs_loss = avg_val_losses[-min_epochs:]
-
-            for loss in last_epochs_loss:
-                if val_loss >= loss*0.995:
-                    signif_decrease = False
-
-            # If network performance has plateaued over the last range of epochs, end training
-            if not signif_decrease and epoch - last_decrease > min_epochs:
-                end_training = True
-
-        # Only save updated weights to memory if they improve val set performance
-        if val_loss < min_val_loss:
-            min_val_loss = val_loss 	# Reset min_val_loss
-            last_decrease = epoch
-            torch.save(network.state_dict(), weights_file)  # Save model
-
-        # Append losses to lists
-        avg_train_losses.append(train_loss)
-        avg_val_losses.append(val_loss)
-
-        if verbose:
-            print('Epoch %d\tLoss %.4f' % (epoch, val_loss))
-        elif epoch % 5 == 0 and silent is False:
-            print('Epoch %d\tLoss %.4f' % (epoch, val_loss))
-
-        # This is placed here to ensure that the best network, even if the performance
-        # improvement is marginal, is saved.
-        if end_training:
-            break
-
-    # Return loss per epoch so that they can be plotted
-    return avg_train_losses, avg_val_losses
+    if task.is_classification:
+        return nn.CrossEntropyLoss(reduction='sum', ignore_index=pid.IGNORED_CLASS_LABEL)
+    if task.per_residue:
+        return nn.MSELoss(reduction='sum')
+    return nn.L1Loss(reduction='sum')
 
 
-def test_labeled_data(network, test_loader, datatype,
-                      problem_type, weights_file, num_classes,
-                      probabilistic_classification, include_figs, 
-                      device, output_file_prefix=''):
-    """Test a trained BRNN on labeled sequences
+def compute_batch_loss(network: nn.Module, batch: tuple, task: Task, criterion: nn.Module,
+                       device: str | torch.device) -> tuple[torch.Tensor, torch.Tensor]:
+    """Run a batch through the network and compute its summed loss
 
-    Using the saved weights of a trained network, run a set of sequences through
-    the network and evaluate the performancd. Return the average loss per
-    sequence and plot the results. Testing a network on previously-unseen data 
-    provides a useful estimate of how generalizeable the network's performance is.
+    Padded positions and residues with missing labels never contribute to the
+    loss: for regression they are masked out here, and for classification they
+    carry the label IGNORED_CLASS_LABEL, which `criterion` ignores.
 
     Parameters
     ----------
-    network : PyTorch network object
-            A BRNN network with the desired architecture
-    test_loader : PyTorch DataLoader object
-            A DataLoader containing the sequences and targets of the test set
-    datatype : str
-            The format of values in the dataset. Should be 'sequence' for datasets
-            with a single value (or class label) per sequence, or 'residues' for
-            datasets with values (or class labels) for every residue in a sequence.
-    problem_type : str
-            The machine learning task--should be either 'regression' or
-            'classification'.
-    weights_file : str
-            A path to the location of the best_performing network weights
-    num_classes: int
-            Number of data classes. If regression task, put 1.
-    probabilistic_classification: bool
-            Whether output should be binary labels, or "weights" of each label type.
-            This field is only implemented for binary, sequence classification tasks.
-    include_figs: bool
-            Whether or not matplotlib figures should be generated.
-    device : str
-            Location of where testing will take place--should be either 'cpu' or
-            'cuda' (GPU). If available, training on GPU is typically much faster.
-    output_file_prefix : str
-            Path and filename prefix to which the test set predictions and plots will be saved. 
+    network : torch.nn.Module
+        A network following the ParrotArchitecture interface
+    batch : tuple
+        (names, padded vectors, targets, lengths) as produced by collate_batch()
+    task : Task
+        The task being trained
+    criterion : torch.nn.Module
+        The loss function returned by build_loss_criterion()
+    device : str or torch.device
+        Device the network lives on
+
+    Returns
+    -------
+    torch.Tensor
+        Scalar loss summed over the batch
+    torch.Tensor
+        The network outputs: [batch_dim X num_classes] or
+        [batch_dim X padded_length X num_classes]
+    """
+
+    names, vectors, targets, lengths = batch
+    vectors = vectors.to(device)
+    targets = targets.to(device)
+
+    outputs = network(vectors, lengths)
+
+    if task.is_classification and task.per_residue:
+        # CrossEntropyLoss expects the class dimension second
+        loss = criterion(outputs.permute(0, 2, 1), targets)
+    elif task.per_residue:
+        # Only real residues with a label (missing labels are NaN)
+        mask = padding_mask(lengths.to(outputs.device), outputs.shape[1]) & ~torch.isnan(targets[..., 0])
+        loss = criterion(outputs[mask], targets[mask])
+    else:
+        loss = criterion(outputs, targets)
+
+    return loss, outputs
+
+
+def sum_batch_losses(batch_losses: list[torch.Tensor]) -> float:
+    """Add up per-batch losses that were kept on the device
+
+    Calling .item() on every batch's loss would make the CPU wait for the GPU
+    after every batch. Keeping the losses on the device and adding them up once
+    gives the same total (each loss is the same float32 value .item() would
+    return, summed in float64 on the CPU) without those waits.
+
+    Parameters
+    ----------
+    batch_losses : list of torch.Tensor
+        Scalar, detached loss of each batch
 
     Returns
     -------
     float
-            The average loss across the entire test set
-    list of lists
-            Details of the output predictions for each of the sequences in the test set. Each
-            inner list represents a sample in the test set, with the format: [sequence_vector,
-            true_value, predicted_value, sequence_ID]
+        The total loss (0.0 for an empty list)
     """
-
-    # Load network weights
-    network.load_state_dict(torch.load(weights_file))
-
-    # Get output directory for images
-    network_filename = weights_file.split('/')[-1]
-    output_dir = weights_file[:-len(network_filename)]
-
-    # Set loss criteria
-    if problem_type == 'regression':
-        criterion = nn.MSELoss()
-    elif problem_type == 'classification':
-        criterion = nn.CrossEntropyLoss()
-
-    test_loss = 0
-    all_targets = []
-    all_outputs = []
-    predictions = []
-    for names, vectors, targets in test_loader: 	# batch size of 1
-        all_targets.append(targets)
-
-        vectors = vectors.to(device)
-        targets = targets.to(device)
-
-        # Forward pass
-        outputs = network(vectors.float())
-        if problem_type == 'regression':
-            loss = criterion(outputs, targets.float())
-        else:
-            if datatype == 'residues':
-                outputs = outputs.permute(0, 2, 1)
-            loss = criterion(outputs, targets.long())
-
-        test_loss += loss.data.item()  # Increment test loss
-        all_outputs.append(outputs.detach())
-
-        # Add to list as: [seq_vector, true value, predicted value, name]
-        predictions.append([vectors[0].cpu().numpy(), targets.cpu().numpy()
-                           [0], outputs.cpu().detach().numpy(), names[0]])
-
-    # Plot 'accuracy' depending on the problem type and datatype
-    if problem_type == 'regression':
-        if datatype == 'residues':
-            if include_figs:
-                brnn_plot.residue_regression_scatterplot(all_targets, all_outputs, 
-                                            output_file_prefix=output_file_prefix)
-
-            # Format predictions
-            for i in range(len(predictions)):
-                predictions[i][2] = predictions[i][2].flatten()
-                predictions[i][1] = predictions[i][1].flatten()
-
-        elif datatype == 'sequence':
-            if include_figs:
-                brnn_plot.sequence_regression_scatterplot(all_targets, all_outputs, 
-                                            output_file_prefix=output_file_prefix)
-
-            # Format predictions
-            for i in range(len(predictions)):
-                predictions[i][2] = predictions[i][2][0][0]
-                predictions[i][1] = predictions[i][1][0]
-
-    elif problem_type == 'classification':
-
-        if datatype == 'residues':
-            if include_figs:
-                brnn_plot.res_confusion_matrix(all_targets, all_outputs, num_classes, 
-                                            output_file_prefix=output_file_prefix)
-
-            # Format predictions and assign class predictions
-            for i in range(len(predictions)):
-                pred_values = []
-                for j in range(len(predictions[i][2])):
-                    pred_values = np.argmax(predictions[i][2], axis=1)[0]
-                predictions[i][2] = np.array(pred_values, dtype=np.int)
-
-        elif datatype == 'sequence':
-            if probabilistic_classification:
-                # Probabilistic assignment of class predictions
-                # Optional implementation for classification tasks
-                # e.g. every sequence is assigned probabilities
-                # corresponding to each possible class
-                pred_probabilities = []
-                for i in range(len(predictions)):
-                    softmax = np.exp(predictions[i][2][0])
-                    probs = softmax / np.sum(softmax)
-                    predictions[i][2] = probs
-                    pred_probabilities.append(probs)
-
-                # Plot ROC and PR curves
-                if include_figs:
-                    brnn_plot.plot_roc_curve(all_targets, pred_probabilities, num_classes, 
-                                            output_file_prefix=output_file_prefix)
-                    brnn_plot.plot_precision_recall_curve(all_targets, pred_probabilities, 
-                                            num_classes, output_file_prefix=output_file_prefix)
-
-            else:
-                # Absolute assignment of class predictions
-                # e.g. every sequence receives an integer class label
-                for i in range(len(predictions)):
-                    pred_value = np.argmax(predictions[i][2])
-                    predictions[i][2] = int(pred_value)
-
-                # Plot confusion matrix (if not in probabilistic classification mode)
-                if include_figs:
-                    brnn_plot.confusion_matrix(all_targets, all_outputs, num_classes, 
-                                                output_file_prefix=output_file_prefix)
-
-    return test_loss / len(test_loader.dataset), predictions
+    if not batch_losses:
+        return 0.0
+    # Move to the CPU before converting: MPS tensors cannot be converted to float64
+    return float(torch.stack(batch_losses).cpu().double().sum())
 
 
-def test_unlabeled_data(network, sequences, device, encoding_scheme='onehot', encoder=None, print_frequency=None):
-    """Test a trained BRNN on unlabeled sequences
-
-    Use a trained network to make predictions on previously-unseen data.
-
-    ** 
-    Note: Unlike the previous functions, `network` here must have pre-loaded
-    weights. 
-    **
+@full_float32_precision()
+def evaluate_loss(network: nn.Module, loader: DataLoader, task: Task, device: str | torch.device) -> float:
+    """Average loss per sequence over a dataset, without updating the network
 
     Parameters
     ----------
-    network : PyTorch network object
-            A BRNN network with the desired architecture and pre-loaded weights
-    sequences : list
-            A list of amino acid sequences to test using the network
-    device : str
-            Location of where testing will take place--should be either 'cpu' or
-            'cuda' (GPU). If available, training on GPU is typically much faster.
-    encoding_scheme : str, optional
-            How amino acid sequences are to be encoded as numeric vectors. Currently,
-            'onehot','biophysics' and 'user' are the implemented options.
-    encoder: UserEncoder object, optional
-            If encoding_scheme is 'user', encoder should be a UserEncoder object
-            that can convert amino acid sequences to numeric vectors. If
-            encoding_scheme is not 'user', use None.
-    print_frequency : int
-            If provided defines at what sequence interval an update is printed.
-            Default = None.
-    
+    network : torch.nn.Module
+        The network to evaluate
+    loader : DataLoader
+        Batches of the dataset to evaluate on
+    task : Task
+        The task being trained
+    device : str or torch.device
+        Device the network lives on
+
+    Returns
+    -------
+    float
+        Total loss divided by the number of sequences
+    """
+
+    criterion = build_loss_criterion(task)
+    batch_losses = []
+    n_sequences = 0
+
+    network.eval()
+    with torch.no_grad():
+        for batch in loader:
+            loss, _ = compute_batch_loss(network, batch, task, criterion, device)
+            batch_losses.append(loss.detach())
+            n_sequences += len(batch[0])
+    total_loss = sum_batch_losses(batch_losses)
+
+    return total_loss / n_sequences
+
+
+# .................................................................
+# Training
+
+def plateau_reached(val_loss: float, recent_val_losses: list[float], epochs_since_best: int, patience: int) -> bool:
+    """Decide whether training with --stop auto should end
+
+    Training ends when the current validation loss is not meaningfully lower
+    than every one of the last `patience` epochs, and the best validation loss
+    is more than `patience` epochs old.
+
+    Parameters
+    ----------
+    val_loss : float
+        Validation loss of the current epoch
+    recent_val_losses : list of float
+        Validation losses of the previous `patience` epochs
+    epochs_since_best : int
+        Number of epochs since the best validation loss so far was reached
+    patience : int
+        The number of epochs over which performance must have stagnated
+
+    Returns
+    -------
+    bool
+        True if training should stop
+    """
+
+    still_improving = all(val_loss < previous * (1 - AUTO_STOP_RELATIVE_IMPROVEMENT)
+                          for previous in recent_val_losses)
+    return not still_improving and epochs_since_best > patience
+
+
+@full_float32_precision()
+def train(network: nn.Module, train_loader: DataLoader, val_loader: DataLoader, task: Task,
+          device: str | torch.device, learn_rate: float, n_epochs: int, stop_condition: str = 'iter',
+          on_improvement: Callable[[nn.Module], None] | None = None, verbose: bool = False,
+          silent: bool = False) -> tuple[list[float], list[float]]:
+    """Train a network, keeping the weights that perform best on the validation set
+
+    Every epoch the network is trained on the training set and then evaluated
+    on the validation set. When training finishes, the network holds the
+    weights from the epoch with the lowest validation loss.
+
+    Models that are not trained by gradient descent (see architectures/classical.py)
+    are instead fitted in one step; the learning rate, number of epochs and stop
+    condition are not used, and the returned lists each hold a single loss.
+
+    Parameters
+    ----------
+    network : torch.nn.Module
+        The network to train (already on `device`)
+    train_loader : DataLoader
+        Batches of the training set (should shuffle)
+    val_loader : DataLoader
+        Batches of the validation set
+    task : Task
+        The task being trained
+    device : str or torch.device
+        Device the network lives on
+    learn_rate : float
+        Initial learning rate for the Adam optimiser
+    n_epochs : int
+        With stop_condition='iter', the number of epochs to train for. With
+        stop_condition='auto', train for at least this many epochs and stop once
+        performance has stagnated for this many epochs.
+    stop_condition : str, optional
+        'iter' (default) or 'auto'
+    on_improvement : callable, optional
+        Called with the network every time the validation loss reaches a new
+        minimum, e.g. to save it to disk so an interrupted run is not lost.
+    verbose : bool, optional
+        If True, print the validation loss every epoch rather than every 5 epochs
+    silent : bool, optional
+        If True, print nothing
+
+    Returns
+    -------
+    list of float
+        Average training loss per sequence, for each epoch
+    list of float
+        Average validation loss per sequence, for each epoch
+    """
+
+    if stop_condition not in ('iter', 'auto'):
+        raise ValueError(f"Invalid stop condition '{stop_condition}': must be 'auto' or 'iter'.")
+
+    if isinstance(network, ClassicalModel):
+        return fit_in_one_step(network, train_loader, val_loader, task, device, on_improvement, silent)
+
+    optimizer = torch.optim.Adam(network.parameters(), lr=learn_rate)
+    criterion = build_loss_criterion(task)
+
+    train_losses: list[float] = []
+    val_losses: list[float] = []
+    best_val_loss = np.inf
+    best_epoch = 0
+    best_weights = None
+
+    # With 'auto' there is no fixed number of epochs: training ends once performance plateaus
+    epochs = range(n_epochs) if stop_condition == 'iter' else itertools.count()
+
+    for epoch in epochs:
+        train_loss = train_epoch(network, train_loader, task, criterion, optimizer, device)
+        val_loss = evaluate_loss(network, val_loader, task, device)
+
+        stop_now = (stop_condition == 'auto' and epoch >= n_epochs
+                    and plateau_reached(val_loss, val_losses[-n_epochs:], epoch - best_epoch, n_epochs))
+
+        # Keep a copy of the best weights seen so far
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_epoch = epoch
+            best_weights = {name: tensor.detach().clone() for name, tensor in network.state_dict().items()}
+            if on_improvement is not None:
+                on_improvement(network)
+
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
+
+        if not silent and (verbose or epoch % PRINT_EVERY_N_EPOCHS == 0):
+            print('Epoch %d\tLoss %.4f' % (epoch, val_loss))
+
+        if stop_now:
+            break
+
+    if best_weights is not None:
+        network.load_state_dict(best_weights)
+
+    return train_losses, val_losses
+
+
+@full_float32_precision()
+def train_epoch(network: nn.Module, loader: DataLoader, task: Task, criterion: nn.Module,
+                optimizer: torch.optim.Optimizer, device: str | torch.device) -> float:
+    """Train a network for one epoch (one pass over the training data)
+
+    Parameters
+    ----------
+    network : torch.nn.Module
+        The network to train (already on `device`)
+    loader : DataLoader
+        Batches of the training set
+    task : Task
+        The task being trained
+    criterion : torch.nn.Module
+        The loss function returned by build_loss_criterion()
+    optimizer : torch.optim.Optimizer
+        Optimizer of the network's parameters
+    device : str or torch.device
+        Device the network lives on
+
+    Returns
+    -------
+    float
+        Average training loss per sequence
+    """
+
+    network.train()
+    batch_losses = []
+    n_train_sequences = 0
+    for batch in loader:
+        loss, _ = compute_batch_loss(network, batch, task, criterion, device)
+        batch_losses.append(loss.detach())
+        n_train_sequences += len(batch[0])
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+    return sum_batch_losses(batch_losses) / n_train_sequences
+
+
+def fit_in_one_step(network: ClassicalModel, train_loader: DataLoader, val_loader: DataLoader, task: Task,
+                    device: str | torch.device, on_improvement: Callable[[nn.Module], None] | None = None,
+                    silent: bool = False) -> tuple[list[float], list[float]]:
+    """Fit a model that is not trained by gradient descent, and report its losses
+
+    Parameters
+    ----------
+    network : ClassicalModel
+        The model to fit
+    train_loader : DataLoader
+        Batches of the training set
+    val_loader : DataLoader
+        Batches of the validation set
+    task : Task
+        The task being trained
+    device : str or torch.device
+        Device the model's outputs are placed on
+    on_improvement : callable, optional
+        Called once with the fitted model (e.g. to save it)
+    silent : bool, optional
+        If True, print nothing
+
+    Returns
+    -------
+    list of float
+        The average training loss per sequence (a single value)
+    list of float
+        The average validation loss per sequence (a single value)
+    """
+
+    network.fit(train_loader)
+    train_loss = evaluate_loss(network, train_loader, task, device)
+    val_loss = evaluate_loss(network, val_loader, task, device)
+
+    if on_improvement is not None:
+        on_improvement(network)
+
+    if not silent:
+        print('Fitted in one step\tLoss %.4f' % val_loss)
+
+    return [train_loss], [val_loss]
+
+
+# .................................................................
+# Evaluation and prediction
+
+@dataclass
+class LabeledPredictions:
+    """Network outputs for every sequence in a labeled dataset
+
+    Attributes
+    ----------
+    names : list of str
+        Sequence IDs
+    sequences : list of str
+        The sequences
+    true_values : list of numpy arrays
+        The true value(s) for each sequence: a scalar for sequence-mapped data,
+        or one value per residue for residue-mapped data
+    outputs : list of numpy arrays
+        The raw network output for each sequence: [num_classes] for
+        sequence-mapped data or [sequence_length X num_classes] for residue-mapped
+        data (classification outputs are logits)
+    loss : float
+        Average loss per sequence, computed with the training loss function
+    """
+
+    names: list[str]
+    sequences: list[str]
+    true_values: list[np.ndarray]
+    outputs: list[np.ndarray]
+    loss: float
+
+
+def unpad_outputs(outputs: torch.Tensor, lengths: torch.Tensor, task: Task) -> list[np.ndarray]:
+    """Split a batch of network outputs into one numpy array per sequence
+
+    Parameters
+    ----------
+    outputs : torch.Tensor
+        Batch output of a network
+    lengths : torch.Tensor
+        The true length of each sequence
+    task : Task
+        The task the network is for
+
+    Returns
+    -------
+    list of numpy arrays
+        [num_classes] per sequence, or [sequence_length X num_classes] per
+        sequence with the padding removed
+    """
+
+    outputs_array = outputs.cpu().numpy()
+    if not task.per_residue:
+        return list(outputs_array)
+    return [outputs_array[i, :length] for i, length in enumerate(lengths.tolist())]
+
+
+@full_float32_precision()
+def predict_labeled(network: nn.Module, dataset: pid.SequenceDataset, task: Task, device: str | torch.device,
+                    batch_size: int = 32) -> LabeledPredictions:
+    """Run a trained network over a labeled dataset (e.g. the test set)
+
+    Parameters
+    ----------
+    network : torch.nn.Module
+        The trained network
+    dataset : SequenceDataset
+        The labeled sequences
+    task : Task
+        The task the network is for
+    device : str or torch.device
+        Device the network lives on
+    batch_size : int, optional
+        Number of sequences evaluated at once (does not affect the results)
+
+    Returns
+    -------
+    LabeledPredictions
+    """
+
+    # Sequences are batched by length (which only affects speed), so the outputs come
+    # out in the batch sampler's order and are put back into dataset order at the end
+    loader = pid.make_dataloader(dataset, task, batch_size, shuffle=False, batching='length')
+    assert loader.batch_sampler is not None
+    loader_order = [index for batch_indices in loader.batch_sampler for index in batch_indices]
+    criterion = build_loss_criterion(task)
+    batch_losses = []
+    outputs_in_loader_order = []
+
+    network.eval()
+    with torch.no_grad():
+        for batch in loader:
+            loss, batch_outputs = compute_batch_loss(network, batch, task, criterion, device)
+            batch_losses.append(loss.detach())
+            outputs_in_loader_order.extend(unpad_outputs(batch_outputs, batch[3], task))
+
+    outputs: list[np.ndarray] = [np.empty(0)] * len(dataset)
+    for index, output in zip(loader_order, outputs_in_loader_order, strict=True):
+        outputs[index] = output
+
+    return LabeledPredictions(names=dataset.names, sequences=dataset.sequences,
+                              true_values=[np.asarray(sample[2]) for sample in dataset.data],
+                              outputs=outputs, loss=sum_batch_losses(batch_losses) / len(dataset))
+
+
+@full_float32_precision()
+def predict_sequences(network: ParrotArchitecture, sequences: list[str], encoder: SequenceEncoder,
+                      device: str | torch.device, batch_size: int = 64,
+                      print_frequency: int | None = None) -> dict[str, np.ndarray]:
+    """Run a trained network over unlabeled sequences
+
+    Parameters
+    ----------
+    network : ParrotArchitecture
+        The trained network (its `task` attribute says how to read the output)
+    sequences : list of str
+        Sequences to predict. Each unique sequence is only run once.
+    encoder : SequenceEncoder
+        The encoder the network was trained with
+    device : str or torch.device
+        Device the network lives on
+    batch_size : int, optional
+        Number of sequences run through the network at once (does not affect
+        the results, since padding is masked)
+    print_frequency : int, optional
+        If given, print a progress update every `print_frequency` sequences
+
     Returns
     -------
     dict
-            A dictionary containing predictions mapped to sequences
+        Maps each unique sequence to its raw network output: [num_classes] for
+        sequence-mapped networks, [sequence_length X num_classes] for
+        residue-mapped networks
     """
 
-    pred_dict = {}
+    # Batch sequences of similar length together, so little computation is spent on padding
+    unique_sequences = list(dict.fromkeys(sequences))
+    by_length = sorted(unique_sequences, key=len)
+    predictions = {}
 
-    local_count = -1
-    total_count = len(sequences)
+    network.eval()
+    for start in range(0, len(by_length), batch_size):
+        batch_sequences = by_length[start:start + batch_size]
 
-    for seq in sequences:
-
-        local_count = local_count + 1
         if print_frequency is not None:
-            if local_count % print_frequency == 0:
-                print(f'On {local_count} of {total_count}')
+            for index in range(start, start + len(batch_sequences)):
+                if index % print_frequency == 0:
+                    print(f'On {index} of {len(unique_sequences)}')
 
-        if encoding_scheme == 'onehot':
-            seq_vector = encode_sequence.one_hot(seq)
-        elif encoding_scheme == 'biophysics':
-            seq_vector = encode_sequence.biophysics(seq)
-        elif encoding_scheme == 'user':
-            seq_vector = encoder.encode(seq)
+        vectors, lengths = pid.pad_sequence_vectors([encoder.encode(seq) for seq in batch_sequences])
+        with torch.no_grad():
+            outputs = network(vectors.to(device), lengths)
 
-        seq_vector = seq_vector.view(1, len(seq_vector), -1)
+        for sequence, output in zip(batch_sequences, unpad_outputs(outputs, lengths, network.task)):
+            predictions[sequence] = output
 
-        # Forward pass
-        outputs = network(seq_vector.float()).detach().numpy()
-        pred_dict[seq] = outputs
+    # Return the sequences in the order they were first given
+    return {sequence: predictions[sequence] for sequence in unique_sequences}
 
-    return pred_dict
+
+def output_to_prediction(output: np.ndarray, task: Task, probabilistic: bool = False) -> np.ndarray:
+    """Convert a raw network output into the prediction reported to the user
+
+    Parameters
+    ----------
+    output : numpy array
+        Raw output for one sequence: [num_classes] or [sequence_length X num_classes]
+    task : Task
+        The task the network is for
+    probabilistic : bool, optional
+        For classification, return class probabilities instead of the most
+        likely class
+
+    Returns
+    -------
+    numpy array
+        Regression: the predicted value (scalar) or one value per residue.
+        Classification: the predicted class (scalar) or one class per residue,
+        or, if `probabilistic`, the probability of each class.
+    """
+
+    if not task.is_classification:
+        return output[..., 0]
+    if probabilistic:
+        return softmax(output, axis=-1)
+    return np.argmax(output, axis=-1)

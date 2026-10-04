@@ -121,6 +121,8 @@ For example, imagine you have a protein dataset where half of the proteins come 
 
 Fortunately, this problem is fairly easy to correct for with protein data by removing samples that display similarity above a certain threshold. If for some reason highly similar sequences can't be removed, then care should be taken so that similar sequences are grouped together in the training set, validation set, or test set. As a basic check, PARROT will warn users if there are duplicate sequences in their dataset.
 
+``parrot-preprocess --split homology`` does this for you. It uses MMseqs2 to put homologous sequences in the same set, then checks that no sequence in one set is homologous to a sequence in another, and writes a split-file to train on with ``parrot-train --split``. Without MMseqs2, ``--split kmer`` does the same with PARROT's own k-mer search, which catches close relatives but not distant homologues. Similarly, ``--class-balance`` balances the classes of the training set. See the ``parrot-preprocess`` page.
+
 **Helpful resources:**
 
 - `Imbalanced classification <https://machinelearningmastery.com/what-is-imbalanced-classification/>`_
@@ -130,7 +132,9 @@ How should I tackle a huge dataset?
 -----------------------------------
 Although larger datasets tend to yield more accurate ML networks, it also makes training a network much more time consuming. With PARROT, trying to optimize hyperparameters an a large dataset can take an unreasonably long time. There are a few possible ways to speed up this process.
 
-1. **Train on a computer with GPUs**. PARROT is optimized to train in parallel on machines with GPUs, so if available, this can speed up training up to 10- or 20-fold.
+1. **Train on a GPU**. PARROT trains on NVIDIA GPUs (CUDA) and on Apple-silicon Macs (MPS), and uses one automatically if available (see ``--device``). On an Apple-silicon Mac this makes the convolutional networks over 10-fold faster per batch than on the CPU, and the BRNN several-fold faster. On a GPU, small networks spend most of their time launching many small computations, so larger batches (``--batch``) can speed up training several-fold, although they also change how the network trains.
+
+   PARROT computes in full float32 precision on every device: on NVIDIA GPUs it turns off TF32, which PyTorch otherwise uses for convolutions and LSTMs on recent GPUs, while it trains and predicts. The same network therefore gives the same predictions on the CPU, an NVIDIA GPU and an Apple-silicon GPU, to about 1e-4 or better.
 
 2. **Optimize hyperparameters on smaller, representative subset of the data**. Although ideally you would optimize hyperparameters on the entirety of the data, this is not feasible on sufficiently large dataset. Instead, you extract a subset of the data (still considering the points about dataset structure from the preceding section) on which you can tune the hyperparameters. Once the best hyperparameters are determined, you can train on the entire network.
 

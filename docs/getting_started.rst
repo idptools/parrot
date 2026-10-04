@@ -20,30 +20,13 @@ To clone the GitHub repository and gain the ability to modify a local copy of th
 
 This will install PARROT locally. If you modify the source code in the local repository, be sure to reinstall with pip.
 
-**JULY 2022 UPDATE**
+**Hyperparameter search**
 
-To mitigate package version dependency issues involving Python, GPy, and PyTorch, new releases of PARROT have separated 
-`parrot-optimize` as an optional add-on installation. All of the documentation for using `parrot-optimize` is unchanged.
-However, if you wish to use the hyperparameter optimization, there are now slight differences in how you install PARROT.
+``parrot-optimize`` needs no extra packages. (Earlier versions needed GPy and GPyOpt, installed with ``pip install idptools-parrot[optimize]``; that command still works, but installs nothing extra.)
 
-To install the PARROT that is compatible with `parrot-optimize` install via pip using:
+**Homology-aware splitting**
 
-.. code-block:: bash
-
-	$ pip install idptools-parrot[optimize]
-
-or
-
-.. code-block:: bash
-
-	$ pip install "idptools-parrot[optimize]"
-
-Alternatively if you have the PARROT repository cloned locally you can install using
-
-.. code-block:: bash
-
-	$ pip install ".[optimize]"
-
+``parrot-preprocess --split homology`` needs `MMseqs2 <https://github.com/soedinglab/MMseqs2>`_, a separate program: ``conda install -c conda-forge -c bioconda mmseqs2``, ``brew install mmseqs2``, or a static binary from the MMseqs2 releases page.
 
 Testing
 -------
@@ -54,11 +37,13 @@ To see if your local installation of PARROT is working properly, first install t
 	
 	$ pip install pytest
 
-Then, you can run the unit test included in the package by navigating to the /tests folder within the installation directory and running:
+Then, you can run the unit tests included in the package by navigating to the top-level directory of the cloned repository and running:
 
 .. code-block:: bash
 
 	$ pytest -v
+
+The tests always run against the source code in the repository you are in. The full suite takes well under a minute on a CPU.
 
 Note that this only works if the package is installed as a repository via GitHub. Installation through PyPI does not include the necessary datafiles to run the tests.
 

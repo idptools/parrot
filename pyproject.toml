@@ -17,13 +17,14 @@ authors = [
 
 license = {text = "MIT"}
 readme = "README.md"  
-requires-python = ">=3.7"
+requires-python = ">=3.11"
 
-# add in as needed	
+# add in as needed. Minimum numpy/torch versions are stable releases from mid-2025;
+# numpy 2.3 is also the first numpy release that requires Python 3.11.
 dependencies = [	  
-    "numpy",
+    "numpy>=2.3",
     "scipy",
-	"torch>=1.8.0",
+	"torch>=2.8",
     "more-itertools",
     "scikit-learn",
     "matplotlib",
@@ -34,9 +35,14 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-  "pytest>=6.1.2",
+  "pytest>=7.0",
 ]
-optimize = ["GPy", "GPyOpt"]
+# parrot-optimize no longer needs extra packages; the extra is kept so older install commands still work
+optimize = []
+# Protein language model encodings: ESM-2 (e.g. --encode esm2_t12_35M_UR50D) and ESM C (--encode esmc_300m).
+# Do not also install Meta's fair-esm alongside esm: both use the import name `esm`.
+plm = ["transformers>=4.40", "h5py>=3.10"]
+esmc = ["esm>=3.1", "h5py>=3.10"]
 
 # define all the command-line scripts; example left, but you
 # can delete this section if none.
@@ -60,6 +66,11 @@ include = ["parrot", "parrot.*"]  # Discover all sub-packages inside the main pa
 parrot = [
     "py.typed"
 ]
+
+# Run the tests against the source tree in this repository (not an installed copy)
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.versioningit]
 default-version = "1+unknown"

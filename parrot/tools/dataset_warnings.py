@@ -57,9 +57,40 @@ def check_duplicate_sequences(d):
 
 
 
+def report_missing_residue_labels(d):
+    """
+    Function that reports how many residue labels are missing (nan) in a residue-mapped
+    dataset. Missing labels are ignored during training and evaluation.
+
+    Parameters
+    ------------
+    d : list
+        d is the parsed data from parrot.process_input_data.parse_file(), before class
+        labels are converted to integers (so missing labels are NaN).
+
+    Returns
+    -----------
+    None
+        No return but prints a summary if any labels are missing
+    """
+    all_values = np.hstack([np.asarray(x[2], dtype=float) for x in d])
+    num_missing = int(np.sum(np.isnan(all_values)))
+    if num_missing == 0:
+        return
+
+    num_sequences_with_missing = sum(bool(np.any(np.isnan(np.asarray(x[2], dtype=float)))) for x in d)
+    print("\n#############################################")
+    print("NOTE: Some residues have no label (nan).\n")
+    print(f"{num_missing} of {len(all_values)} residue labels ({np.around(100*num_missing/len(all_values), 1)}%) "
+          f"are missing, in {num_sequences_with_missing} of {len(d)} sequences.")
+    print("These residues are ignored when training and evaluating.\n")
+    print("#############################################\n")
+
+
 # Imbalanced classification dataset:
 def check_class_imbalance(d):
-    all_labels = np.hstack([x[2] for x in d])
+    all_labels = np.hstack([x[2] for x in d]).astype(float)
+    all_labels = all_labels[~np.isnan(all_labels)]  # missing residue labels are not a class
     label_counts = {}
     for label in all_labels:
         if label in label_counts:
@@ -102,7 +133,8 @@ def check_class_imbalance(d):
 
 # Distribution of regression values
 def check_regression_imbalance(d):
-    vals = np.hstack([x[2] for x in d])
+    vals = np.hstack([x[2] for x in d]).astype(float)
+    vals = vals[~np.isnan(vals)]  # missing residue labels
     check_zero_centered(vals)
     check_low_std(vals)
     check_skew(vals)
@@ -132,10 +164,12 @@ def check_low_std(v):
 
 # Regression distribution of values
 def check_skew(v):
+    # Strongly skewed in either direction (a long tail of high or of low values)
     s = skew(v)
-    if s > 1:
+    if abs(s) > 1:
         print("\n#############################################")
         print("WARNING: Dataset is skewed.\n")
+        print(f"Skewness: {np.around(s, 2)}")
         print()
         print("This may cause model bias.\n")
         print("#############################################\n")

@@ -8,135 +8,120 @@ idptools-parrot was developed by the Holehouse lab
 Question/comments/concerns? Raise an issue on github:
 https://github.com/idptools/parrot
 
-Licensed under the MIT license. 
+Licensed under the MIT license.
 
 '''
 
-from parrot import brnn_architecture
-from parrot import encode_sequence
-
-import torch
 import numpy as np
-import os
+from scipy.special import softmax  # noqa: F401  (kept importable as py_predictor.softmax)
 
-def softmax(v):
-    return (np.e ** v) / np.sum(np.e ** v)
+from parrot import checkpoint, devices, plm, train_network
+
 
 class Predictor():
-    """Class that for integrating a trained PARROT network into a Python workflow
+    """Class for integrating a trained PARROT network into a Python workflow
 
     Usage:
     >>> from parrot import py_predictor
-    >>> my_predictor = py_predictor.Predictor(</path/to/saved_network.pt>, 
-                                                dtype={"sequence" or "residues"})
+    >>> my_predictor = py_predictor.Predictor('/path/to/saved_network.pt')
     >>> value = my_predictor.predict(AA_sequence)
 
-    ***
-    NOTE:   Assumes all sequences are composed of canonical amino acids and 
-            that all networks were implemented using one-hot encoding.
-    ***
+    Networks saved by this version of PARROT record their architecture, task and
+    encoding, so only the path is needed. Networks saved by earlier versions
+    (which must be one-hot BRNNs) also need `dtype`.
 
+    Predictions run on the CPU unless another device is requested, e.g.
+    Predictor(path, device='auto') to use a GPU (CUDA or Apple-silicon MPS) when
+    one is available. The CPU is the default because a GPU only pays off for
+    many sequences at once, and MPS cannot be used inside forked worker
+    processes (e.g. multiprocessing on macOS with the 'fork' start method).
 
     Attributes
     ----------
     dtype : str
-            Data format that the network was trained for. Either "sequence" or 
-            "residues".
-    num_layers : int
-            Number of hidden layers in the trained network.
-    hidden_vector_size : int
-            Size of hidden vectoer in the trained network.
+        Data format that the network was trained for: "sequence" or "residues".
     n_classes : int
-            Number of data classes that the network was trained for. If 1, then
-            network is designed for regression task. If >1, then classification
-            task with n_classes.
+        Number of data classes. If 1, the network is a regressor; if >1, a
+        classifier with n_classes classes.
     task : str
-            Designates if network is designed for "classification" or "regression".
-    network : PyTorch object
-            Initialized PARROT network with loaded weights.
+        "classification" or "regression".
+    num_layers : int or None
+        Number of hidden layers, for BRNN networks (None for other architectures).
+    hidden_vector_size : int or None
+        Size of the hidden vectors, for BRNN networks (None for other architectures).
+    network : ParrotArchitecture
+        The loaded network.
+    encoder : SequenceEncoder
+        The encoder the network was trained with.
+    device : torch.device
+        The device predictions run on.
     """
 
-    def __init__(self, saved_weights, dtype):
+    def __init__(self, saved_weights, dtype=None, device='cpu', embedding_cache=None):
         """
         Parameters
         ----------
         saved_weights : str or Path
-                Location of the saved network weights. If a valid file is provided,
-                network parameters will be dynamically read in an network will be 
-                initialized.
-        dtype : str
-                Data format that the network was trained for. Either "sequence" or 
-                "residues".
+            Location of the saved network
+        dtype : str, optional
+            "sequence" or "residues". Required for networks saved by earlier
+            versions of PARROT; for newer networks, if given, it must match the
+            saved network.
+        device : str, optional
+            'cpu' (default), 'cuda', 'mps', or 'auto' (CUDA if available, else
+            MPS if available, else the CPU). For networks trained on protein
+            language model (PLM) embeddings, the PLM also runs here, so a GPU
+            ('auto') is much faster.
+        embedding_cache : str or Path, optional
+            PLM networks only: a directory in which to store embeddings, so
+            sequences predicted again are not re-embedded. By default nothing
+            is stored and each sequence is embedded when predicted.
         """
 
-        self.dtype = dtype
-  
-        loaded_model = torch.load(saved_weights, map_location=torch.device('cpu'))
-      
-        # Dynamically read in correct network size:
-        self.num_layers = 0
-        while True:
-            s = f'lstm.weight_ih_l{self.num_layers}'
-            try:
-                temp = loaded_model[s]
-                self.num_layers += 1
-            except KeyError:
-                break
-        
-        # Extract other network hyperparams           
-        self.hidden_vector_size = int(np.shape(loaded_model['lstm.weight_ih_l0'])[0] / 4)
-        self.n_classes = np.shape(loaded_model['fc.bias'])[0]
-
-        if self.n_classes > 1:
-            self.task = "classification"
-        else:
-            self.task = "regression"
-
-        # Instantiate network weights into Predictor() object
-        if self.dtype == "sequence":
-            self.network = brnn_architecture.BRNN_MtO(20, self.hidden_vector_size, 
-                                            self.num_layers, self.n_classes, 'cpu')
-        elif self.dtype == "residues":
-            self.network = brnn_architecture.BRNN_MtM(20, self.hidden_vector_size, 
-                                            self.num_layers, self.n_classes, 'cpu')
-        else:
+        if dtype is not None and dtype not in ['sequence', 'residues']:
             raise ValueError("dtype must equal 'residues' or 'sequence'")
-                                        
-        self.network.load_state_dict(loaded_model)
 
+        self.device = devices.resolve_device(device)
+        self.network, self.encoder = checkpoint.load_network(str(saved_weights), device=self.device,
+                                                             legacy_datatype=dtype)
+        task = self.network.task
+
+        if isinstance(self.encoder, plm.PLMEncoder):
+            self.encoder.use_device(self.device)
+            if embedding_cache is not None:
+                self.encoder.use_cache(embedding_cache)
+        elif embedding_cache is not None:
+            raise ValueError('embedding_cache only applies to networks trained on protein language model embeddings')
+
+        if dtype is not None and dtype != task.datatype:
+            raise ValueError(f"dtype '{dtype}' does not match the saved network, which is a '{task.datatype}' network")
+
+        self.dtype = task.datatype
+        self.n_classes = task.num_classes
+        self.task = task.problem_type
+        self.num_layers = self.network.hyperparameter_values.get('num_layers')
+        self.hidden_vector_size = self.network.hyperparameter_values.get('hidden_size')
 
     def predict(self, seq):
-        """Use the network to predict values for a single sequence of valid amino acids
+        """Use the network to predict values for a single sequence
 
         Parameters
         ----------
         seq : str
-            Valid amino acid sequence
-            
+            Sequence (converted to uppercase before encoding)
+
         Returns
         -------
         np.ndarray
-            Returns a 1D np.ndarray the length of the sequence where each position
-            is the prediction at that position.
+            Regression: one value (sequence networks) or one value per residue.
+            Classification: the probability of each class, with shape
+            [num_classes] (sequence networks) or [len(seq) X num_classes].
         """
 
-        # convert sequence to uppercase
         seq = seq.upper()
+        output = train_network.predict_sequences(self.network, [seq], self.encoder, self.device)[seq]
 
-        # Convert to one-hot sequence vector
-        seq_vector = encode_sequence.one_hot(seq)
-        seq_vector = seq_vector.view(1, len(seq_vector), -1)  # formatting
+        if self.n_classes > 1:
+            return train_network.output_to_prediction(output, self.network.task, probabilistic=True)
 
-        # Forward pass
-        prediction = self.network(seq_vector.float()).detach().numpy().flatten()
-
-        # softmax to get class probabilities
-        if self.task == "classification":
-            if self.dtype == "residues":
-                prediction = prediction.reshape(-1, self.n_classes)
-                prediction = np.array(list(map(softmax, prediction)))
-
-            else:
-                prediction = softmax(prediction)
-
-        return prediction
+        return np.asarray(output).flatten()

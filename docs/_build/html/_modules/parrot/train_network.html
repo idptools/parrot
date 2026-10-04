@@ -1,87 +1,51 @@
 
 
 <!DOCTYPE html>
-<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
-<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<html class="writer-html5" lang="en" data-content_root="../../">
 <head>
-  <meta charset="utf-8">
-  
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>parrot.train_network &mdash; parrot  documentation</title>
-  
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
 
   
-  
-  
-  
-
-  
-  <script type="text/javascript" src="../../_static/js/modernizr.min.js"></script>
-  
-    
-      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
-        <script src="../../_static/jquery.js"></script>
-        <script src="../../_static/underscore.js"></script>
-        <script src="../../_static/doctools.js"></script>
-        <script src="../../_static/language_data.js"></script>
-    
-    <script type="text/javascript" src="../../_static/js/theme.js"></script>
-
-    
-
-  
-  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" /> 
 </head>
 
-<body class="wy-body-for-nav">
-
-   
+<body class="wy-body-for-nav"> 
   <div class="wy-grid-for-nav">
-    
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-          
 
           
-            <a href="../../index.html" class="icon icon-home"> parrot
           
-
-          
+          <a href="../../index.html" class="icon icon-home">
+            parrot
           </a>
-
-          
-            
-            
-          
-
-          
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
 </div>
-
-          
-        </div>
-
-        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
-          
-            
-            
-              
-            
-            
-              <p class="caption"><span class="caption-text">Contents:</span></p>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../getting_started.html">Getting Started with PARROT</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-preprocess.html">parrot-preprocess</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-train.html">parrot-train</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/architectures.html">Architectures</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/plm_encodings.html">Protein language model encodings</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-optimize.html">parrot-optimize</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-predict.html">parrot-predict</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/parrot-cvsplit.html">parrot-cvsplit</a></li>
@@ -89,72 +53,42 @@
 <li class="toctree-l1"><a class="reference internal" href="../../usage/advanced_examples.html">Advanced Examples:</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/cross_validation.html">Evaluating a Network with Cross-Validation:</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/ml_faqs.html">Machine Learning Resources:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../adding_architectures.html">Adding a new architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../api.html">Module Documentation</a></li>
 </ul>
 
-            
-          
         </div>
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
-
-      
-      <nav class="wy-nav-top" aria-label="top navigation">
-        
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="../../index.html">parrot</a>
-        
       </nav>
 
-
       <div class="wy-nav-content">
-        
         <div class="rst-content">
-        
-          
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div role="navigation" aria-label="breadcrumbs navigation">
-
+          <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-    
-      <li><a href="../../index.html">Docs</a> &raquo;</li>
-        
-          <li><a href="../index.html">Module code</a> &raquo;</li>
-        
-      <li>parrot.train_network</li>
-    
-    
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">parrot.train_network</li>
       <li class="wy-breadcrumbs-aside">
-        
       </li>
-    
   </ul>
-
-  
   <hr/>
 </div>
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
-            
+             
   <h1>Source code for parrot.train_network</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">Core training module of PARROT</span>
+<span class="sd">Core training module of PARROT: training any registered architecture, evaluating</span>
+<span class="sd">it on labeled data and making predictions on new sequences.</span>
+
+<span class="sd">Nothing in this module depends on which architecture is being used; networks</span>
+<span class="sd">only need to follow the ParrotArchitecture interface (see</span>
+<span class="sd">parrot/architectures/base.py).</span>
 
 <span class="sd">.............................................................................</span>
 <span class="sd">idptools-parrot was developed by the Holehouse lab</span>
@@ -163,456 +97,645 @@
 <span class="sd">Question/comments/concerns? Raise an issue on github:</span>
 <span class="sd">https://github.com/idptools/parrot</span>
 
-<span class="sd">Licensed under the MIT license. </span>
+<span class="sd">Licensed under the MIT license.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
-<span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
-<span class="kn">from</span> <span class="nn">torch.utils.data</span> <span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">DataLoader</span>
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">itertools</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
 
-<span class="kn">from</span> <span class="nn">parrot</span> <span class="kn">import</span> <span class="n">brnn_plot</span>
-<span class="kn">from</span> <span class="nn">parrot</span> <span class="kn">import</span> <span class="n">encode_sequence</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy.special</span><span class="w"> </span><span class="kn">import</span> <span class="n">softmax</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch.utils.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataLoader</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">parrot</span><span class="w"> </span><span class="kn">import</span> <span class="n">process_input_data</span> <span class="k">as</span> <span class="n">pid</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">parrot.architectures</span><span class="w"> </span><span class="kn">import</span> <span class="n">HyperParameter</span><span class="p">,</span> <span class="n">ParrotArchitecture</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">parrot.devices</span><span class="w"> </span><span class="kn">import</span> <span class="n">full_float32_precision</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">parrot.architectures.classical</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClassicalModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">parrot.architectures.layers</span><span class="w"> </span><span class="kn">import</span> <span class="n">padding_mask</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">parrot.encode_sequence</span><span class="w"> </span><span class="kn">import</span> <span class="n">SequenceEncoder</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">parrot.tasks</span><span class="w"> </span><span class="kn">import</span> <span class="n">Task</span>
+
+<span class="c1"># The learning rate is the one hyperparameter shared by every architecture</span>
+<span class="n">LEARNING_RATE</span> <span class="o">=</span> <span class="n">HyperParameter</span><span class="p">(</span><span class="s1">&#39;learning_rate&#39;</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;initial learning rate&#39;</span><span class="p">,</span>
+                               <span class="n">search_range</span><span class="o">=</span><span class="p">(</span><span class="mf">1e-5</span><span class="p">,</span> <span class="mf">1e-2</span><span class="p">),</span> <span class="n">log_scale</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># With --stop auto, the validation loss must fall by at least this fraction relative</span>
+<span class="c1"># to every recent epoch to count as still improving</span>
+<span class="n">AUTO_STOP_RELATIVE_IMPROVEMENT</span> <span class="o">=</span> <span class="mf">0.005</span>
+
+<span class="c1"># How often (in epochs) the validation loss is printed when not in verbose mode</span>
+<span class="n">PRINT_EVERY_N_EPOCHS</span> <span class="o">=</span> <span class="mi">5</span>
 
 
-<div class="viewcode-block" id="train"><a class="viewcode-back" href="../../api.html#parrot.train_network.train">[docs]</a><span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">train_loader</span><span class="p">,</span> <span class="n">val_loader</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">problem_type</span><span class="p">,</span> <span class="n">weights_file</span><span class="p">,</span>
-          <span class="n">stop_condition</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">learn_rate</span><span class="p">,</span> <span class="n">n_epochs</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">silent</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Train a BRNN and save the best performing network weights</span>
+<span class="c1"># .................................................................</span>
+<span class="c1"># Losses</span>
 
-<span class="sd">    Train the network on a training set, and every epoch evaluate its performance on</span>
-<span class="sd">    a validation set. Save the network weights that acheive the best performance on</span>
-<span class="sd">    the validation set.</span>
+<div class="viewcode-block" id="build_loss_criterion">
+<a class="viewcode-back" href="../../api.html#parrot.train_network.build_loss_criterion">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_loss_criterion</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">Task</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build the loss function used for training, validation and testing</span>
 
-<span class="sd">    User must specify the machine learning tast (`problem_type`) and the format of</span>
-<span class="sd">    the data (`datatype`). Additionally, this function requires the learning rate</span>
-<span class="sd">    hyperparameter and the number of epochs of training. The other hyperparameters, </span>
-<span class="sd">    number of hidden layers and hidden vector size, are implictly included on the </span>
-<span class="sd">    the provided network.</span>
-
-<span class="sd">    The user may specify if they want to train the network for a set number of</span>
-<span class="sd">    epochs or until an automatic stopping condition is reached with the argument</span>
-<span class="sd">    `stop_condition`. Depending on the stopping condition used, the `n_epochs`</span>
-<span class="sd">    argument will have a different role.</span>
+<span class="sd">    Losses are summed over every sequence (and, for residue-mapped data, every</span>
+<span class="sd">    real residue) in a batch. Callers divide the accumulated total by the number</span>
+<span class="sd">    of sequences, so all reported losses are average loss per sequence.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
-<span class="sd">    network : PyTorch network object</span>
-<span class="sd">            A BRNN network with the desired architecture</span>
-<span class="sd">    train_loader : PyTorch DataLoader object</span>
-<span class="sd">            A DataLoader containing the sequences and targets of the training set</span>
-<span class="sd">    val_loader : PyTorch DataLoader object</span>
-<span class="sd">            A DataLoader containing the sequences and targets of the validation set</span>
-<span class="sd">    datatype : str</span>
-<span class="sd">            The format of values in the dataset. Should be &#39;sequence&#39; for datasets</span>
-<span class="sd">            with a single value (or class label) per sequence, or &#39;residues&#39; for</span>
-<span class="sd">            datasets with values (or class labels) for every residue in a sequence.</span>
-<span class="sd">    problem_type : str</span>
-<span class="sd">            The machine learning task--should be either &#39;regression&#39; or</span>
-<span class="sd">            &#39;classification&#39;.</span>
-<span class="sd">    weights_file : str</span>
-<span class="sd">            A path to the location where the best_performing network weights will be</span>
-<span class="sd">            saved</span>
-<span class="sd">    stop_condition : str</span>
-<span class="sd">            Determines when to conclude network training. If &#39;iter&#39;, then the network</span>
-<span class="sd">            will train for `n_epochs` epochs, then stop. If &#39;auto&#39; then the network</span>
-<span class="sd">            will train for at least `n_epochs` epochs, then begin assessing whether</span>
-<span class="sd">            performance has sufficiently stagnated. If the performance plateaus for</span>
-<span class="sd">            `n_epochs` consecutive epochs, then training will stop.</span>
-<span class="sd">    device : str</span>
-<span class="sd">            Location of where training will take place--should be either &#39;cpu&#39; or</span>
-<span class="sd">            &#39;cuda&#39; (GPU). If available, training on GPU is typically much faster.</span>
-<span class="sd">    learn_rate : float</span>
-<span class="sd">            Initial learning rate of network training. The training process is</span>
-<span class="sd">            controlled by the Adam optimization algorithm, so this learning rate</span>
-<span class="sd">            will tend to decrease as training progresses.</span>
-<span class="sd">    n_epochs : int</span>
-<span class="sd">            Number of epochs to train for, or required to have stagnated performance</span>
-<span class="sd">            for, depending on `stop_condition`.</span>
-<span class="sd">    verbose : bool, optional</span>
-<span class="sd">            If true, causes training updates to be written every epoch, rather than</span>
-<span class="sd">            every 5 epochs.</span>
-<span class="sd">    silent : bool, optional</span>
-<span class="sd">            If true, causes not training updates to be written to standard out.</span>
+<span class="sd">    task : Task</span>
+<span class="sd">        The task being trained</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
-<span class="sd">    list</span>
-<span class="sd">            A list of the average training set losses achieved at each epoch</span>
-<span class="sd">    list</span>
-<span class="sd">            A list of the average validation set losses achieved at each epoch</span>
+<span class="sd">    torch.nn.Module</span>
+<span class="sd">        MSE for residue regression, L1 for sequence regression, and cross-</span>
+<span class="sd">        entropy for classification. The cross-entropy loss ignores padded</span>
+<span class="sd">        residues and residues with missing labels, which carry the label</span>
+<span class="sd">        IGNORED_CLASS_LABEL.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="c1"># Set optimizer</span>
-    <span class="n">optimizer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">network</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="n">learn_rate</span><span class="p">)</span>
-
-    <span class="c1"># Set loss criteria</span>
-    <span class="k">if</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;regression&#39;</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
-            <span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MSELoss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
-            <span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">L1Loss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;classification&#39;</span><span class="p">:</span>
-        <span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">)</span>
-
-    <span class="n">network</span> <span class="o">=</span> <span class="n">network</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
-    <span class="n">total_step</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">train_loader</span><span class="p">)</span>
-    <span class="n">min_val_loss</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span>
-    <span class="n">avg_train_losses</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="n">avg_val_losses</span> <span class="o">=</span> <span class="p">[]</span>
-
-    <span class="k">if</span> <span class="n">stop_condition</span> <span class="o">==</span> <span class="s1">&#39;auto&#39;</span><span class="p">:</span>
-        <span class="n">min_epochs</span> <span class="o">=</span> <span class="n">n_epochs</span>
-        <span class="c1"># Set to some arbitrarily large number of iterations -- will stop automatically</span>
-        <span class="n">n_epochs</span> <span class="o">=</span> <span class="mi">20000000</span>
-        <span class="n">last_decrease</span> <span class="o">=</span> <span class="mi">0</span>
-
-    <span class="c1"># Train the model - evaluate performance on val set every epoch</span>
-    <span class="n">end_training</span> <span class="o">=</span> <span class="kc">False</span>
-    <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_epochs</span><span class="p">):</span>  <span class="c1"># Main loop</span>
-
-        <span class="c1"># Initialize training and testing loss for epoch</span>
-        <span class="n">train_loss</span> <span class="o">=</span> <span class="mi">0</span>
-        <span class="n">val_loss</span> <span class="o">=</span> <span class="mi">0</span>
-
-        <span class="c1"># Iterate over batches</span>
-        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">names</span><span class="p">,</span> <span class="n">vectors</span><span class="p">,</span> <span class="n">targets</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">train_loader</span><span class="p">):</span>
-            <span class="n">vectors</span> <span class="o">=</span> <span class="n">vectors</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
-            <span class="n">targets</span> <span class="o">=</span> <span class="n">targets</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
-
-            <span class="c1"># Forward pass</span>
-            <span class="n">outputs</span> <span class="o">=</span> <span class="n">network</span><span class="p">(</span><span class="n">vectors</span><span class="o">.</span><span class="n">float</span><span class="p">())</span>
-
-            <span class="k">if</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;regression&#39;</span><span class="p">:</span>
-                <span class="n">loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">outputs</span><span class="p">,</span> <span class="n">targets</span><span class="o">.</span><span class="n">float</span><span class="p">())</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
-                    <span class="n">outputs</span> <span class="o">=</span> <span class="n">outputs</span><span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-                <span class="n">loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">outputs</span><span class="p">,</span> <span class="n">targets</span><span class="o">.</span><span class="n">long</span><span class="p">())</span>
-
-            <span class="n">train_loss</span> <span class="o">+=</span> <span class="n">loss</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-
-            <span class="c1"># Backward and optimize</span>
-            <span class="n">optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
-            <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
-            <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
-
-        <span class="k">for</span> <span class="n">names</span><span class="p">,</span> <span class="n">vectors</span><span class="p">,</span> <span class="n">targets</span> <span class="ow">in</span> <span class="n">val_loader</span><span class="p">:</span>
-            <span class="n">vectors</span> <span class="o">=</span> <span class="n">vectors</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
-            <span class="n">targets</span> <span class="o">=</span> <span class="n">targets</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
-
-            <span class="c1"># Forward pass</span>
-            <span class="n">outputs</span> <span class="o">=</span> <span class="n">network</span><span class="p">(</span><span class="n">vectors</span><span class="o">.</span><span class="n">float</span><span class="p">())</span>
-            <span class="k">if</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;regression&#39;</span><span class="p">:</span>
-                <span class="n">loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">outputs</span><span class="p">,</span> <span class="n">targets</span><span class="o">.</span><span class="n">float</span><span class="p">())</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
-                    <span class="n">outputs</span> <span class="o">=</span> <span class="n">outputs</span><span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-                <span class="n">loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">outputs</span><span class="p">,</span> <span class="n">targets</span><span class="o">.</span><span class="n">long</span><span class="p">())</span>
-
-            <span class="c1"># Increment val loss</span>
-            <span class="n">val_loss</span> <span class="o">+=</span> <span class="n">loss</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-
-        <span class="c1"># Avg loss:</span>
-        <span class="n">train_loss</span> <span class="o">/=</span> <span class="nb">len</span><span class="p">(</span><span class="n">train_loader</span><span class="o">.</span><span class="n">dataset</span><span class="p">)</span>
-        <span class="n">val_loss</span> <span class="o">/=</span> <span class="nb">len</span><span class="p">(</span><span class="n">val_loader</span><span class="o">.</span><span class="n">dataset</span><span class="p">)</span>
-
-        <span class="n">signif_decrease</span> <span class="o">=</span> <span class="kc">True</span>
-        <span class="k">if</span> <span class="n">stop_condition</span> <span class="o">==</span> <span class="s1">&#39;auto&#39;</span> <span class="ow">and</span> <span class="n">epoch</span> <span class="o">&gt;</span> <span class="n">min_epochs</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
-            <span class="c1"># Check to see if loss has stopped decreasing</span>
-            <span class="n">last_epochs_loss</span> <span class="o">=</span> <span class="n">avg_val_losses</span><span class="p">[</span><span class="o">-</span><span class="n">min_epochs</span><span class="p">:]</span>
-
-            <span class="k">for</span> <span class="n">loss</span> <span class="ow">in</span> <span class="n">last_epochs_loss</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">val_loss</span> <span class="o">&gt;=</span> <span class="n">loss</span><span class="o">*</span><span class="mf">0.995</span><span class="p">:</span>
-                    <span class="n">signif_decrease</span> <span class="o">=</span> <span class="kc">False</span>
-
-            <span class="c1"># If network performance has plateaued over the last range of epochs, end training</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">signif_decrease</span> <span class="ow">and</span> <span class="n">epoch</span> <span class="o">-</span> <span class="n">last_decrease</span> <span class="o">&gt;</span> <span class="n">min_epochs</span><span class="p">:</span>
-                <span class="n">end_training</span> <span class="o">=</span> <span class="kc">True</span>
-
-        <span class="c1"># Only save updated weights to memory if they improve val set performance</span>
-        <span class="k">if</span> <span class="n">val_loss</span> <span class="o">&lt;</span> <span class="n">min_val_loss</span><span class="p">:</span>
-            <span class="n">min_val_loss</span> <span class="o">=</span> <span class="n">val_loss</span> 	<span class="c1"># Reset min_val_loss</span>
-            <span class="n">last_decrease</span> <span class="o">=</span> <span class="n">epoch</span>
-            <span class="n">torch</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">network</span><span class="o">.</span><span class="n">state_dict</span><span class="p">(),</span> <span class="n">weights_file</span><span class="p">)</span>  <span class="c1"># Save model</span>
-
-        <span class="c1"># Append losses to lists</span>
-        <span class="n">avg_train_losses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">train_loss</span><span class="p">)</span>
-        <span class="n">avg_val_losses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">val_loss</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Epoch </span><span class="si">%d</span><span class="se">\t</span><span class="s1">Loss </span><span class="si">%.4f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">epoch</span><span class="p">,</span> <span class="n">val_loss</span><span class="p">))</span>
-        <span class="k">elif</span> <span class="n">epoch</span> <span class="o">%</span> <span class="mi">5</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">silent</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Epoch </span><span class="si">%d</span><span class="se">\t</span><span class="s1">Loss </span><span class="si">%.4f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">epoch</span><span class="p">,</span> <span class="n">val_loss</span><span class="p">))</span>
-
-        <span class="c1"># This is placed here to ensure that the best network, even if the performance</span>
-        <span class="c1"># improvement is marginal, is saved.</span>
-        <span class="k">if</span> <span class="n">end_training</span><span class="p">:</span>
-            <span class="k">break</span>
-
-    <span class="c1"># Return loss per epoch so that they can be plotted</span>
-    <span class="k">return</span> <span class="n">avg_train_losses</span><span class="p">,</span> <span class="n">avg_val_losses</span></div>
+    <span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">is_classification</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">,</span> <span class="n">ignore_index</span><span class="o">=</span><span class="n">pid</span><span class="o">.</span><span class="n">IGNORED_CLASS_LABEL</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">per_residue</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">nn</span><span class="o">.</span><span class="n">MSELoss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">nn</span><span class="o">.</span><span class="n">L1Loss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;sum&#39;</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="test_labeled_data"><a class="viewcode-back" href="../../api.html#parrot.train_network.test_labeled_data">[docs]</a><span class="k">def</span> <span class="nf">test_labeled_data</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">test_loader</span><span class="p">,</span> <span class="n">datatype</span><span class="p">,</span>
-                      <span class="n">problem_type</span><span class="p">,</span> <span class="n">weights_file</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span>
-                      <span class="n">probabilistic_classification</span><span class="p">,</span> <span class="n">include_figs</span><span class="p">,</span> 
-                      <span class="n">device</span><span class="p">,</span> <span class="n">output_file_prefix</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Test a trained BRNN on labeled sequences</span>
 
-<span class="sd">    Using the saved weights of a trained network, run a set of sequences through</span>
-<span class="sd">    the network and evaluate the performancd. Return the average loss per</span>
-<span class="sd">    sequence and plot the results. Testing a network on previously-unseen data </span>
-<span class="sd">    provides a useful estimate of how generalizeable the network&#39;s performance is.</span>
+<div class="viewcode-block" id="compute_batch_loss">
+<a class="viewcode-back" href="../../api.html#parrot.train_network.compute_batch_loss">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">compute_batch_loss</span><span class="p">(</span><span class="n">network</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">Task</span><span class="p">,</span> <span class="n">criterion</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
+                       <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run a batch through the network and compute its summed loss</span>
+
+<span class="sd">    Padded positions and residues with missing labels never contribute to the</span>
+<span class="sd">    loss: for regression they are masked out here, and for classification they</span>
+<span class="sd">    carry the label IGNORED_CLASS_LABEL, which `criterion` ignores.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
-<span class="sd">    network : PyTorch network object</span>
-<span class="sd">            A BRNN network with the desired architecture</span>
-<span class="sd">    test_loader : PyTorch DataLoader object</span>
-<span class="sd">            A DataLoader containing the sequences and targets of the test set</span>
-<span class="sd">    datatype : str</span>
-<span class="sd">            The format of values in the dataset. Should be &#39;sequence&#39; for datasets</span>
-<span class="sd">            with a single value (or class label) per sequence, or &#39;residues&#39; for</span>
-<span class="sd">            datasets with values (or class labels) for every residue in a sequence.</span>
-<span class="sd">    problem_type : str</span>
-<span class="sd">            The machine learning task--should be either &#39;regression&#39; or</span>
-<span class="sd">            &#39;classification&#39;.</span>
-<span class="sd">    weights_file : str</span>
-<span class="sd">            A path to the location of the best_performing network weights</span>
-<span class="sd">    num_classes: int</span>
-<span class="sd">            Number of data classes. If regression task, put 1.</span>
-<span class="sd">    probabilistic_classification: bool</span>
-<span class="sd">            Whether output should be binary labels, or &quot;weights&quot; of each label type.</span>
-<span class="sd">            This field is only implemented for binary, sequence classification tasks.</span>
-<span class="sd">    include_figs: bool</span>
-<span class="sd">            Whether or not matplotlib figures should be generated.</span>
-<span class="sd">    device : str</span>
-<span class="sd">            Location of where testing will take place--should be either &#39;cpu&#39; or</span>
-<span class="sd">            &#39;cuda&#39; (GPU). If available, training on GPU is typically much faster.</span>
-<span class="sd">    output_file_prefix : str</span>
-<span class="sd">            Path and filename prefix to which the test set predictions and plots will be saved. </span>
+<span class="sd">    network : torch.nn.Module</span>
+<span class="sd">        A network following the ParrotArchitecture interface</span>
+<span class="sd">    batch : tuple</span>
+<span class="sd">        (names, padded vectors, targets, lengths) as produced by collate_batch()</span>
+<span class="sd">    task : Task</span>
+<span class="sd">        The task being trained</span>
+<span class="sd">    criterion : torch.nn.Module</span>
+<span class="sd">        The loss function returned by build_loss_criterion()</span>
+<span class="sd">    device : str or torch.device</span>
+<span class="sd">        Device the network lives on</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    torch.Tensor</span>
+<span class="sd">        Scalar loss summed over the batch</span>
+<span class="sd">    torch.Tensor</span>
+<span class="sd">        The network outputs: [batch_dim X num_classes] or</span>
+<span class="sd">        [batch_dim X padded_length X num_classes]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">names</span><span class="p">,</span> <span class="n">vectors</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">lengths</span> <span class="o">=</span> <span class="n">batch</span>
+    <span class="n">vectors</span> <span class="o">=</span> <span class="n">vectors</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">targets</span> <span class="o">=</span> <span class="n">targets</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+
+    <span class="n">outputs</span> <span class="o">=</span> <span class="n">network</span><span class="p">(</span><span class="n">vectors</span><span class="p">,</span> <span class="n">lengths</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">is_classification</span> <span class="ow">and</span> <span class="n">task</span><span class="o">.</span><span class="n">per_residue</span><span class="p">:</span>
+        <span class="c1"># CrossEntropyLoss expects the class dimension second</span>
+        <span class="n">loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">outputs</span><span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">targets</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">task</span><span class="o">.</span><span class="n">per_residue</span><span class="p">:</span>
+        <span class="c1"># Only real residues with a label (missing labels are NaN)</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">padding_mask</span><span class="p">(</span><span class="n">lengths</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">outputs</span><span class="o">.</span><span class="n">device</span><span class="p">),</span> <span class="n">outputs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">torch</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">targets</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+        <span class="n">loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">outputs</span><span class="p">[</span><span class="n">mask</span><span class="p">],</span> <span class="n">targets</span><span class="p">[</span><span class="n">mask</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">outputs</span><span class="p">,</span> <span class="n">targets</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">loss</span><span class="p">,</span> <span class="n">outputs</span></div>
+
+
+
+<div class="viewcode-block" id="sum_batch_losses">
+<a class="viewcode-back" href="../../api.html#parrot.train_network.sum_batch_losses">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sum_batch_losses</span><span class="p">(</span><span class="n">batch_losses</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Add up per-batch losses that were kept on the device</span>
+
+<span class="sd">    Calling .item() on every batch&#39;s loss would make the CPU wait for the GPU</span>
+<span class="sd">    after every batch. Keeping the losses on the device and adding them up once</span>
+<span class="sd">    gives the same total (each loss is the same float32 value .item() would</span>
+<span class="sd">    return, summed in float64 on the CPU) without those waits.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    batch_losses : list of torch.Tensor</span>
+<span class="sd">        Scalar, detached loss of each batch</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    float</span>
-<span class="sd">            The average loss across the entire test set</span>
-<span class="sd">    list of lists</span>
-<span class="sd">            Details of the output predictions for each of the sequences in the test set. Each</span>
-<span class="sd">            inner list represents a sample in the test set, with the format: [sequence_vector,</span>
-<span class="sd">            true_value, predicted_value, sequence_ID]</span>
+<span class="sd">        The total loss (0.0 for an empty list)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="c1"># Load network weights</span>
-    <span class="n">network</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">weights_file</span><span class="p">))</span>
-
-    <span class="c1"># Get output directory for images</span>
-    <span class="n">network_filename</span> <span class="o">=</span> <span class="n">weights_file</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-    <span class="n">output_dir</span> <span class="o">=</span> <span class="n">weights_file</span><span class="p">[:</span><span class="o">-</span><span class="nb">len</span><span class="p">(</span><span class="n">network_filename</span><span class="p">)]</span>
-
-    <span class="c1"># Set loss criteria</span>
-    <span class="k">if</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;regression&#39;</span><span class="p">:</span>
-        <span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MSELoss</span><span class="p">()</span>
-    <span class="k">elif</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;classification&#39;</span><span class="p">:</span>
-        <span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">()</span>
-
-    <span class="n">test_loss</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="n">all_targets</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="n">all_outputs</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="n">predictions</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">names</span><span class="p">,</span> <span class="n">vectors</span><span class="p">,</span> <span class="n">targets</span> <span class="ow">in</span> <span class="n">test_loader</span><span class="p">:</span> 	<span class="c1"># batch size of 1</span>
-        <span class="n">all_targets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span>
-
-        <span class="n">vectors</span> <span class="o">=</span> <span class="n">vectors</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
-        <span class="n">targets</span> <span class="o">=</span> <span class="n">targets</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
-
-        <span class="c1"># Forward pass</span>
-        <span class="n">outputs</span> <span class="o">=</span> <span class="n">network</span><span class="p">(</span><span class="n">vectors</span><span class="o">.</span><span class="n">float</span><span class="p">())</span>
-        <span class="k">if</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;regression&#39;</span><span class="p">:</span>
-            <span class="n">loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">outputs</span><span class="p">,</span> <span class="n">targets</span><span class="o">.</span><span class="n">float</span><span class="p">())</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
-                <span class="n">outputs</span> <span class="o">=</span> <span class="n">outputs</span><span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-            <span class="n">loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">outputs</span><span class="p">,</span> <span class="n">targets</span><span class="o">.</span><span class="n">long</span><span class="p">())</span>
-
-        <span class="n">test_loss</span> <span class="o">+=</span> <span class="n">loss</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>  <span class="c1"># Increment test loss</span>
-        <span class="n">all_outputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">outputs</span><span class="o">.</span><span class="n">detach</span><span class="p">())</span>
-
-        <span class="c1"># Add to list as: [seq_vector, true value, predicted value, name]</span>
-        <span class="n">predictions</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">vectors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">(),</span> <span class="n">targets</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
-                           <span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">outputs</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">(),</span> <span class="n">names</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span>
-
-    <span class="c1"># Plot &#39;accuracy&#39; depending on the problem type and datatype</span>
-    <span class="k">if</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;regression&#39;</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">include_figs</span><span class="p">:</span>
-                <span class="n">brnn_plot</span><span class="o">.</span><span class="n">residue_regression_scatterplot</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">all_outputs</span><span class="p">,</span> 
-                                            <span class="n">output_file_prefix</span><span class="o">=</span><span class="n">output_file_prefix</span><span class="p">)</span>
-
-            <span class="c1"># Format predictions</span>
-            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">predictions</span><span class="p">)):</span>
-                <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
-                <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
-
-        <span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">include_figs</span><span class="p">:</span>
-                <span class="n">brnn_plot</span><span class="o">.</span><span class="n">sequence_regression_scatterplot</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">all_outputs</span><span class="p">,</span> 
-                                            <span class="n">output_file_prefix</span><span class="o">=</span><span class="n">output_file_prefix</span><span class="p">)</span>
-
-            <span class="c1"># Format predictions</span>
-            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">predictions</span><span class="p">)):</span>
-                <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
-                <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
-
-    <span class="k">elif</span> <span class="n">problem_type</span> <span class="o">==</span> <span class="s1">&#39;classification&#39;</span><span class="p">:</span>
-
-        <span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;residues&#39;</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">include_figs</span><span class="p">:</span>
-                <span class="n">brnn_plot</span><span class="o">.</span><span class="n">res_confusion_matrix</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">all_outputs</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> 
-                                            <span class="n">output_file_prefix</span><span class="o">=</span><span class="n">output_file_prefix</span><span class="p">)</span>
-
-            <span class="c1"># Format predictions and assign class predictions</span>
-            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">predictions</span><span class="p">)):</span>
-                <span class="n">pred_values</span> <span class="o">=</span> <span class="p">[]</span>
-                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">])):</span>
-                    <span class="n">pred_values</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-                <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">pred_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int</span><span class="p">)</span>
-
-        <span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;sequence&#39;</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">probabilistic_classification</span><span class="p">:</span>
-                <span class="c1"># Probabilistic assignment of class predictions</span>
-                <span class="c1"># Optional implementation for classification tasks</span>
-                <span class="c1"># e.g. every sequence is assigned probabilities</span>
-                <span class="c1"># corresponding to each possible class</span>
-                <span class="n">pred_probabilities</span> <span class="o">=</span> <span class="p">[]</span>
-                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">predictions</span><span class="p">)):</span>
-                    <span class="n">softmax</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
-                    <span class="n">probs</span> <span class="o">=</span> <span class="n">softmax</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">softmax</span><span class="p">)</span>
-                    <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">probs</span>
-                    <span class="n">pred_probabilities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">probs</span><span class="p">)</span>
-
-                <span class="c1"># Plot ROC and PR curves</span>
-                <span class="k">if</span> <span class="n">include_figs</span><span class="p">:</span>
-                    <span class="n">brnn_plot</span><span class="o">.</span><span class="n">plot_roc_curve</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">pred_probabilities</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> 
-                                            <span class="n">output_file_prefix</span><span class="o">=</span><span class="n">output_file_prefix</span><span class="p">)</span>
-                    <span class="n">brnn_plot</span><span class="o">.</span><span class="n">plot_precision_recall_curve</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">pred_probabilities</span><span class="p">,</span> 
-                                            <span class="n">num_classes</span><span class="p">,</span> <span class="n">output_file_prefix</span><span class="o">=</span><span class="n">output_file_prefix</span><span class="p">)</span>
-
-            <span class="k">else</span><span class="p">:</span>
-                <span class="c1"># Absolute assignment of class predictions</span>
-                <span class="c1"># e.g. every sequence receives an integer class label</span>
-                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">predictions</span><span class="p">)):</span>
-                    <span class="n">pred_value</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">])</span>
-                    <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">pred_value</span><span class="p">)</span>
-
-                <span class="c1"># Plot confusion matrix (if not in probabilistic classification mode)</span>
-                <span class="k">if</span> <span class="n">include_figs</span><span class="p">:</span>
-                    <span class="n">brnn_plot</span><span class="o">.</span><span class="n">confusion_matrix</span><span class="p">(</span><span class="n">all_targets</span><span class="p">,</span> <span class="n">all_outputs</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> 
-                                                <span class="n">output_file_prefix</span><span class="o">=</span><span class="n">output_file_prefix</span><span class="p">)</span>
-
-    <span class="k">return</span> <span class="n">test_loss</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">test_loader</span><span class="o">.</span><span class="n">dataset</span><span class="p">),</span> <span class="n">predictions</span></div>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">batch_losses</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">0.0</span>
+    <span class="c1"># Move to the CPU before converting: MPS tensors cannot be converted to float64</span>
+    <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">batch_losses</span><span class="p">)</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">double</span><span class="p">()</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span></div>
 
 
-<div class="viewcode-block" id="test_unlabeled_data"><a class="viewcode-back" href="../../api.html#parrot.train_network.test_unlabeled_data">[docs]</a><span class="k">def</span> <span class="nf">test_unlabeled_data</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">sequences</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">encoding_scheme</span><span class="o">=</span><span class="s1">&#39;onehot&#39;</span><span class="p">,</span> <span class="n">encoder</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">print_frequency</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Test a trained BRNN on unlabeled sequences</span>
 
-<span class="sd">    Use a trained network to make predictions on previously-unseen data.</span>
-
-<span class="sd">    ** </span>
-<span class="sd">    Note: Unlike the previous functions, `network` here must have pre-loaded</span>
-<span class="sd">    weights. </span>
-<span class="sd">    **</span>
+<div class="viewcode-block" id="evaluate_loss">
+<a class="viewcode-back" href="../../api.html#parrot.train_network.evaluate_loss">[docs]</a>
+<span class="nd">@full_float32_precision</span><span class="p">()</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">evaluate_loss</span><span class="p">(</span><span class="n">network</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">loader</span><span class="p">:</span> <span class="n">DataLoader</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">Task</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Average loss per sequence over a dataset, without updating the network</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
-<span class="sd">    network : PyTorch network object</span>
-<span class="sd">            A BRNN network with the desired architecture and pre-loaded weights</span>
-<span class="sd">    sequences : list</span>
-<span class="sd">            A list of amino acid sequences to test using the network</span>
-<span class="sd">    device : str</span>
-<span class="sd">            Location of where testing will take place--should be either &#39;cpu&#39; or</span>
-<span class="sd">            &#39;cuda&#39; (GPU). If available, training on GPU is typically much faster.</span>
-<span class="sd">    encoding_scheme : str, optional</span>
-<span class="sd">            How amino acid sequences are to be encoded as numeric vectors. Currently,</span>
-<span class="sd">            &#39;onehot&#39;,&#39;biophysics&#39; and &#39;user&#39; are the implemented options.</span>
-<span class="sd">    encoder: UserEncoder object, optional</span>
-<span class="sd">            If encoding_scheme is &#39;user&#39;, encoder should be a UserEncoder object</span>
-<span class="sd">            that can convert amino acid sequences to numeric vectors. If</span>
-<span class="sd">            encoding_scheme is not &#39;user&#39;, use None.</span>
-<span class="sd">    print_frequency : int</span>
-<span class="sd">            If provided defines at what sequence interval an update is printed.</span>
-<span class="sd">            Default = None.</span>
-<span class="sd">    </span>
+<span class="sd">    network : torch.nn.Module</span>
+<span class="sd">        The network to evaluate</span>
+<span class="sd">    loader : DataLoader</span>
+<span class="sd">        Batches of the dataset to evaluate on</span>
+<span class="sd">    task : Task</span>
+<span class="sd">        The task being trained</span>
+<span class="sd">    device : str or torch.device</span>
+<span class="sd">        Device the network lives on</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    float</span>
+<span class="sd">        Total loss divided by the number of sequences</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">criterion</span> <span class="o">=</span> <span class="n">build_loss_criterion</span><span class="p">(</span><span class="n">task</span><span class="p">)</span>
+    <span class="n">batch_losses</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">n_sequences</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">network</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">loader</span><span class="p">:</span>
+            <span class="n">loss</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">compute_batch_loss</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">criterion</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
+            <span class="n">batch_losses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">loss</span><span class="o">.</span><span class="n">detach</span><span class="p">())</span>
+            <span class="n">n_sequences</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">total_loss</span> <span class="o">=</span> <span class="n">sum_batch_losses</span><span class="p">(</span><span class="n">batch_losses</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">total_loss</span> <span class="o">/</span> <span class="n">n_sequences</span></div>
+
+
+
+<span class="c1"># .................................................................</span>
+<span class="c1"># Training</span>
+
+<div class="viewcode-block" id="plateau_reached">
+<a class="viewcode-back" href="../../api.html#parrot.train_network.plateau_reached">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">plateau_reached</span><span class="p">(</span><span class="n">val_loss</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">recent_val_losses</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">epochs_since_best</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">patience</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Decide whether training with --stop auto should end</span>
+
+<span class="sd">    Training ends when the current validation loss is not meaningfully lower</span>
+<span class="sd">    than every one of the last `patience` epochs, and the best validation loss</span>
+<span class="sd">    is more than `patience` epochs old.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    val_loss : float</span>
+<span class="sd">        Validation loss of the current epoch</span>
+<span class="sd">    recent_val_losses : list of float</span>
+<span class="sd">        Validation losses of the previous `patience` epochs</span>
+<span class="sd">    epochs_since_best : int</span>
+<span class="sd">        Number of epochs since the best validation loss so far was reached</span>
+<span class="sd">    patience : int</span>
+<span class="sd">        The number of epochs over which performance must have stagnated</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    bool</span>
+<span class="sd">        True if training should stop</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">still_improving</span> <span class="o">=</span> <span class="nb">all</span><span class="p">(</span><span class="n">val_loss</span> <span class="o">&lt;</span> <span class="n">previous</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">AUTO_STOP_RELATIVE_IMPROVEMENT</span><span class="p">)</span>
+                          <span class="k">for</span> <span class="n">previous</span> <span class="ow">in</span> <span class="n">recent_val_losses</span><span class="p">)</span>
+    <span class="k">return</span> <span class="ow">not</span> <span class="n">still_improving</span> <span class="ow">and</span> <span class="n">epochs_since_best</span> <span class="o">&gt;</span> <span class="n">patience</span></div>
+
+
+
+<div class="viewcode-block" id="train">
+<a class="viewcode-back" href="../../api.html#parrot.train_network.train">[docs]</a>
+<span class="nd">@full_float32_precision</span><span class="p">()</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">train</span><span class="p">(</span><span class="n">network</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">train_loader</span><span class="p">:</span> <span class="n">DataLoader</span><span class="p">,</span> <span class="n">val_loader</span><span class="p">:</span> <span class="n">DataLoader</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">Task</span><span class="p">,</span>
+          <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="n">learn_rate</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">n_epochs</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">stop_condition</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;iter&#39;</span><span class="p">,</span>
+          <span class="n">on_improvement</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">],</span> <span class="kc">None</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+          <span class="n">silent</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Train a network, keeping the weights that perform best on the validation set</span>
+
+<span class="sd">    Every epoch the network is trained on the training set and then evaluated</span>
+<span class="sd">    on the validation set. When training finishes, the network holds the</span>
+<span class="sd">    weights from the epoch with the lowest validation loss.</span>
+
+<span class="sd">    Models that are not trained by gradient descent (see architectures/classical.py)</span>
+<span class="sd">    are instead fitted in one step; the learning rate, number of epochs and stop</span>
+<span class="sd">    condition are not used, and the returned lists each hold a single loss.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    network : torch.nn.Module</span>
+<span class="sd">        The network to train (already on `device`)</span>
+<span class="sd">    train_loader : DataLoader</span>
+<span class="sd">        Batches of the training set (should shuffle)</span>
+<span class="sd">    val_loader : DataLoader</span>
+<span class="sd">        Batches of the validation set</span>
+<span class="sd">    task : Task</span>
+<span class="sd">        The task being trained</span>
+<span class="sd">    device : str or torch.device</span>
+<span class="sd">        Device the network lives on</span>
+<span class="sd">    learn_rate : float</span>
+<span class="sd">        Initial learning rate for the Adam optimiser</span>
+<span class="sd">    n_epochs : int</span>
+<span class="sd">        With stop_condition=&#39;iter&#39;, the number of epochs to train for. With</span>
+<span class="sd">        stop_condition=&#39;auto&#39;, train for at least this many epochs and stop once</span>
+<span class="sd">        performance has stagnated for this many epochs.</span>
+<span class="sd">    stop_condition : str, optional</span>
+<span class="sd">        &#39;iter&#39; (default) or &#39;auto&#39;</span>
+<span class="sd">    on_improvement : callable, optional</span>
+<span class="sd">        Called with the network every time the validation loss reaches a new</span>
+<span class="sd">        minimum, e.g. to save it to disk so an interrupted run is not lost.</span>
+<span class="sd">    verbose : bool, optional</span>
+<span class="sd">        If True, print the validation loss every epoch rather than every 5 epochs</span>
+<span class="sd">    silent : bool, optional</span>
+<span class="sd">        If True, print nothing</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    list of float</span>
+<span class="sd">        Average training loss per sequence, for each epoch</span>
+<span class="sd">    list of float</span>
+<span class="sd">        Average validation loss per sequence, for each epoch</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">stop_condition</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;iter&#39;</span><span class="p">,</span> <span class="s1">&#39;auto&#39;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid stop condition &#39;</span><span class="si">{</span><span class="n">stop_condition</span><span class="si">}</span><span class="s2">&#39;: must be &#39;auto&#39; or &#39;iter&#39;.&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">ClassicalModel</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">fit_in_one_step</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">train_loader</span><span class="p">,</span> <span class="n">val_loader</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">on_improvement</span><span class="p">,</span> <span class="n">silent</span><span class="p">)</span>
+
+    <span class="n">optimizer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">network</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="n">learn_rate</span><span class="p">)</span>
+    <span class="n">criterion</span> <span class="o">=</span> <span class="n">build_loss_criterion</span><span class="p">(</span><span class="n">task</span><span class="p">)</span>
+
+    <span class="n">train_losses</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">val_losses</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">best_val_loss</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span>
+    <span class="n">best_epoch</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">best_weights</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="c1"># With &#39;auto&#39; there is no fixed number of epochs: training ends once performance plateaus</span>
+    <span class="n">epochs</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_epochs</span><span class="p">)</span> <span class="k">if</span> <span class="n">stop_condition</span> <span class="o">==</span> <span class="s1">&#39;iter&#39;</span> <span class="k">else</span> <span class="n">itertools</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="n">epochs</span><span class="p">:</span>
+        <span class="n">train_loss</span> <span class="o">=</span> <span class="n">train_epoch</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">train_loader</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">criterion</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
+        <span class="n">val_loss</span> <span class="o">=</span> <span class="n">evaluate_loss</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">val_loader</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
+
+        <span class="n">stop_now</span> <span class="o">=</span> <span class="p">(</span><span class="n">stop_condition</span> <span class="o">==</span> <span class="s1">&#39;auto&#39;</span> <span class="ow">and</span> <span class="n">epoch</span> <span class="o">&gt;=</span> <span class="n">n_epochs</span>
+                    <span class="ow">and</span> <span class="n">plateau_reached</span><span class="p">(</span><span class="n">val_loss</span><span class="p">,</span> <span class="n">val_losses</span><span class="p">[</span><span class="o">-</span><span class="n">n_epochs</span><span class="p">:],</span> <span class="n">epoch</span> <span class="o">-</span> <span class="n">best_epoch</span><span class="p">,</span> <span class="n">n_epochs</span><span class="p">))</span>
+
+        <span class="c1"># Keep a copy of the best weights seen so far</span>
+        <span class="k">if</span> <span class="n">val_loss</span> <span class="o">&lt;</span> <span class="n">best_val_loss</span><span class="p">:</span>
+            <span class="n">best_val_loss</span> <span class="o">=</span> <span class="n">val_loss</span>
+            <span class="n">best_epoch</span> <span class="o">=</span> <span class="n">epoch</span>
+            <span class="n">best_weights</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">tensor</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">tensor</span> <span class="ow">in</span> <span class="n">network</span><span class="o">.</span><span class="n">state_dict</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+            <span class="k">if</span> <span class="n">on_improvement</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">on_improvement</span><span class="p">(</span><span class="n">network</span><span class="p">)</span>
+
+        <span class="n">train_losses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">train_loss</span><span class="p">)</span>
+        <span class="n">val_losses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">val_loss</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">silent</span> <span class="ow">and</span> <span class="p">(</span><span class="n">verbose</span> <span class="ow">or</span> <span class="n">epoch</span> <span class="o">%</span> <span class="n">PRINT_EVERY_N_EPOCHS</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Epoch </span><span class="si">%d</span><span class="se">\t</span><span class="s1">Loss </span><span class="si">%.4f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">epoch</span><span class="p">,</span> <span class="n">val_loss</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">stop_now</span><span class="p">:</span>
+            <span class="k">break</span>
+
+    <span class="k">if</span> <span class="n">best_weights</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">network</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">best_weights</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">train_losses</span><span class="p">,</span> <span class="n">val_losses</span></div>
+
+
+
+<div class="viewcode-block" id="train_epoch">
+<a class="viewcode-back" href="../../api.html#parrot.train_network.train_epoch">[docs]</a>
+<span class="nd">@full_float32_precision</span><span class="p">()</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">train_epoch</span><span class="p">(</span><span class="n">network</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">loader</span><span class="p">:</span> <span class="n">DataLoader</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">Task</span><span class="p">,</span> <span class="n">criterion</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
+                <span class="n">optimizer</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Optimizer</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Train a network for one epoch (one pass over the training data)</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    network : torch.nn.Module</span>
+<span class="sd">        The network to train (already on `device`)</span>
+<span class="sd">    loader : DataLoader</span>
+<span class="sd">        Batches of the training set</span>
+<span class="sd">    task : Task</span>
+<span class="sd">        The task being trained</span>
+<span class="sd">    criterion : torch.nn.Module</span>
+<span class="sd">        The loss function returned by build_loss_criterion()</span>
+<span class="sd">    optimizer : torch.optim.Optimizer</span>
+<span class="sd">        Optimizer of the network&#39;s parameters</span>
+<span class="sd">    device : str or torch.device</span>
+<span class="sd">        Device the network lives on</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    float</span>
+<span class="sd">        Average training loss per sequence</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">network</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+    <span class="n">batch_losses</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">n_train_sequences</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">loader</span><span class="p">:</span>
+        <span class="n">loss</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">compute_batch_loss</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">criterion</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
+        <span class="n">batch_losses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">loss</span><span class="o">.</span><span class="n">detach</span><span class="p">())</span>
+        <span class="n">n_train_sequences</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+        <span class="n">optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+        <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+        <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">sum_batch_losses</span><span class="p">(</span><span class="n">batch_losses</span><span class="p">)</span> <span class="o">/</span> <span class="n">n_train_sequences</span></div>
+
+
+
+<div class="viewcode-block" id="fit_in_one_step">
+<a class="viewcode-back" href="../../api.html#parrot.train_network.fit_in_one_step">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">fit_in_one_step</span><span class="p">(</span><span class="n">network</span><span class="p">:</span> <span class="n">ClassicalModel</span><span class="p">,</span> <span class="n">train_loader</span><span class="p">:</span> <span class="n">DataLoader</span><span class="p">,</span> <span class="n">val_loader</span><span class="p">:</span> <span class="n">DataLoader</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">Task</span><span class="p">,</span>
+                    <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="n">on_improvement</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">],</span> <span class="kc">None</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                    <span class="n">silent</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fit a model that is not trained by gradient descent, and report its losses</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    network : ClassicalModel</span>
+<span class="sd">        The model to fit</span>
+<span class="sd">    train_loader : DataLoader</span>
+<span class="sd">        Batches of the training set</span>
+<span class="sd">    val_loader : DataLoader</span>
+<span class="sd">        Batches of the validation set</span>
+<span class="sd">    task : Task</span>
+<span class="sd">        The task being trained</span>
+<span class="sd">    device : str or torch.device</span>
+<span class="sd">        Device the model&#39;s outputs are placed on</span>
+<span class="sd">    on_improvement : callable, optional</span>
+<span class="sd">        Called once with the fitted model (e.g. to save it)</span>
+<span class="sd">    silent : bool, optional</span>
+<span class="sd">        If True, print nothing</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    list of float</span>
+<span class="sd">        The average training loss per sequence (a single value)</span>
+<span class="sd">    list of float</span>
+<span class="sd">        The average validation loss per sequence (a single value)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">network</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">train_loader</span><span class="p">)</span>
+    <span class="n">train_loss</span> <span class="o">=</span> <span class="n">evaluate_loss</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">train_loader</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
+    <span class="n">val_loss</span> <span class="o">=</span> <span class="n">evaluate_loss</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">val_loader</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">on_improvement</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">on_improvement</span><span class="p">(</span><span class="n">network</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">silent</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Fitted in one step</span><span class="se">\t</span><span class="s1">Loss </span><span class="si">%.4f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">val_loss</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">[</span><span class="n">train_loss</span><span class="p">],</span> <span class="p">[</span><span class="n">val_loss</span><span class="p">]</span></div>
+
+
+
+<span class="c1"># .................................................................</span>
+<span class="c1"># Evaluation and prediction</span>
+
+<div class="viewcode-block" id="LabeledPredictions">
+<a class="viewcode-back" href="../../api.html#parrot.train_network.LabeledPredictions">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">LabeledPredictions</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Network outputs for every sequence in a labeled dataset</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    names : list of str</span>
+<span class="sd">        Sequence IDs</span>
+<span class="sd">    sequences : list of str</span>
+<span class="sd">        The sequences</span>
+<span class="sd">    true_values : list of numpy arrays</span>
+<span class="sd">        The true value(s) for each sequence: a scalar for sequence-mapped data,</span>
+<span class="sd">        or one value per residue for residue-mapped data</span>
+<span class="sd">    outputs : list of numpy arrays</span>
+<span class="sd">        The raw network output for each sequence: [num_classes] for</span>
+<span class="sd">        sequence-mapped data or [sequence_length X num_classes] for residue-mapped</span>
+<span class="sd">        data (classification outputs are logits)</span>
+<span class="sd">    loss : float</span>
+<span class="sd">        Average loss per sequence, computed with the training loss function</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">sequences</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">true_values</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+    <span class="n">outputs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+    <span class="n">loss</span><span class="p">:</span> <span class="nb">float</span></div>
+
+
+
+<div class="viewcode-block" id="unpad_outputs">
+<a class="viewcode-back" href="../../api.html#parrot.train_network.unpad_outputs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">unpad_outputs</span><span class="p">(</span><span class="n">outputs</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">lengths</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">Task</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Split a batch of network outputs into one numpy array per sequence</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    outputs : torch.Tensor</span>
+<span class="sd">        Batch output of a network</span>
+<span class="sd">    lengths : torch.Tensor</span>
+<span class="sd">        The true length of each sequence</span>
+<span class="sd">    task : Task</span>
+<span class="sd">        The task the network is for</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    list of numpy arrays</span>
+<span class="sd">        [num_classes] per sequence, or [sequence_length X num_classes] per</span>
+<span class="sd">        sequence with the padding removed</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">outputs_array</span> <span class="o">=</span> <span class="n">outputs</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">task</span><span class="o">.</span><span class="n">per_residue</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">outputs_array</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">outputs_array</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:</span><span class="n">length</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">length</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">lengths</span><span class="o">.</span><span class="n">tolist</span><span class="p">())]</span></div>
+
+
+
+<div class="viewcode-block" id="predict_labeled">
+<a class="viewcode-back" href="../../api.html#parrot.train_network.predict_labeled">[docs]</a>
+<span class="nd">@full_float32_precision</span><span class="p">()</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">predict_labeled</span><span class="p">(</span><span class="n">network</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">dataset</span><span class="p">:</span> <span class="n">pid</span><span class="o">.</span><span class="n">SequenceDataset</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">Task</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+                    <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LabeledPredictions</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run a trained network over a labeled dataset (e.g. the test set)</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    network : torch.nn.Module</span>
+<span class="sd">        The trained network</span>
+<span class="sd">    dataset : SequenceDataset</span>
+<span class="sd">        The labeled sequences</span>
+<span class="sd">    task : Task</span>
+<span class="sd">        The task the network is for</span>
+<span class="sd">    device : str or torch.device</span>
+<span class="sd">        Device the network lives on</span>
+<span class="sd">    batch_size : int, optional</span>
+<span class="sd">        Number of sequences evaluated at once (does not affect the results)</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    LabeledPredictions</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Sequences are batched by length (which only affects speed), so the outputs come</span>
+    <span class="c1"># out in the batch sampler&#39;s order and are put back into dataset order at the end</span>
+    <span class="n">loader</span> <span class="o">=</span> <span class="n">pid</span><span class="o">.</span><span class="n">make_dataloader</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">batching</span><span class="o">=</span><span class="s1">&#39;length&#39;</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">loader</span><span class="o">.</span><span class="n">batch_sampler</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="n">loader_order</span> <span class="o">=</span> <span class="p">[</span><span class="n">index</span> <span class="k">for</span> <span class="n">batch_indices</span> <span class="ow">in</span> <span class="n">loader</span><span class="o">.</span><span class="n">batch_sampler</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">batch_indices</span><span class="p">]</span>
+    <span class="n">criterion</span> <span class="o">=</span> <span class="n">build_loss_criterion</span><span class="p">(</span><span class="n">task</span><span class="p">)</span>
+    <span class="n">batch_losses</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">outputs_in_loader_order</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="n">network</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">loader</span><span class="p">:</span>
+            <span class="n">loss</span><span class="p">,</span> <span class="n">batch_outputs</span> <span class="o">=</span> <span class="n">compute_batch_loss</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">criterion</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
+            <span class="n">batch_losses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">loss</span><span class="o">.</span><span class="n">detach</span><span class="p">())</span>
+            <span class="n">outputs_in_loader_order</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">unpad_outputs</span><span class="p">(</span><span class="n">batch_outputs</span><span class="p">,</span> <span class="n">batch</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">task</span><span class="p">))</span>
+
+    <span class="n">outputs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="mi">0</span><span class="p">)]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">dataset</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">output</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">loader_order</span><span class="p">,</span> <span class="n">outputs_in_loader_order</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="n">outputs</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">output</span>
+
+    <span class="k">return</span> <span class="n">LabeledPredictions</span><span class="p">(</span><span class="n">names</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">names</span><span class="p">,</span> <span class="n">sequences</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">sequences</span><span class="p">,</span>
+                              <span class="n">true_values</span><span class="o">=</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">sample</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="k">for</span> <span class="n">sample</span> <span class="ow">in</span> <span class="n">dataset</span><span class="o">.</span><span class="n">data</span><span class="p">],</span>
+                              <span class="n">outputs</span><span class="o">=</span><span class="n">outputs</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="n">sum_batch_losses</span><span class="p">(</span><span class="n">batch_losses</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">dataset</span><span class="p">))</span></div>
+
+
+
+<div class="viewcode-block" id="predict_sequences">
+<a class="viewcode-back" href="../../api.html#parrot.train_network.predict_sequences">[docs]</a>
+<span class="nd">@full_float32_precision</span><span class="p">()</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">predict_sequences</span><span class="p">(</span><span class="n">network</span><span class="p">:</span> <span class="n">ParrotArchitecture</span><span class="p">,</span> <span class="n">sequences</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">encoder</span><span class="p">:</span> <span class="n">SequenceEncoder</span><span class="p">,</span>
+                      <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span><span class="p">,</span>
+                      <span class="n">print_frequency</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run a trained network over unlabeled sequences</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    network : ParrotArchitecture</span>
+<span class="sd">        The trained network (its `task` attribute says how to read the output)</span>
+<span class="sd">    sequences : list of str</span>
+<span class="sd">        Sequences to predict. Each unique sequence is only run once.</span>
+<span class="sd">    encoder : SequenceEncoder</span>
+<span class="sd">        The encoder the network was trained with</span>
+<span class="sd">    device : str or torch.device</span>
+<span class="sd">        Device the network lives on</span>
+<span class="sd">    batch_size : int, optional</span>
+<span class="sd">        Number of sequences run through the network at once (does not affect</span>
+<span class="sd">        the results, since padding is masked)</span>
+<span class="sd">    print_frequency : int, optional</span>
+<span class="sd">        If given, print a progress update every `print_frequency` sequences</span>
+
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    dict</span>
-<span class="sd">            A dictionary containing predictions mapped to sequences</span>
+<span class="sd">        Maps each unique sequence to its raw network output: [num_classes] for</span>
+<span class="sd">        sequence-mapped networks, [sequence_length X num_classes] for</span>
+<span class="sd">        residue-mapped networks</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="n">pred_dict</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="c1"># Batch sequences of similar length together, so little computation is spent on padding</span>
+    <span class="n">unique_sequences</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="n">sequences</span><span class="p">))</span>
+    <span class="n">by_length</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">unique_sequences</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="nb">len</span><span class="p">)</span>
+    <span class="n">predictions</span> <span class="o">=</span> <span class="p">{}</span>
 
-    <span class="n">local_count</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
-    <span class="n">total_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">sequences</span><span class="p">)</span>
+    <span class="n">network</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">start</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">by_length</span><span class="p">),</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="n">batch_sequences</span> <span class="o">=</span> <span class="n">by_length</span><span class="p">[</span><span class="n">start</span><span class="p">:</span><span class="n">start</span> <span class="o">+</span> <span class="n">batch_size</span><span class="p">]</span>
 
-    <span class="k">for</span> <span class="n">seq</span> <span class="ow">in</span> <span class="n">sequences</span><span class="p">:</span>
-
-        <span class="n">local_count</span> <span class="o">=</span> <span class="n">local_count</span> <span class="o">+</span> <span class="mi">1</span>
         <span class="k">if</span> <span class="n">print_frequency</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">local_count</span> <span class="o">%</span> <span class="n">print_frequency</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;On </span><span class="si">{</span><span class="n">local_count</span><span class="si">}</span><span class="s1"> of </span><span class="si">{</span><span class="n">total_count</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">start</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch_sequences</span><span class="p">)):</span>
+                <span class="k">if</span> <span class="n">index</span> <span class="o">%</span> <span class="n">print_frequency</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;On </span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s1"> of </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">unique_sequences</span><span class="p">)</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">encoding_scheme</span> <span class="o">==</span> <span class="s1">&#39;onehot&#39;</span><span class="p">:</span>
-            <span class="n">seq_vector</span> <span class="o">=</span> <span class="n">encode_sequence</span><span class="o">.</span><span class="n">one_hot</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">encoding_scheme</span> <span class="o">==</span> <span class="s1">&#39;biophysics&#39;</span><span class="p">:</span>
-            <span class="n">seq_vector</span> <span class="o">=</span> <span class="n">encode_sequence</span><span class="o">.</span><span class="n">biophysics</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">encoding_scheme</span> <span class="o">==</span> <span class="s1">&#39;user&#39;</span><span class="p">:</span>
-            <span class="n">seq_vector</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span>
+        <span class="n">vectors</span><span class="p">,</span> <span class="n">lengths</span> <span class="o">=</span> <span class="n">pid</span><span class="o">.</span><span class="n">pad_sequence_vectors</span><span class="p">([</span><span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span> <span class="k">for</span> <span class="n">seq</span> <span class="ow">in</span> <span class="n">batch_sequences</span><span class="p">])</span>
+        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+            <span class="n">outputs</span> <span class="o">=</span> <span class="n">network</span><span class="p">(</span><span class="n">vectors</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">),</span> <span class="n">lengths</span><span class="p">)</span>
 
-        <span class="n">seq_vector</span> <span class="o">=</span> <span class="n">seq_vector</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">seq_vector</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">sequence</span><span class="p">,</span> <span class="n">output</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">batch_sequences</span><span class="p">,</span> <span class="n">unpad_outputs</span><span class="p">(</span><span class="n">outputs</span><span class="p">,</span> <span class="n">lengths</span><span class="p">,</span> <span class="n">network</span><span class="o">.</span><span class="n">task</span><span class="p">)):</span>
+            <span class="n">predictions</span><span class="p">[</span><span class="n">sequence</span><span class="p">]</span> <span class="o">=</span> <span class="n">output</span>
 
-        <span class="c1"># Forward pass</span>
-        <span class="n">outputs</span> <span class="o">=</span> <span class="n">network</span><span class="p">(</span><span class="n">seq_vector</span><span class="o">.</span><span class="n">float</span><span class="p">())</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
-        <span class="n">pred_dict</span><span class="p">[</span><span class="n">seq</span><span class="p">]</span> <span class="o">=</span> <span class="n">outputs</span>
+    <span class="c1"># Return the sequences in the order they were first given</span>
+    <span class="k">return</span> <span class="p">{</span><span class="n">sequence</span><span class="p">:</span> <span class="n">predictions</span><span class="p">[</span><span class="n">sequence</span><span class="p">]</span> <span class="k">for</span> <span class="n">sequence</span> <span class="ow">in</span> <span class="n">unique_sequences</span><span class="p">}</span></div>
 
-    <span class="k">return</span> <span class="n">pred_dict</span></div>
+
+
+<div class="viewcode-block" id="output_to_prediction">
+<a class="viewcode-back" href="../../api.html#parrot.train_network.output_to_prediction">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">output_to_prediction</span><span class="p">(</span><span class="n">output</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">Task</span><span class="p">,</span> <span class="n">probabilistic</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a raw network output into the prediction reported to the user</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    output : numpy array</span>
+<span class="sd">        Raw output for one sequence: [num_classes] or [sequence_length X num_classes]</span>
+<span class="sd">    task : Task</span>
+<span class="sd">        The task the network is for</span>
+<span class="sd">    probabilistic : bool, optional</span>
+<span class="sd">        For classification, return class probabilities instead of the most</span>
+<span class="sd">        likely class</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    numpy array</span>
+<span class="sd">        Regression: the predicted value (scalar) or one value per residue.</span>
+<span class="sd">        Classification: the predicted class (scalar) or one class per residue,</span>
+<span class="sd">        or, if `probabilistic`, the probability of each class.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">task</span><span class="o">.</span><span class="n">is_classification</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">output</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">probabilistic</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">softmax</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span></div>
+
 </pre></div>
 
            </div>
-           
           </div>
           <footer>
-  
 
   <hr/>
 
   <div role="contentinfo">
-    <p>
-        &copy; Copyright 2020, Holehouse Lab. Project structure based on the Computational Molecular Science Python Cookiecutter version 1.3
-
-    </p>
+    <p>&#169; Copyright 2020, Holehouse Lab. Project structure based on the Computational Molecular Science Python Cookiecutter version 1.3.</p>
   </div>
-  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
 
 </footer>
-
         </div>
       </div>
-
     </section>
-
   </div>
-  
-
-
-  <script type="text/javascript">
+  <script>
       jQuery(function () {
           SphinxRtdTheme.Navigation.enable(true);
       });
-  </script>
-
-  
-  
-    
-   
+  </script> 
 
 </body>
 </html>

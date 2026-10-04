@@ -1,0 +1,540 @@
+"""
+Splitting a dataset into training, validation and test sets without leakage.
+
+A test set only measures how well a network generalises if none of its
+sequences has a close relative in the training set; otherwise a network can
+score well by recognising relatives rather than by having learnt anything
+transferable. This module splits a dataset so that no sequence in one set is
+similar to a sequence in another. Similarity is found by a search engine:
+MMseqs2 (Steinegger & Söding 2017, Nat Biotechnol 35:1026; MMseqsSearch here),
+which must be installed separately, or PARROT's own k-mer search
+(parrot.tools.kmer_similarity), which needs nothing extra but only finds closer
+relatives.
+
+The protocol (the one used to build PARROT's benchmark datasets) is deliberately
+very stringent:
+
+1. Similarity criterion. With MMseqs2, two sequences are homologous if they are
+   identical, or if any alignment between them has an E-value of at most
+   HomologyCriteria.max_evalue (1e-3) and covers at least
+   HomologyCriteria.min_coverage (30%) of the shorter sequence. No
+   sequence-identity threshold is used, so any statistically significant
+   alignment counts. Searches use MMseqs2's most sensitive setting.
+2. Clustering. An all-against-all search links similar records, which are
+   clustered around representatives, largest first, as in CD-HIT. Records that
+   must stay together (the same --groups entry, or identical sequences) are
+   always in the same cluster.
+3. Assignment. Clusters are shared out among the sets, largest first, each to the
+   set furthest below its target fraction.
+4. Separation check. Each set is searched against the others (test against
+   training, test against validation, validation against training), and any
+   record in the lower-priority set (training < validation < test) similar
+   to the higher-priority set is removed together with its group. Because
+   MMseqs2 E-values depend on the size of the database searched, the search is
+   repeated until a round finds nothing.
+
+.............................................................................
+idptools-parrot was developed by the Holehouse lab
+     Original release ---- 2020
+
+Question/comments/concerns? Raise an issue on github:
+https://github.com/idptools/parrot
+
+Licensed under the MIT license.
+"""
+
+import os
+import shutil
+import subprocess
+import tempfile
+from collections import Counter, defaultdict
+from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Protocol
+
+import numpy as np
+
+# The three sets, in order of priority: when records in two sets are similar, the
+# record in the lower-priority set is removed
+SET_NAMES = ('test', 'val', 'train')
+
+# Names used in reports
+SET_LABELS = {'train': 'training', 'val': 'validation', 'test': 'test'}
+
+# Search the sets against each other at most this many times (see enforce_separation)
+MAX_SEPARATION_ROUNDS = 5
+
+INSTALL_HELP = ('MMseqs2 is needed for --split homology but the `mmseqs` command was not found. Install it with '
+                '`conda install -c conda-forge -c bioconda mmseqs2` or `brew install mmseqs2`, or download a static '
+                'binary from https://github.com/soedinglab/MMseqs2/releases, then put it on the PATH or pass its '
+                'location with --mmseqs. Alternatively, --split kmer needs nothing extra but only finds closer '
+                'relatives.')
+
+
+class Match(Protocol):
+    """One similarity found by a search: indices into the query and target lists, and whether it links them."""
+
+    query: int
+    target: int
+    linked: bool
+
+
+class SimilaritySearch(Protocol):
+    """A search engine for splitting: finds similar sequences, and describes what it does for the report."""
+
+    def __call__(self, queries: Sequence[str], targets: Sequence[str] | None = None,
+                 weaker: bool = False) -> list[Match]:
+        """Search queries against targets (None: against themselves, each pair once and without self-hits).
+
+        Every match that meets the criterion has linked=True; with weaker=True,
+        weaker similarities are returned as well (linked=False), for the report.
+        """
+
+    def describe(self) -> str:
+        """The criterion, in words."""
+
+    def summarise(self, matches: Sequence[Match]) -> str:
+        """A short description of the strength of the matches found (for the report)."""
+
+
+@dataclass(frozen=True)
+class HomologyCriteria:
+    """When two sequences count as homologous, and how hard MMseqs2 searches
+
+    Attributes
+    ----------
+    max_evalue : float
+        Largest E-value of an alignment that links two sequences
+    min_coverage : float
+        Smallest fraction of the shorter sequence the alignment must cover
+    sensitivity : float
+        MMseqs2 search sensitivity (-s); 7.5 is the most sensitive setting
+    max_target_sequences : int
+        Targets per query passing MMseqs2's prefilter (--max-seqs; default 300
+        in MMseqs2), raised so large families are not truncated
+    report_max_evalue : float
+        The separation check also reports every weaker alignment up to this
+        E-value, so any remaining similarity between sets is visible
+    mask_low_complexity : bool
+        Whether MMseqs2 masks low-complexity regions (its default). Masking
+        avoids alignments driven only by compositional bias; without it,
+        similarity in low-complexity regions (common in disordered proteins)
+        also links sequences, which is even more stringent.
+    """
+
+    max_evalue: float = 1e-3
+    min_coverage: float = 0.3
+    sensitivity: float = 7.5
+    max_target_sequences: int = 2000
+    report_max_evalue: float = 1e-2
+    mask_low_complexity: bool = True
+
+    def describe(self) -> str:
+        """The criteria in words, for reports."""
+        return (f'identical, or an MMseqs2 alignment with E <= {self.max_evalue:g} covering >= '
+                f'{100 * self.min_coverage:g}% of the shorter sequence (no identity threshold; sensitivity '
+                f'{self.sensitivity:g}; up to {self.max_target_sequences:,} targets per query; low-complexity '
+                f'masking {"on" if self.mask_low_complexity else "off"})')
+
+
+@dataclass
+class SplitItem:
+    """One record to be assigned to a set
+
+    Attributes
+    ----------
+    index : int
+        The record's position in the dataset
+    sequence : str
+    group : str
+        Records with the same group are always placed in the same set
+    split : str or None
+        'train', 'val' or 'test' once assigned
+    """
+
+    index: int
+    sequence: str
+    group: str
+    split: str | None = None
+
+
+@dataclass(frozen=True)
+class Alignment:
+    """One MMseqs2 alignment between two sequences (indices refer to the query and target lists).
+
+    linked is True if the alignment meets the homology criteria of the search that found it.
+    """
+
+    query: int
+    target: int
+    identity: float
+    alignment_length: int
+    query_length: int
+    target_length: int
+    evalue: float
+    linked: bool = False
+
+    @property
+    def shorter_coverage(self) -> float:
+        """Fraction of the shorter of the two sequences covered by the alignment."""
+        return self.alignment_length / min(self.query_length, self.target_length)
+
+    def homologous(self, criteria: HomologyCriteria) -> bool:
+        """True if the alignment meets the homology criteria."""
+        return self.evalue <= criteria.max_evalue and self.shorter_coverage >= criteria.min_coverage
+
+
+# .................................................................
+# Running MMseqs2
+
+def find_mmseqs(path: str | None = None) -> str:
+    """The MMseqs2 executable to run
+
+    Parameters
+    ----------
+    path : str, optional
+        Location of the executable; by default `mmseqs` is looked up on the PATH
+
+    Raises
+    ------
+    RuntimeError
+        If it cannot be found, with instructions for installing it
+    """
+    found = shutil.which(path or 'mmseqs')
+    if found is None:
+        raise RuntimeError(INSTALL_HELP if path is None else f'MMseqs2 was not found at {path}. ' + INSTALL_HELP)
+    return found
+
+
+def mmseqs_version(executable: str) -> str:
+    """The version (or commit) MMseqs2 reports, for the record."""
+    result = subprocess.run([executable, 'version'], capture_output=True, text=True)
+    return result.stdout.strip() or 'unknown'
+
+
+def identity_summary(identities: Iterable[float]) -> str:
+    """Count alignments by sequence identity, for reports."""
+    bins = [(0.9, '>=90%'), (0.5, '50-90%'), (0.3, '30-50%'), (0.0, '<30%')]
+    counts = Counter(next(label for threshold, label in bins if identity >= threshold) for identity in identities)
+    return 'identity ' + ', '.join(f'{label}: {counts[label]:,}' for _, label in bins)
+
+
+class MMseqsSearch:
+    """Finds homologous sequences with MMseqs2 (see SimilaritySearch)
+
+    Attributes
+    ----------
+    executable : str
+        The MMseqs2 executable
+    criteria : HomologyCriteria
+    threads : int
+    workdir : Path or None
+        Where MMseqs2's temporary files go (default: the system's temporary directory)
+    """
+
+    def __init__(self, criteria: HomologyCriteria | None = None, executable: str | None = None,
+                 threads: int | None = None, workdir: str | Path | None = None) -> None:
+        self.executable = find_mmseqs(executable)
+        self.criteria = criteria or HomologyCriteria()
+        self.threads = threads or os.cpu_count() or 1
+        self.workdir = None if workdir is None else Path(workdir)
+
+    def describe(self) -> str:
+        return (f'{self.criteria.describe()}; MMseqs2 {self.executable} (version {mmseqs_version(self.executable)}), '
+                f'{self.threads} threads')
+
+    def summarise(self, matches: Sequence[Alignment]) -> str:
+        return f'at E <= {self.criteria.report_max_evalue:g}; {identity_summary(m.identity for m in matches)}'
+
+    def __call__(self, queries: Sequence[str], targets: Sequence[str] | None = None,
+                 weaker: bool = False) -> list[Alignment]:
+        max_evalue = self.criteria.report_max_evalue if weaker else self.criteria.max_evalue
+        with tempfile.TemporaryDirectory(prefix='parrot_mmseqs_', dir=self.workdir) as directory:
+            workdir = Path(directory)
+            query_fasta = workdir / 'queries.fasta'
+            write_fasta(queries, query_fasta)
+            target_fasta = query_fasta
+            if targets is not None:
+                target_fasta = workdir / 'targets.fasta'
+                write_fasta(targets, target_fasta)
+
+            results = workdir / 'results.m8'
+            command = [self.executable, 'easy-search', str(query_fasta), str(target_fasta), str(results),
+                       str(workdir / 'tmp'), '-s', str(self.criteria.sensitivity), '-e', str(max_evalue),
+                       '--max-seqs', str(self.criteria.max_target_sequences),
+                       '--mask', '1' if self.criteria.mask_low_complexity else '0',
+                       '--format-output', 'query,target,fident,alnlen,qlen,tlen,evalue',
+                       '--threads', str(self.threads), '-v', '1']
+            completed = subprocess.run(command, capture_output=True, text=True)
+            if completed.returncode != 0:
+                raise RuntimeError(f'MMseqs2 failed (exit code {completed.returncode}):\n{completed.stderr[-2000:]}')
+
+            alignments = []
+            with open(results) as handle:
+                for line in handle:
+                    query, target, identity, length, query_length, target_length, evalue = line.split()
+                    if targets is None and query == target:
+                        continue
+                    alignment = Alignment(int(query), int(target), float(identity), int(length), int(query_length),
+                                          int(target_length), float(evalue))
+                    alignments.append(Alignment(**{**alignment.__dict__,
+                                                   'linked': alignment.homologous(self.criteria)}))
+        return alignments
+
+
+def write_fasta(sequences: Sequence[str], path: Path) -> None:
+    """Write sequences to a FASTA file, named by their index."""
+    with open(path, 'w') as handle:
+        for index, sequence in enumerate(sequences):
+            handle.write(f'>{index}\n{sequence}\n')
+
+
+# .................................................................
+# Clustering
+
+def representative_clusters(keys: Sequence[str], links: Iterable[tuple[str, str]],
+                            sizes: dict[str, int]) -> dict[str, int]:
+    """Cluster keys around representatives, without chaining
+
+    Keys are visited from largest to smallest (ties broken by name). Each key
+    not yet clustered becomes a representative, and every unclustered key
+    directly linked to it joins its cluster. Every member of a cluster is
+    therefore a direct relative of its representative; unlike connected
+    components, a chain of weak links cannot pull unrelated keys together. This
+    is the scheme used by CD-HIT (Li & Godzik 2006, Bioinformatics 22:1658) and
+    by MMseqs2's default clustering mode.
+
+    Parameters
+    ----------
+    keys : list of str
+        Every key
+    links : iterable of (str, str)
+        Pairs of directly related keys
+    sizes : dict
+        Size of each key (e.g. its number of records); larger keys become
+        representatives first
+
+    Returns
+    -------
+    dict
+        Maps each key to a cluster number (0, 1, 2, ...)
+    """
+    neighbours: dict[str, set[str]] = defaultdict(set)
+    for first, second in links:
+        if first != second:
+            neighbours[first].add(second)
+            neighbours[second].add(first)
+
+    cluster_of: dict[str, int] = {}
+    num_clusters = 0
+    for representative in sorted(keys, key=lambda key: (-sizes.get(key, 0), key)):
+        if representative in cluster_of:
+            continue
+        cluster_of[representative] = num_clusters
+        for neighbour in sorted(neighbours[representative]):
+            cluster_of.setdefault(neighbour, num_clusters)
+        num_clusters += 1
+    return cluster_of
+
+
+def identical_sequence_links(items: Sequence[SplitItem]) -> list[tuple[str, str]]:
+    """Link the groups of identical sequences (a search can miss them, e.g. when low-complexity regions are masked)."""
+    groups_by_sequence: dict[str, set[str]] = defaultdict(set)
+    for item in items:
+        groups_by_sequence[item.sequence].add(item.group)
+
+    links: list[tuple[str, str]] = []
+    for groups in groups_by_sequence.values():
+        ordered = sorted(groups)
+        links.extend((ordered[0], other) for other in ordered[1:])
+    return links
+
+
+def merge_groups(items: Sequence[SplitItem], links: Iterable[tuple[str, str]]) -> None:
+    """Give linked groups one shared group name, in place (connected components: groups must never be split)."""
+    parent: dict[str, str] = {item.group: item.group for item in items}
+
+    def root(group: str) -> str:
+        while parent[group] != group:
+            parent[group] = parent[parent[group]]
+            group = parent[group]
+        return group
+
+    for first, second in links:
+        first_root, second_root = root(first), root(second)
+        if first_root != second_root:
+            parent[max(first_root, second_root)] = min(first_root, second_root)
+    for item in items:
+        item.group = root(item.group)
+
+
+def similarity_clusters(items: Sequence[SplitItem], search: SimilaritySearch,
+                        report: Callable[[str], None]) -> dict[str, int]:
+    """Cluster groups so that similar records usually end up in the same set
+
+    Clustering only keeps similar records together so that little data is lost
+    later; the guarantee that no two sets share similar records comes from
+    enforce_separation().
+
+    Returns
+    -------
+    dict
+        Maps each group to a cluster number
+    """
+    matches = search([item.sequence for item in items])
+    links = [(items[match.query].group, items[match.target].group) for match in matches if match.linked]
+
+    records_per_group = Counter(item.group for item in items)
+    clusters = representative_clusters(sorted(records_per_group), links, records_per_group)
+
+    records_per_cluster = sorted(Counter(clusters[item.group] for item in items).values(), reverse=True)
+    report(f'Searched {len(items):,} sequences all against all: {len(links):,} similar pairs, of which '
+           f'{sum(first != second for first, second in links):,} link two groups')
+    report(f'{len(records_per_group):,} groups form {len(records_per_cluster):,} clusters; the largest holds '
+           f'{records_per_cluster[0]:,} records ({100 * records_per_cluster[0] / len(items):.1f}%), and '
+           f'{sum(size == 1 for size in records_per_cluster):,} records are on their own')
+    return clusters
+
+
+# .................................................................
+# Assigning sets
+
+def assign_clusters(items: Sequence[SplitItem], clusters: dict[str, int], fractions: dict[str, float],
+                    rng: np.random.Generator, report: Callable[[str], None]) -> None:
+    """Share clusters out among the sets, largest first, each to the set furthest below its target (in place)
+
+    Parameters
+    ----------
+    items : list of SplitItem
+    clusters : dict
+        Cluster of each group
+    fractions : dict
+        Target fraction of the records for each set, e.g. {'train': 0.7, 'val': 0.15, 'test': 0.15}
+    rng : numpy.random.Generator
+        Decides the order in which clusters of the same size are assigned
+    report : callable
+        Receives report lines
+    """
+    if not np.isclose(sum(fractions.values()), 1.0):
+        raise ValueError(f'Set fractions must sum to 1, got {fractions}')
+
+    members: dict[int, list[SplitItem]] = defaultdict(list)
+    for item in items:
+        members[clusters[item.group]].append(item)
+
+    cluster_members = list(members.values())
+    order = rng.permutation(len(cluster_members))
+    cluster_members = sorted((cluster_members[i] for i in order), key=len, reverse=True)
+
+    total = len(items)
+    counts = {name: 0 for name in fractions}
+    for cluster in cluster_members:
+        name = max(fractions, key=lambda split: fractions[split] * total - counts[split])
+        for item in cluster:
+            item.split = name
+        counts[name] += len(cluster)
+
+    report('Assigned clusters to sets: ' + ', '.join(f'{SET_LABELS[name]} {counts[name]:,} '
+                                                     f'({100 * counts[name] / total:.1f}%)' for name in fractions))
+
+
+def random_split(items: Sequence[SplitItem], fractions: dict[str, float], rng: np.random.Generator,
+                 report: Callable[[str], None]) -> list[SplitItem]:
+    """Assign groups to sets at random (identical sequences are kept in one group, so never split)
+
+    Returns
+    -------
+    list of SplitItem
+        Every item, with its set
+    """
+    merge_groups(items, identical_sequence_links(items))
+    clusters = {group: number for number, group in enumerate(sorted({item.group for item in items}))}
+    assign_clusters(items, clusters, fractions, rng, report)
+    return list(items)
+
+
+def enforce_separation(items: Sequence[SplitItem], search: SimilaritySearch,
+                       report: Callable[[str], None]) -> list[SplitItem]:
+    """Search each set against the others, removing records similar to a higher-priority set, until none remain
+
+    Returns
+    -------
+    list of SplitItem
+        The items kept
+
+    Raises
+    ------
+    RuntimeError
+        If the sets are still not separated after MAX_SEPARATION_ROUNDS rounds
+    """
+    kept = list(items)
+    for round_number in range(1, MAX_SEPARATION_ROUNDS + 1):
+        offending = cross_set_matches(kept, search, report)
+        if not offending:
+            report('PASSED: no sequence in one set is identical or similar (by the criterion above) to a sequence '
+                   'in another set')
+            return kept
+
+        before = len(kept)
+        kept = [item for item in kept if item.group not in offending]
+        report(f'Round {round_number}: removed {before - len(kept):,} records ({len(offending):,} groups) similar '
+               'to a higher-priority set; searching again')
+
+    raise RuntimeError(f'The sets were still not separated after {MAX_SEPARATION_ROUNDS} rounds')
+
+
+def cross_set_matches(items: Sequence[SplitItem], search: SimilaritySearch,
+                      report: Callable[[str], None]) -> set[str]:
+    """Groups in a lower-priority set that are similar (or identical) to a higher-priority set."""
+    by_set: dict[str, list[SplitItem]] = defaultdict(list)
+    for item in items:
+        by_set[str(item.split)].append(item)
+
+    offending: set[str] = set()
+    for query_set, target_set in [('test', 'train'), ('test', 'val'), ('val', 'train')]:
+        queries, targets = by_set.get(query_set, []), by_set.get(target_set, [])
+        if not queries or not targets:
+            continue
+
+        matches = search([item.sequence for item in queries], [item.sequence for item in targets], weaker=True)
+        linked = [match for match in matches if match.linked]
+        offending.update(targets[match.target].group for match in linked)
+
+        query_sequences = {item.sequence for item in queries}
+        identical = [item.group for item in targets if item.sequence in query_sequences]
+        offending.update(identical)
+
+        report(f'{SET_LABELS[query_set]} vs {SET_LABELS[target_set]}: {len(matches):,} similarities from '
+               f'{len({match.query for match in matches}):,} of {len(queries):,} {SET_LABELS[query_set]} sequences '
+               f'({search.summarise(matches)}); {len(linked):,} meet the criterion; {len(identical):,} '
+               f'{SET_LABELS[target_set]} sequences are identical to a {SET_LABELS[query_set]} sequence')
+    return offending
+
+
+def similarity_split(items: Sequence[SplitItem], fractions: dict[str, float], rng: np.random.Generator,
+                     report: Callable[[str], None], search: SimilaritySearch) -> list[SplitItem]:
+    """Split items into sets so that no set contains a sequence similar to one in another set
+
+    Parameters
+    ----------
+    items : list of SplitItem
+        The records (their groups and sets are modified in place)
+    fractions : dict
+        Target fraction of the records for each set
+    rng : numpy.random.Generator
+    report : callable
+        Receives report lines
+    search : SimilaritySearch
+        Finds similar sequences, e.g. MMseqsSearch or kmer_similarity.KmerSearch
+
+    Returns
+    -------
+    list of SplitItem
+        The items kept (records similar to a higher-priority set are removed)
+    """
+    report(f'Similarity criterion: {search.describe()}')
+    merge_groups(items, identical_sequence_links(items))
+    clusters = similarity_clusters(items, search, report)
+    assign_clusters(items, clusters, fractions, rng, report)
+    return enforce_separation(items, search, report)

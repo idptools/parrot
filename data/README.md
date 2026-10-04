@@ -20,7 +20,7 @@ This datafile is an example residue regression dataset. Each residue has a targe
 
 ## `seqfile.txt` (and `seqfile_noIDs.txt`)
 
-These files are example sequence files for use in ``parrot-predict``. `seqfile.txt` has sequences and sequence IDs, while `seqfile_noIDs.txt` is just a list of sequences (to be used with the ``--excludeSeqIDs`` flag).
+These files are example sequence files for use in ``parrot-predict``. `seqfile.txt` has sequences and sequence IDs, while `seqfile_noIDs.txt` is just a list of sequences (to be used with the ``--exclude-seq-id`` flag).
 
 ## `splitfile.txt`
 

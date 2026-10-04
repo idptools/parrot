@@ -1,6 +1,42 @@
 Module Documentation
 ====================
 
+tasks.py
+--------
+
+.. automodule:: parrot.tasks
+   :members:
+
+architectures
+-------------
+
+.. automodule:: parrot.architectures
+   :members:
+
+.. automodule:: parrot.architectures.base
+   :members:
+
+.. automodule:: parrot.architectures.registry
+   :members:
+
+.. automodule:: parrot.architectures.layers
+   :members:
+
+.. automodule:: parrot.architectures.brnn
+   :members:
+
+.. automodule:: parrot.architectures.composition
+   :members:
+
+.. automodule:: parrot.architectures.cnn
+   :members:
+
+.. automodule:: parrot.architectures.unet
+   :members:
+
+.. automodule:: parrot.architectures.classical
+   :members:
+
 brnn_architecture.py
 --------------------
 
@@ -25,16 +61,43 @@ train_network.py
 .. automodule:: parrot.train_network
    :members:
 
-bayesian_optimization.py
-------------------------
+checkpoint.py
+-------------
 
-.. automodule:: parrot.bayesian_optimization
+.. automodule:: parrot.checkpoint
    :members:
 
-brnn_plot.py
+reporting.py
 ------------
 
-.. automodule:: parrot.brnn_plot
+.. automodule:: parrot.reporting
+   :members:
+
+hyperparameter_search.py
+------------------------
+
+.. automodule:: parrot.hyperparameter_search
+   :members:
+
+tools.homology
+--------------
+
+.. automodule:: parrot.tools.homology
+   :members:
+
+tools.kmer_similarity
+---------------------
+
+.. automodule:: parrot.tools.kmer_similarity
+   :members:
+
+tools.preproc and tools.class_balancing
+---------------------------------------
+
+.. automodule:: parrot.tools.preproc
+   :members:
+
+.. automodule:: parrot.tools.class_balancing
    :members:
 
 py_predictor.py

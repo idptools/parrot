@@ -86,6 +86,8 @@ In addition to one-hot encoding, encoding using biophysical scales (vector of pr
 
     parrot-train data/seq_regress_dataset.tsv biophysics_network.pt -d sequence -c 1 -nl 2 -hs 10 -e 200 --encode biophysics
 
+The biophysical features are on very different scales (molecular weight is in the hundreds, while the aromatic flag is 0 or 1), so we recommend adding ``--standardize-encoding``, which rescales every feature to mean 0 and standard deviation 1 across the amino acids (see "Standardizing an encoding" on the ``parrot-train`` page).
+
 More powerfully, PARROT also allows the user to manually specify their own encoding scheme, if they desire. An example encoding file can be found in the **/data** folder. In this case, provide the path to this encoding file following the flag.
 
 .. code-block:: bash
@@ -141,111 +143,64 @@ Currently, probabilistic classification is only implemented for *sequence classi
 Hyperparameter tuning with ``parrot-optimize``:
 -----------------------------------------------
 
-``parrot-optimize`` will train a network like ``parrot-train``, however this command does not require the user to specify hyperparameters. Instead, it relies upon Bayesian Optimization to automatically select hyperparameters. Although Bayesian Optimization is much more efficient than grid search optimization, it still requires many iterations to converge upon the best hyperparameters. Additionally, this command relies upon 5-fold cross validation for each set of hyperparameters to achieve an accurate estimate of network performance. All together, this means that ``parrot-optimize`` can take over 100x longer to run than ``parrot-train``. It is strongly recommended to only run this command on a machine with a GPU.
+``parrot-optimize`` trains a network like ``parrot-train``, but chooses the hyperparameters for you: the learning rate and the architecture's main hyperparameters (for the BRNN, the number of layers and the hidden size). It tries many configurations, drops poor ones after a few epochs (successive halving) and suggests new ones where good results have clustered (TPE); see the ``parrot-optimize`` page for details. The default 50 trials cost about as much as 15-20 ``parrot-train`` runs, so a GPU helps.
 
-Nonetheless, usage for ``parrot-optimize`` is remarkably similar to ``parrot-train``, since many of the flags are identical. As an example, let's run the command on a residue regression dataset:
-
-.. code-block:: bash
-
-    parrot-optimize data/res_class_dataset.tsv optimize_example.pt -d residues -c 3 -e 200 --max-iter 20 -b 32 --verbose
-
-Notice how we do not need to specify number of layers, hidden vector size, or learning rate as these are the parameters we are optimizing. Perhaps the most important consideration is the number of epochs. Running the optimization procedure with a large number of epochs is more likely to identify the best performing hyperparameters, however more epochs also means significantly longer run time. **IMPORTANT: I only used 20 iterations and 150 epochs here to speed up the example but it is HIGHLY recommended to use at least the default iterations for normal usage.** It is recommended to play around with your data using ``parrot-train`` with a few different parameters and visualizing the training and validation loss per epoch in order to pick the optimal number of epochs for training. Ideally, you should set the number of epochs to be around the point where validation accuracy tends to plateau during training.
-
-Let's break down what is output to console during the optimization procedure:
+Usage is almost identical to ``parrot-train``. For example, on the residue classification example dataset:
 
 .. code-block:: bash
 
-    PARROT with hyperparameter optimization
-    ---------------------------------------
-    Train on:   cuda
-    Datatype:   residues
-    ML Task:    classification
-    Batch size: 32
-    Number of epochs:   200
-    Number of optimization iterations:  20
+    parrot-optimize data/res_class_dataset.tsv optimize_example.pt -d residues -c 3 -e 30 --trials 20 --seed 1
 
+We do not specify the number of layers, the hidden size or the learning rate: these are searched. The most important choice is ``--epochs``, the number of epochs a configuration is trained for if it survives to the end (and so the final network's training): choose it as you would for ``parrot-train``, e.g. by looking at a training and validation loss curve. Here we use 20 trials to keep the example short; the default is 50.
 
-    Initial search results:
-    lr  nl  hs  output
-    0.00100  1  20  11.6680
-    0.00100  2  20  11.2927
-    0.00100  3  20  11.0651
-    0.00100  4  20  10.9217
-    0.00100  5  20  11.2689
-    0.01000  2  20  10.7816
-    0.00050  2  20  11.6328
-    0.00010  2  20  13.6755
-    0.00001  2  20  32.7119
-    0.00100  2   5  11.2988
-    0.00100  2  15  11.1669
-    0.00100  2  35  11.2267
-    0.00100  2  50  11.0833
-    Noise estimate: 0.7594081234203327
-
-
-The first chunk of text details the network performance (average of 5 data folds) during the initial stage of hyperparameter optimization. This stage is used to gather an estimate of the noise (standard deviation across cross-val folds) for future optimization. The hyperparameters used in the initial search stage are hard-coded into the optimization procedure.
+The search first describes what it will try, then reports each configuration's validation loss at the end of each stage it reaches (this output is from an NVIDIA GPU; it took about 40 seconds):
 
 .. code-block:: bash
 
-    Primary optimization:
-    --------------------
+    Searching 20 configuration(s) of the brnn architecture
+      learning_rate: 1e-05 to 0.01, log scale
+      hidden_size: 5 to 50
+      num_layers: 1 to 5
+    Epochs per stage: 3 -> 10 -> 30 (the best 1/3 of each stage continue to the next)
+      trial   1 (default)  epochs    3  val loss 20.61    learning_rate=0.001  hidden_size=10  num_layers=1
+      trial   2 (initial)  epochs    3  val loss 20.21    learning_rate=0.00146485  hidden_size=24  num_layers=2
+      trial   3 (initial)  epochs    3  val loss 18.13    learning_rate=0.00880616  hidden_size=5  num_layers=1
+      trial   3 (initial)  epochs   10  val loss 11.97    learning_rate=0.00880616  hidden_size=5  num_layers=1
+      trial   4 (initial)  epochs    3  val loss 20.81    learning_rate=3.47937e-05  hidden_size=17  num_layers=5
+      trial   5 (initial)  epochs    3  val loss 20.12    learning_rate=0.00297527  hidden_size=14  num_layers=1
+      trial   6 (initial)  epochs    3  val loss 20.72    learning_rate=6.72572e-05  hidden_size=31  num_layers=2
+      trial   5 (initial)  epochs   10  val loss 13.43    learning_rate=0.00297527  hidden_size=14  num_layers=1
+      trial   7 (initial)  epochs    3  val loss 20.77    learning_rate=1.32461e-05  hidden_size=47  num_layers=3
+      trial   8 (initial)  epochs    3  val loss 20.86    learning_rate=0.000146358  hidden_size=36  num_layers=5
+      trial   9 (initial)  epochs    3  val loss 20.72    learning_rate=0.000471578  hidden_size=42  num_layers=4
+      trial   2 (initial)  epochs   10  val loss 11.89    learning_rate=0.00146485  hidden_size=24  num_layers=2
+      trial   2 (initial)  epochs   30  val loss 10.05    learning_rate=0.00146485  hidden_size=24  num_layers=2
+      trial  10 (model  )  epochs    3  val loss 19.39    learning_rate=0.00839561  hidden_size=5  num_layers=1
+      ...
+      trial  19 (model  )  epochs    3  val loss 17.01    learning_rate=0.00817644  hidden_size=6  num_layers=1
+      trial  19 (model  )  epochs   10  val loss 10.54    learning_rate=0.00817644  hidden_size=6  num_layers=1
+      trial  19 (model  )  epochs   30  val loss 10.22    learning_rate=0.00817644  hidden_size=6  num_layers=1
+      trial  20 (model  )  epochs    3  val loss 17.06    learning_rate=0.00843449  hidden_size=8  num_layers=1
+      trial  20 (model  )  epochs   10  val loss 10.4     learning_rate=0.00843449  hidden_size=8  num_layers=1
+      trial  20 (model  )  epochs   30  val loss 9.917    learning_rate=0.00843449  hidden_size=8  num_layers=1
+    Best configuration (trial 14, validation loss 9.902):
+      learning_rate=0.00864999  hidden_size=5  num_layers=1  loglength_feedforward=True
+    Test Loss: 10.8989
 
-    Learning rate   |   n_layers   |   hidden vector size |  avg CV loss  
-    ======================================================================
-      0.010000  |      3       |         20           |    10.593
-      0.005001  |      3       |         19           |    10.820
-      0.010000  |      4       |         21           |    10.715
-      0.005513  |      3       |         21           |    10.852
-      0.000744  |      4       |         21           |    11.113
-      0.004678  |      5       |         22           |    10.847
-      0.008415  |      4       |         22           |    10.550
-      0.000954  |      4       |         23           |    11.024
-      0.010000  |      3       |         23           |    10.597
-      0.010000  |      4       |         24           |    10.559
-      0.002181  |      3       |         24           |    10.757
-      0.000709  |      4       |         25           |    11.065
-      0.001744  |      5       |         24           |    11.281
-      0.010000  |      3       |         25           |    10.707
-      0.010000  |      2       |         22           |    10.869
-      0.010000  |      2       |         24           |    10.758
-      0.000822  |      2       |         25           |    11.275
-      0.000859  |      2       |         23           |    11.100
-      0.010000  |      5       |         26           |    10.817
-      0.010000  |      4       |         30           |    10.774
+With ``--epochs 30`` there are three stages: every configuration is trained for 3 epochs, the best third of them continue to 10 epochs, and the best third of those to 30. Trial 1 is PARROT's default hyperparameters, trials 2-9 are spread evenly over the search space, and from trial 10 the search mostly suggests configurations near the best so far ("model"), with some drawn at random. Configurations that are clearly worse, such as those with very small learning rates, are stopped after 3 epochs. The best configuration has already been trained for the full 30 epochs, so it becomes the final network, which is then tested on the held-out test set exactly as in ``parrot-train``.
 
-    The optimal hyperparameters are:
-    lr = 0.00841
-    nl = 4
-    hs = 22
-
-
-This long block of text is the main process of optimization. The algorithm automatically selects the learning rate, number of layers and hidden vector size for each iteration. Finally, after the algorithm runs for 20 iterations (default: 50 iterations), the optimal hyperparameters are determined. These hyperparameters are also saved to a text file called 'optimal_hyperparams.txt' in the output directory. You might notice that the optimization procedure doesn't appear to sample the entire hyperparameter space, but this is due to the fact that we specified to use fewer iterations than normally recommended.
+As well as the usual ``parrot-train`` output, ``optimize_example_optimal_hyperparams.txt`` lists the chosen hyperparameters, and ``optimize_example_hyperparameter_trials.tsv`` records every trial:
 
 .. code-block:: bash
 
-    Training with optimal hyperparams:
-    Epoch 0 Loss 31.7953
-    Epoch 1 Loss 30.4627
-    Epoch 2 Loss 22.8318
-    Epoch 3 Loss 26.4293
-    Epoch 4 Loss 17.9814
-    Epoch 5 Loss 15.7970
-    Epoch 6 Loss 15.0506
-    Epoch 7 Loss 13.6761
-    Epoch 8 Loss 13.8338
-    Epoch 9 Loss 14.3309
-    Epoch 10    Loss 13.1378
+    trial  origin  status  epochs  val_loss_3_epochs  val_loss_10_epochs  val_loss_30_epochs  learning_rate  hidden_size  num_layers
+    1  default  stopped  3  20.6142      0.001  10  1
+    2  initial  completed  30  20.2055  11.887  10.0479  0.00146485  24  2
+    3  initial  stopped  10  18.1306  11.9684    0.00880616  5  1
+    4  initial  stopped  3  20.8106      3.47937e-05  17  5
     ...
-    Epoch 396   Loss 40.0893
-    Epoch 397   Loss 40.9645
-    Epoch 398   Loss 41.5348
-    Epoch 399   Loss 41.8932
 
-    Test Loss: 11.1555
-
-
-Lastly, a network is trained on all the training data using the optimal hyperparameters and tested on the held-out test set. The output produced is analogous to ``parrot-train``.
-
+Hyperparameters you give on the command line are fixed rather than searched, e.g. ``--architecture cnn --channels 32`` searches everything except the number of channels. For small datasets, ``--cv-folds 5`` scores each configuration by 5-fold cross-validation instead of on the validation set.
 
 Integrating trained PARROT networks into Python workflows:
 ----------------------------------------------------------

@@ -1,89 +1,54 @@
 
 
 <!DOCTYPE html>
-<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
-<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<html class="writer-html5" lang="en" data-content_root="../">
 <head>
-  <meta charset="utf-8">
-  
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>parrot-optimize &mdash; parrot  documentation</title>
-  
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
 
   
-  
-  
-  
-
-  
-  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
-  
-    
-      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-        <script src="../_static/jquery.js"></script>
-        <script src="../_static/underscore.js"></script>
-        <script src="../_static/doctools.js"></script>
-        <script src="../_static/language_data.js"></script>
-    
-    <script type="text/javascript" src="../_static/js/theme.js"></script>
-
-    
-
-  
-  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="parrot-predict" href="parrot-predict.html" />
-    <link rel="prev" title="parrot-train" href="parrot-train.html" /> 
+    <link rel="prev" title="Protein language model encodings" href="plm_encodings.html" /> 
 </head>
 
-<body class="wy-body-for-nav">
-
-   
+<body class="wy-body-for-nav"> 
   <div class="wy-grid-for-nav">
-    
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-          
 
           
-            <a href="../index.html" class="icon icon-home"> parrot
           
-
-          
+          <a href="../index.html" class="icon icon-home">
+            parrot
           </a>
-
-          
-            
-            
-          
-
-          
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
 </div>
-
-          
-        </div>
-
-        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
-          
-            
-            
-              
-            
-            
-              <p class="caption"><span class="caption-text">Contents:</span></p>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started with PARROT</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parrot-preprocess.html">parrot-preprocess</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parrot-train.html">parrot-train</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architectures.html">Architectures</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plm_encodings.html">Protein language model encodings</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">parrot-optimize</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parrot-predict.html">parrot-predict</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parrot-cvsplit.html">parrot-cvsplit</a></li>
@@ -91,76 +56,46 @@
 <li class="toctree-l1"><a class="reference internal" href="advanced_examples.html">Advanced Examples:</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cross_validation.html">Evaluating a Network with Cross-Validation:</a></li>
 <li class="toctree-l1"><a class="reference internal" href="ml_faqs.html">Machine Learning Resources:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../adding_architectures.html">Adding a new architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api.html">Module Documentation</a></li>
 </ul>
 
-            
-          
         </div>
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
-
-      
-      <nav class="wy-nav-top" aria-label="top navigation">
-        
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="../index.html">parrot</a>
-        
       </nav>
 
-
       <div class="wy-nav-content">
-        
         <div class="rst-content">
-        
-          
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div role="navigation" aria-label="breadcrumbs navigation">
-
+          <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-    
-      <li><a href="../index.html">Docs</a> &raquo;</li>
-        
-      <li>parrot-optimize</li>
-    
-    
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">parrot-optimize</li>
       <li class="wy-breadcrumbs-aside">
-        
-            
             <a href="../_sources/usage/parrot-optimize.rst.txt" rel="nofollow"> View page source</a>
-          
-        
       </li>
-    
   </ul>
-
-  
   <hr/>
 </div>
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
-            
-  <div class="section" id="parrot-optimize">
-<h1>parrot-optimize<a class="headerlink" href="#parrot-optimize" title="Permalink to this headline">¶</a></h1>
-<p><code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> is a command for performing hyperparameter optimization on a given dataset and then training a PARROT network with the optimal hyperparameters. The dataset is divided 5-fold and iteratively retrained and validated using cross-validation to estimate the performance of the network using a given set of hyperparameters. Bayesian optimization ensures that in each iteration, hyperparameters are selected that better sample hyperparameter space and/or are expected to improve performance. After a specified number of iterations, the algorithm returns the best-performing hyperparameters and a new network will be trained on the cumulative cross-validation data, then tested on held out test data. Because of its iterative, cross-validation-based procedure, using <code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> takes <strong>significantly</strong> longer to train a network than <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code>, and is not recommended for basic usage and for users running PARROT on computers lacking GPUs. The final trained network will be saved to to memory along with a file specifying the optimal hyperparameters and several estimates of network performance on a held-out test set (identically to <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code>).</p>
-<p>Once PARROT is installed, the user can run <code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> from the command line:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ parrot-optimize data_file output_network &lt;flags&gt;
+             
+  <section id="parrot-optimize">
+<h1>parrot-optimize<a class="headerlink" href="#parrot-optimize" title="Link to this heading"></a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> searches for good hyperparameters for a network architecture on your dataset, then trains and tests a network with the best ones, producing the same output as <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code>. It needs no extra packages.</p>
+<p>What is searched: the learning rate (for networks trained by gradient descent), plus every hyperparameter the chosen architecture marks as searched, either over a range of numbers or over a set of choices (for the default <code class="docutils literal notranslate"><span class="pre">brnn</span></code>: the hidden size, between 5 and 50, and the number of layers, between 1 and 5; for <code class="docutils literal notranslate"><span class="pre">cnn</span></code> also the kernel width; see the “Architectures” page). Any architecture hyperparameter given on the command line (e.g. <code class="docutils literal notranslate"><span class="pre">--architecture</span> <span class="pre">cnn</span> <span class="pre">--channels</span> <span class="pre">32</span> <span class="pre">--attention-pooling-off</span></code>) is fixed at that value and not searched; hyperparameters that are neither searched nor given keep their defaults.</p>
+<p>How it searches. Each configuration is scored by its lowest validation loss, exactly as <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> chooses its best epoch. Two ideas keep the search efficient:</p>
+<ul class="simple">
+<li><p><strong>Successive halving.</strong> Every configuration is first trained for a few epochs. Once enough configurations have reached a stage, the best third of them continue for three times as many epochs, carrying on from where they stopped, up to <code class="docutils literal notranslate"><span class="pre">--epochs</span></code>. With <code class="docutils literal notranslate"><span class="pre">--epochs</span> <span class="pre">30</span></code> the stages are 3, 10 and 30 epochs. Poor configurations are therefore dropped after a few epochs, and most of the training goes to promising ones (Jamieson &amp; Talwalkar 2016; Li et al. 2020).</p></li>
+<li><p><strong>Model-based sampling (TPE).</strong> The first configuration is PARROT’s defaults and the next few are spread evenly over the search space. After that, new configurations are suggested where good results have clustered so far: a tree-structured Parzen estimator (Bergstra et al. 2011, as used in BOHB, Falkner et al. 2018) models good and bad configurations separately and proposes the candidate most likely to be good. A third of new configurations are drawn at random, so the whole space keeps being explored.</p></li>
+</ul>
+<p>The best configuration has then already been trained for the full number of epochs on the training set, keeping its best epoch on the validation set, so it is used as the final network and tested on the test set, exactly as <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> would. With <code class="docutils literal notranslate"><span class="pre">--cv-folds</span> <span class="pre">k</span></code>, configurations are instead scored by k-fold cross-validation over the training and validation data (more robust for small datasets, but about k times slower), and the final network is then trained on the training set with the best hyperparameters.</p>
+<p>As a rough guide, the default 50 trials cost about as much as 15-20 <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> runs with the same <code class="docutils literal notranslate"><span class="pre">--epochs</span></code> (20 trials, about 10). Every trial is recorded as it finishes in <code class="docutils literal notranslate"><span class="pre">&lt;output&gt;_hyperparameter_trials.tsv</span></code>.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$<span class="w"> </span>parrot-optimize<span class="w"> </span>data_file<span class="w"> </span>output_network<span class="w"> </span>&lt;flags&gt;
 </pre></div>
 </div>
 <p>Where <cite>data_file</cite> specifies the path to the whitespace-separated datafile and <cite>output_network</cite> is the path to where the final trained network will be saved. It is recommended, but not required, that networks are saved using a “.pt” file extension, following the PyTorch convention.</p>
@@ -175,74 +110,73 @@
 <blockquote>
 <div><ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">--help</span></code> / <code class="docutils literal notranslate"><span class="pre">-h</span></code> : Display a help message.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--architecture</span></code> : The network architecture to optimize (default is ‘brnn’).</p></li>
+<li><p>Architecture hyperparameter flags (e.g. <code class="docutils literal notranslate"><span class="pre">--hidden-size</span></code>, <code class="docutils literal notranslate"><span class="pre">--kernel-size</span></code>, <code class="docutils literal notranslate"><span class="pre">--attention-pooling-off</span></code>) : Fix these hyperparameters instead of searching them.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--batch</span></code> / <code class="docutils literal notranslate"><span class="pre">-b</span></code> : Training minibatch size (default is 32). Must be a positive integer, and for most datasets should be in the range of 8-256. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance, but are not explicitly required.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">--epochs</span></code> / <code class="docutils literal notranslate"><span class="pre">-e</span></code> : Number of epochs to train for during each iteration of optimization on each data fold (default is 100).</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">--max-iter</span></code> : Maximum number of iterations the optimization algorithm should run for. Default is 75.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--batching</span></code> : How training sequences are grouped into batches: <code class="docutils literal notranslate"><span class="pre">length</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">random</span></code>. <code class="docutils literal notranslate"><span class="pre">length</span></code> puts sequences of similar length in the same batch (still re-randomised every epoch), so far less time is spent on padding; for datasets whose lengths vary widely this makes training several-fold faster. <code class="docutils literal notranslate"><span class="pre">random</span></code> shuffles freely, as earlier versions of PARROT did. Because padding never affects a network’s output, this changes which sequences share a batch during training but nothing else.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--epochs</span></code> / <code class="docutils literal notranslate"><span class="pre">-e</span></code> : Number of epochs a configuration is trained for if it reaches the final stage, and so the number of epochs the final network is trained for (default is 100). Choose it as you would for <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--trials</span></code> : Number of hyperparameter configurations to try (default is 50). More trials explore the space more thoroughly; the cost grows roughly in proportion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--max-iter</span></code> : Same as <code class="docutils literal notranslate"><span class="pre">--trials</span></code> (kept so that older scripts keep working).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--min-epochs</span></code> : Number of epochs every configuration is first trained for (default: <code class="docutils literal notranslate"><span class="pre">--epochs</span></code> divided by the reduction factor squared, i.e. one ninth, at least 1). The stages run from here up to <code class="docutils literal notranslate"><span class="pre">--epochs</span></code>, each <code class="docutils literal notranslate"><span class="pre">--reduction-factor</span></code> times longer than the one before. Raise it if your networks need more epochs before their validation loss says anything about how they will end up.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--reduction-factor</span></code> : At each stage the best 1/reduction-factor of the configurations continue, for reduction-factor times as many epochs (default 3).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--cv-folds</span></code> : Score each configuration by k-fold cross-validation over the training and validation data instead of on the validation set. Slower (about k times), but more reliable for small datasets.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--split</span></code> : Path to a “split-file” for manually dividing dataset into training, validation and test sets. The file should contain three lines, corresponding to training, validation and test sets respectively. Each line should have integers separated by whitespace, with the integers specify which sequences/lines in the <cite>datafile</cite> (0-indexed) will belong to which dataset. See <strong>/data</strong> folder for examples. If a split-file is not provided, default behavior is for PARROT to randomly divide data into training, validation and test sets. The cross-validation folds will be divided from the training and validation data.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--set-fractions</span></code> : Include this flag to manually set the proportions of the data belonging to the training, validation and test sets. This option must be followed by three floats (representing train, validation, and test) between 0 and 1 that cumulatively sum to 1. By default, PARROT uses splits of 70:15:15. Note that the <code class="docutils literal notranslate"><span class="pre">--split</span></code> flag overrides these values.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--save-splits</span></code> : Include this flag if you would like PARROT to produce a split-file based on its random partitioning of data into training/validation/test sets, which can be useful for replication and/or testing multiple networks on the same data. Output split-file will be saved in the same folder as <em>output_network</em> using the same name followed by “_split_file.txt”. This flag is overridden if a split-file is manually provided. (NOTE: This is a new feature, let us know if you run into any issues!)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">--encode</span></code> : Include this flag to specify the numeric encoding scheme for each amino acid. Available options are ‘onehot’ (default), ‘biophysics’ or user-specified. If you wish to manually specify an encoding scheme, provide a path to a text file describing the amino acid to vector mapping. Example encoding files are provided in the <strong>/data</strong> folder.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--encode</span></code> : Include this flag to specify the numeric encoding scheme for each amino acid. Available options are ‘onehot’ (default), ‘biophysics’, a protein language model (e.g. ‘esm2_t12_35M_UR50D’; see “Protein language model encodings”), or user-specified. If you wish to manually specify an encoding scheme, provide a path to a text file describing the amino acid to vector mapping. Example encoding files are provided in the <strong>/data</strong> folder.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--embedding-cache</span></code> : Protein language model encodings only. Directory in which to store the embedding of every sequence, so each is computed only once (default: a <code class="docutils literal notranslate"><span class="pre">parrot_train_embeddings</span></code> directory next to <em>output_network</em>). Point several runs at the same directory to share embeddings. See “Protein language model encodings”.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--standardize-encoding</span></code> : Standardize every feature of the encoding to mean 0 and standard deviation 1 across the amino acids (or other characters) the encoding defines, so that features measured on very different scales contribute equally. Recommended for <code class="docutils literal notranslate"><span class="pre">biophysics</span></code> and most user encodings; see “Standardizing an encoding” on the <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> page. The standardization is saved with the network and applied automatically by <code class="docutils literal notranslate"><span class="pre">parrot-predict</span></code> and <code class="docutils literal notranslate"><span class="pre">Predictor</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--exclude-seq-id</span></code> : Include this flag if the <cite>data_file</cite> is formatted without sequence IDs as the first column in each row.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--probabilistic-classification</span></code> : Include this flag to output class predictions as continuous values [0-1], based on the probability that the input sample belongs to each class. Currently only implemented for sequence classification. This flag also modifies the output figures and output performance stats. (NOTE: This is a new feature, let us know if you run into any issues!)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--include-figs</span></code> : Include this flag to generate images based on network training and performance on test set. Figures will be saved to same directory as specified by <em>output_network</em> using same naming convention.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--no-stats</span></code> : Include this flag to prevent a “_performance_stats.txt” file from being output.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--ignore-warnings</span></code> : By default, PARROT checks your data for a few criteria and prints warnings if it doesn’t meet some basic heuristics. Use this flag to silence these warnings (network training occurs unimpeded in either case).</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">--force-cpu</span></code> : Include this flag to force network training on the CPU, even if a GPU is available.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--device</span></code> : Device to run on: <code class="docutils literal notranslate"><span class="pre">auto</span></code> (default), <code class="docutils literal notranslate"><span class="pre">cpu</span></code>, <code class="docutils literal notranslate"><span class="pre">cuda</span></code> or <code class="docutils literal notranslate"><span class="pre">mps</span></code>. <code class="docutils literal notranslate"><span class="pre">auto</span></code> uses an NVIDIA GPU (CUDA) if one is available, otherwise an Apple-silicon GPU (MPS) if available, otherwise the CPU. Requesting a device that is not available is an error.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--force-cpu</span></code> : Same as <code class="docutils literal notranslate"><span class="pre">--device</span> <span class="pre">cpu</span></code> (kept so that older scripts keep working).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--gpu-id</span></code> : Index of the CUDA device to use, for machines with more than one NVIDIA GPU (e.g. <code class="docutils literal notranslate"><span class="pre">--gpu-id</span> <span class="pre">1</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--seed</span></code> : Integer random seed. Providing a seed makes the data splits, cross-validation folds and network training reproducible: re-running on the same machine and device (CPU, CUDA or MPS) gives the same results. By default no seed is set.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--verbose</span></code> / <code class="docutils literal notranslate"><span class="pre">-v</span></code> : Include this flag to produce more descriptive output to terminal.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--silent</span></code> : Include this flag to produce no output to terminal.</p></li>
 </ul>
 </div></blockquote>
 <p><strong>Output:</strong></p>
-<p><code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> will produce similar output as <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code>, with one exception. <code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> also produces a file “optimal_hyperparams.txt” which specifies which hyperparameters were ultimately chosen for the final network.</p>
-</div>
+<p><code class="docutils literal notranslate"><span class="pre">parrot-optimize</span></code> produces the same output as <code class="docutils literal notranslate"><span class="pre">parrot-train</span></code> (the network, test-set predictions, performance statistics and, with <code class="docutils literal notranslate"><span class="pre">--include-figs</span></code>, figures) for the best configuration, plus:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;output&gt;_optimal_hyperparams.txt</span></code>: the architecture and the hyperparameters of the final network, one “name: value” pair per line (including the learning rate).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;output&gt;_hyperparameter_trials.tsv</span></code>: one row per configuration tried, written as the search goes: the trial number, how it was chosen (<code class="docutils literal notranslate"><span class="pre">default</span></code>, <code class="docutils literal notranslate"><span class="pre">initial</span></code>, <code class="docutils literal notranslate"><span class="pre">model</span></code> or <code class="docutils literal notranslate"><span class="pre">random</span></code>), whether it was <code class="docutils literal notranslate"><span class="pre">completed</span></code> (trained for the full number of epochs), <code class="docutils literal notranslate"><span class="pre">stopped</span></code> early or <code class="docutils literal notranslate"><span class="pre">failed</span></code> (e.g. a configuration that does not suit the data), the epochs it was trained for, its validation loss at the end of each stage, and its hyperparameters.</p></li>
+</ul>
+<p>Earlier versions of PARROT used Gaussian-process Bayesian optimization (GPyOpt) with 5-fold cross-validation for every configuration. That cost about 325 full training runs with the default settings; the current search needs no extra packages and costs about 15-20.</p>
+</section>
 
 
            </div>
-           
           </div>
-          <footer>
-  
-    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-      
-        <a href="parrot-predict.html" class="btn btn-neutral float-right" title="parrot-predict" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
-      
-      
-        <a href="parrot-train.html" class="btn btn-neutral float-left" title="parrot-train" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
-      
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="plm_encodings.html" class="btn btn-neutral float-left" title="Protein language model encodings" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="parrot-predict.html" class="btn btn-neutral float-right" title="parrot-predict" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
-  
 
   <hr/>
 
   <div role="contentinfo">
-    <p>
-        &copy; Copyright 2020, Holehouse Lab. Project structure based on the Computational Molecular Science Python Cookiecutter version 1.3
-
-    </p>
+    <p>&#169; Copyright 2020, Holehouse Lab. Project structure based on the Computational Molecular Science Python Cookiecutter version 1.3.</p>
   </div>
-  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
 
 </footer>
-
         </div>
       </div>
-
     </section>
-
   </div>
-  
-
-
-  <script type="text/javascript">
+  <script>
       jQuery(function () {
           SphinxRtdTheme.Navigation.enable(true);
       });
-  </script>
-
-  
-  
-    
-   
+  </script> 
 
 </body>
 </html>

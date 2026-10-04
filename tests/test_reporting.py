@@ -1,0 +1,263 @@
+"""
+Tests for parrot.reporting: test-set prediction files, performance metrics and figures.
+"""
+
+import os
+from typing import Any
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+
+from parrot import process_input_data as pid
+from parrot import reporting
+from parrot.tasks import Task
+from parrot.train_network import LabeledPredictions
+
+
+@pytest.fixture
+def captured_figures(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    """Record every figure reporting closes so its contents can be inspected afterwards."""
+    figures = []
+    real_close = plt.close
+
+    def capture_then_close(fig: Any = None) -> None:
+        figures.append(fig)
+        real_close(fig)
+
+    monkeypatch.setattr(reporting.plt, 'close', capture_then_close)
+    return figures
+
+
+def read_metrics(path: str) -> dict[str, float]:
+    """Parse a '<name> : <value>' performance-stats file into a dictionary."""
+    metrics = {}
+    with open(path) as fh:
+        for line in fh:
+            name, value = line.rsplit(':', 1)
+            metrics[name.strip()] = float(value)
+    return metrics
+
+
+def read_lines(path: str) -> list[str]:
+    with open(path) as fh:
+        return [line.rstrip('\n') for line in fh]
+
+
+# ..........................................................................................
+# Figures
+
+def test_training_loss_plot(tmp_path):
+    path = str(tmp_path / 'loss.png')
+    reporting.plot_training_loss([3.0, 2.0, 1.5, 1.2], [3.5, 2.5, 2.0, 1.9], path)
+
+    assert os.path.isfile(path)
+    assert plt.get_fignums() == []
+
+
+def test_regression_scatterplot_covers_negative_values(tmp_path, captured_figures):
+    """Axis limits must contain all points, including negative ones"""
+    path = str(tmp_path / 'scatter.png')
+    reporting.regression_scatterplot(np.array([-5.0, -2.0, 1.0, 3.0]), np.array([-4.0, -2.5, 0.5, 2.0]), path)
+
+    assert os.path.isfile(path)
+    ax = captured_figures[-1].axes[0]
+    low, high = ax.get_xlim()
+    assert low < -5.0 and high > 3.0
+    assert ax.get_xlim() == ax.get_ylim()
+
+
+def test_regression_scatterplot_with_identical_true_values(tmp_path, captured_figures):
+    """No regression line exists when every true value is the same, but the figure is still made"""
+    path = str(tmp_path / 'scatter.png')
+    reporting.regression_scatterplot(np.full(4, 2.0), np.array([1.0, 2.0, 2.5, 3.0]), path)
+
+    assert os.path.isfile(path)
+    assert 'nan' in captured_figures[-1].axes[0].get_title()
+
+
+def test_regression_scatterplot_does_not_accumulate(tmp_path, captured_figures):
+    values = np.array([1.0, 2.0, 3.0])
+    path = str(tmp_path / 'scatter.png')
+
+    reporting.regression_scatterplot(values, values, path)
+    reporting.regression_scatterplot(values, values, path)
+
+    assert len(captured_figures) == 2
+    assert len(captured_figures[1].axes[0].collections) == 1
+    assert plt.get_fignums() == []
+
+
+@pytest.mark.parametrize('num_classes', [2, 3])
+def test_roc_and_precision_recall_curves(tmp_path, num_classes):
+    rng = np.random.default_rng(0)
+    true_classes = np.arange(30) % num_classes
+    probabilities = rng.random((30, num_classes))
+    probabilities /= probabilities.sum(axis=1, keepdims=True)
+
+    reporting.plot_roc_curve(true_classes, probabilities, str(tmp_path / 'roc.png'))
+    reporting.plot_precision_recall_curve(true_classes, probabilities, str(tmp_path / 'pr.png'))
+
+    assert os.path.isfile(tmp_path / 'roc.png') and os.path.isfile(tmp_path / 'pr.png')
+    assert plt.get_fignums() == []
+
+
+def test_confusion_matrix(tmp_path, captured_figures):
+    font_size_before = plt.rcParams['font.size']
+    path = str(tmp_path / 'cm.png')
+
+    reporting.plot_confusion_matrix(np.array([0, 1, 2, 2]), np.array([0, 1, 2, 1]), 3, path)
+
+    assert os.path.isfile(path)
+    assert plt.get_fignums() == []
+    # seaborn font scaling must not leak into the global matplotlib style
+    assert plt.rcParams['font.size'] == font_size_before
+
+    # Rows are predicted labels and columns are true labels
+    heatmap_values = captured_figures[-1].axes[0].collections[0].get_array().reshape(3, 3)
+    np.testing.assert_array_equal(heatmap_values, [[1, 0, 0], [0, 1, 1], [0, 0, 1]])
+
+
+# ..........................................................................................
+# Performance metrics
+
+def test_metrics_sequence_classification():
+    labels = [np.asarray(label) for label in [0, 1, 2, 0, 1, 2]]
+    metrics = reporting.performance_metrics(labels, labels, Task('sequence', 3))
+    assert metrics == {'Matthews Correlation Coef': 1.0, 'F1 Score': 1.0, 'Accuracy': 1.0}
+
+
+def test_metrics_probabilistic_classification():
+    labels = [np.asarray(label) for label in [0, 1, 1, 0]]
+    probabilities = [np.array([0.9, 0.1]), np.array([0.2, 0.8]), np.array([0.4, 0.6]), np.array([0.7, 0.3])]
+
+    metrics = reporting.performance_metrics(labels, probabilities, Task('sequence', 2), probabilistic=True)
+
+    assert metrics['Area under ROC'] == 1.0
+    assert metrics['Area under Precision-Recall curve'] == 1.0
+    assert metrics['Accuracy'] == 1.0
+
+
+def test_metrics_residue_classification():
+    true_values = [np.array([0, 1, 1]), np.array([1, 0])]
+    predictions = [np.array([0, 1, 0]), np.array([1, 0])]
+    assert reporting.performance_metrics(true_values, predictions, Task('residues', 2))['Accuracy'] == 0.8
+
+
+@pytest.mark.parametrize('datatype', ['sequence', 'residues'])
+def test_metrics_regression(datatype):
+    if datatype == 'sequence':
+        true_values = [np.asarray(value) for value in [0.1, 0.5, 0.2, 0.9]]
+    else:
+        true_values = [np.array([0.1, 0.5]), np.array([0.2, 0.9])]
+    predictions = [2 * value + 1 for value in true_values]
+
+    metrics = reporting.performance_metrics(true_values, predictions, Task(datatype, 1))
+
+    assert metrics['Pearson R'] == pytest.approx(1.0, abs=1e-3)
+    assert metrics['Spearman R'] == 1.0
+
+
+def test_write_performance_metrics(tmp_path):
+    path = str(tmp_path / 'stats.txt')
+    reporting.write_performance_metrics({'Pearson R': 0.5, 'Spearman R': 0.25}, path)
+    assert read_lines(path) == ['Pearson R : 0.500', 'Spearman R : 0.250']
+
+
+# ..........................................................................................
+# Prediction files
+
+@pytest.mark.parametrize('values, decimals, expected', [
+    (np.float32(1.25), None, '1.25'),
+    (np.int64(2), None, '2'),
+    (np.array([0, 2, 1]), None, '0 2 1'),
+    (np.array([0.123456, 0.876544]), 4, '0.1235 0.8765'),
+])
+def test_format_values(values, decimals, expected):
+    assert reporting.format_values(values, decimals) == expected
+
+
+def test_write_predictions(tmp_path):
+    path = str(tmp_path / 'predictions.tsv')
+    reporting.write_predictions(['protA', 'protB'], ['ACD', 'KK'], [np.asarray(1.5), np.asarray(-2.0)],
+                                [np.float32(1.25), np.float32(-1.0)], Task('sequence', 1), path)
+
+    assert read_lines(path) == ['protA_TRUE ACD 1.5', 'protA_PRED ACD 1.25',
+                                'protB_TRUE KK -2.0', 'protB_PRED KK -1.0']
+
+
+def test_write_predictions_without_ids(tmp_path):
+    path = str(tmp_path / 'predictions.tsv')
+    reporting.write_predictions(['', ''], ['ACD', 'KK'], [np.asarray(1), np.asarray(0)],
+                                [np.int64(1), np.int64(2)], Task('sequence', 3), path)
+
+    assert read_lines(path) == ['test0_TRUE ACD 1', 'test0_PRED ACD 1', 'test1_TRUE KK 0', 'test1_PRED KK 2']
+
+
+def test_write_predictions_with_missing_labels(tmp_path):
+    path = str(tmp_path / 'predictions.tsv')
+    ignored = pid.IGNORED_CLASS_LABEL
+    reporting.write_predictions(['a'], ['ACD'], [np.array([0, ignored, 2])], [np.array([0, 1, 2])],
+                                Task('residues', 3), path)
+    assert read_lines(path) == ['a_TRUE ACD 0 nan 2', 'a_PRED ACD 0 1 2']
+
+    reporting.write_predictions(['a'], ['ACD'], [np.array([0.5, np.nan, 2.0])],
+                                [np.array([0.25, 1.0, 2.0], dtype=np.float32)], Task('residues', 1), path)
+    assert read_lines(path) == ['a_TRUE ACD 0.5 nan 2.0', 'a_PRED ACD 0.25 1.0 2.0']
+
+
+def test_metrics_ignore_missing_labels():
+    ignored = pid.IGNORED_CLASS_LABEL
+    classification = reporting.performance_metrics([np.array([0, ignored, 1]), np.array([ignored, 0])],
+                                                   [np.array([0, 1, 1]), np.array([1, 0])], Task('residues', 2))
+    assert classification['Accuracy'] == 1.0
+
+    regression = reporting.performance_metrics([np.array([0.1, np.nan, 0.5]), np.array([np.nan, 0.9])],
+                                               [np.array([1.2, -50.0, 2.0]), np.array([99.0, 2.8])],
+                                               Task('residues', 1))
+    assert regression['Pearson R'] == pytest.approx(1.0, abs=1e-3)
+
+
+# ..........................................................................................
+# Full test-set report
+
+def make_labeled(task: Task) -> LabeledPredictions:
+    """Labeled predictions for three sequences, with outputs consistent with the task."""
+    rng = np.random.default_rng(0)
+    sequences = ['ACDE', 'FGH', 'KLMNP']
+    if task.per_residue:
+        true_values = [rng.integers(0, task.num_classes, len(seq)) if task.is_classification
+                       else rng.random(len(seq)) for seq in sequences]
+        outputs = [rng.random((len(seq), task.num_classes)) for seq in sequences]
+    else:
+        true_values = [np.asarray(i % task.num_classes) if task.is_classification else np.asarray(rng.random())
+                       for i in range(len(sequences))]
+        outputs = [rng.random(task.num_classes) for _ in sequences]
+    return LabeledPredictions(names=['a', 'b', 'c'], sequences=sequences, true_values=true_values, outputs=outputs,
+                              loss=0.5)
+
+
+@pytest.mark.parametrize('task, probabilistic, expected_figures', [
+    (Task('sequence', 1), False, ['_seq_scatterplot.png']),
+    (Task('residues', 1), False, ['_res_scatterplot.png']),
+    (Task('sequence', 3), False, ['_seq_CM.png']),
+    (Task('residues', 3), False, ['_res_CM.png']),
+    (Task('sequence', 3), True, ['_ROC_curve.png', '_PR_curve.png']),
+], ids=['seq-regress', 'res-regress', 'seq-class', 'res-class', 'seq-prob'])
+def test_report_test_results(tmp_path, task, probabilistic, expected_figures):
+    prefix = str(tmp_path / 'net')
+    reporting.report_test_results(make_labeled(task), task, prefix, probabilistic=probabilistic, include_figs=True)
+
+    assert len(read_lines(prefix + '_predictions.tsv')) == 6
+    assert os.path.isfile(prefix + '_performance_stats.txt')
+    for suffix in expected_figures:
+        assert os.path.isfile(prefix + suffix), suffix
+    assert plt.get_fignums() == []
+
+
+def test_report_test_results_optional_outputs(tmp_path):
+    prefix = str(tmp_path / 'net')
+    reporting.report_test_results(make_labeled(Task('sequence', 1)), Task('sequence', 1), prefix,
+                                  include_figs=False, write_stats=False)
+
+    assert os.listdir(tmp_path) == ['net_predictions.tsv']

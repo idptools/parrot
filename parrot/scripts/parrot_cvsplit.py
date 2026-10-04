@@ -24,6 +24,7 @@ import argparse
 
 from parrot import process_input_data as pid
 from parrot.tools import validate_args
+from parrot.tools import cli
 
 # Parse the command line arguments
 def main():
@@ -35,7 +36,11 @@ def main():
                          help='number of CV folds (def=10)')
      parser.add_argument('-t', '--training-fraction', default=0.8, type=float, dest='percent_train',
           help='Fraction of the non-test set data to use as training data (def=0.8)')
+     parser.add_argument('--seed', type=int, default=None,
+          help='Random seed for reproducible split-files (default: not seeded)')
      args = parser.parse_args()
+
+     cli.set_random_seed(args.seed)
 
      # Ensure that provided data file exists, K > 1, and 0 < fraction < 1
      data_file = validate_args.check_file_exists(args.data_file, 'Datafile')
@@ -47,9 +52,9 @@ def main():
      output = os.path.abspath(args.output_splitfiles)
      prefix, output_dir = validate_args.split_file_and_directory(output)
 
-     # Check total number of sequences
-     with open(data_file) as d:
-          lines = [line.strip().split() for line in d]
+     # Check total number of sequences. Blank and comment lines are skipped exactly as
+     # they are when the datafile is read for training, so the indices line up.
+     lines = pid.read_tsv_raw(data_file)
      n_seqs = len(lines)
 
      # Split dataset randomly into K even chunks
@@ -67,6 +72,12 @@ def main():
           train, val = pid.vector_split(train_val_set, args.percent_train)
           train_sets.append(np.sort(train))
           val_sets.append(np.sort(val))
+
+     # Check every fold before writing anything: an empty set in a split-file cannot be trained on
+     for i in range(args.num_folds):
+          pid.check_sets_not_empty(train_sets[i], val_sets[i], test_sets[i],
+                                   f'in fold {i} when {n_seqs} sequences are divided into {args.num_folds} folds '
+                                   f'with a training fraction of {args.percent_train}. Use fewer folds or more data.')
 
      # Write split-files to specified location
      print('Creating split-files:')
