@@ -20,8 +20,8 @@ from parrot.architectures.transformer import apply_rotary, sinusoidal_positions
 from parrot.architectures.unet import Up
 from parrot.tasks import Task
 
-from tests.helpers import (ARCHITECTURES_UNDER_TEST, LinearTestArchitecture, architecture_class, make_network,
-                           randomize_global_context, ready_network, supports)
+from tests.helpers import (ARCHITECTURES_UNDER_TEST, LinearTestArchitecture, architecture_class, encode_batch,
+                           make_network, randomize_global_context, ready_network, supports)
 
 # Sequences of very different lengths, including ones shorter than the U-Net's downsampling factor
 SEQUENCES = ['ACDEFGHIK', 'LMN', 'PQRSTVWYACDEFGHIKLMNPQ', 'KK', 'W', 'ACDEFGHIKLMNPQRSTVWYAC']
@@ -66,12 +66,6 @@ CASE_IDS = [f'{configuration_id(architecture, values)}-{task.datatype}-{task.num
 # Configurations of architectures trained by gradient descent
 GRADIENT_CONFIGURATIONS = [(architecture, values) for architecture, values in CONFIGURATIONS
                            if architecture_class(architecture).trained_by_gradient_descent]
-
-
-
-def encode_batch(sequences: list[str]) -> tuple[torch.Tensor, torch.Tensor]:
-    """One-hot encode and zero-pad a list of sequences into a batch."""
-    return pid.pad_sequence_vectors([encode_sequence.one_hot(seq) for seq in sequences])
 
 
 def encode_single(sequence: str) -> torch.Tensor:

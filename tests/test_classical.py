@@ -8,7 +8,6 @@ import pytest
 import torch
 from scipy.stats import pearsonr
 
-from parrot import encode_sequence
 from parrot import process_input_data as pid
 from parrot import train_network
 from parrot.architectures import build_network
@@ -17,13 +16,10 @@ from parrot.architectures.layers import adjacent_pair_composition, mean_over_res
 from parrot.tasks import Task
 from parrot.tools import cli
 
-from tests.helpers import data_path, ready_network
+from tests.helpers import data_path, encode_batch, ready_network
 
 ONE_STEP_ARCHITECTURES = ['linear', 'svm', 'random_forest', 'knn']
 
-
-def encode_batch(sequences: list[str]) -> tuple[torch.Tensor, torch.Tensor]:
-    return pid.pad_sequence_vectors([encode_sequence.one_hot(seq) for seq in sequences])
 
 
 def example_loaders(filename: str, task: Task) -> tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:

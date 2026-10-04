@@ -11,27 +11,13 @@ import pytest
 import torch
 
 from parrot import hyperparameter_search as hs
-from parrot import process_input_data as pid
 from parrot import train_network
 from parrot.architectures import HyperParameter
 from parrot.tasks import Task
 
-from tests.helpers import data_path
+from tests.helpers import FakeTrainer, make_loaders, make_search
 
 TASK = Task('sequence', 1)
-
-
-def make_loaders(n_folds: int | None = None, n_samples: int = 60) -> list[tuple[torch.utils.data.DataLoader,
-                                                                                torch.utils.data.DataLoader]]:
-    """(training, validation) loaders from the sequence regression example: the validation split, or CV folds."""
-    data = pid.parse_file(data_path('seq_regress_dataset.tsv'), TASK, ignore_warnings=True)[:n_samples]
-    split = int(0.75 * len(data))
-    if n_folds is None:
-        sets = [(np.arange(split), np.arange(split, len(data)))]
-    else:
-        sets = pid.cross_validation_folds(np.arange(len(data)), n_folds)
-    return [(pid.make_dataloader(pid.SequenceDataset(data, train), TASK, 16, shuffle=True),
-             pid.make_dataloader(pid.SequenceDataset(data, held_out), TASK, 16)) for train, held_out in sets]
 
 
 # ..........................................................................................
@@ -164,29 +150,6 @@ def test_tpe_treats_failed_configurations_as_bad():
 
 # ..........................................................................................
 # Successive halving (with a stand-in for training)
-
-class FakeTrainer:
-    """Scores a configuration without training: loss = how far its learning rate is from 0.003, minus a bonus for epochs"""
-
-    def __init__(self, space: hs.SearchSpace, fail_if=lambda values: False) -> None:
-        self.space = space
-        self.fail_if = fail_if
-        self.calls: list[tuple[int, int]] = []
-
-    def train_to(self, trial: hs.Trial, epochs: int) -> float:
-        self.calls.append((trial.number, epochs))
-        if self.fail_if(trial.values):
-            raise ValueError('this configuration does not suit the data')
-        trial.folds = [hs.FoldProgress()]
-        trial.epochs = epochs
-        return abs(math.log10(trial.values['learning_rate'] / 0.003)) + 1 / epochs
-
-
-def make_search(n_trials: int = 30, max_epochs: int = 27, seed: int = 0, **kwargs) -> hs.HyperparameterSearch:
-    space = hs.SearchSpace('brnn')
-    return hs.HyperparameterSearch(space, kwargs.pop('trainer', FakeTrainer(space)), n_trials, max_epochs,
-                                   rng=np.random.default_rng(seed), silent=True, **kwargs)
-
 
 class PromotionCheckingTrainer(FakeTrainer):
     """Records, for every promotion, the trial's rank among the trials that had finished its stage at the time"""

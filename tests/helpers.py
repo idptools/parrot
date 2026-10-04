@@ -2,13 +2,19 @@
 Shared constants and helper functions for the PARROT test suite.
 """
 
+import math
 import os
+from collections.abc import Callable
+from typing import Any
 
+import numpy as np
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
 
 import parrot
 from parrot import encode_sequence
+from parrot import hyperparameter_search as hs
 from parrot import process_input_data as pid
 from parrot.architectures import (HyperParameter, ParrotArchitecture, available_architectures, build_network,
                                   get_architecture)
@@ -73,6 +79,24 @@ def make_network(datatype: str, num_classes: int, input_size: int = 20, hidden_s
                          {'hidden_size': hidden_size, 'num_layers': num_layers,
                           'attention_pooling': attention_pooling, 'loglength_feedforward': loglength_feedforward})
 
+
+
+def encode_batch(sequences: list[str]) -> tuple[torch.Tensor, torch.Tensor]:
+    """One-hot encode and zero-pad a list of sequences into a batch.
+
+    Parameters
+    ----------
+    sequences : list of str
+        The sequences, in the order they appear in the batch
+
+    Returns
+    -------
+    torch.Tensor
+        The padded float32 batch [batch_dim X padded_length X 20]
+    torch.Tensor
+        The true length of each sequence
+    """
+    return pid.pad_sequence_vectors([encode_sequence.one_hot(sequence) for sequence in sequences])
 
 class LinearTestArchitecture(ParrotArchitecture):
     """A tiny architecture used only to check that new architectures plug into PARROT.
@@ -178,3 +202,96 @@ def ready_network(architecture: str, task: Task, hyperparameter_values: dict | N
         network.fit(pid.make_dataloader(pid.SequenceDataset(data, encoder=encoder), task, batch_size=5))
 
     return network
+
+
+# ..........................................................................................
+# Hyperparameter search
+
+# The task of the sequence regression example, used by the search tests
+SEARCH_TASK = Task('sequence', 1)
+
+# The learning rate FakeTrainer scores configurations against
+FAKE_BEST_LEARNING_RATE = 0.003
+
+
+def make_loaders(n_folds: int | None = None, n_samples: int = 60) -> list[tuple[DataLoader, DataLoader]]:
+    """Build (training, validation) loaders from the sequence regression example.
+
+    Parameters
+    ----------
+    n_folds : int, optional
+        If given, one pair of loaders per cross-validation fold; otherwise a
+        single pair, with the first 75% of the sequences used for training.
+    n_samples : int, optional
+        How many sequences of the example to use (the first n_samples)
+
+    Returns
+    -------
+    list of (DataLoader, DataLoader)
+        The training and validation loaders, in batches of 16
+    """
+    data = pid.parse_file(data_path('seq_regress_dataset.tsv'), SEARCH_TASK, ignore_warnings=True)[:n_samples]
+    split = int(0.75 * len(data))
+    if n_folds is None:
+        sets = [(np.arange(split), np.arange(split, len(data)))]
+    else:
+        sets = pid.cross_validation_folds(np.arange(len(data)), n_folds)
+    return [(pid.make_dataloader(pid.SequenceDataset(data, train), SEARCH_TASK, 16, shuffle=True),
+             pid.make_dataloader(pid.SequenceDataset(data, held_out), SEARCH_TASK, 16)) for train, held_out in sets]
+
+
+class FakeTrainer:
+    """A stand-in for hyperparameter_search.TrialTrainer that scores configurations without training.
+
+    The loss of a configuration is how far its learning rate is from
+    FAKE_BEST_LEARNING_RATE (in log10 units), plus 1/epochs so that training
+    for longer always helps. This makes the search's decisions exactly
+    reproducible on any machine.
+
+    Attributes
+    ----------
+    space : SearchSpace
+        The search space being searched
+    fail_if : callable
+        Called with a trial's hyperparameter values; if it returns True the
+        trial fails, as a configuration that does not suit the data would
+    calls : list of (int, int)
+        Every (trial number, epochs) the search asked for, in order
+    """
+
+    def __init__(self, space: hs.SearchSpace, fail_if: Callable[[dict[str, Any]], bool] = lambda values: False) -> None:
+        self.space = space
+        self.fail_if = fail_if
+        self.calls: list[tuple[int, int]] = []
+
+    def train_to(self, trial: hs.Trial, epochs: int) -> float:
+        """Pretend to train a trial to `epochs` epochs and return its loss (see the class docstring)."""
+        self.calls.append((trial.number, epochs))
+        if self.fail_if(trial.values):
+            raise ValueError('this configuration does not suit the data')
+        trial.folds = [hs.FoldProgress()]
+        trial.epochs = epochs
+        return abs(math.log10(trial.values['learning_rate'] / FAKE_BEST_LEARNING_RATE)) + 1 / epochs
+
+
+def make_search(n_trials: int = 30, max_epochs: int = 27, seed: int = 0, **kwargs: Any) -> hs.HyperparameterSearch:
+    """Build a silent search of the BRNN's hyperparameters, scored by FakeTrainer unless a `trainer` is given.
+
+    Parameters
+    ----------
+    n_trials : int, optional
+        Number of configurations to try
+    max_epochs : int, optional
+        Epochs a configuration is trained for at the final stage
+    seed : int, optional
+        Seed of the search's random number generator
+    **kwargs
+        `trainer`, plus any other keyword arguments of HyperparameterSearch
+
+    Returns
+    -------
+    HyperparameterSearch
+    """
+    space = hs.SearchSpace('brnn')
+    return hs.HyperparameterSearch(space, kwargs.pop('trainer', FakeTrainer(space)), n_trials, max_epochs,
+                                   rng=np.random.default_rng(seed), silent=True, **kwargs)
