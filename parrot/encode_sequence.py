@@ -35,7 +35,12 @@ import numpy as np
 import torch
 
 from parrot import plm
-from parrot.sequence_encoder import STANDARD_AMINO_ACIDS, SequenceEncoder, check_characters  # noqa: F401
+from parrot.sequence_encoder import STANDARD_AMINO_ACIDS
+
+# SequenceEncoder and check_characters live in sequence_encoder.py; they are also importable from here, where
+# earlier versions of PARROT defined them
+from parrot.sequence_encoder import SequenceEncoder as SequenceEncoder
+from parrot.sequence_encoder import check_characters as check_characters
 
 # Bytes run from 0 to 255; characters that fit in one byte are looked up by their byte value
 NUM_BYTE_VALUES = 256

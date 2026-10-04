@@ -25,7 +25,8 @@ import torch
 from parrot.architectures import ParrotArchitecture, build_network, get_architecture
 from parrot.architectures.registry import fill_legacy_values
 from parrot.devices import cpu_copy
-from parrot.encode_sequence import SequenceEncoder, encoder_from_config, get_encoder
+from parrot.encode_sequence import encoder_from_config, get_encoder
+from parrot.sequence_encoder import SequenceEncoder
 from parrot.package_version import PARROT_VERSION
 from parrot.tasks import Task
 

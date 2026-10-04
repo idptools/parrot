@@ -21,7 +21,8 @@ import os
 from parrot import plm, prediction, reporting
 from parrot import process_input_data as pid
 from parrot.checkpoint import load_network
-from parrot.encode_sequence import SequenceEncoder, StandardizedEncoder, get_encoder
+from parrot.encode_sequence import StandardizedEncoder, get_encoder
+from parrot.sequence_encoder import SequenceEncoder
 from parrot.architectures import ParrotArchitecture
 from parrot.scripts import arguments
 from parrot.scripts.common import (LEGACY_NOTE, add_device_arguments, add_embedding_cache_argument,
@@ -217,3 +218,7 @@ def read_sequence_file(seq_file: str, exclude_seq_id: bool) -> tuple[list[str] |
         return None, [line[0] for line in lines]
 
     return [line[0] for line in lines], [line[1] for line in lines]
+
+
+if __name__ == '__main__':
+    main()

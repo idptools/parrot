@@ -23,7 +23,7 @@ from scipy.special import softmax
 from parrot import process_input_data as pid
 from parrot.architectures import ParrotArchitecture
 from parrot.devices import full_float32_precision
-from parrot.encode_sequence import SequenceEncoder
+from parrot.sequence_encoder import SequenceEncoder
 from parrot.tasks import Task
 from parrot.train_network import build_loss_criterion, compute_batch_loss, sum_batch_losses
 

@@ -43,7 +43,9 @@ def version_from_source_checkout() -> str:
     return version
 
 
+# _version.py is written when PARROT is built or installed; a raw source checkout has none
 try:
-    from parrot._version import __version__ as PARROT_VERSION
+    from parrot._version import __version__ as installed_version
+    PARROT_VERSION: str = installed_version
 except ImportError:
     PARROT_VERSION = version_from_source_checkout()

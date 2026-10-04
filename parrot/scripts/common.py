@@ -28,7 +28,8 @@ from parrot import process_input_data as pid
 from parrot.architectures import (DEFAULT_ARCHITECTURE, HyperParameter, HyperParameterValue, ParrotArchitecture,
                                   available_architectures, get_architecture, resolve_hyperparameters)
 from parrot.checkpoint import save_network
-from parrot.encode_sequence import SequenceEncoder, get_encoder
+from parrot.encode_sequence import get_encoder
+from parrot.sequence_encoder import SequenceEncoder
 from parrot.reproducibility import set_random_seed
 from parrot.scripts import arguments
 from parrot.tasks import VALID_DATATYPES, Task

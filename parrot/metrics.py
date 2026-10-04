@@ -95,7 +95,8 @@ def one_hot_classes(classes: np.ndarray, num_classes: int) -> np.ndarray:
     numpy int array
         [num_samples X num_classes], 1 in each sample's class column and 0 elsewhere
     """
-    return np.eye(num_classes, dtype=int)[classes.astype(int)]
+    one_hot: np.ndarray = np.eye(num_classes, dtype=int)[classes.astype(int)]
+    return one_hot
 
 
 def confusion_counts(true_classes: np.ndarray, predicted_classes: np.ndarray, num_classes: int) -> np.ndarray:

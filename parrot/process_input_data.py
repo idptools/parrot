@@ -23,7 +23,8 @@ import torch
 from torch.utils.data import DataLoader, Dataset, Sampler
 
 from parrot import parrot_exceptions
-from parrot.encode_sequence import OneHotEncoder, SequenceEncoder
+from parrot.encode_sequence import OneHotEncoder
+from parrot.sequence_encoder import SequenceEncoder
 from parrot.tasks import VALID_DATATYPES, Task
 from parrot.tools import dataset_warnings
 

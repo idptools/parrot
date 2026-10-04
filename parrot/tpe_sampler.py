@@ -150,7 +150,8 @@ class TPESampler:
         """
         # Scott's rule for a d-dimensional kernel density estimate: standard deviation x n^(-1 / (d + 4))
         scott = points.std(axis=0) * len(points) ** (-1.0 / (len(self.space) + 4))
-        return np.clip(scott, MIN_BANDWIDTH, 1.0)
+        bandwidths: np.ndarray = np.clip(scott, MIN_BANDWIDTH, 1.0)
+        return bandwidths
 
     def _sample(self, centres: np.ndarray, bandwidth: np.ndarray, n: int) -> np.ndarray:
         """Draw n points from the kernel density centred on `centres`.
@@ -206,7 +207,8 @@ class TPESampler:
             if not outside.any():
                 break
             values[outside] = self.rng.normal(means[outside], width)
-        return np.clip(values, 0, 1)
+        clipped: np.ndarray = np.clip(values, 0, 1)
+        return clipped
 
     def _log_density(self, points: np.ndarray, centres: np.ndarray, bandwidth: np.ndarray) -> np.ndarray:
         """Log of the kernel density estimate centred on `centres` (see the class docstring), at each point.

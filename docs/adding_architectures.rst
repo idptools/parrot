@@ -10,8 +10,8 @@ How the pieces fit together
 * ``parrot/tasks.py`` defines ``Task``: whether data is sequence-mapped (``'sequence'``) or residue-mapped (``'residues'``), and the number of classes (1 for regression).
 * ``parrot/architectures/`` contains the architectures. ``base.py`` defines the ``ParrotArchitecture`` base class (including the readout most architectures end with), ``hyperparameters.py`` defines the ``HyperParameter`` declaration and the hyperparameters several architectures share, ``registry.py`` maps names to architectures and builds networks, ``layers.py`` holds shared building blocks, each neural architecture lives in its own module (``brnn.py``, ``composition.py``, ``cnn.py``, ``unet.py``, ``transformer.py``), and ``classical.py`` holds the simple scikit-learn models.
 * ``parrot/encode_sequence.py`` defines the encoders that turn sequences into vectors (one-hot, biophysics, or a user file).
-* ``parrot/train_network.py`` trains, evaluates and runs networks; ``parrot/reporting.py`` writes predictions, metrics and figures; ``parrot/checkpoint.py`` saves and loads networks.
-* ``parrot/scripts/common.py`` holds everything ``parrot-train`` and ``parrot-optimize`` share, including generating a command-line flag for every architecture hyperparameter.
+* ``parrot/train_network.py`` trains networks (and fits the classical models); ``parrot/prediction.py`` runs trained networks; ``parrot/metrics.py``, ``parrot/figures.py`` and ``parrot/reporting.py`` measure, plot and write how a network performs; ``parrot/checkpoint.py`` saves and loads networks.
+* ``parrot/scripts/common.py`` holds everything the command-line tools share, including generating a command-line flag for every architecture hyperparameter.
 
 The interface
 -------------

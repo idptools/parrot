@@ -11,9 +11,10 @@ parrot.process_input_data.pad_sequence_vectors).
 from parrot.package_version import PARROT_VERSION as __version__
 
 # Encoding sequences as numbers
-from parrot.encode_sequence import (BIOPHYSICS, ONE_HOT, BiophysicsEncoder, OneHotEncoder, SequenceEncoder,
-                                    StandardizedEncoder, UserEncoder, biophysics, encoder_from_config, get_encoder,
-                                    one_hot, parse_encode_file)
+from parrot.encode_sequence import (BIOPHYSICS, ONE_HOT, BiophysicsEncoder, OneHotEncoder, StandardizedEncoder,
+                                    UserEncoder, biophysics, encoder_from_config, get_encoder, one_hot,
+                                    parse_encode_file)
+from parrot.sequence_encoder import SequenceEncoder
 
 # Reading datafiles, splitting them into sets and batching them
 from parrot.process_input_data import (SequenceDataset, cross_validation_folds, load_and_split, make_dataloader,
