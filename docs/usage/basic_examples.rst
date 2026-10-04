@@ -122,9 +122,9 @@ Let's look at the figures that we generated: "seq_class_network_train_val_loss.p
 .. image:: ../images/seq_class_network_seq_CM.png
   :width: 400
 
-The first is a plot of the performance achieved by the network on the training and validation sets over the course of training. The validation loss here is the same as what is being output to terminal. This particular plot looks a little funny, but that's due to the fact that this classification task is not very difficult, so our network learns what it needs too by around epoch 20 and the rest of the time is just overfitting and noise.
+The first is a plot of the performance achieved by the network on the training and validation sets over the course of training. The validation loss here is the same as what is being output to terminal. This classification task is not very difficult, so our network learns what it needs to by around epoch 25; from about epoch 75 the validation loss creeps back up as the network starts to overfit the training set. That does no harm here, because PARROT keeps the network from the epoch with the lowest validation loss. (Your curves and numbers will differ a little from the ones shown here, because the data are split into training, validation and test sets at random; ``--seed`` makes a run reproducible.)
 
-The second figure is provides some insight on how well our network will generalize onto unseen data. After training completes, PARROT networks are applied to a test set of randomly held-out sequences. For a classification task, PARROT displays a confusion matrix detailing the true vs predicted classes for each sequence in this test set. As you can see, our network is perfect (also confirmed by our performance stats file)!
+The second figure is provides some insight on how well our network will generalize onto unseen data. After training completes, PARROT networks are applied to a test set of randomly held-out sequences. For a classification task, PARROT displays a confusion matrix detailing the true vs predicted classes for each sequence in this test set. As you can see, our network classifies 43 of the 45 test sequences correctly (an accuracy of 0.956 in our performance stats file)!
 
 **Sequence regression:**
 
@@ -160,8 +160,8 @@ The performance stats file provides the Pearson and Spearman correlations for th
 
 .. code-block:: bash
 
-    Pearson R : 0.958
-    Spearman R : 0.963
+    Pearson R : 0.999
+    Spearman R : 0.998
 
 Not bad!
 
@@ -189,9 +189,9 @@ This produces more files to the output directory. If we look at the performance 
 
 .. code-block:: bash
 
-    Matthews Correlation Coef : 0.621
-    F1 Score : 0.744
-    Accuracy : 0.748
+    Matthews Correlation Coef : 0.638
+    F1 Score : 0.754
+    Accuracy : 0.758
 
 In this case, the confusion matrix is for every single residue in all of the sequences in the test set. Looking at the confusion matrix can shed some light on which classes our network has trouble with.
 
@@ -213,7 +213,7 @@ The output from this command is analogous to the other examples. Like the sequen
 .. image:: ../images/res_regress_network_res_scatterplot.png
   :width: 400
 
-Here, each point represents a single residue in the test set. Each combination of marker shape and color in this scatterplot belongs to a single sequence, which may provide some insight on whether the network systematically mis-predicts all sequences, or if there are only a few specific sequences that are outliers.
+Here, each point represents a single residue in the test set, and the line is where predicted and true values are equal. To see whether the network systematically mis-predicts particular sequences, look up their residues in the prediction file, which lists the true and predicted values of every residue of every test sequence.
 
 parrot-predict
 ==============
