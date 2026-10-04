@@ -115,10 +115,13 @@ tpe_sampler.py
 .. automodule:: parrot.tpe_sampler
    :members:
 
-tools.homology
---------------
+tools.splitting and tools.mmseqs_search
+---------------------------------------
 
-.. automodule:: parrot.tools.homology
+.. automodule:: parrot.tools.splitting
+   :members:
+
+.. automodule:: parrot.tools.mmseqs_search
    :members:
 
 tools.kmer_similarity
@@ -127,13 +130,22 @@ tools.kmer_similarity
 .. automodule:: parrot.tools.kmer_similarity
    :members:
 
-tools.preproc and tools.class_balancing
----------------------------------------
+tools.preproc, tools.class_balancing and tools.dataset_warnings
+---------------------------------------------------------------
 
 .. automodule:: parrot.tools.preproc
    :members:
 
 .. automodule:: parrot.tools.class_balancing
+   :members:
+
+.. automodule:: parrot.tools.dataset_warnings
+   :members:
+
+reproducibility.py
+------------------
+
+.. automodule:: parrot.reproducibility
    :members:
 
 py_predictor.py

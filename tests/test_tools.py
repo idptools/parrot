@@ -1,141 +1,16 @@
 """
-Tests for the helper modules in parrot.tools: argument validation, CLI helpers,
-dataset warnings, preprocessing and class balancing.
+Tests for the data tools in parrot.tools: dataset warnings, preprocessing and
+class balancing.
 """
-
-import os
-import random
 
 import numpy as np
 import pytest
-import torch
 
-import parrot
 from parrot import process_input_data as pid
 from parrot.parrot_exceptions import ParrotException
-from parrot.tools import class_balancing, cli, dataset_warnings, preproc, validate_args
+from parrot.tools import class_balancing, dataset_warnings, preproc
 
 from tests.helpers import data_path
-
-
-# ..........................................................................................
-# validate_args
-
-def test_check_file_exists(tmp_path):
-    path = tmp_path / 'exists.txt'
-    path.write_text('x')
-
-    assert validate_args.check_file_exists(str(path), 'File') == str(path)
-    with pytest.raises(FileNotFoundError, match='Datafile does not exist'):
-        validate_args.check_file_exists(str(tmp_path / 'missing.txt'), 'Datafile')
-
-
-def test_check_directory(tmp_path):
-    validate_args.check_directory(str(tmp_path), 'Output directory')
-    with pytest.raises(FileNotFoundError):
-        validate_args.check_directory(str(tmp_path / 'missing'), 'Output directory')
-
-
-@pytest.mark.parametrize('filename, expected_prefix', [
-    ('network.pt', 'network'),
-    ('network', 'network'),
-    ('my.network.v2.pt', 'my.network.v2'),
-])
-def test_split_file_and_directory(tmp_path, filename, expected_prefix):
-    prefix, directory = validate_args.split_file_and_directory(str(tmp_path / filename))
-
-    assert directory == os.path.join(str(tmp_path), '')
-    assert prefix == os.path.join(str(tmp_path), expected_prefix)
-
-
-def test_split_file_and_directory_missing_directory(tmp_path):
-    with pytest.raises(FileNotFoundError):
-        validate_args.split_file_and_directory(str(tmp_path / 'missing' / 'network.pt'))
-
-
-def test_check_positive():
-    validate_args.check_positive(1, 'Value')
-    for bad_value in [0, -3]:
-        with pytest.raises(ValueError, match='positive'):
-            validate_args.check_positive(bad_value, 'Value')
-
-
-def test_check_between_zero_and_one():
-    validate_args.check_between_zero_and_one(0.5, 'Value')
-    for bad_value in [0, 1, -0.1, 1.5]:
-        with pytest.raises(ValueError, match='between 0 and 1'):
-            validate_args.check_between_zero_and_one(bad_value, 'Value')
-
-
-def test_check_stop_condition(capsys):
-    validate_args.check_stop_condition('iter', 100)
-    validate_args.check_stop_condition('auto', 5)
-    assert capsys.readouterr().out == ''
-
-    validate_args.check_stop_condition('auto', 50)
-    assert 'may take a long time' in capsys.readouterr().out
-
-    with pytest.raises(ValueError):
-        validate_args.check_stop_condition('never', 10)
-
-
-# ..........................................................................................
-# cli
-
-def draw_random_numbers() -> tuple[float, float, float]:
-    return random.random(), np.random.rand(), torch.rand(1).item()
-
-
-def test_set_random_seed_is_reproducible():
-    cli.set_random_seed(123)
-    first = draw_random_numbers()
-    cli.set_random_seed(123)
-    assert draw_random_numbers() == first
-
-    cli.set_random_seed(124)
-    assert draw_random_numbers() != first
-
-
-def test_set_random_seed_none_does_not_reseed():
-    cli.set_random_seed(123)
-    first = draw_random_numbers()
-    cli.set_random_seed(123)
-    cli.set_random_seed(None)
-    assert draw_random_numbers() == first
-
-
-def test_set_random_seed_makes_cudnn_deterministic(monkeypatch):
-    monkeypatch.setattr(torch.backends.cudnn, 'deterministic', False)
-    cli.set_random_seed(123)
-    assert torch.backends.cudnn.deterministic
-
-
-def test_print_startup(capsys):
-    cli.print_startup('parrot-train', silent=False)
-    output = capsys.readouterr().out
-    assert f'parrot-train (version {parrot.__version__})' in output
-    assert 'parrot-predict' not in output
-
-    cli.print_startup('parrot-predict', silent=False, print_parrot=True)
-    assert 'Welcome to PARROT!' in capsys.readouterr().out
-
-    cli.print_startup('parrot-train', silent=True)
-    assert capsys.readouterr().out == ''
-
-
-def test_print_settings(capsys):
-    cli.print_settings(False, hidden_size=10, dtype='sequence')
-    output = capsys.readouterr().out
-    assert 'hidden_size   : 10' in output and 'dtype         : sequence' in output
-
-    cli.print_settings(True, hidden_size=10)
-    assert capsys.readouterr().out == ''
-
-
-def test_cli_validate_args():
-    cli.validate_args('residues', ['residues', 'sequence'])
-    with pytest.raises(Exception, match='Invalid option passed'):
-        cli.validate_args('residue', ['residues', 'sequence'], 'extra message')
 
 
 # ..........................................................................................
@@ -230,13 +105,22 @@ def test_recode_classes_residues():
     assert new_lines == [['a', 'ACD', '0', '1', '1'], ['b', 'EF', '1', '0']]
 
 
-@pytest.mark.parametrize('verbose', [False, True])
-def test_remove_line_duplicates(verbose):
+def test_remove_line_duplicates():
     lines = [['a', 'ACD', '1'], ['a', 'ACD', '1'], ['a', 'ACD', '0'], ['b', 'ACD', '1'], ['c', 'EFG', '1']]
-    new_lines = preproc.remove_line_duplicates(lines, verbose=verbose)
+    new_lines = preproc.remove_line_duplicates(lines)
 
     # Only the exact duplicate line is removed
-    assert sorted(new_lines) == sorted([['a', 'ACD', '1'], ['a', 'ACD', '0'], ['b', 'ACD', '1'], ['c', 'EFG', '1']])
+    assert new_lines == [['a', 'ACD', '1'], ['a', 'ACD', '0'], ['b', 'ACD', '1'], ['c', 'EFG', '1']]
+
+
+def test_remove_line_duplicates_keeps_the_input_order():
+    """Lines must not be regrouped by ID (earlier versions of PARROT moved a repeated ID's lines together)"""
+    lines = [['a', 'AAA', '1'], ['b', 'CCC', '2'], ['a', 'DDD', '3'], ['b', 'CCC', '2']]
+    assert preproc.remove_line_duplicates(lines) == [['a', 'AAA', '1'], ['b', 'CCC', '2'], ['a', 'DDD', '3']]
+
+
+def test_count_repeated_sequences():
+    assert preproc.count_repeated_sequences([['a', 'ACD', '1'], ['b', 'ACD', '0'], ['c', 'EFG', '1']]) == 1
 
 
 # ..........................................................................................
@@ -267,8 +151,7 @@ def test_residue_class_balance_reduces_imbalance():
     max_fraction_removed = 0.25
 
     new_lines, tracker = class_balancing.run_class_balance_residues(list(lines), block_size=20,
-                                                                    max_fraction_removed=max_fraction_removed,
-                                                                    verbose=False)
+                                                                    max_fraction_removed=max_fraction_removed)
 
     assert tracker[0] == pytest.approx(original_imbalance)
     assert imbalance_of(new_lines) < original_imbalance
@@ -279,15 +162,14 @@ def test_residue_class_balance_reduces_imbalance():
 
 def test_residue_class_balance_tracker_reports_final_imbalance():
     """The last tracker entry must describe the returned data, not the state one removal earlier"""
-    new_lines, tracker = class_balancing.run_class_balance_residues(make_imbalanced_residue_lines(), block_size=20,
-                                                                    verbose=False)
+    new_lines, tracker = class_balancing.run_class_balance_residues(make_imbalanced_residue_lines(), block_size=20)
     assert tracker[-1] == pytest.approx(imbalance_of(new_lines))
 
 
 def test_residue_class_balance_stops_at_threshold():
     lines = make_imbalanced_residue_lines(class_probabilities=(0.45, 0.35, 0.2))
     new_lines, tracker = class_balancing.run_class_balance_residues(lines, balance_threshold=2.0, block_size=20,
-                                                                    max_fraction_removed=0.9, verbose=False)
+                                                                    max_fraction_removed=0.9)
 
     assert tracker[-1] <= 2.0
     assert all(score > 2.0 for score in tracker[:-1])
@@ -296,13 +178,13 @@ def test_residue_class_balance_stops_at_threshold():
 def test_residue_class_balance_already_balanced():
     lines = make_imbalanced_residue_lines(class_probabilities=(0.34, 0.33, 0.33))
     new_lines, tracker = class_balancing.run_class_balance_residues(list(lines), balance_threshold=1.4,
-                                                                    block_size=20, verbose=False)
+                                                                    block_size=20)
     assert len(tracker) == 1 and len(new_lines) == len(lines)
 
 
 def test_residue_class_balance_keeps_input_order():
     lines = make_imbalanced_residue_lines()
-    new_lines, _ = class_balancing.run_class_balance_residues(list(lines), block_size=20, verbose=False)
+    new_lines, _ = class_balancing.run_class_balance_residues(list(lines), block_size=20)
 
     original_positions = [lines.index(line) for line in new_lines]
     assert len(new_lines) < len(lines)
@@ -312,7 +194,7 @@ def test_residue_class_balance_keeps_input_order():
 def test_residue_class_balance_never_makes_the_balance_worse():
     lines = make_imbalanced_residue_lines(n_sequences=300, class_probabilities=(0.5, 0.3, 0.2))
     _, tracker = class_balancing.run_class_balance_residues(list(lines), balance_threshold=1.0, block_size=5,
-                                                            max_fraction_removed=0.9, verbose=False)
+                                                            max_fraction_removed=0.9)
     assert all(later <= earlier + 1e-12 for earlier, later in zip(tracker, tracker[1:]))
 
 
@@ -321,7 +203,7 @@ def test_residue_class_balance_breaks_ties_between_the_most_common_classes():
     lines = ([[f'zero{i}', 'A', '0'] for i in range(10)] + [[f'one{i}', 'A', '1'] for i in range(10)]
              + [[f'two{i}', 'A', '2'] for i in range(5)])
     new_lines, tracker = class_balancing.run_class_balance_residues(list(lines), balance_threshold=1.0,
-                                                                    max_fraction_removed=0.5, verbose=False)
+                                                                    max_fraction_removed=0.5)
     assert tracker[-1] == 1.0
     assert len(new_lines) == 15
 
@@ -329,15 +211,14 @@ def test_residue_class_balance_breaks_ties_between_the_most_common_classes():
 def test_residue_class_balance_stops_when_no_removal_helps():
     # Every line carries one residue of each class, so removing lines cannot change the balance
     lines = [[f'seq{i}', 'AAAA', '0', '0', '1', '2'] for i in range(40)]
-    new_lines, tracker = class_balancing.run_class_balance_residues(list(lines), max_fraction_removed=0.5,
-                                                                    verbose=False)
+    new_lines, tracker = class_balancing.run_class_balance_residues(list(lines), max_fraction_removed=0.5)
     assert new_lines == lines and tracker == [2.0]
 
 
 def test_residue_class_balance_never_removes_unlabelled_lines():
     lines = make_imbalanced_residue_lines() + [[f'unlabelled{i}', 'AAA', 'nan', 'nan', 'nan'] for i in range(20)]
     new_lines, _ = class_balancing.run_class_balance_residues(list(lines), balance_threshold=1.0, block_size=50,
-                                                              max_fraction_removed=0.5, verbose=False)
+                                                              max_fraction_removed=0.5)
     assert sum(line[0].startswith('unlabelled') for line in new_lines) == 20
 
 
@@ -350,14 +231,14 @@ def test_class_count_matrix_treats_equal_numbers_as_one_class():
 def test_residue_class_balance_ignores_missing_labels():
     # The labelled residues are perfectly balanced; missing labels must not count as a third class
     lines = [[f'seq{i}', 'A' * 6] + ['0', '1', '0', '1', 'nan', 'nan'] for i in range(50)]
-    new_lines, tracker = class_balancing.run_class_balance_residues(list(lines), block_size=10, verbose=False)
+    new_lines, tracker = class_balancing.run_class_balance_residues(list(lines), block_size=10)
     assert tracker == [1.0] and len(new_lines) == len(lines)
 
 
 @pytest.mark.parametrize('n_sequences', [1, 2, 3, 4, 5])
 def test_residue_class_balance_on_tiny_datasets(n_sequences):
     lines = make_imbalanced_residue_lines(n_sequences=n_sequences)
-    new_lines, tracker = class_balancing.run_class_balance_residues(list(lines), verbose=False)
+    new_lines, tracker = class_balancing.run_class_balance_residues(list(lines))
 
     # max_fraction_removed (0.25) is a hard limit, even when it allows no removal at all
     assert len(lines) - len(new_lines) <= int(len(lines) * 0.25)
@@ -366,15 +247,14 @@ def test_residue_class_balance_on_tiny_datasets(n_sequences):
 def test_residue_class_balance_never_removes_a_whole_class():
     # Removing either sequence would delete a class entirely, so nothing can be removed
     lines = [['a', 'A' * 10] + ['0'] * 10, ['b', 'A'] + ['1']]
-    new_lines, tracker = class_balancing.run_class_balance_residues(list(lines), max_fraction_removed=0.9,
-                                                                    verbose=False)
+    new_lines, tracker = class_balancing.run_class_balance_residues(list(lines), max_fraction_removed=0.9)
     assert sorted(new_lines) == sorted(lines) and tracker == [10.0]
 
 
 def test_residue_class_balance_does_not_modify_its_input():
     lines = make_imbalanced_residue_lines()
     original = [list(line) for line in lines]
-    class_balancing.run_class_balance_residues(lines, block_size=20, verbose=False)
+    class_balancing.run_class_balance_residues(lines, block_size=20)
     assert lines == original
 
 
@@ -387,17 +267,26 @@ def test_residue_class_balance_does_not_modify_its_input():
 ])
 def test_residue_class_balance_validates_input(kwargs):
     with pytest.raises(ParrotException):
-        class_balancing.run_class_balance_residues(make_imbalanced_residue_lines(), verbose=False, **kwargs)
+        class_balancing.run_class_balance_residues(make_imbalanced_residue_lines(), **kwargs)
 
 
 def test_residue_class_balance_on_example_data(capsys):
     lines = pid.read_tsv_raw(data_path('res_class_dataset.tsv'))
     new_lines, tracker = class_balancing.run_class_balance_residues(list(lines), balance_threshold=1.05,
-                                                                    block_size=30, verbose=True)
+                                                                    block_size=30)
 
     assert tracker[-1] <= tracker[0]
     assert tracker[-1] == pytest.approx(imbalance_of(new_lines))
-    assert 'Performing automatic class balancing for residues' in capsys.readouterr().out
+    assert capsys.readouterr().out == ''  # balancing reports through parrot-preprocess, not by printing
+
+
+@pytest.mark.parametrize('tracker, expected', [
+    ([3.0, 2.0, 1.3], 'reached the target'),
+    ([3.0, 2.5, 2.0], 'were removed'),
+    ([3.0, 2.5], 'no single removal improves'),
+])
+def test_residue_balance_stop_reason(tracker, expected):
+    assert expected in class_balancing.residue_balance_stop_reason(tracker, balance_threshold=1.4, budget=2)
 
 
 # ..........................................................................................
@@ -420,7 +309,7 @@ def class_counts_of(lines: list[list[str]]) -> dict[str, int]:
 def test_sequence_class_balance_reaches_threshold():
     lines = make_sequence_lines([100, 30, 20])
     new_lines = class_balancing.run_class_balance_sequences(list(lines), balance_threshold=1.4,
-                                                            max_fraction_removed=0.9, verbose=False)
+                                                            max_fraction_removed=0.9)
 
     counts = class_counts_of(new_lines)
     assert max(counts.values()) / min(counts.values()) <= 1.4
@@ -431,8 +320,7 @@ def test_sequence_class_balance_reaches_threshold():
 def test_sequence_class_balance_respects_max_fraction_removed():
     lines = make_sequence_lines([100, 30, 20])
     max_fraction_removed = 0.25
-    new_lines = class_balancing.run_class_balance_sequences(list(lines), max_fraction_removed=max_fraction_removed,
-                                                            verbose=False)
+    new_lines = class_balancing.run_class_balance_sequences(list(lines), max_fraction_removed=max_fraction_removed)
 
     assert len(lines) - len(new_lines) == int(len(lines) * max_fraction_removed)
     assert class_counts_of(new_lines) == {'0': 63, '1': 30, '2': 20}
@@ -442,7 +330,7 @@ def test_sequence_class_balance_gets_the_best_balance_the_budget_allows():
     # 7/6/3 with a budget of 4: capping both larger classes at 5 (3 removals) gives the best possible
     # imbalance, 5/3; a fourth removal could not lower it
     lines = make_sequence_lines([7, 6, 3])
-    new_lines = class_balancing.run_class_balance_sequences(list(lines), max_fraction_removed=0.25, verbose=False)
+    new_lines = class_balancing.run_class_balance_sequences(list(lines), max_fraction_removed=0.25)
     assert class_counts_of(new_lines) == {'0': 5, '1': 5, '2': 3}
 
 
@@ -450,13 +338,13 @@ def test_sequence_class_balance_removes_no_more_than_needed():
     # Reaching an imbalance of 1.4 needs class 0 cut to 140, not to 100
     lines = make_sequence_lines([1000, 100])
     new_lines = class_balancing.run_class_balance_sequences(list(lines), balance_threshold=1.4,
-                                                            max_fraction_removed=0.9, verbose=False)
+                                                            max_fraction_removed=0.9)
     assert class_counts_of(new_lines) == {'0': 140, '1': 100}
 
 
 def test_sequence_class_balance_keeps_input_order():
     lines = make_sequence_lines([60, 20])
-    new_lines = class_balancing.run_class_balance_sequences(list(lines), max_fraction_removed=0.5, verbose=False)
+    new_lines = class_balancing.run_class_balance_sequences(list(lines), max_fraction_removed=0.5)
     positions = [lines.index(line) for line in new_lines]
     assert positions == sorted(positions) and len(new_lines) == 48
 
@@ -475,7 +363,7 @@ def test_sequence_class_cap(counts, budget, threshold, cap):
 
 def test_sequence_class_balance_keeps_missing_labels():
     lines = make_sequence_lines([100, 30]) + [[f'missing{i}', 'ACD', 'nan'] for i in range(5)]
-    new_lines = class_balancing.run_class_balance_sequences(list(lines), max_fraction_removed=0.9, verbose=False)
+    new_lines = class_balancing.run_class_balance_sequences(list(lines), max_fraction_removed=0.9)
 
     counts = class_counts_of(new_lines)
     assert counts['nan'] == 5  # never removed, and not balanced as a class
@@ -485,11 +373,11 @@ def test_sequence_class_balance_keeps_missing_labels():
 def test_sequence_class_balance_does_not_modify_its_input():
     lines = make_sequence_lines([100, 30, 20])
     original = [list(line) for line in lines]
-    class_balancing.run_class_balance_sequences(lines, verbose=False)
+    class_balancing.run_class_balance_sequences(lines)
     assert lines == original
 
 
 def test_sequence_class_balance_already_balanced():
     lines = make_sequence_lines([20, 19, 18])
-    new_lines = class_balancing.run_class_balance_sequences(list(lines), verbose=False)
+    new_lines = class_balancing.run_class_balance_sequences(list(lines))
     assert sorted(new_lines) == sorted(lines)

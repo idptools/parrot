@@ -17,18 +17,26 @@ Licensed under the MIT license.
 """
 
 import argparse
+from typing import Any
 
-import numpy as np
+from torch.utils.data import DataLoader
 
 from parrot import hyperparameter_search, train_network
-from parrot.architectures import build_network
+from parrot.architectures import HyperParameterValue, ParrotArchitecture, build_network
+from parrot.reproducibility import random_generator
 from parrot.scripts import common
 
 # Number of configurations tried by default
 DEFAULT_TRIALS = 50
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
+    """The command-line arguments of parrot-optimize
+
+    Returns
+    -------
+    argparse.ArgumentParser
+    """
     parser = argparse.ArgumentParser(description='Search for good hyperparameters, then train and test a PARROT network '
                                                  'with them.')
     common.add_training_arguments(parser)
@@ -38,7 +46,7 @@ def main():
     search.add_argument('--trials', type=int, default=None,
                         help=f'number of hyperparameter configurations to try (default {DEFAULT_TRIALS})')
     search.add_argument('--max-iter', dest='max_iter', type=int, default=None,
-                        help='same as --trials (kept so that older scripts keep working)')
+                        help=f'same as --trials {common.LEGACY_NOTE}')
     search.add_argument('--min-epochs', dest='min_epochs', type=int, default=None,
                         help='epochs every configuration is first trained for; the best ones continue for longer, up '
                              'to --epochs (default: --epochs / reduction-factor^2, at least 1)')
@@ -49,8 +57,12 @@ def main():
     search.add_argument('--cv-folds', dest='cv_folds', type=int, default=None,
                         help='score each configuration by k-fold cross-validation over the training and validation '
                              'data, instead of on the validation set (about k times slower; for small datasets)')
+    return parser
 
-    args = parser.parse_args()
+
+def main() -> None:
+    """Search for good hyperparameters, then save and report on a network trained with the best ones."""
+    args = build_parser().parse_args()
     n_trials = check_search_arguments(args)
 
     # Any architecture hyperparameter given on the command line is fixed rather than searched
@@ -62,21 +74,9 @@ def main():
                                  batching=args.batching, epochs=args.epochs, trials=n_trials,
                                  cv_folds=args.cv_folds or 'none (validation set)'))
 
-    if run.cv_sets is None:
-        loaders = [(run.loader(run.train_set, shuffle=True), run.loader(run.val_set))]
-    else:
-        loaders = [(run.loader(fold_train, shuffle=True), run.loader(fold_held_out))
-                   for fold_train, fold_held_out in run.cv_sets]
-
     space = hyperparameter_search.SearchSpace(args.architecture, fixed_hyperparameters)
-    trainer = hyperparameter_search.TrialTrainer(space, loaders, len(run.encoder), run.task, run.device)
-    trials_file = run.output_prefix + '_hyperparameter_trials.tsv'
-    # Seeded by --seed (through NumPy's global generator), so the search is reproducible
-    searcher = hyperparameter_search.HyperparameterSearch(
-        space, trainer, n_trials, args.epochs, min_epochs=args.min_epochs, reduction_factor=args.reduction_factor,
-        rng=np.random.default_rng(np.random.randint(2 ** 31)), silent=run.silent,
-        on_progress=lambda progress: progress.write_trials(trials_file))
-    best_trial = searcher.run()
+    trainer = hyperparameter_search.TrialTrainer(space, search_loaders(run), len(run.encoder), run.task, run.device)
+    searcher, best_trial = run_search(args, run, space, trainer, n_trials)
     best = searcher.best_values(best_trial)
     write_hyperparameters(run.output_prefix + '_optimal_hyperparams.txt', args.architecture, best)
 
@@ -84,22 +84,104 @@ def main():
         # The best trial already is a full training run on the training set, keeping its best epoch
         network, train_losses, val_losses = trainer.trained_network(best_trial)
     else:
-        # Cross-validation trained on folds, so train the final network on the training set
-        if not run.silent:
-            print('Training with the best hyperparameters:')
-        learning_rate = best.pop(train_network.LEARNING_RATE.name, train_network.LEARNING_RATE.default)
-        network = build_network(args.architecture, len(run.encoder), run.task, best).to(run.device)
-        train_losses, val_losses = train_network.train(network, run.loader(run.train_set, shuffle=True),
-                                                       run.loader(run.val_set), run.task, run.device,
-                                                       learning_rate=learning_rate, n_epochs=args.epochs,
-                                                       stop_condition='iter', on_improvement=run.save,
-                                                       verbose=args.verbose, silent=args.silent)
+        network, train_losses, val_losses = train_with_best_values(args, run, best)
 
     common.finish_training_run(run, network, train_losses, val_losses)
 
 
-def check_search_arguments(args):
+def search_loaders(run: common.TrainingRun) -> list[tuple[DataLoader, DataLoader]]:
+    """The (training, validation) loaders configurations are scored on: the validation split, or each fold
+
+    Parameters
+    ----------
+    run : TrainingRun
+
+    Returns
+    -------
+    list of (DataLoader, DataLoader)
+    """
+    if run.cv_sets is None:
+        return [(run.loader(run.train_set, shuffle=True), run.loader(run.val_set))]
+    return [(run.loader(fold_train, shuffle=True), run.loader(fold_held_out))
+            for fold_train, fold_held_out in run.cv_sets]
+
+
+def run_search(args: argparse.Namespace, run: common.TrainingRun, space: hyperparameter_search.SearchSpace,
+               trainer: hyperparameter_search.TrialTrainer,
+               n_trials: int) -> tuple[hyperparameter_search.HyperparameterSearch, hyperparameter_search.Trial]:
+    """Run the search, writing the trials table after every step so far
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed arguments
+    run : TrainingRun
+    space : SearchSpace
+    trainer : TrialTrainer
+    n_trials : int
+        Number of configurations to try
+
+    Returns
+    -------
+    HyperparameterSearch
+        The finished search
+    Trial
+        Its best trial
+    """
+    trials_file = run.output_prefix + '_hyperparameter_trials.tsv'
+    searcher = hyperparameter_search.HyperparameterSearch(
+        space, trainer, n_trials, args.epochs, min_epochs=args.min_epochs, reduction_factor=args.reduction_factor,
+        rng=random_generator(), silent=run.silent, on_progress=lambda progress: progress.write_trials(trials_file))
+    return searcher, searcher.run()
+
+
+def train_with_best_values(args: argparse.Namespace, run: common.TrainingRun,
+                           best: dict[str, HyperParameterValue]) -> tuple[ParrotArchitecture, list[float], list[float]]:
+    """Train the final network on the training set with the best hyperparameters (after a cross-validated search)
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed arguments
+    run : TrainingRun
+    best : dict
+        The best configuration (including the learning rate)
+
+    Returns
+    -------
+    ParrotArchitecture
+        The trained network
+    list of float
+        Training loss per epoch
+    list of float
+        Validation loss per epoch
+    """
+    if not run.silent:
+        print('Training with the best hyperparameters:')
+    architecture_values = dict(best)
+    learning_rate = float(architecture_values.pop(train_network.LEARNING_RATE.name,
+                                                  train_network.LEARNING_RATE.default))
+    network = build_network(args.architecture, len(run.encoder), run.task, architecture_values).to(run.device)
+    train_losses, val_losses = train_network.train(network, run.loader(run.train_set, shuffle=True),
+                                                   run.loader(run.val_set), run.task, run.device,
+                                                   learning_rate=learning_rate, n_epochs=args.epochs,
+                                                   stop_condition='iter', on_improvement=run.save,
+                                                   verbose=args.verbose, silent=args.silent)
+    return network, train_losses, val_losses
+
+
+def check_search_arguments(args: argparse.Namespace) -> int:
     """Validate the search options, returning the number of trials
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed arguments
+
+    Returns
+    -------
+    int
+        The number of configurations to try
 
     Raises
     ------
@@ -120,7 +202,7 @@ def check_search_arguments(args):
     return n_trials
 
 
-def write_hyperparameters(path, architecture, hyperparameters):
+def write_hyperparameters(path: str, architecture: str, hyperparameters: dict[str, Any]) -> None:
     """Record the chosen hyperparameters as "<name>: <value>" lines
 
     Parameters
@@ -137,3 +219,7 @@ def write_hyperparameters(path, architecture, hyperparameters):
         f.write(f'architecture: {architecture}\n')
         for name, value in hyperparameters.items():
             f.write(f'{name}: {hyperparameter_search.format_value(value)}\n')
+
+
+if __name__ == '__main__':
+    main()

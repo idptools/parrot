@@ -1,5 +1,13 @@
 """
-Module with functions for dealing with automatic class balacing
+Class balancing for parrot-preprocess --class-balance: removing lines from
+classification data so that its classes are more balanced.
+
+The imbalance of a dataset is the count of its most common class divided by
+the count of its least common class (1.0 is perfectly balanced). Sequence
+classes are balanced by capping every class at the same size
+(run_class_balance_sequences); residue classes, where each line holds a mix of
+classes, by removing one line at a time, each time the line whose removal
+improves the balance most (run_class_balance_residues).
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -8,70 +16,70 @@ idptools-parrot was developed by the Holehouse lab
 Question/comments/concerns? Raise an issue on github:
 https://github.com/idptools/parrot
 
-Licensed under the MIT license. 
+Licensed under the MIT license.
 """
 
-import datetime
 import math
 from collections import defaultdict
+from typing import Any
 
 import numpy as np
 
-
-from parrot.parrot_exceptions import ParrotException 
-from parrot.tools.preproc import is_missing_label
+from parrot.parrot_exceptions import ParrotException
+from parrot.reproducibility import random_generator
+from parrot.tools.dataset_warnings import BALANCED_CLASS_RATIO
+from parrot.tools.preproc import Line, is_missing_label
 
 # Two balance scores closer than this (relative) are treated as equal
 SCORE_TOLERANCE = 1e-12
 
+# Imbalances are compared rounded to this many decimal places when choosing between equally good removals, so
+# floating-point noise cannot decide the choice
+TIE_BREAK_DECIMALS = 9
+
+# Defaults: balance until the classes are as balanced as dataset_warnings expects, removing at most a quarter of
+# the lines, and considering 100 lines for each removal of residue balancing
+DEFAULT_BALANCE_THRESHOLD = BALANCED_CLASS_RATIO
+DEFAULT_MAX_FRACTION_REMOVED = 0.25
+DEFAULT_BLOCK_SIZE = 100
+
+# Balancing to an imbalance above this makes little sense, so it is refused
+MAX_BALANCE_THRESHOLD = 5.0
 
 
-def __validate_class_balance_input(balance_threshold, max_fraction_removed):
-    """
-    Helper function that checks that a balance_threshold and a max_fraction_removed threshold
+def check_balance_settings(balance_threshold: float, max_fraction_removed: float) -> None:
+    """Check the target imbalance and the most data that may be removed
 
     Parameters
-    -------------
-    balance_threshold : float
-        Float that reports on the balance score threshold to be used. Expects to be between 1 and 5.0
-
-    max_fraction_removed : float
-        Fraction which defines the max fraction of the data that can be removed in the name of 
-        class balancing. Expects to be between 0 and 1 not inclusive.
-
-
-    Returns
     ----------
-    None
-        No return
+    balance_threshold : float
+        The imbalance to balance to, between 1 and MAX_BALANCE_THRESHOLD
+    max_fraction_removed : float
+        The largest fraction of the lines that may be removed, between 0 and 1 (exclusive)
 
     Raises
-    ----------
-    parrot.parrot_exceptions.ParrotException
-        If an invalid exception then raises a ParrotException
-
+    ------
+    ParrotException
+        If either is out of range
     """
-    
-    if balance_threshold < 1.0 or balance_threshold > 5:
-        raise ParrotException('Error during class balancing. The balance threshold must be between 1.0 and 5 - asking to balance with a balance score > 5 does not any sense')
+    if not 1.0 <= balance_threshold <= MAX_BALANCE_THRESHOLD:
+        raise ParrotException(f'Error during class balancing. The balance threshold must be between 1.0 and '
+                              f'{MAX_BALANCE_THRESHOLD:g} (balancing to a larger imbalance makes little sense)')
 
-    if max_fraction_removed <= 0 or max_fraction_removed >= 1.0:
-        raise ParrotException('Error during class balancing. max_fraction_removed must be between 0 and 1 (not inclusive)')
-    
+    if not 0 < max_fraction_removed < 1.0:
+        raise ParrotException('Error during class balancing. max_fraction_removed must be between 0 and 1 '
+                              '(not inclusive)')
 
-# ..........................................................................................
-#
-#    
-def class_key(label):
-    """
-    The class a label names: labels that are the same number ('1', '1.0') are the same class.
+
+def class_key(label: str) -> float | str:
+    """The class a label names: labels that are the same number ('1', '1.0') are the same class.
 
     Parameters
-    ------------
+    ----------
     label : str
 
     Returns
-    ----------
+    -------
     float or str
     """
     try:
@@ -80,17 +88,16 @@ def class_key(label):
         return label
 
 
-def class_count_matrix(lines):
-    """
-    Count each line's residues in each class (missing labels are not counted).
+def class_count_matrix(lines: list[Line]) -> tuple[list[Any], np.ndarray]:
+    """Count each line's residues in each class (missing labels are not counted).
 
     Parameters
-    ------------
+    ----------
     lines : list
         Parsed datafile lines ([id, sequence, label, label, ...])
 
     Returns
-    ----------
+    -------
     (list, numpy.ndarray)
         The classes, and an integer array with one row per line and one column per class
     """
@@ -104,17 +111,16 @@ def class_count_matrix(lines):
     return classes, counts
 
 
-def balance_scores(class_totals):
-    """
-    Score how imbalanced each row of class totals is.
+def balance_scores(class_totals: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Score how imbalanced each row of class totals is.
 
     Parameters
-    ------------
+    ----------
     class_totals : numpy.ndarray
         One row of class totals per possible dataset
 
     Returns
-    ----------
+    -------
     (numpy.ndarray, numpy.ndarray)
         The imbalance (most / least common class; inf if a class would have no
         members left), and a secondary score, the sum over classes of
@@ -128,16 +134,16 @@ def balance_scores(class_totals):
     return imbalance, spread
 
 
-def best_removal(totals, counts, candidates, current):
-    """
-    The candidate line whose removal improves the balance most, or None if none improves it.
+def best_removal(totals: np.ndarray, counts: np.ndarray, candidates: np.ndarray,
+                 current: tuple[float, float]) -> int | None:
+    """The candidate line whose removal improves the balance most, or None if none improves it.
 
     A removal improves the balance if it lowers the imbalance, or keeps it the
     same and lowers the secondary score (so ties for the most common class can
     be broken one line at a time).
 
     Parameters
-    ------------
+    ----------
     totals : numpy.ndarray
         Current class totals
     counts : numpy.ndarray
@@ -148,7 +154,7 @@ def best_removal(totals, counts, candidates, current):
         Current imbalance and secondary score
 
     Returns
-    ----------
+    -------
     int or None
     """
     imbalance, spread = balance_scores(totals[None, :] - counts[candidates])
@@ -157,75 +163,61 @@ def best_removal(totals, counts, candidates, current):
     better = np.flatnonzero(lower | level)
     if len(better) == 0:
         return None
-    best = better[np.lexsort((spread[better], np.round(imbalance[better], 9)))[0]]
+    best = better[np.lexsort((spread[better], np.round(imbalance[better], TIE_BREAK_DECIMALS)))[0]]
     return int(candidates[best])
 
 
-def run_class_balance_residues(lines,
-                               balance_threshold=1.4,
-                               block_size=100,
-                               max_fraction_removed=0.25,
-                               verbose=True,
-                               rng=None):
+def run_class_balance_residues(lines: list[Line], balance_threshold: float = DEFAULT_BALANCE_THRESHOLD,
+                               block_size: int = DEFAULT_BLOCK_SIZE,
+                               max_fraction_removed: float = DEFAULT_MAX_FRACTION_REMOVED,
+                               rng: np.random.Generator | None = None) -> tuple[list[Line], list[float]]:
+    """Remove lines from residue-classification data so its classes are more balanced
 
-    """
-    Remove lines from residue-classification data so its classes are more balanced.
-
-    This implements Stochastic Residue Class Balancing (SRCB). The imbalance
-    score is the count of the most common class divided by the count of the
-    least common class (1.0 is perfectly balanced). Each step draws block_size
-    lines at random, works out the imbalance after removing each of them, and
-    removes the one that improves it most. If none of the block improves the
-    balance, every remaining line is checked before giving up, and a line that
-    would make the balance worse (or delete a class entirely) is never removed.
-    Balancing stops when the imbalance is at most balance_threshold, when
-    max_fraction_removed of the lines have been removed, or when no single
-    removal improves the balance. Each step costs O(block_size), so this scales
-    to very large datasets; a larger block makes better choices.
+    This implements Stochastic Residue Class Balancing (SRCB). Each step draws
+    block_size lines at random, works out the imbalance after removing each of
+    them, and removes the one that improves it most. If none of the block
+    improves the balance, every remaining line is checked before giving up, and
+    a line that would make the balance worse (or delete a class entirely) is
+    never removed. Balancing stops when the imbalance is at most
+    balance_threshold, when max_fraction_removed of the lines have been removed,
+    or when no single removal improves the balance (see
+    residue_balance_stop_reason()). Each step costs O(block_size), so this
+    scales to very large datasets; a larger block makes better choices.
 
     Parameters
-    -------------
+    ----------
     lines : list
-        Lines is a list of lists, where each sublist is of the format [<id>, <sequence>, <class1>, ...,<classn>]. The
-        number of class1,class2 data points should match the number of residues in the <sequence>.
-
-    balance_threshold : float
-        Stop once the imbalance score (most common class / least common class) is at most this. We use a threshold
-        of 1.4 to match the warning thresholds defined in parrot.tools.dataset_warnings. Default = 1.4
-
-    block_size : int
-        Number of lines considered for removal at each step (at least 2). Default 100.
-
-    max_fraction_removed : float
-        The largest fraction of the lines that may be removed. Must be between 0 and 1 (not inclusive of
-        either). Default = 0.25.
-
-    verbose : bool
-        Flag which indicates if status and input info should be printed to screen.
-
+        Lines of the form [<id>, <sequence>, <class1>, ..., <classn>], with one
+        class label per residue
+    balance_threshold : float, optional
+        Stop once the imbalance (most common class / least common class) is at
+        most this
+    block_size : int, optional
+        Number of lines considered for removal at each step (at least 2)
+    max_fraction_removed : float, optional
+        The largest fraction of the lines that may be removed (between 0 and 1, exclusive)
     rng : numpy.random.Generator, optional
-        Source of randomness. By default one is seeded from NumPy's global generator, so
-        parrot.tools.cli.set_random_seed() makes balancing reproducible.
+        Source of randomness. By default one is seeded from NumPy's global
+        generator, so reproducibility.set_random_seed() makes balancing reproducible.
 
     Returns
-    -----------
-    (list, list)
-        Returns a tuple of two lists:
+    -------
+    list
+        The kept lines, in their input order
+    list of float
+        The imbalance before balancing and after each removal
 
-        [0] - The kept lines, in their input order.
-
-        [1] - The imbalance score before balancing and after each removal.
-
+    Raises
+    ------
+    ParrotException
+        If a setting is out of range or no line has a class label
     """
 
-    # validate input...
     if block_size < 2:
         raise ParrotException('Error during class balancing. Block size must be greater than 1')
-
-    __validate_class_balance_input(balance_threshold, max_fraction_removed)
-
+    check_balance_settings(balance_threshold, max_fraction_removed)
     if rng is None:
-        rng = np.random.default_rng(np.random.randint(2 ** 31))
+        rng = random_generator()
 
     classes, counts = class_count_matrix(lines)
     if len(classes) == 0:
@@ -236,37 +228,22 @@ def run_class_balance_residues(lines,
     current = (float(imbalance[0]), float(spread[0]))
     tracker = [current[0]]
 
-    # the most lines that may be removed (0 for very small datasets: max_fraction_removed is a hard limit)
-    budget = int(len(lines) * max_fraction_removed)
-
-    if verbose:
-        print('-------------------------------------------------------------------')
-        print('Performing automatic class balancing for residues (--class-balance)')
-        print('-------------------------------------------------------------------')
-        print('')
-        print(f'   Found {len(classes)} different classes accross {len(lines)} sequences')
-        print('   Class breakdown:')
-        print('   ' + format_class_counts(classes, totals))
-        print(f'   These classes have an imbalance ratio of {current[0]:.4g}')
-        print(f'   Max num. of removable sequences : {budget}')
-        print(f'   Imbalance threshold             : {balance_threshold}')
-        print(f'   Block size                      : {block_size}')
-        print(f'   Starting at {datetime.datetime.now()}')
+    # The most lines that may be removed (0 for very small datasets: max_fraction_removed is a hard limit)
+    budget = removal_budget(len(lines), max_fraction_removed)
 
     # Lines not yet removed, in no particular order; position[i] is where line i is in `remaining`
     remaining = np.arange(len(lines))
     position = np.arange(len(lines))
     n_remaining = len(lines)
-    stuck = False
     while len(tracker) - 1 < budget and tracker[-1] > balance_threshold:
         block = remaining[rng.integers(0, n_remaining, size=min(block_size, n_remaining))]
         choice = best_removal(totals, counts, block, current)
         if choice is None:
             choice = best_removal(totals, counts, remaining[:n_remaining], current)
             if choice is None:
-                stuck = True
                 break
 
+        # Remove the chosen line: move the last remaining line into its place
         totals = totals - counts[choice]
         last = remaining[n_remaining - 1]
         remaining[position[choice]] = last
@@ -278,38 +255,62 @@ def run_class_balance_residues(lines,
         tracker.append(current[0])
 
     kept = np.sort(remaining[:n_remaining])
-    new_lines = [lines[i] for i in kept]
-
-    if verbose:
-        removed = len(lines) - len(new_lines)
-        if stuck:
-            print(f'   Stopped: no single removal improves the balance any further')
-        print('   -------------------------------------')
-        print(f'   Complete at {datetime.datetime.now()}')
-        print(f'   Removed {removed} sequences ({removed / len(lines):.3f} of sequences)')
-        print(f'   Updated balance score: {tracker[-1]:.4g}')
-        print(f'   Updated class breakdown:')
-        print('   ' + format_class_counts(classes, totals))
-        print('   -------------------------------------\n')
-
-    return (new_lines, tracker)
+    return [lines[i] for i in kept], tracker
 
 
-def format_class_counts(classes, totals):
+def removal_budget(num_lines: int, max_fraction_removed: float) -> int:
+    """The most lines class balancing may remove.
+
+    Parameters
+    ----------
+    num_lines : int
+    max_fraction_removed : float
+
+    Returns
+    -------
+    int
+        max_fraction_removed of the lines, rounded down
+    """
+    return int(num_lines * max_fraction_removed)
+
+
+def residue_balance_stop_reason(tracker: list[float], balance_threshold: float, budget: int) -> str:
+    """Why run_class_balance_residues() stopped, in words
+
+    Parameters
+    ----------
+    tracker : list of float
+        The imbalance before balancing and after each removal
+    balance_threshold : float
+        The imbalance it balanced to
+    budget : int
+        The most lines it could remove (see removal_budget())
+
+    Returns
+    -------
+    str
+    """
+    if tracker[-1] <= balance_threshold:
+        return f'the imbalance reached the target of {balance_threshold:g}'
+    if len(tracker) - 1 >= budget:
+        return f'the most lines that may be removed ({budget:,}) were removed'
+    return 'no single removal improves the balance any further'
+
+
+def format_class_counts(classes: list[Any], totals: np.ndarray | list[int]) -> str:
     """Class counts as text, e.g. '0: 120, 1: 80'."""
     return ', '.join(f'{format_class(key)}: {int(total):,}' for key, total in zip(classes, totals))
 
 
-def format_class(key):
+def format_class(key: float | str) -> str:
     """A class key (see class_key) as text: whole numbers without a decimal point."""
     if isinstance(key, float) and key.is_integer():
         return str(int(key))
     return str(key)
 
 
-def sequence_class_cap(class_counts, budget, balance_threshold):
-    """
-    The largest number of lines each class can keep, for sequence class balancing.
+def sequence_class_cap(class_counts: list[int], budget: int, balance_threshold: float) -> int:
+    """The largest number of lines each class can keep, for sequence class balancing.
 
     Capping every class at the same size is the best possible balancing of
     sequence classes: the cap is lowered until the most common class is at most
@@ -317,7 +318,7 @@ def sequence_class_cap(class_counts, budget, balance_threshold):
     the budget, whichever comes first. The least common class is never reduced.
 
     Parameters
-    ------------
+    ----------
     class_counts : list of int
         Lines in each class
     budget : int
@@ -325,7 +326,7 @@ def sequence_class_cap(class_counts, budget, balance_threshold):
     balance_threshold : float
 
     Returns
-    ----------
+    -------
     int
     """
     smallest, largest = min(class_counts), max(class_counts)
@@ -333,7 +334,8 @@ def sequence_class_cap(class_counts, budget, balance_threshold):
     if target >= largest:
         return largest
 
-    def removals(cap):
+    def removals(cap: int) -> int:
+        """Lines removed if every class is capped at `cap`."""
         return sum(max(0, count - cap) for count in class_counts)
 
     if removals(target) <= budget:
@@ -350,14 +352,10 @@ def sequence_class_cap(class_counts, budget, balance_threshold):
     return high
 
 
-def run_class_balance_sequences(lines,
-                                balance_threshold=1.4,
-                                max_fraction_removed=0.25,
-                                verbose=True,
-                                rng=None):
-
-    """
-    Remove lines from sequence-classification data so its classes are more balanced.
+def run_class_balance_sequences(lines: list[Line], balance_threshold: float = DEFAULT_BALANCE_THRESHOLD,
+                                max_fraction_removed: float = DEFAULT_MAX_FRACTION_REMOVED,
+                                rng: np.random.Generator | None = None) -> list[Line]:
+    """Remove lines from sequence-classification data so its classes are more balanced
 
     Every class is capped at the same size, chosen by sequence_class_cap():
     the cap is lowered until the most common class is at most
@@ -367,40 +365,34 @@ def run_class_balance_sequences(lines,
     over its cap at random; lines with a missing label are never removed.
 
     Parameters
-    -------------
+    ----------
     lines : list
-        Lines is a list of lists, where each sublist is of the format [<id>, <sequence>, <class>].
-
-    balance_threshold : float
-        Stop once the imbalance score (most common class / least common class) is at most this. We use a threshold
-        of 1.4 to match the warning thresholds defined in parrot.tools.dataset_warnings. Default = 1.4
-
-    max_fraction_removed : float
-        The largest fraction of the lines that may be removed. Must be between 0 and 1 (not inclusive of
-        either). Default = 0.25.
-
-    verbose : bool
-        Flag which indicates if status and input info should be printed to screen.
-
+        Lines of the form [<id>, <sequence>, <class>]
+    balance_threshold : float, optional
+        Stop once the imbalance (most common class / least common class) is at most this
+    max_fraction_removed : float, optional
+        The largest fraction of the lines that may be removed (between 0 and 1, exclusive)
     rng : numpy.random.Generator, optional
-        Source of randomness. By default one is seeded from NumPy's global generator, so
-        parrot.tools.cli.set_random_seed() makes balancing reproducible.
+        Source of randomness. By default one is seeded from NumPy's global
+        generator, so reproducibility.set_random_seed() makes balancing reproducible.
 
     Returns
-    -----------
+    -------
     list
-        The kept lines, in their input order.
+        The kept lines, in their input order
 
+    Raises
+    ------
+    ParrotException
+        If a setting is out of range or no line has a class label
     """
 
-    # validate input options (same validation as used for run_class_balance_residues())
-    __validate_class_balance_input(balance_threshold, max_fraction_removed)
-
+    check_balance_settings(balance_threshold, max_fraction_removed)
     if rng is None:
-        rng = np.random.default_rng(np.random.randint(2 ** 31))
+        rng = random_generator()
 
-    # line numbers of each class; lines with a missing label belong to no class and are kept
-    members = defaultdict(list)
+    # Line numbers of each class; lines with a missing label belong to no class and are kept
+    members: dict[Any, list[int]] = defaultdict(list)
     for index, line in enumerate(lines):
         if not is_missing_label(line[2]):
             members[class_key(line[2])].append(index)
@@ -409,31 +401,11 @@ def run_class_balance_sequences(lines,
 
     classes = sorted(members, key=lambda key: (isinstance(key, str), key))
     before = [len(members[key]) for key in classes]
-    budget = int(len(lines) * max_fraction_removed)
-    cap = sequence_class_cap(before, budget, balance_threshold)
+    cap = sequence_class_cap(before, removal_budget(len(lines), max_fraction_removed), balance_threshold)
 
-    removed = set()
+    removed: set[int] = set()
     for key in classes:
         excess = len(members[key]) - cap
         if excess > 0:
             removed.update(rng.choice(members[key], size=excess, replace=False).tolist())
-    new_lines = [line for index, line in enumerate(lines) if index not in removed]
-    after = [min(count, cap) for count in before]
-
-    if verbose:
-        print('-------------------------------------------------------------------')
-        print('Performing automatic class balancing for sequences (--class-balance)')
-        print('-------------------------------------------------------------------')
-        print('')
-        print(f'   Found {len(classes)} different classes accross {len(lines)} sequences')
-        print('   Class breakdown: ' + format_class_counts(classes, before))
-        print(f'   These classes have an imbalance ratio of {max(before) / min(before):.4g}')
-        print(f'   Max num. of removable sequences: {budget}')
-        print(f'   Imbalance threshold            : {balance_threshold}')
-        print(f'   Removed {len(removed)} sequences ({len(removed) / len(lines):.3f} of sequences), capping every '
-              f'class at {cap}')
-        print(f'   Updated balance score: {max(after) / min(after):.4g}')
-        print('   Updated class breakdown: ' + format_class_counts(classes, after))
-        print('   -------------------------------------\n')
-
-    return new_lines
+    return [line for index, line in enumerate(lines) if index not in removed]

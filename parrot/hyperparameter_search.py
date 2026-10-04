@@ -477,7 +477,7 @@ class HyperparameterSearch:
         return best_trial
 
     def best_values(self, trial: Trial) -> dict[str, HyperParameterValue]:
-        """The learning rate (for networks trained by gradient descent) and every architecture hyperparameter of a trial.
+        """The learning rate (if trained by gradient descent) and every architecture hyperparameter of a trial.
 
         Parameters
         ----------

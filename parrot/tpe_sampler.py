@@ -71,7 +71,8 @@ class TPESampler:
         self.space = space
         self.rng = rng
         self._numeric = np.array([space.is_numeric(hyperparameter) for hyperparameter in space.dimensions])
-        self._choice_counts = np.array([len(hyperparameter.search_choices or ()) for hyperparameter in space.dimensions])
+        self._choice_counts = np.array([len(hyperparameter.search_choices or ())
+                                        for hyperparameter in space.dimensions])
 
     def n_good(self, n_observations: int) -> int:
         """How many of the best configurations make up the good density.
@@ -130,7 +131,8 @@ class TPESampler:
 
         good_bandwidth, bad_bandwidth = self._bandwidths(good), self._bandwidths(bad)
         candidates = self._sample(good, good_bandwidth * BANDWIDTH_FACTOR, CANDIDATES_PER_SUGGESTION)
-        log_ratio = self._log_density(candidates, good, good_bandwidth) - self._log_density(candidates, bad, bad_bandwidth)
+        log_ratio = (self._log_density(candidates, good, good_bandwidth)
+                     - self._log_density(candidates, bad, bad_bandwidth))
         return candidates[np.argsort(-log_ratio, kind='stable')]
 
     def _bandwidths(self, points: np.ndarray) -> np.ndarray:

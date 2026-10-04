@@ -287,7 +287,7 @@ def plateau_reached(val_loss: float, recent_val_losses: list[float], epochs_sinc
 @full_float32_precision()
 def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: DataLoader, task: Task,
           device: str | torch.device, learning_rate: float, n_epochs: int, stop_condition: str = 'iter',
-          on_improvement: Callable[[nn.Module], None] | None = None, verbose: bool = False,
+          on_improvement: Callable[[ParrotArchitecture], None] | None = None, verbose: bool = False,
           silent: bool = False) -> tuple[list[float], list[float]]:
     """Train a network, keeping the weights that perform best on the validation set
 
@@ -415,7 +415,8 @@ def train_epoch(network: nn.Module, loader: DataLoader, task: Task, criterion: n
 
 
 def fit_in_one_step(network: ParrotArchitecture, train_loader: DataLoader, val_loader: DataLoader, task: Task,
-                    device: str | torch.device, on_improvement: Callable[[nn.Module], None] | None = None,
+                    device: str | torch.device,
+                    on_improvement: Callable[[ParrotArchitecture], None] | None = None,
                     silent: bool = False) -> tuple[list[float], list[float]]:
     """Fit a model that is not trained by gradient descent, and report its losses
 

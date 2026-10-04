@@ -1,5 +1,11 @@
 """
-Module with functions used in parrot-preprocess
+The steps of parrot-preprocess that clean, deduplicate and recode a datafile,
+and write the processed datafile.
+
+Every function here works on parsed datafile lines ([ID, sequence, value(s)],
+all as text, as read by process_input_data.read_tsv_raw()) and records what it
+did in a ProcessingReport rather than printing it. Splitting is in splitting.py
+and class balancing in class_balancing.py.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -8,26 +14,30 @@ idptools-parrot was developed by the Holehouse lab
 Question/comments/concerns? Raise an issue on github:
 https://github.com/idptools/parrot
 
-Licensed under the MIT license. 
+Licensed under the MIT license.
 """
 
 import math
 from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from datetime import datetime
 
 import numpy as np
 
 from parrot import process_input_data as pid
+from parrot.sequence_encoder import STANDARD_AMINO_ACIDS
+from parrot.tools.splitting import SET_NAMES
 
-# The 20 standard amino acids (the residues every PARROT encoding understands)
-STANDARD_AMINO_ACIDS = frozenset('ACDEFGHIKLMNPQRSTVWY')
+# A datafile line, split into fields: [ID, sequence, value, value, ...]
+Line = list[str]
 
 # How identical sequences are deduplicated (see deduplicate())
 DEDUPLICATION_MODES = ('merge', 'first', 'drop')
 
+# Whole numbers smaller than this are written without a decimal point (larger ones lose precision as integers)
+LARGEST_EXACT_WHOLE_NUMBER = 1e15
 
-# .................................................................
-#
-#
+
 class ProcessingReport:
     """Records what parrot-preprocess did, for printing and for the report file
 
@@ -39,37 +49,44 @@ class ProcessingReport:
         Print each line as it is added
     """
 
-    def __init__(self, verbose=False):
-        self.lines = []
+    def __init__(self, verbose: bool = False) -> None:
+        """
+        Parameters
+        ----------
+        verbose : bool, optional
+            Print each line as it is added
+        """
+        self.lines: list[str] = []
         self.verbose = verbose
 
-    def add(self, text=''):
+    def add(self, text: str = '') -> None:
         """Add a line to the report."""
         self.lines.append(text)
         if self.verbose:
             print(text)
 
-    def section(self, title):
+    def section(self, title: str) -> None:
         """Start a new titled section."""
         self.add()
         self.add(title)
         self.add('-' * len(title))
 
-    def write(self, path):
+    def write(self, path: str) -> None:
         """Write the report to a file."""
         with open(path, 'w') as fh:
             fh.write('\n'.join(self.lines) + '\n')
 
 
 # .................................................................
-#
-#
-def clean_sequences(lines, report, uppercase=False, remove_nonstandard=False, min_length=None, max_length=None):
-    """
-    Optionally upper-case sequences, and remove sequences with non-standard residues or outside a length range.
+# Cleaning sequences
+
+def clean_sequences(lines: list[Line], report: ProcessingReport, uppercase: bool = False,
+                    remove_nonstandard: bool = False, min_length: int | None = None,
+                    max_length: int | None = None) -> list[Line]:
+    """Optionally upper-case sequences, and remove sequences with non-standard residues or outside a length range
 
     Parameters
-    -----------
+    ----------
     lines : list
         Parsed datafile lines ([id, sequence, value(s)...])
     report : ProcessingReport
@@ -82,7 +99,7 @@ def clean_sequences(lines, report, uppercase=False, remove_nonstandard=False, mi
         Remove sequences shorter or longer than these
 
     Returns
-    ----------
+    -------
     list
         The kept lines
     """
@@ -92,42 +109,116 @@ def clean_sequences(lines, report, uppercase=False, remove_nonstandard=False, mi
         report.add(f'Converted {changed:,} sequences to upper case')
 
     if remove_nonstandard:
-        letters = Counter()
-        kept = []
-        for line in lines:
-            unknown = set(line[1]) - STANDARD_AMINO_ACIDS
-            if unknown:
-                letters.update(unknown)
-            else:
-                kept.append(line)
-        report.add(f'Removed {len(lines) - len(kept):,} sequences containing residues other than the 20 standard '
-                   f'amino acids' + (f' ({", ".join(sorted(letters))})' if letters else ''))
+        lines = remove_nonstandard_sequences(lines, report)
+
+    if min_length is not None:
+        kept = [line for line in lines if len(line[1]) >= min_length]
+        report.add(f'Removed {len(lines) - len(kept):,} sequences shorter than {min_length} residues')
         lines = kept
 
-    for limit, too_far, words in ((min_length, lambda n: n < min_length, 'shorter than'),
-                                  (max_length, lambda n: n > max_length, 'longer than')):
-        if limit is not None:
-            kept = [line for line in lines if not too_far(len(line[1]))]
-            report.add(f'Removed {len(lines) - len(kept):,} sequences {words} {limit} residues')
-            lines = kept
+    if max_length is not None:
+        kept = [line for line in lines if len(line[1]) <= max_length]
+        report.add(f'Removed {len(lines) - len(kept):,} sequences longer than {max_length} residues')
+        lines = kept
     return lines
 
 
-def format_number(value):
-    """Format a value for a datafile: whole numbers without a decimal point, missing values as 'nan'."""
-    if np.isnan(value):
-        return pid.MISSING_LABEL_TEXT
-    if float(value).is_integer() and abs(value) < 1e15:
-        return str(int(value))
-    return repr(float(value))
-
-
-def deduplicate(lines, mode, datatype, classification, report):
-    """
-    Deal with sequences that appear more than once, keeping one line per unique sequence (or none).
+def remove_nonstandard_sequences(lines: list[Line], report: ProcessingReport) -> list[Line]:
+    """Remove sequences containing anything other than the 20 standard amino acids, reporting which letters
 
     Parameters
-    -----------
+    ----------
+    lines : list
+        Parsed datafile lines
+    report : ProcessingReport
+
+    Returns
+    -------
+    list
+        The kept lines
+    """
+    standard = set(STANDARD_AMINO_ACIDS)
+    letters: Counter[str] = Counter()
+    kept = []
+    for line in lines:
+        unknown = set(line[1]) - standard
+        if unknown:
+            letters.update(unknown)
+        else:
+            kept.append(line)
+    report.add(f'Removed {len(lines) - len(kept):,} sequences containing residues other than the 20 standard '
+               f'amino acids' + (f' ({", ".join(sorted(letters))})' if letters else ''))
+    return kept
+
+
+# .................................................................
+# Duplicates
+
+def remove_line_duplicates(lines: list[Line]) -> list[Line]:
+    """Remove lines that are exact copies of an earlier line (same ID, sequence and values)
+
+    The first copy of each line is kept, and the lines stay in their input order.
+
+    Parameters
+    ----------
+    lines : list
+        Parsed datafile lines
+
+    Returns
+    -------
+    list
+        The kept lines
+    """
+    seen: set[tuple[str, ...]] = set()
+    kept = []
+    for line in lines:
+        fields = tuple(line)
+        if fields not in seen:
+            seen.add(fields)
+            kept.append(line)
+    return kept
+
+
+def count_repeated_sequences(lines: list[Line]) -> int:
+    """How many sequences appear on more than one line
+
+    Parameters
+    ----------
+    lines : list
+        Parsed datafile lines
+
+    Returns
+    -------
+    int
+    """
+    return sum(count > 1 for count in Counter(line[1] for line in lines).values())
+
+
+@dataclass
+class MergeSummary:
+    """What merging the copies of duplicated sequences did, for the report (see deduplicate())
+
+    Attributes
+    ----------
+    conflicting_sequences : int
+        Sequence classification: sequences whose copies had different labels (removed)
+    disagreeing_residues : int
+        Residue classification: residues whose labelled copies disagreed (made missing)
+    spreads : list of float
+        Sequence regression: the range of each sequence's copies' values
+    """
+
+    conflicting_sequences: int = 0
+    disagreeing_residues: int = 0
+    spreads: list[float] = field(default_factory=list)
+
+
+def deduplicate(lines: list[Line], mode: str, datatype: str, classification: bool,
+                report: ProcessingReport) -> list[Line]:
+    """Deal with sequences that appear more than once, keeping one line per unique sequence (or none)
+
+    Parameters
+    ----------
     lines : list
         Parsed datafile lines ([id, sequence, value(s)...])
     mode : str
@@ -146,151 +237,201 @@ def deduplicate(lines, mode, datatype, classification, report):
         Where to record what was done
 
     Returns
-    ----------
+    -------
     list
         One line per kept sequence, in order of first appearance, with the first copy's ID
     """
     if mode not in DEDUPLICATION_MODES:
         raise ValueError(f"Unknown deduplication mode '{mode}': choose from {', '.join(DEDUPLICATION_MODES)}")
 
-    copies_of = defaultdict(list)
+    copies_of: dict[str, list[Line]] = defaultdict(list)
     for line in lines:
         copies_of[line[1]].append(line)
     duplicated = {sequence: copies for sequence, copies in copies_of.items() if len(copies) > 1}
     report.add(f'{len(duplicated):,} sequences appear more than once '
                f'({sum(len(copies) for copies in duplicated.values()) - len(duplicated):,} extra copies)')
 
-    merged = {}
-    conflicting = disagreeing_residues = 0
-    spreads = []
-    for sequence, copies in duplicated.items():
-        if mode == 'first':
-            merged[sequence] = copies[0]
-            continue
-        if mode == 'drop':
-            merged[sequence] = None
-            continue
+    summary = MergeSummary()
+    merged = {sequence: merge_copies(copies, mode, datatype, classification, summary)
+              for sequence, copies in duplicated.items()}
 
-        first = copies[0]
-        if datatype == 'sequence':
-            values = [copy[2] for copy in copies]
-            if classification:
-                if len(set(values)) > 1:
-                    conflicting += 1
-                    merged[sequence] = None
-                else:
-                    merged[sequence] = first
-            else:
-                numbers = np.array(values, dtype=float)
-                spreads.append(float(np.nanmax(numbers) - np.nanmin(numbers)) if np.any(~np.isnan(numbers)) else 0.0)
-                mean = np.nanmean(numbers) if np.any(~np.isnan(numbers)) else np.nan
-                merged[sequence] = [first[0], sequence, format_number(mean)]
-        else:
-            if any(len(copy) != len(first) for copy in copies):
-                raise ValueError(f'Copies of {first[0]} have different numbers of values')
-            if classification:
-                labels = []
-                for position in range(2, len(first)):
-                    present = {copy[position] for copy in copies if not is_missing_label(copy[position])}
-                    if len(present) > 1:
-                        disagreeing_residues += 1
-                        labels.append(pid.MISSING_LABEL_TEXT)
-                    else:
-                        labels.append(present.pop() if present else pid.MISSING_LABEL_TEXT)
-            else:
-                numbers = np.array([copy[2:] for copy in copies], dtype=float)
-                labelled = ~np.isnan(numbers)
-                with np.errstate(invalid='ignore'):
-                    means = np.where(labelled.any(axis=0), np.nansum(numbers, axis=0) / labelled.sum(axis=0), np.nan)
-                labels = [format_number(value) for value in means]
-            merged[sequence] = [first[0], sequence] + labels
-
+    # Each duplicated sequence's merged line (if any) takes the place of its first copy
     kept = []
     for line in lines:
         sequence = line[1]
         if sequence not in duplicated:
             kept.append(line)
         elif sequence in merged:
-            if merged[sequence] is not None:
-                kept.append(merged[sequence])
-            del merged[sequence]
+            merged_line = merged.pop(sequence)
+            if merged_line is not None:
+                kept.append(merged_line)
 
     if duplicated:
-        if mode == 'first':
-            report.add('Kept the first copy of each')
-        elif mode == 'drop':
-            report.add('Removed every copy of each (we cannot know which is right)')
-        elif datatype == 'sequence' and classification:
-            report.add(f'Removed {conflicting:,} of them whose copies had different labels; kept one copy of the rest')
-        elif datatype == 'sequence':
-            report.add(f'Merged the copies of each by averaging their values (median range between copies '
-                       f'{np.median(spreads):.3g}, largest {np.max(spreads):.3g})')
-        elif classification:
-            report.add(f'Merged the copies of each residue by residue; {disagreeing_residues:,} residues whose '
-                       'labelled copies disagreed became missing (nan)')
-        else:
-            report.add('Merged the copies of each residue by residue, averaging their labelled values')
+        report.add(describe_merge(mode, datatype, classification, summary))
     report.add(f'{len(kept):,} lines remain')
     return kept
 
 
-def write_dataset(lines, splits, datafile, split_file, report):
-    """
-    Write a PARROT datafile and, if sets were assigned, the matching split-file.
-
-    With sets, lines are written in the order training, validation, test, and the
-    split-file lists the line numbers of each set, so the data can be trained on
-    with parrot-train --split.
+def merge_copies(copies: list[Line], mode: str, datatype: str, classification: bool,
+                 summary: MergeSummary) -> Line | None:
+    """The one line that replaces the copies of a duplicated sequence, or None to remove them all
 
     Parameters
-    -----------
-    lines : list
-        Lines to write
-    splits : list of str or None
-        The set ('train', 'val' or 'test') of each line, or None to write the
-        lines in order without a split-file
-    datafile, split_file : str
-        Where to write them
-    report : ProcessingReport
-        Where to record what was written
+    ----------
+    copies : list
+        Every line with this sequence, in order
+    mode, datatype, classification
+        See deduplicate()
+    summary : MergeSummary
+        Updated with what was done
+
+    Returns
+    -------
+    list or None
     """
-    if splits is not None:
-        order = [i for name in ('train', 'val', 'test') for i in range(len(lines)) if splits[i] == name]
-        if len(order) != len(lines):
-            raise ValueError('Every line must be assigned to train, val or test')
-        lines = [lines[i] for i in order]
-        splits = [splits[i] for i in order]
+    if mode == 'first':
+        return copies[0]
+    if mode == 'drop':
+        return None
 
-    with open(datafile, 'w') as fh:
-        for line in lines:
-            fh.write(' '.join(line) + '\n')
+    if datatype == 'sequence':
+        return merge_sequence_labels(copies, summary) if classification else merge_sequence_values(copies, summary)
 
-    if splits is None:
-        report.add(f'Wrote {len(lines):,} lines to {datafile}')
-        return
+    if any(len(copy) != len(copies[0]) for copy in copies):
+        raise ValueError(f'Copies of {copies[0][0]} have different numbers of values')
+    return merge_residue_labels(copies, summary) if classification else merge_residue_values(copies)
 
-    indices = {name: np.array([i for i, split in enumerate(splits) if split == name], dtype=int)
-               for name in ('train', 'val', 'test')}
-    pid.write_split_file(split_file, indices['train'], indices['val'], indices['test'])
-    report.add(f'Wrote {len(lines):,} lines to {datafile} (training {len(indices["train"]):,}, validation '
-               f'{len(indices["val"]):,}, test {len(indices["test"]):,}) and the matching split-file {split_file}')
+
+def merge_sequence_labels(copies: list[Line], summary: MergeSummary) -> Line | None:
+    """Sequence classification: keep the first copy if every copy has the same label, otherwise none
+
+    Parameters
+    ----------
+    copies : list
+        Every line with this sequence
+    summary : MergeSummary
+        Counts the sequences whose copies disagree
+
+    Returns
+    -------
+    list or None
+    """
+    if len({copy[2] for copy in copies}) > 1:
+        summary.conflicting_sequences += 1
+        return None
+    return copies[0]
+
+
+def merge_sequence_values(copies: list[Line], summary: MergeSummary) -> Line:
+    """Sequence regression: one line with the average of the copies' values (missing values ignored)
+
+    Parameters
+    ----------
+    copies : list
+        Every line with this sequence
+    summary : MergeSummary
+        Records the range of the copies' values
+
+    Returns
+    -------
+    list
+    """
+    numbers = np.array([copy[2] for copy in copies], dtype=float)
+    labelled = ~np.isnan(numbers)
+    summary.spreads.append(float(np.nanmax(numbers) - np.nanmin(numbers)) if labelled.any() else 0.0)
+    mean = np.nanmean(numbers) if labelled.any() else np.nan
+    return [copies[0][0], copies[0][1], format_number(mean)]
+
+
+def merge_residue_labels(copies: list[Line], summary: MergeSummary) -> Line:
+    """Residue classification: each residue keeps its label if every labelled copy agrees, otherwise it becomes missing
+
+    Parameters
+    ----------
+    copies : list
+        Every line with this sequence (all with the same number of values)
+    summary : MergeSummary
+        Counts the residues whose labelled copies disagree
+
+    Returns
+    -------
+    list
+    """
+    first = copies[0]
+    labels = []
+    for position in range(2, len(first)):
+        present = {copy[position] for copy in copies if not is_missing_label(copy[position])}
+        if len(present) > 1:
+            summary.disagreeing_residues += 1
+            labels.append(pid.MISSING_LABEL_TEXT)
+        else:
+            labels.append(present.pop() if present else pid.MISSING_LABEL_TEXT)
+    return [first[0], first[1]] + labels
+
+
+def merge_residue_values(copies: list[Line]) -> Line:
+    """Residue regression: each residue gets the average of its labelled copies (missing if none is labelled)
+
+    Parameters
+    ----------
+    copies : list
+        Every line with this sequence (all with the same number of values)
+
+    Returns
+    -------
+    list
+    """
+    numbers = np.array([copy[2:] for copy in copies], dtype=float)
+    labelled = ~np.isnan(numbers)
+    with np.errstate(invalid='ignore'):
+        means = np.where(labelled.any(axis=0), np.nansum(numbers, axis=0) / labelled.sum(axis=0), np.nan)
+    return [copies[0][0], copies[0][1]] + [format_number(value) for value in means]
+
+
+def describe_merge(mode: str, datatype: str, classification: bool, summary: MergeSummary) -> str:
+    """The report line describing how the copies of duplicated sequences were dealt with
+
+    Parameters
+    ----------
+    mode, datatype, classification
+        See deduplicate()
+    summary : MergeSummary
+
+    Returns
+    -------
+    str
+    """
+    if mode == 'first':
+        return 'Kept the first copy of each'
+    if mode == 'drop':
+        return 'Removed every copy of each (we cannot know which is right)'
+    if datatype == 'sequence' and classification:
+        return (f'Removed {summary.conflicting_sequences:,} of them whose copies had different labels; kept one '
+                'copy of the rest')
+    if datatype == 'sequence':
+        return (f'Merged the copies of each by averaging their values (median range between copies '
+                f'{np.median(summary.spreads):.3g}, largest {np.max(summary.spreads):.3g})')
+    if classification:
+        return (f'Merged the copies of each residue by residue; {summary.disagreeing_residues:,} residues whose '
+                'labelled copies disagreed became missing (nan)')
+    return 'Merged the copies of each residue by residue, averaging their labelled values'
 
 
 # .................................................................
-#
-#
-def is_missing_label(label):
-    """
-    True if a label marks a missing value: 'nan' in any capitalisation, exactly as
-    PARROT reads datafiles (residues with a missing label are ignored in training).
+# Labels
+
+def is_missing_label(label: str) -> bool:
+    """True if a label marks a missing value: 'nan' in any capitalisation, exactly as PARROT reads datafiles
+
+    Residues with a missing label are ignored in training.
 
     Parameters
-    -----------
+    ----------
     label : str
         A class label or value as written in a datafile
 
     Returns
-    ----------
+    -------
     bool
     """
     try:
@@ -299,36 +440,42 @@ def is_missing_label(label):
         return False
 
 
-# .................................................................
-#
-#
-def recode_classes(lines):
+def format_number(value: float) -> str:
+    """Format a value for a datafile: whole numbers without a decimal point, missing values as 'nan'.
+
+    Parameters
+    ----------
+    value : float
+
+    Returns
+    -------
+    str
     """
-    Function which takes a set of data read in (lines) and converts it into a PARROT-compliant set of 
-    lines files where classes start at 0. This works for both residue and sequence datatypes.
+    if np.isnan(value):
+        return pid.MISSING_LABEL_TEXT
+    if float(value).is_integer() and abs(value) < LARGEST_EXACT_WHOLE_NUMBER:
+        return str(int(value))
+    return repr(float(value))
+
+
+def recode_classes(lines: list[Line]) -> tuple[list[Line], dict[str, int]]:
+    """Renumber class labels as consecutive whole numbers from 0, as PARROT needs (residue or sequence data)
 
     If every label is a number, classes are ordered by value and labels with the same value
     (e.g. '1' and '1.0') are the same class; otherwise labels are ordered alphabetically.
     Missing labels ('nan') are not a class and are written out unchanged.
 
     Parameters
-    -----------
+    ----------
     lines : list
-        The lines list is a list of lists, where each sublist corresponds to a line in a parsed
-        datafile. If the dataype is sequence then each sublist has three elements (id, sequence, class/score),
-        while if the datatype is residues then each sublists has n elements (id, sequence, per-residue scores or 
-        classes for each residue).
-
+        Parsed datafile lines ([id, sequence, label(s)...])
 
     Returns
-    -------------
+    -------
     list
-        Returns a revised lines list, where sequence or residue classes are numbered consecutively
-        from 0.
-
+        The lines with each label replaced by its class number
     dict
-        Maps each label found in the input to its new class number
-    
+        Maps each label found in the input to its class number
     """
 
     labels = {label for line in lines for label in line[2:] if not is_missing_label(label)}
@@ -346,106 +493,71 @@ def recode_classes(lines):
     else:
         class_mapping = {label: number for number, label in enumerate(sorted(labels))}
 
-    n_classes = len(set(class_mapping.values()))
-    if n_classes > 100:
-        print(f'WARNING: {n_classes} individual classes found. This is probably not a good classification problem...')
-
-    # build a new lines list, where the sequence or residue classes are mapped via class_mapping
     new_lines = []
     for line in lines:
         new_labels = [label if is_missing_label(label) else str(class_mapping[label]) for label in line[2:]]
         new_lines.append([line[0], line[1]] + new_labels)
 
-    return (new_lines, class_mapping)
-
+    return new_lines, class_mapping
 
 
 # .................................................................
-#
-#
-def remove_line_duplicates(lines, verbose=False):
-    """
-    Function that removes true duplicates and warns about potential psuedoduplicates if
-    verbose is set to true.
+# Writing
+
+def write_class_mapping(path: str, mapping: dict[str, int]) -> None:
+    """Write which class number each original label was given (see recode_classes())
 
     Parameters
-    -------------
-    lines : list
-        Lines list file generated by parrot.process_input_data.__read_tsv(<filename>).
-
-    verbose : bool
-        Flag which tells the function how loud to be. Default = False.
-
-    Returns
-    ------------
-    list
-        Returns an updated lines file that has had all the true duplicate lines removed (i.e.
-        lines where the id, sequence, and data were all identical. 
-    
-
+    ----------
+    path : str
+        File to write
+    mapping : dict
+        Original label -> class number
     """
-
-    if verbose:
-        print('---------------------------------------------------------------')
-        print('Performing duplicate checking/removal --remove-line-duplicates ')
-        print('---------------------------------------------------------------')
-
-    found = {}
-    all_sequences = set([])
-    duplicate_count = 0
-    seq_duplicate_count = 0
-    seq_duplicate_count_full = 0
-
-    # for each line
-    for i in lines:
-
-        # this part ONLY keeps track of sequences. Note these are not removed
-        # because which one should you remove!
-        if i[1] in all_sequences:
-            seq_duplicate_count_full = seq_duplicate_count_full + 1
-        else:
-            all_sequences.add(i[1])
-
-        # if the ID code is has not yet been seen
-        if i[0] not in found:
-            found[i[0]] = [i]
-
-        # else if the ID code (first column in datafile) HAS been seen
-        else:
-            
-            # set the unique flag to true
-            this_is_a_duplicate = False
-
-            # for EVERY time it was seen (hits is a previous line)
-            for hits in found[i[0]]:
-
-                # if the sequence ALSO MATCHED
-                if hits[1] == i[1]:
-                    seq_duplicate_count = seq_duplicate_count + 1
-                    
-                    if hits[2:] == i[2:]:
-                        duplicate_count = duplicate_count + 1
-                        #
-                        this_is_a_duplicate = True
-
-            # if we get here then this was 
-            if this_is_a_duplicate is False:
-                found[i[0]].append(i)
-
-    if verbose:
-        print(f'   Found {duplicate_count} full duplicate lines in this file. These have been removed.\n')
-        print(f'   Also found {seq_duplicate_count} ID-sequence duplicates in this file (same ID, same sequence, different data.\n   If any of these were full duplicates (likely) they will have been removed.\n')
-        print(f'   Found {seq_duplicate_count_full} sequence duplicates in this file (same sequence with different ID and different data).\n   If any of these were full duplicates (likely) they will have been removed.\n')
-
-    new_lines = []
-    for id_key in found:
-        for x in found[id_key]:
-            new_lines.append(x)
-
-    return new_lines
-        
-                
+    with open(path, 'w') as fh:
+        fh.write('File generated by parrot-preprocess\n\n')
+        fh.write(f'File generated at {datetime.now()}\n')
+        fh.write(f'Number of classes: {len(set(mapping.values()))}\n\n')
+        for label, number in mapping.items():
+            fh.write(f'{label} = {number}\n')
 
 
+def write_dataset(lines: list[Line], splits: list[str] | None, datafile: str, split_file: str,
+                  report: ProcessingReport) -> None:
+    """Write a PARROT datafile and, if sets were assigned, the matching split-file
 
+    With sets, lines are written in the order training, validation, test, and the
+    split-file lists the line numbers of each set, so the data can be trained on
+    with parrot-train --split.
 
+    Parameters
+    ----------
+    lines : list
+        Lines to write
+    splits : list of str or None
+        The set ('train', 'val' or 'test') of each line, or None to write the
+        lines in order without a split-file
+    datafile, split_file : str
+        Where to write them
+    report : ProcessingReport
+        Where to record what was written
+    """
+    if splits is not None:
+        order = [i for name in SET_NAMES for i in range(len(lines)) if splits[i] == name]
+        if len(order) != len(lines):
+            raise ValueError('Every line must be assigned to train, val or test')
+        lines = [lines[i] for i in order]
+        splits = [splits[i] for i in order]
+
+    with open(datafile, 'w') as fh:
+        for line in lines:
+            fh.write(' '.join(line) + '\n')
+
+    if splits is None:
+        report.add(f'Wrote {len(lines):,} lines to {datafile}')
+        return
+
+    indices = {name: np.array([i for i, split in enumerate(splits) if split == name], dtype=int) for name in SET_NAMES}
+    pid.write_split_file(split_file, indices['train'], indices['val'], indices['test'])
+    report.add(f'Wrote {len(lines):,} lines to {datafile} (training {len(indices["train"]):,}, validation '
+               f'{len(indices["val"]):,}, test {len(indices["test"]):,}) and the matching split-file {split_file}')

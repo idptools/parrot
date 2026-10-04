@@ -59,7 +59,7 @@ Identical sequences in different sets are the most blatant form of leakage, and 
     *  ``first`` : Keep the first copy as it is.
     *  ``drop`` : Remove every copy, since there is no way to know which is right.
 
-``--remove-sequence-duplicates`` is the same as ``--deduplicate drop``. ``--remove-line-duplicates`` removes only lines that are exact copies of an earlier line (same ID, sequence and values).
+``--remove-sequence-duplicates`` is the same as ``--deduplicate drop``. ``--remove-line-duplicates`` removes only lines that are exact copies of an earlier line (same ID, sequence and values), keeping the first copy of each and leaving every line in its original order.
 
 Even without ``--deduplicate``, every ``--split`` method always puts identical sequences in the same set.
 

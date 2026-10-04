@@ -229,13 +229,13 @@ You can use a trained network from ``parrot-optimize`` or ``parrot-train`` to pr
     e5 GREPCCMLLYILILAAAQRDESSSSST
     f6 PGDEADLGHRSLVWADD
 
-To run ``parrot-predict``, we need to provide the path to this sequence file, the path to our trained network file, the location where we want to output our predictions to, and information on network type and architecture. The most important thing to keep in mind when using ``parrot-predict`` is that your ``-nl`` and ``-hs`` hyperparameters (and encoding scheme) must exactly match those used for network training, or else you will get an error. 
+To run ``parrot-predict``, we need to provide the path to this sequence file, the path to our trained network file, and the location where we want to output our predictions to. The saved network records its architecture, hyperparameters, task and encoding, so nothing else is needed (``--datatype`` and ``--classes``, if given, are checked against the saved network).
 
-Let's run our trained sequence regression network on this sequence file. Note the ``-nl`` and ``-hs`` flags are same as we used above.
+Let's run our trained sequence regression network on this sequence file:
 
 .. code-block:: bash
 
-    parrot-predict data/seqfile.txt seq_regress_network.pt seq_regress_newPredictions.txt --datatype sequence --classes 1 -nl 2 -hs 20
+    parrot-predict data/seqfile.txt seq_regress_network.pt seq_regress_newPredictions.txt
 
 We can see these predictions in "seq_regress_newPredictions.txt":
 

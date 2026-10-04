@@ -1,7 +1,7 @@
 """
 Tests for parrot-preprocess as a data-preparation tool: cleaning, deduplication,
 splitting into training, validation and test sets without leakage
-(parrot.tools.homology and parrot.tools.kmer_similarity), class balancing of the
+(parrot.tools.splitting, with parrot.tools.mmseqs_search and parrot.tools.kmer_similarity), class balancing of the
 training set only, and the files it writes.
 
 The splitting protocol is tested with a fake search, so these tests do not need
@@ -20,7 +20,7 @@ import pytest
 
 from parrot import process_input_data as pid
 from parrot.scripts import parrot_preprocess
-from parrot.tools import homology, kmer_similarity, preproc
+from parrot.tools import kmer_similarity, mmseqs_search, preproc, splitting
 
 from tests.helpers import data_path
 
@@ -150,7 +150,7 @@ class FamilySearch:
                 if targets is None and q == t:
                     continue
                 if self.families.get(query) is not None and self.families.get(query) == self.families.get(target):
-                    alignments.append(homology.Alignment(q, t, 0.8, min(len(query), len(target)), len(query),
+                    alignments.append(mmseqs_search.Alignment(q, t, 0.8, min(len(query), len(target)), len(query),
                                                          len(target), 1e-20, linked=True))
         return alignments
 
@@ -165,19 +165,19 @@ class FixedSearch(FamilySearch):
         return self.alignments
 
 
-def make_family_items(n_families: int, members: int) -> tuple[list[homology.SplitItem], dict[str, str]]:
+def make_family_items(n_families: int, members: int) -> tuple[list[splitting.SplitItem], dict[str, str]]:
     items, families = [], {}
     for family in range(n_families):
         for member in range(members):
             sequence = f'F{family}M{member}'
             families[sequence] = f'family{family}'
-            items.append(homology.SplitItem(len(items), sequence, f'line {len(items)}'))
+            items.append(splitting.SplitItem(len(items), sequence, f'line {len(items)}'))
     return items, families
 
 
 def test_homology_split_keeps_families_together():
     items, families = make_family_items(n_families=40, members=3)
-    kept = homology.similarity_split(items, FRACTIONS, np.random.default_rng(0), lambda line: None,
+    kept = splitting.similarity_split(items, FRACTIONS, np.random.default_rng(0), lambda line: None,
                                      FamilySearch(families))
 
     assert len(kept) == len(items)
@@ -191,18 +191,18 @@ def test_homology_split_keeps_families_together():
 
 def test_representative_clusters_do_not_chain():
     # a-b and b-c are linked, but a and c are not: c must not join a's cluster through b
-    clusters = homology.representative_clusters(['a', 'b', 'c'], [('a', 'b'), ('b', 'c')], {'b': 1, 'a': 2, 'c': 1})
+    clusters = splitting.representative_clusters(['a', 'b', 'c'], [('a', 'b'), ('b', 'c')], {'b': 1, 'a': 2, 'c': 1})
     assert clusters['a'] == clusters['b'] != clusters['c']
 
 
 def test_enforce_separation_removes_lower_priority_homologues():
-    items = [homology.SplitItem(0, 'X1', 'g0', 'test'), homology.SplitItem(1, 'X2', 'g1', 'train'),
-             homology.SplitItem(2, 'X3', 'g2', 'val'), homology.SplitItem(3, 'Y1', 'g3', 'train'),
-             homology.SplitItem(4, 'Y2', 'g4', 'val')]
+    items = [splitting.SplitItem(0, 'X1', 'g0', 'test'), splitting.SplitItem(1, 'X2', 'g1', 'train'),
+             splitting.SplitItem(2, 'X3', 'g2', 'val'), splitting.SplitItem(3, 'Y1', 'g3', 'train'),
+             splitting.SplitItem(4, 'Y2', 'g4', 'val')]
     families = {'X1': 'x', 'X2': 'x', 'X3': 'x', 'Y1': 'y', 'Y2': 'y'}
     lines = []
 
-    kept = homology.enforce_separation(items, FamilySearch(families), lines.append)
+    kept = splitting.enforce_separation(items, FamilySearch(families), lines.append)
 
     # test keeps X1; val loses X3 (homologous to test) but keeps Y2; train loses X2 and Y1
     assert sorted(item.sequence for item in kept) == ['X1', 'Y2']
@@ -210,37 +210,37 @@ def test_enforce_separation_removes_lower_priority_homologues():
 
 
 def test_enforce_separation_removes_identical_sequences_even_without_alignments():
-    items = [homology.SplitItem(0, 'SAME', 'g0', 'test'), homology.SplitItem(1, 'SAME', 'g1', 'train'),
-             homology.SplitItem(2, 'OTHER', 'g2', 'train')]
-    kept = homology.enforce_separation(items, FixedSearch([]), lambda line: None)
+    items = [splitting.SplitItem(0, 'SAME', 'g0', 'test'), splitting.SplitItem(1, 'SAME', 'g1', 'train'),
+             splitting.SplitItem(2, 'OTHER', 'g2', 'train')]
+    kept = splitting.enforce_separation(items, FixedSearch([]), lambda line: None)
     assert [item.index for item in kept] == [0, 2]
 
 
 def test_enforce_separation_gives_up_after_too_many_rounds():
-    items = [homology.SplitItem(0, 'A', 'g0', 'test'), homology.SplitItem(1, 'B', 'g1', 'train')]
-    always = homology.Alignment(0, 0, 0.5, 10, 10, 10, 1e-10, linked=True)
-    items += [homology.SplitItem(i, f'C{i}', f'g{i}', 'train') for i in range(2, 2 + homology.MAX_SEPARATION_ROUNDS)]
+    items = [splitting.SplitItem(0, 'A', 'g0', 'test'), splitting.SplitItem(1, 'B', 'g1', 'train')]
+    always = mmseqs_search.Alignment(0, 0, 0.5, 10, 10, 10, 1e-10, linked=True)
+    items += [splitting.SplitItem(i, f'C{i}', f'g{i}', 'train') for i in range(2, 2 + splitting.MAX_SEPARATION_ROUNDS)]
     with pytest.raises(RuntimeError, match='still not separated'):
-        homology.enforce_separation(items, FixedSearch([always]), lambda line: None)
+        splitting.enforce_separation(items, FixedSearch([always]), lambda line: None)
 
 
 def test_alignment_homology_criteria():
-    criteria = homology.HomologyCriteria()
-    assert homology.Alignment(0, 1, 0.2, 30, 100, 200, 1e-4).homologous(criteria)
-    assert not homology.Alignment(0, 1, 0.9, 29, 100, 200, 1e-10).homologous(criteria)  # covers < 30%
-    assert not homology.Alignment(0, 1, 0.9, 100, 100, 200, 2e-3).homologous(criteria)  # E too large
+    criteria = mmseqs_search.HomologyCriteria()
+    assert mmseqs_search.Alignment(0, 1, 0.2, 30, 100, 200, 1e-4).homologous(criteria)
+    assert not mmseqs_search.Alignment(0, 1, 0.9, 29, 100, 200, 1e-10).homologous(criteria)  # covers < 30%
+    assert not mmseqs_search.Alignment(0, 1, 0.9, 100, 100, 200, 2e-3).homologous(criteria)  # E too large
 
 
 def test_merge_groups_joins_linked_groups():
-    items = [homology.SplitItem(i, sequence, f'g{i}') for i, sequence in enumerate(['A', 'B', 'A', 'C', 'B'])]
-    homology.merge_groups(items, homology.identical_sequence_links(items))
+    items = [splitting.SplitItem(i, sequence, f'g{i}') for i, sequence in enumerate(['A', 'B', 'A', 'C', 'B'])]
+    splitting.merge_groups(items, splitting.identical_sequence_links(items))
     assert items[0].group == items[2].group and items[1].group == items[4].group
     assert len({item.group for item in items}) == 3
 
 
 def test_random_split_keeps_identical_sequences_together():
-    items = [homology.SplitItem(i, f'S{i % 25}', f'line {i}') for i in range(100)]
-    kept = homology.random_split(items, FRACTIONS, np.random.default_rng(1), lambda line: None)
+    items = [splitting.SplitItem(i, f'S{i % 25}', f'line {i}') for i in range(100)]
+    kept = splitting.random_split(items, FRACTIONS, np.random.default_rng(1), lambda line: None)
     sets_of_sequence = {}
     for item in kept:
         sets_of_sequence.setdefault(item.sequence, set()).add(item.split)
@@ -249,13 +249,13 @@ def test_random_split_keeps_identical_sequences_together():
 
 def test_assign_clusters_rejects_bad_fractions():
     with pytest.raises(ValueError, match='sum to 1'):
-        homology.assign_clusters([], {}, {'train': 0.5, 'val': 0.1, 'test': 0.1}, np.random.default_rng(0),
+        splitting.assign_clusters([], {}, {'train': 0.5, 'val': 0.1, 'test': 0.1}, np.random.default_rng(0),
                                  lambda line: None)
 
 
 def test_find_mmseqs_explains_how_to_install_it():
     with pytest.raises(RuntimeError, match='conda install'):
-        homology.find_mmseqs('/no/such/mmseqs')
+        mmseqs_search.find_mmseqs('/no/such/mmseqs')
 
 
 # ..........................................................................................
@@ -565,7 +565,7 @@ def test_mmseqs_search_finds_homologues(tmp_path):
     rng = np.random.default_rng(3)
     ancestor = random_sequence(rng, 150)
     sequences = [ancestor, mutate(rng, ancestor, 0.3), random_sequence(rng, 150)]
-    search = homology.MMseqsSearch(homology.HomologyCriteria(), threads=2, workdir=tmp_path)
+    search = mmseqs_search.MMseqsSearch(mmseqs_search.HomologyCriteria(), threads=2, workdir=tmp_path)
 
     alignments = search(sequences)
 

@@ -37,7 +37,7 @@ from parrot import hyperparameter_search as hs
 from parrot import train_network
 from parrot.architectures import available_architectures, get_architecture
 from parrot.tasks import Task
-from parrot.tools import cli
+from parrot.reproducibility import set_random_seed
 
 from tests.helpers import TEST_SEED, FakeTrainer, encode_batch, make_loaders, make_search, ready_network
 
@@ -137,7 +137,7 @@ def snapshot_network(architecture: str, values: dict[str, Any], task: Task) -> d
         estimator) and 'outputs' (for each sequence of SNAPSHOT_SEQUENCES, the
         sequence's output, or each real residue's output for residue tasks)
     """
-    cli.set_random_seed(TEST_SEED)
+    set_random_seed(TEST_SEED)
     network = ready_network(architecture, task, values)
     network.eval()
 
@@ -193,7 +193,7 @@ def search_snapshot() -> dict[str, dict[str, Any]]:
                          trainer=FakeTrainer(hs.SearchSpace('brnn'), fail_if=lambda values: values['num_layers'] > 2))
     snapshot['stand-in with failures'] = search_record(search, search.run())
 
-    cli.set_random_seed(TEST_SEED)
+    set_random_seed(TEST_SEED)
     space = hs.SearchSpace('brnn')
     trainer = hs.TrialTrainer(space, make_loaders(), 20, Task('sequence', 1), 'cpu')
     search = hs.HyperparameterSearch(space, trainer, 6, 4, rng=np.random.default_rng(0), silent=True)
@@ -212,7 +212,7 @@ def training_snapshot() -> dict[str, dict[str, list[float]]]:
     snapshot = {}
     runs = [('brnn 4 epochs', 'brnn', 'iter', 4), ('cnn auto stop', 'cnn', 'auto', 2)]
     for name, architecture, stop_condition, n_epochs in runs:
-        cli.set_random_seed(TEST_SEED)
+        set_random_seed(TEST_SEED)
         network = ready_network(architecture, Task('sequence', 1))
         train_loader, val_loader = make_loaders()[0]
         train_losses, val_losses = train_network.train(network, train_loader, val_loader, Task('sequence', 1),

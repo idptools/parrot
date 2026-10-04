@@ -14,7 +14,7 @@ from parrot.architectures import build_network
 from parrot.architectures.classical import MINIMUM_PROBABILITY, ClassicalModel
 from parrot.architectures.layers import adjacent_pair_composition, mean_over_residues
 from parrot.tasks import Task
-from parrot.tools import cli
+from parrot.reproducibility import set_random_seed
 
 from tests.helpers import data_path, encode_batch, ready_network
 
@@ -129,7 +129,7 @@ def test_fitting_is_reproducible_with_seed(architecture):
     batch, lengths = encode_batch(['ACDEFGHIK', 'KKRRKDE'])
     outputs = []
     for _ in range(2):
-        cli.set_random_seed(5)
+        set_random_seed(5)
         network = build_network(architecture, 20, task)
         network.fit(train_loader)
         with torch.no_grad():

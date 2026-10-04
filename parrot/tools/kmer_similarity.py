@@ -62,10 +62,15 @@ from dataclasses import dataclass, fields
 import numpy as np
 from scipy.special import pdtrc
 
-from parrot.tools.homology import identity_summary
+from parrot.sequence_encoder import STANDARD_AMINO_ACIDS
+from parrot.tools.splitting import Match, identity_summary
 
-# The 20 standard amino acids; k-mers containing anything else are ignored
-AMINO_ACIDS = 'ACDEFGHIKLMNPQRSTVWY'
+# k-mers containing anything other than the 20 standard amino acids are ignored
+AMINO_ACIDS = STANDARD_AMINO_ACIDS
+
+# The k-mer sizes allowed: below 3, chance matches swamp real ones; above 8, close relatives are missed
+MIN_KMER_SIZE = 3
+MAX_KMER_SIZE = 8
 
 # Code for a residue that is not one of the 20 standard amino acids
 NOT_AN_AMINO_ACID = 255
@@ -134,8 +139,16 @@ class KmerCriteria:
     report_max_evalue: float = 1e-2
 
     def __post_init__(self) -> None:
-        if not 3 <= self.kmer_size <= 8:
-            raise ValueError(f'The k-mer size must be between 3 and 8, got {self.kmer_size}')
+        """Check the settings are usable.
+
+        Raises
+        ------
+        ValueError
+            If the k-mer size is outside [MIN_KMER_SIZE, MAX_KMER_SIZE] or a band setting is too small
+        """
+        if not MIN_KMER_SIZE <= self.kmer_size <= MAX_KMER_SIZE:
+            raise ValueError(f'The k-mer size must be between {MIN_KMER_SIZE} and {MAX_KMER_SIZE}, '
+                             f'got {self.kmer_size}')
         if self.band_width < 2 or self.max_gap < 1 or self.max_drift < 0:
             raise ValueError('band_width must be at least 2, max_gap at least 1 and max_drift at least 0')
 
@@ -205,6 +218,7 @@ class KmerTable:
 
     @property
     def longest(self) -> int:
+        """Length of the longest sequence (0 if there are none)."""
         return int(self.lengths.max(initial=0))
 
 
@@ -244,7 +258,22 @@ def low_complexity_residues(residues: np.ndarray, position: np.ndarray, length_o
 
 
 def kmer_table(sequences: Sequence[str], kmer_size: int, mask_low_complexity: bool) -> KmerTable:
-    """Find every k-mer of every sequence (see KmerTable), ordered by sequence and position."""
+    """Find every k-mer of every sequence (see KmerTable), ordered by sequence and position
+
+    The sequences are handled as one long array of residue codes, so every
+    step works on all of them at once.
+
+    Parameters
+    ----------
+    sequences : list of str
+    kmer_size : int
+    mask_low_complexity : bool
+        Leave out k-mers in low-complexity sequence (see the module documentation)
+
+    Returns
+    -------
+    KmerTable
+    """
     lengths = np.array([len(sequence) for sequence in sequences], dtype=np.int64)
     residues = _RESIDUE_CODES[np.frombuffer(''.join(sequences).encode('ascii', 'replace'), dtype=np.uint8)]
     sequence_of = np.repeat(np.arange(len(sequences), dtype=np.int64), lengths)
@@ -263,29 +292,34 @@ def kmer_table(sequences: Sequence[str], kmer_size: int, mask_low_complexity: bo
                                             LOW_COMPLEXITY_ENTROPY)
     excluded_before = np.concatenate(([0], np.cumsum(excluded, dtype=np.int64)))
 
+    # A k-mer starts at every residue; it is usable if it lies within one sequence and contains no excluded
+    # residue (no excluded residue between its start and its end, counted with the cumulative sum above)
     n_kmers = max(len(residues) - kmer_size + 1, 0)
-    ok = position[:n_kmers] + kmer_size <= lengths[sequence_of[:n_kmers]]
-    ok &= excluded_before[kmer_size:kmer_size + n_kmers] == excluded_before[:n_kmers]
+    usable = position[:n_kmers] + kmer_size <= lengths[sequence_of[:n_kmers]]
+    usable &= excluded_before[kmer_size:kmer_size + n_kmers] == excluded_before[:n_kmers]
+
+    # Each k-mer as a number: its residue codes as the digits of a base-20 number
     codes = np.zeros(n_kmers, dtype=np.int64)
     for offset in range(kmer_size):
         codes = codes * len(AMINO_ACIDS) + residues[offset:offset + n_kmers]
 
     if mask_low_complexity:
+        # Count the distinct amino acids in each k-mer: a residue adds one if it differs from every earlier one
         distinct = np.ones(n_kmers, dtype=np.int64)
         for later in range(1, kmer_size):
-            new = np.ones(n_kmers, dtype=bool)
+            differs_from_all_earlier = np.ones(n_kmers, dtype=bool)
             for earlier in range(later):
-                new &= residues[later:later + n_kmers] != residues[earlier:earlier + n_kmers]
-            distinct += new
-        ok &= distinct > kmer_size // 2
+                differs_from_all_earlier &= residues[later:later + n_kmers] != residues[earlier:earlier + n_kmers]
+            distinct += differs_from_all_earlier
+        usable &= distinct > kmer_size // 2
 
-    kept = np.flatnonzero(ok)
+    kept = np.flatnonzero(usable)
     counts = np.bincount(sequence_of[kept], minlength=len(sequences)).astype(np.int64)
     return KmerTable(codes[kept], sequence_of[kept], position[kept], counts, lengths, composition)
 
 
 class KmerSearch:
-    """Finds similar sequences from shared k-mers (see the module documentation and homology.SimilaritySearch)
+    """Finds similar sequences from shared k-mers (see the module documentation and splitting.SimilaritySearch)
 
     Attributes
     ----------
@@ -293,66 +327,176 @@ class KmerSearch:
     """
 
     def __init__(self, criteria: KmerCriteria | None = None) -> None:
+        """
+        Parameters
+        ----------
+        criteria : KmerCriteria, optional
+            When two sequences count as similar (the defaults if not given)
+        """
         self.criteria = criteria or KmerCriteria()
 
     def describe(self) -> str:
+        """The criterion, in words."""
         return f'{self.criteria.describe()}; PARROT k-mer search (no MMseqs2)'
 
-    def summarise(self, matches: Sequence[KmerMatch]) -> str:
+    def summarise(self, matches: Sequence[Match]) -> str:
+        """A short description of the strength of the matches found (for the report)."""
         return (f'at E <= {self.criteria.report_max_evalue:g}; estimated '
                 + identity_summary(match.identity for match in matches))
 
     def __call__(self, queries: Sequence[str], targets: Sequence[str] | None = None,
                  weaker: bool = False) -> list[KmerMatch]:
+        """Search queries against targets (or, with targets=None, against each other, each pair once)
+
+        Parameters
+        ----------
+        queries : list of str
+        targets : list of str, optional
+            None to search the queries against themselves, without self-hits
+        weaker : bool, optional
+            Also return matches up to report_max_evalue that do not meet the
+            criterion (linked=False), for the report
+
+        Returns
+        -------
+        list of KmerMatch
+        """
         criteria = self.criteria
+        self_search = targets is None
         query_table = kmer_table(queries, criteria.kmer_size, criteria.mask_low_complexity)
-        target_table = query_table if targets is None else kmer_table(targets, criteria.kmer_size,
-                                                                      criteria.mask_low_complexity)
-        n_targets = len(queries) if targets is None else len(targets)
+
         # As for a database search (MMseqs2, BLAST), E-values are per query: the targets are the database
-        database_size = len(queries) - 1 if targets is None else len(targets)
+        if targets is None:
+            target_table, n_targets, database_size = query_table, len(queries), len(queries) - 1
+        else:
+            target_table = kmer_table(targets, criteria.kmer_size, criteria.mask_low_complexity)
+            n_targets, database_size = len(targets), len(targets)
         max_evalue = criteria.report_max_evalue if weaker else criteria.max_evalue
 
-        # Index the targets' k-mers by (k-mer, target): each query k-mer's matches are then one contiguous run,
-        # and when searching the queries against themselves, only targets after the query are visited
-        order = np.lexsort((target_table.sequence, target_table.codes))
-        index_keys = target_table.codes[order] * n_targets + target_table.sequence[order]
-        index_sequence = target_table.sequence[order]
-        index_position = target_table.position[order]
-
-        query_keys = query_table.codes * n_targets
-        first = np.searchsorted(index_keys, query_keys + (query_table.sequence if targets is None else 0),
-                                side='right' if targets is None else 'left')
-        last = np.searchsorted(index_keys, query_keys + n_targets, side='left')
+        index = TargetIndex.build(target_table, n_targets)
+        first, last = index.match_ranges(query_table, self_search)
         hits_per_kmer = last - first
 
         matches: list[KmerMatch] = []
         for batch in query_batches(query_table.sequence, hits_per_kmer):
-            rows = np.arange(batch.start, batch.stop)
-            repeats = hits_per_kmer[rows]
-            total = int(repeats.sum())
-            if total == 0:
+            hits = index.hits(query_table, batch, first, hits_per_kmer)
+            if hits is None:
                 continue
-            entries = (np.repeat(first[rows] - (np.cumsum(repeats) - repeats), repeats)
-                       + np.arange(total, dtype=np.int64))
             lowest_query = int(query_table.sequence[batch.start])
-            hits = Hits(pair=(np.repeat(query_table.sequence[rows], repeats) - lowest_query) * n_targets
-                        + index_sequence[entries],
-                        query_position=np.repeat(query_table.position[rows], repeats),
-                        target_position=index_position[entries])
-            del entries
-
             runs = find_runs(hits, criteria.band_width, target_table.longest, criteria.max_gap)
             del hits
-            query_index, target_index, shared, evalue, coverage, identity = score_pairs(
-                runs, query_table, target_table, n_targets, lowest_query, criteria, database_size)
-            reported = evalue <= max_evalue
-            linked = (evalue <= criteria.max_evalue) & (coverage >= criteria.min_coverage)
-            for values in zip(query_index[reported].tolist(), target_index[reported].tolist(),
-                              shared[reported].tolist(), coverage[reported].tolist(), evalue[reported].tolist(),
-                              identity[reported].tolist(), linked[reported].tolist()):
-                matches.append(KmerMatch(*values))
+            scores = score_pairs(runs, query_table, target_table, n_targets, lowest_query, criteria, database_size)
+            matches += scores.matches(max_evalue, criteria)
         return matches
+
+
+@dataclass
+class TargetIndex:
+    """The targets' k-mers, sorted so that every match of one query k-mer is a contiguous range
+
+    Each target k-mer gets the key (k-mer code) x n_targets + (target number):
+    sorting by key sorts by k-mer and then by target, so the matches of a k-mer
+    are the keys from code x n_targets up to (but not including)
+    (code + 1) x n_targets, in target order.
+
+    Attributes
+    ----------
+    keys : numpy.ndarray of int64
+        Sorted keys
+    sequence : numpy.ndarray of int64
+        The target each key belongs to
+    position : numpy.ndarray of int64
+        Where in that target the k-mer starts
+    n_targets : int
+        Number of target sequences
+    """
+
+    keys: np.ndarray
+    sequence: np.ndarray
+    position: np.ndarray
+    n_targets: int
+
+    @classmethod
+    def build(cls, target_table: KmerTable, n_targets: int) -> 'TargetIndex':
+        """Index the k-mers of a table of target sequences.
+
+        Parameters
+        ----------
+        target_table : KmerTable
+        n_targets : int
+            Number of target sequences
+
+        Returns
+        -------
+        TargetIndex
+        """
+        order = np.lexsort((target_table.sequence, target_table.codes))
+        return cls(keys=target_table.codes[order] * n_targets + target_table.sequence[order],
+                   sequence=target_table.sequence[order], position=target_table.position[order], n_targets=n_targets)
+
+    def match_ranges(self, query_table: KmerTable, self_search: bool) -> tuple[np.ndarray, np.ndarray]:
+        """For every query k-mer, the range of index entries holding the same k-mer
+
+        When the queries are searched against themselves, a query k-mer's range
+        starts just after its own sequence (the first key greater than
+        code x n_targets + query number), so each pair of sequences is compared
+        once and no sequence is compared with itself.
+
+        Parameters
+        ----------
+        query_table : KmerTable
+        self_search : bool
+            True if the index holds the queries themselves
+
+        Returns
+        -------
+        numpy.ndarray of int64
+            First entry of each query k-mer's range
+        numpy.ndarray of int64
+            One past its last entry
+        """
+        lowest_keys = query_table.codes * self.n_targets
+        if self_search:
+            first = np.searchsorted(self.keys, lowest_keys + query_table.sequence, side='right')
+        else:
+            first = np.searchsorted(self.keys, lowest_keys, side='left')
+        last = np.searchsorted(self.keys, lowest_keys + self.n_targets, side='left')
+        return first, last
+
+    def hits(self, query_table: KmerTable, batch: slice, first: np.ndarray, hits_per_kmer: np.ndarray) -> 'Hits | None':
+        """Every shared k-mer of one batch of query k-mers (see query_batches), or None if there are none
+
+        Parameters
+        ----------
+        query_table : KmerTable
+        batch : slice
+            Rows of the query table (whole sequences)
+        first : numpy.ndarray of int64
+            First index entry matching each query k-mer (see match_ranges())
+        hits_per_kmer : numpy.ndarray of int64
+            Number of index entries matching each query k-mer
+
+        Returns
+        -------
+        Hits or None
+            Pairs are numbered relative to the batch's first query:
+            (query - first query of the batch) x n_targets + target
+        """
+        rows = np.arange(batch.start, batch.stop)
+        repeats = hits_per_kmer[rows]
+        total = int(repeats.sum())
+        if total == 0:
+            return None
+
+        # The index entries matching each query k-mer, one after another: row r contributes
+        # first[r], first[r] + 1, ..., first[r] + repeats[r] - 1
+        entries = (np.repeat(first[rows] - (np.cumsum(repeats) - repeats), repeats)
+                   + np.arange(total, dtype=np.int64))
+        lowest_query = int(query_table.sequence[batch.start])
+        query_number = np.repeat(query_table.sequence[rows], repeats) - lowest_query
+        return Hits(pair=query_number * self.n_targets + self.sequence[entries],
+                    query_position=np.repeat(query_table.position[rows], repeats),
+                    target_position=self.position[entries])
 
 
 @dataclass
@@ -414,6 +558,21 @@ def find_runs(hits: Hits, band_width: int, longest_target: int, max_gap: int) ->
     a band, shared k-mers are chained in order along the query, and a chain is
     broken wherever two consecutive ones are more than max_gap residues apart, so
     that stray chance matches elsewhere in the band do not stretch a run.
+
+    Parameters
+    ----------
+    hits : Hits
+        Every shared k-mer
+    band_width : int
+        Width of each band, in diagonals
+    longest_target : int
+        Length of the longest target (used to keep diagonal numbers positive)
+    max_gap : int
+        Largest gap, in query residues, between consecutive k-mers of a run
+
+    Returns
+    -------
+    Runs
     """
     diagonal = hits.query_position - hits.target_position + longest_target
     n_bands = (diagonal.max(initial=0) + band_width) // band_width + 1
@@ -457,7 +616,21 @@ def find_runs(hits: Hits, band_width: int, longest_target: int, max_gap: int) ->
 
 
 def reduce_runs(function: np.ufunc, values: np.ndarray, starts: np.ndarray, ends: np.ndarray) -> np.ndarray:
-    """function.reduce over values[starts[i]:ends[i] + 1] for each i (runs in order, not overlapping)."""
+    """function.reduce over values[starts[i]:ends[i] + 1] for each i (runs in order, not overlapping)
+
+    Parameters
+    ----------
+    function : numpy ufunc
+        e.g. np.minimum
+    values : numpy.ndarray
+    starts, ends : numpy.ndarray of int64
+        First and last index of each run
+
+    Returns
+    -------
+    numpy.ndarray
+        One value per run
+    """
     # reduceat over the slices [start, end + 1), interleaved with the slices between runs (discarded)
     boundaries = np.empty(2 * len(starts), dtype=np.int64)
     boundaries[0::2] = starts
@@ -467,46 +640,183 @@ def reduce_runs(function: np.ufunc, values: np.ndarray, starts: np.ndarray, ends
     return function.reduceat(values, boundaries)[0::2]
 
 
+@dataclass
+class PairScores:
+    """The score of every pair of sequences with a run of shared k-mers (see score_pairs)
+
+    Attributes
+    ----------
+    query_index, target_index : numpy.ndarray of int64
+        The two sequences
+    shared : numpy.ndarray of int64
+        Shared k-mers in the best run
+    evalue : numpy.ndarray of float
+        E-value
+    coverage : numpy.ndarray of float
+        Fraction of the shorter sequence spanned by the similarity
+    identity : numpy.ndarray of float
+        Rough identity estimate
+    """
+
+    query_index: np.ndarray
+    target_index: np.ndarray
+    shared: np.ndarray
+    evalue: np.ndarray
+    coverage: np.ndarray
+    identity: np.ndarray
+
+    def matches(self, max_evalue: float, criteria: KmerCriteria) -> list[KmerMatch]:
+        """The pairs with an E-value of at most max_evalue, as KmerMatch objects
+
+        Parameters
+        ----------
+        max_evalue : float
+            Largest E-value reported
+        criteria : KmerCriteria
+            Decides which matches are linked
+
+        Returns
+        -------
+        list of KmerMatch
+        """
+        reported = self.evalue <= max_evalue
+        linked = (self.evalue <= criteria.max_evalue) & (self.coverage >= criteria.min_coverage)
+        columns = [self.query_index, self.target_index, self.shared, self.coverage, self.evalue, self.identity, linked]
+        return [KmerMatch(*values) for values in zip(*(column[reported].tolist() for column in columns))]
+
+
 def score_pairs(runs: Runs, query_table: KmerTable, target_table: KmerTable, n_targets: int, lowest_query: int,
-                criteria: KmerCriteria, database_size: int) -> tuple[np.ndarray, ...]:
+                criteria: KmerCriteria, database_size: int) -> PairScores:
     """Score every pair of sequences with a run of shared k-mers (see the module documentation)
+
+    Parameters
+    ----------
+    runs : Runs
+        Runs of shared k-mers of one batch of queries (see find_runs)
+    query_table, target_table : KmerTable
+    n_targets : int
+        Number of target sequences (pairs are numbered query x n_targets + target)
+    lowest_query : int
+        The batch's first query (pair numbers are relative to it)
+    criteria : KmerCriteria
+    database_size : int
+        Number of sequences each query was searched against
 
     Returns
     -------
-    (query_index, target_index, shared, evalue, coverage, identity) : numpy.ndarray each
-        One entry per pair: the sequences, the shared k-mers of the best run, the
-        E-value, the coverage of the shorter sequence, and a rough identity estimate
+    PairScores
     """
-    k = criteria.kmer_size
     if len(runs.pair) == 0:
-        empty = np.zeros(0)
-        return empty.astype(np.int64), empty.astype(np.int64), empty.astype(np.int64), empty, empty, empty
+        no_pairs = np.zeros(0)
+        return PairScores(no_pairs.astype(np.int64), no_pairs.astype(np.int64), no_pairs.astype(np.int64), no_pairs,
+                          no_pairs, no_pairs)
+
     query_of = runs.pair // n_targets + lowest_query
     target_of = runs.pair % n_targets
-    # Chance that a k-mer in one sequence matches a k-mer in the other, if they were unrelated
-    kmer_match = np.einsum('ij,ij->i', query_table.composition[query_of], target_table.composition[target_of]) ** k
-    shorter = np.minimum(query_table.lengths[query_of], target_table.lengths[target_of])
+    # Chance that a k-mer in one sequence matches a k-mer in the other, if they were unrelated: the chance
+    # that two residues drawn from the two compositions are identical (the dot product), to the power k
+    kmer_match = np.einsum('ij,ij->i', query_table.composition[query_of],
+                           target_table.composition[target_of]) ** criteria.kmer_size
 
-    # Each pair's best run: the most shared k-mers, then the longest span
-    order = np.lexsort((-runs.span, -runs.size, runs.pair))
-    best = order[np.concatenate(([True], runs.pair[order][1:] != runs.pair[order][:-1]))]
-    pairs = runs.pair[best]
+    best = best_runs(runs)
     query_index, target_index = query_of[best], target_of[best]
     shared = runs.size[best]
+    evalue = pair_evalues(shared, kmer_match[best], query_index, target_index, query_table, target_table, criteria,
+                          database_size)
+    shorter = np.minimum(query_table.lengths[query_of], target_table.lengths[target_of])
+    coverage = pair_coverage(runs, best, kmer_match, shorter, criteria)
 
-    # E-value: chance of at least this many shared k-mers in one band, times the bands and targets searched
+    # If a fraction f of a run's positions start a shared k-mer, f ~ identity^k
+    density = shared / (runs.query_last[best] - runs.query_first[best] + 1)
+    identity = np.minimum(density, 1.0) ** (1 / criteria.kmer_size)
+    return PairScores(query_index, target_index, shared, evalue, coverage, identity)
+
+
+def best_runs(runs: Runs) -> np.ndarray:
+    """Each pair's best run: the one with the most shared k-mers, then the longest span
+
+    Parameters
+    ----------
+    runs : Runs
+
+    Returns
+    -------
+    numpy.ndarray of int64
+        Index of each pair's best run, in order of pair number
+    """
+    order = np.lexsort((-runs.span, -runs.size, runs.pair))
+    first_of_pair = np.concatenate(([True], runs.pair[order][1:] != runs.pair[order][:-1]))
+    best: np.ndarray = order[first_of_pair]
+    return best
+
+
+def pair_evalues(shared: np.ndarray, kmer_match: np.ndarray, query_index: np.ndarray, target_index: np.ndarray,
+                 query_table: KmerTable, target_table: KmerTable, criteria: KmerCriteria,
+                 database_size: int) -> np.ndarray:
+    """E-value of each pair's best run: the chance of at least that many shared k-mers in one band, times the
+    number of bands and of targets searched
+
+    Parameters
+    ----------
+    shared : numpy.ndarray
+        Shared k-mers in each pair's best run
+    kmer_match : numpy.ndarray
+        Chance that two k-mers of the pair match by chance
+    query_index, target_index : numpy.ndarray
+        The pair's sequences
+    query_table, target_table : KmerTable
+    criteria : KmerCriteria
+    database_size : int
+        Number of sequences each query was searched against
+
+    Returns
+    -------
+    numpy.ndarray of float
+    """
+    # Chance matches in a band are Poisson distributed; the expected number is the number of k-mer positions
+    # that fall in one band times the chance each matches
     positions_in_band = criteria.band_width * np.minimum(query_table.counts[query_index],
                                                          target_table.counts[target_index])
+    # Two layouts of bands (see find_runs), each covering every diagonal of the pair
     bands_per_pair = 2 * (query_table.lengths[query_index] + target_table.lengths[target_index]) / criteria.band_width
-    evalue = pdtrc(shared - 1, positions_in_band * kmer_match[best]) * bands_per_pair * database_size
+    evalue: np.ndarray = pdtrc(shared - 1, positions_in_band * kmer_match) * bands_per_pair * database_size
+    return evalue
 
-    # Extent: the best run, and runs near its diagonal that are unlikely by chance anywhere near it
-    pair_number = np.searchsorted(pairs, runs.pair)
+
+def pair_coverage(runs: Runs, best: np.ndarray, kmer_match: np.ndarray, shorter: np.ndarray,
+                  criteria: KmerCriteria) -> np.ndarray:
+    """Fraction of the shorter sequence spanned by each pair's best run and the runs near its diagonal
+
+    A run near the best one's diagonal (within max_drift) counts only if a run
+    at least as strong would arise by chance anywhere near that diagonal with a
+    probability of at most RUN_CHANCE.
+
+    Parameters
+    ----------
+    runs : Runs
+    best : numpy.ndarray
+        Index of each pair's best run (see best_runs)
+    kmer_match : numpy.ndarray
+        For each run, the chance that two k-mers of its pair match by chance
+    shorter : numpy.ndarray
+        For each run, the length of the shorter sequence of its pair
+    criteria : KmerCriteria
+
+    Returns
+    -------
+    numpy.ndarray of float
+        One coverage per pair, at most 1
+    """
+    # Which pair each run belongs to, as a position in `best`
+    pair_number = np.searchsorted(runs.pair[best], runs.pair)
+
     near = np.abs(runs.diagonal - runs.diagonal[best][pair_number]) <= criteria.max_drift
     positions_in_stretch = criteria.band_width * (runs.query_last - runs.query_first + criteria.max_gap)
     stretches_near = 2 * (2 * criteria.max_drift / criteria.band_width + 1) * (shorter / criteria.max_gap + 1)
     near &= pdtrc(runs.size - 1, positions_in_stretch * kmer_match) * stretches_near <= RUN_CHANCE
     near[best] = True
+
+    # The extent of every counted run of each pair, in the query and in the target
     query_low, query_high = runs.query_first[best].copy(), runs.query_last[best].copy()
     target_low, target_high = runs.target_low[best].copy(), runs.target_high[best].copy()
     np.minimum.at(query_low, pair_number[near], runs.query_first[near])
@@ -514,17 +824,30 @@ def score_pairs(runs: Runs, query_table: KmerTable, target_table: KmerTable, n_t
     np.minimum.at(target_low, pair_number[near], runs.target_low[near])
     np.maximum.at(target_high, pair_number[near], runs.target_high[near])
 
-    extent = np.maximum(query_high - query_low, target_high - target_low) + k
-    coverage = np.minimum(extent / np.maximum(shorter[best], 1), 1.0)
-    density = shared / (runs.query_last[best] - runs.query_first[best] + 1)
-    identity = np.minimum(density, 1.0) ** (1 / k)
-    return query_index, target_index, shared, evalue, coverage, identity
+    # Spans run from the first to the last k-mer start, so add one k-mer's length
+    extent = np.maximum(query_high - query_low, target_high - target_low) + criteria.kmer_size
+    coverage: np.ndarray = np.minimum(extent / np.maximum(shorter[best], 1), 1.0)
+    return coverage
 
 
 def query_batches(query_sequence: np.ndarray, hits_per_kmer: np.ndarray, limit: int | None = None) -> list[slice]:
-    """Split the query k-mers (ordered by sequence) into runs of whole sequences with at most `limit` matches each.
+    """Split the query k-mers (ordered by sequence) into runs of whole sequences with at most `limit` matches each
 
     A single sequence with more matches than the limit gets a batch of its own.
+
+    Parameters
+    ----------
+    query_sequence : numpy.ndarray of int64
+        The sequence each query k-mer belongs to (in order)
+    hits_per_kmer : numpy.ndarray of int64
+        Number of target k-mers each query k-mer matches
+    limit : int, optional
+        Most matches per batch (default BATCH_MATCHES)
+
+    Returns
+    -------
+    list of slice
+        Rows of the query k-mer table in each batch
     """
     limit = BATCH_MATCHES if limit is None else limit
     if len(query_sequence) == 0:

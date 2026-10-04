@@ -40,8 +40,8 @@ def test_noarg_train_call(run_cli):
 
 
 def test_train_invalid_dtype(run_cli, tmp_path):
-    """Calling parrot-train with invalid datatype arg should return an error"""
-    with pytest.raises(ValueError):
+    """Calling parrot-train with invalid datatype arg should stop with a usage message"""
+    with pytest.raises(SystemExit):
         run_cli(parrot_train.main, ["parrot-train", data_path("seq_class_dataset.tsv"),
                                     tmp_path / "output_network.pt", "-d", "gibberish", "-c", "4"])
 
@@ -53,7 +53,7 @@ def test_train_invalid_numclasses(run_cli, tmp_path):
                                     tmp_path / "output_network.pt", "-d", "sequence", "-c", "2"])
 
 
-def test_train_invalid_setFractions(run_cli, tmp_path):
+def test_train_invalid_set_fractions(run_cli, tmp_path):
     """Calling parrot-train with --setFractions not summing to 1 should return an error"""
     with pytest.raises(ValueError):
         run_cli(parrot_train.main, ["parrot-train", data_path("seq_class_dataset.tsv"),
@@ -68,8 +68,8 @@ def test_noarg_optimize_call(run_cli):
 
 
 def test_optimize_invalid_dtype(run_cli, tmp_path):
-    """Calling parrot-optimize with invalid datatype arg should return an error"""
-    with pytest.raises(ValueError):
+    """Calling parrot-optimize with invalid datatype arg should stop with a usage message"""
+    with pytest.raises(SystemExit):
         run_cli(parrot_optimize.main, ["parrot-optimize", data_path("seq_class_dataset.tsv"),
                                        tmp_path / "output_network.pt", "-d", "gibberish", "-c", "4"])
 

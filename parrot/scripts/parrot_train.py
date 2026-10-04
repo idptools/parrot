@@ -19,26 +19,42 @@ import argparse
 
 from parrot import train_network
 from parrot.architectures import build_network
-from parrot.scripts import common
-from parrot.tools import validate_args
+from parrot.scripts import arguments, common
+
+# With --stop auto, --epochs is how many epochs performance must stagnate for, so beyond this many epochs
+# training can take a long time (a rule of thumb, warned about rather than refused)
+LONG_AUTO_STOP_EPOCHS = 10
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
+    """The command-line arguments of parrot-train
+
+    Returns
+    -------
+    argparse.ArgumentParser
+    """
     parser = argparse.ArgumentParser(description='Train and test a PARROT network with user-specified hyperparameters.')
     common.add_training_arguments(parser)
     common.add_hyperparameter_arguments(parser)
 
     parser.add_argument('-lr', '--learning-rate', default=train_network.LEARNING_RATE.default, type=float,
                         metavar='learning_rate', help=f'(def={train_network.LEARNING_RATE.default})')
-    parser.add_argument('--stop', default='iter', metavar='stop_condition', type=str,
-                        help="training stop condition: either 'auto' or 'iter' (default 'iter')")
+    parser.add_argument('--stop', default='iter', choices=train_network.STOP_CONDITIONS,
+                        help="training stop condition: 'iter' trains for --epochs epochs (default); 'auto' trains "
+                             "until the validation loss has not improved for --epochs epochs")
+    return parser
 
-    args = parser.parse_args()
+
+def main() -> None:
+    """Train a network with the given hyperparameters, save it, and report its performance on the test set."""
+    args = build_parser().parse_args()
 
     # Check the training-specific arguments before any data is loaded
-    validate_args.check_between_zero_and_one(args.learning_rate, 'Learning rate')
-    validate_args.check_stop_condition(args.stop, args.epochs)
+    arguments.check_fraction(args.learning_rate, 'Learning rate')
     hyperparameters = common.hyperparameters_from_args(args)
+    if args.stop == 'auto' and args.epochs > LONG_AUTO_STOP_EPOCHS and not args.silent:
+        print(f"Warning: Stop condition is set to 'auto' and num_epochs > {LONG_AUTO_STOP_EPOCHS}. "
+              'Network training may take a long time.\n')
 
     run = common.prepare_training_run(args)
     network = build_network(args.architecture, len(run.encoder), run.task, hyperparameters).to(run.device)
@@ -60,3 +76,7 @@ def main():
                                                    verbose=args.verbose, silent=args.silent)
 
     common.finish_training_run(run, network, train_losses, val_losses)
+
+
+if __name__ == '__main__':
+    main()

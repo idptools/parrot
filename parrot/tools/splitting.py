@@ -6,10 +6,10 @@ sequences has a close relative in the training set; otherwise a network can
 score well by recognising relatives rather than by having learnt anything
 transferable. This module splits a dataset so that no sequence in one set is
 similar to a sequence in another. Similarity is found by a search engine:
-MMseqs2 (Steinegger & Söding 2017, Nat Biotechnol 35:1026; MMseqsSearch here),
+MMseqs2 (Steinegger & Söding 2017, Nat Biotechnol 35:1026; mmseqs_search.py),
 which must be installed separately, or PARROT's own k-mer search
-(parrot.tools.kmer_similarity), which needs nothing extra but only finds closer
-relatives.
+(kmer_similarity.py), which needs nothing extra but only finds closer relatives.
+Any object with the SimilaritySearch interface can be used.
 
 The protocol (the one used to build PARROT's benchmark datasets) is deliberately
 very stringent:
@@ -43,48 +43,53 @@ https://github.com/idptools/parrot
 Licensed under the MIT license.
 """
 
-import os
-import shutil
-import subprocess
-import tempfile
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol
 
 import numpy as np
 
-# The three sets, in order of priority: when records in two sets are similar, the
-# record in the lower-priority set is removed
-SET_NAMES = ('test', 'val', 'train')
+# The three sets, in the order they are written to a datafile (and to a split-file)
+SET_NAMES = ('train', 'val', 'test')
 
 # Names used in reports
 SET_LABELS = {'train': 'training', 'val': 'validation', 'test': 'test'}
 
+# The sets have a priority, test > validation > training: when records in two sets are similar, the record in
+# the lower-priority set is removed. These are the pairs of sets searched against each other, as
+# (higher-priority set, lower-priority set).
+SEPARATED_SET_PAIRS = (('test', 'train'), ('test', 'val'), ('val', 'train'))
+
 # Search the sets against each other at most this many times (see enforce_separation)
 MAX_SEPARATION_ROUNDS = 5
 
-INSTALL_HELP = ('MMseqs2 is needed for --split homology but the `mmseqs` command was not found. Install it with '
-                '`conda install -c conda-forge -c bioconda mmseqs2` or `brew install mmseqs2`, or download a static '
-                'binary from https://github.com/soedinglab/MMseqs2/releases, then put it on the PATH or pass its '
-                'location with --mmseqs. Alternatively, --split kmer needs nothing extra but only finds closer '
-                'relatives.')
+# Identity bins for reports: (lowest identity, label), highest first
+IDENTITY_BINS = ((0.9, '>=90%'), (0.5, '50-90%'), (0.3, '30-50%'), (0.0, '<30%'))
 
 
 class Match(Protocol):
-    """One similarity found by a search: indices into the query and target lists, and whether it links them."""
+    """One similarity found by a search: indices into the query and target lists, its identity, and whether it
+    links them (meets the search's criterion)."""
 
-    query: int
-    target: int
-    linked: bool
+    @property
+    def query(self) -> int: ...
+
+    @property
+    def target(self) -> int: ...
+
+    @property
+    def identity(self) -> float: ...
+
+    @property
+    def linked(self) -> bool: ...
 
 
 class SimilaritySearch(Protocol):
     """A search engine for splitting: finds similar sequences, and describes what it does for the report."""
 
     def __call__(self, queries: Sequence[str], targets: Sequence[str] | None = None,
-                 weaker: bool = False) -> list[Match]:
+                 weaker: bool = False) -> Sequence[Match]:
         """Search queries against targets (None: against themselves, each pair once and without self-hits).
 
         Every match that meets the criterion has linked=True; with weaker=True,
@@ -96,46 +101,6 @@ class SimilaritySearch(Protocol):
 
     def summarise(self, matches: Sequence[Match]) -> str:
         """A short description of the strength of the matches found (for the report)."""
-
-
-@dataclass(frozen=True)
-class HomologyCriteria:
-    """When two sequences count as homologous, and how hard MMseqs2 searches
-
-    Attributes
-    ----------
-    max_evalue : float
-        Largest E-value of an alignment that links two sequences
-    min_coverage : float
-        Smallest fraction of the shorter sequence the alignment must cover
-    sensitivity : float
-        MMseqs2 search sensitivity (-s); 7.5 is the most sensitive setting
-    max_target_sequences : int
-        Targets per query passing MMseqs2's prefilter (--max-seqs; default 300
-        in MMseqs2), raised so large families are not truncated
-    report_max_evalue : float
-        The separation check also reports every weaker alignment up to this
-        E-value, so any remaining similarity between sets is visible
-    mask_low_complexity : bool
-        Whether MMseqs2 masks low-complexity regions (its default). Masking
-        avoids alignments driven only by compositional bias; without it,
-        similarity in low-complexity regions (common in disordered proteins)
-        also links sequences, which is even more stringent.
-    """
-
-    max_evalue: float = 1e-3
-    min_coverage: float = 0.3
-    sensitivity: float = 7.5
-    max_target_sequences: int = 2000
-    report_max_evalue: float = 1e-2
-    mask_low_complexity: bool = True
-
-    def describe(self) -> str:
-        """The criteria in words, for reports."""
-        return (f'identical, or an MMseqs2 alignment with E <= {self.max_evalue:g} covering >= '
-                f'{100 * self.min_coverage:g}% of the shorter sequence (no identity threshold; sensitivity '
-                f'{self.sensitivity:g}; up to {self.max_target_sequences:,} targets per query; low-complexity '
-                f'masking {"on" if self.mask_low_complexity else "off"})')
 
 
 @dataclass
@@ -159,135 +124,22 @@ class SplitItem:
     split: str | None = None
 
 
-@dataclass(frozen=True)
-class Alignment:
-    """One MMseqs2 alignment between two sequences (indices refer to the query and target lists).
-
-    linked is True if the alignment meets the homology criteria of the search that found it.
-    """
-
-    query: int
-    target: int
-    identity: float
-    alignment_length: int
-    query_length: int
-    target_length: int
-    evalue: float
-    linked: bool = False
-
-    @property
-    def shorter_coverage(self) -> float:
-        """Fraction of the shorter of the two sequences covered by the alignment."""
-        return self.alignment_length / min(self.query_length, self.target_length)
-
-    def homologous(self, criteria: HomologyCriteria) -> bool:
-        """True if the alignment meets the homology criteria."""
-        return self.evalue <= criteria.max_evalue and self.shorter_coverage >= criteria.min_coverage
-
-
-# .................................................................
-# Running MMseqs2
-
-def find_mmseqs(path: str | None = None) -> str:
-    """The MMseqs2 executable to run
+def identity_summary(identities: Iterable[float]) -> str:
+    """Count similarities by sequence identity, for reports (see IDENTITY_BINS).
 
     Parameters
     ----------
-    path : str, optional
-        Location of the executable; by default `mmseqs` is looked up on the PATH
+    identities : iterable of float
+        Identity of each similarity, from 0 to 1
 
-    Raises
-    ------
-    RuntimeError
-        If it cannot be found, with instructions for installing it
+    Returns
+    -------
+    str
+        e.g. 'identity >=90%: 3, 50-90%: 10, 30-50%: 0, <30%: 1'
     """
-    found = shutil.which(path or 'mmseqs')
-    if found is None:
-        raise RuntimeError(INSTALL_HELP if path is None else f'MMseqs2 was not found at {path}. ' + INSTALL_HELP)
-    return found
-
-
-def mmseqs_version(executable: str) -> str:
-    """The version (or commit) MMseqs2 reports, for the record."""
-    result = subprocess.run([executable, 'version'], capture_output=True, text=True)
-    return result.stdout.strip() or 'unknown'
-
-
-def identity_summary(identities: Iterable[float]) -> str:
-    """Count alignments by sequence identity, for reports."""
-    bins = [(0.9, '>=90%'), (0.5, '50-90%'), (0.3, '30-50%'), (0.0, '<30%')]
-    counts = Counter(next(label for threshold, label in bins if identity >= threshold) for identity in identities)
-    return 'identity ' + ', '.join(f'{label}: {counts[label]:,}' for _, label in bins)
-
-
-class MMseqsSearch:
-    """Finds homologous sequences with MMseqs2 (see SimilaritySearch)
-
-    Attributes
-    ----------
-    executable : str
-        The MMseqs2 executable
-    criteria : HomologyCriteria
-    threads : int
-    workdir : Path or None
-        Where MMseqs2's temporary files go (default: the system's temporary directory)
-    """
-
-    def __init__(self, criteria: HomologyCriteria | None = None, executable: str | None = None,
-                 threads: int | None = None, workdir: str | Path | None = None) -> None:
-        self.executable = find_mmseqs(executable)
-        self.criteria = criteria or HomologyCriteria()
-        self.threads = threads or os.cpu_count() or 1
-        self.workdir = None if workdir is None else Path(workdir)
-
-    def describe(self) -> str:
-        return (f'{self.criteria.describe()}; MMseqs2 {self.executable} (version {mmseqs_version(self.executable)}), '
-                f'{self.threads} threads')
-
-    def summarise(self, matches: Sequence[Alignment]) -> str:
-        return f'at E <= {self.criteria.report_max_evalue:g}; {identity_summary(m.identity for m in matches)}'
-
-    def __call__(self, queries: Sequence[str], targets: Sequence[str] | None = None,
-                 weaker: bool = False) -> list[Alignment]:
-        max_evalue = self.criteria.report_max_evalue if weaker else self.criteria.max_evalue
-        with tempfile.TemporaryDirectory(prefix='parrot_mmseqs_', dir=self.workdir) as directory:
-            workdir = Path(directory)
-            query_fasta = workdir / 'queries.fasta'
-            write_fasta(queries, query_fasta)
-            target_fasta = query_fasta
-            if targets is not None:
-                target_fasta = workdir / 'targets.fasta'
-                write_fasta(targets, target_fasta)
-
-            results = workdir / 'results.m8'
-            command = [self.executable, 'easy-search', str(query_fasta), str(target_fasta), str(results),
-                       str(workdir / 'tmp'), '-s', str(self.criteria.sensitivity), '-e', str(max_evalue),
-                       '--max-seqs', str(self.criteria.max_target_sequences),
-                       '--mask', '1' if self.criteria.mask_low_complexity else '0',
-                       '--format-output', 'query,target,fident,alnlen,qlen,tlen,evalue',
-                       '--threads', str(self.threads), '-v', '1']
-            completed = subprocess.run(command, capture_output=True, text=True)
-            if completed.returncode != 0:
-                raise RuntimeError(f'MMseqs2 failed (exit code {completed.returncode}):\n{completed.stderr[-2000:]}')
-
-            alignments = []
-            with open(results) as handle:
-                for line in handle:
-                    query, target, identity, length, query_length, target_length, evalue = line.split()
-                    if targets is None and query == target:
-                        continue
-                    alignment = Alignment(int(query), int(target), float(identity), int(length), int(query_length),
-                                          int(target_length), float(evalue))
-                    alignments.append(Alignment(**{**alignment.__dict__,
-                                                   'linked': alignment.homologous(self.criteria)}))
-        return alignments
-
-
-def write_fasta(sequences: Sequence[str], path: Path) -> None:
-    """Write sequences to a FASTA file, named by their index."""
-    with open(path, 'w') as handle:
-        for index, sequence in enumerate(sequences):
-            handle.write(f'>{index}\n{sequence}\n')
+    counts = Counter(next(label for threshold, label in IDENTITY_BINS if identity >= threshold)
+                     for identity in identities)
+    return 'identity ' + ', '.join(f'{label}: {counts[label]:,}' for _, label in IDENTITY_BINS)
 
 
 # .................................................................
@@ -492,7 +344,7 @@ def cross_set_matches(items: Sequence[SplitItem], search: SimilaritySearch,
         by_set[str(item.split)].append(item)
 
     offending: set[str] = set()
-    for query_set, target_set in [('test', 'train'), ('test', 'val'), ('val', 'train')]:
+    for query_set, target_set in SEPARATED_SET_PAIRS:
         queries, targets = by_set.get(query_set, []), by_set.get(target_set, [])
         if not queries or not targets:
             continue
@@ -526,7 +378,7 @@ def similarity_split(items: Sequence[SplitItem], fractions: dict[str, float], rn
     report : callable
         Receives report lines
     search : SimilaritySearch
-        Finds similar sequences, e.g. MMseqsSearch or kmer_similarity.KmerSearch
+        Finds similar sequences, e.g. mmseqs_search.MMseqsSearch or kmer_similarity.KmerSearch
 
     Returns
     -------

@@ -124,7 +124,7 @@ def test_unknown_device_fails():
 
 def device_arguments(device: str = 'auto', force_cpu: bool = False, gpu_id: int | None = None) -> argparse.Namespace:
     """Parsed arguments as add_device_arguments() would produce them."""
-    return argparse.Namespace(device=device, forceCPU=force_cpu, gpu_id=gpu_id, silent=True)
+    return argparse.Namespace(device=device, force_cpu=force_cpu, gpu_id=gpu_id, silent=True)
 
 
 def test_force_cpu_overrides_auto(monkeypatch):

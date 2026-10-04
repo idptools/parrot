@@ -1,7 +1,8 @@
 """
-Building blocks shared by the command-line tools that train networks
-(parrot-train and parrot-optimize): common arguments, argument validation,
-data loading, and saving and reporting on the trained network.
+Building blocks shared by PARROT's command-line tools: the arguments,
+data loading, and saving and reporting that parrot-train and parrot-optimize
+share, and the device and embedding-cache handling that parrot-predict also
+uses.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -14,7 +15,6 @@ Licensed under the MIT license.
 """
 
 import argparse
-import math
 import os
 import sys
 from dataclasses import dataclass
@@ -29,11 +29,13 @@ from parrot.architectures import (DEFAULT_ARCHITECTURE, HyperParameter, HyperPar
                                   available_architectures, get_architecture, resolve_hyperparameters)
 from parrot.checkpoint import save_network
 from parrot.encode_sequence import SequenceEncoder, get_encoder
-from parrot.tasks import Task
-from parrot.tools import cli, dataset_warnings, validate_args
+from parrot.reproducibility import set_random_seed
+from parrot.scripts import arguments
+from parrot.tasks import VALID_DATATYPES, Task
+from parrot.tools import dataset_warnings
 
-# Default proportions of the data used for training, validation and testing
-DEFAULT_SET_FRACTIONS = [0.7, 0.15, 0.15]
+# Ends the help of every flag kept only so that commands written for earlier versions of PARROT still work
+LEGACY_NOTE = '(kept so that older commands keep working)'
 
 # Batch sizes above this are very large for the datasets PARROT is used with, and may lower accuracy (rule of thumb)
 LARGE_BATCH_SIZE = 512
@@ -57,7 +59,7 @@ def add_training_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('data_file', help='path to tsv file with format: <idx> <sequence> <data>')
     parser.add_argument('output_network', help='location to save the trained network')
 
-    parser.add_argument('-d', '--datatype', metavar='dtype', type=str, required=True,
+    parser.add_argument('-d', '--datatype', required=True, choices=VALID_DATATYPES,
                         help="REQUIRED. Format of the input data file, must be 'sequence' or 'residues'")
     parser.add_argument('-c', '--classes', type=int, metavar='num_classes', required=True,
                         help='REQUIRED. Number of output classes, for regression put 1')
@@ -73,10 +75,10 @@ def add_training_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('-e', '--epochs', default=100, type=int, metavar='num_epochs',
                         help='number of training epochs (def=100)')
 
-    parser.add_argument('--split', default='', metavar='split_file', type=str,
+    parser.add_argument('--split', dest='split_file', default=None, metavar='split_file',
                         help="file indicating how to split datafile into training, validation, and test sets")
-    parser.add_argument('--set-fractions', nargs=3, default=DEFAULT_SET_FRACTIONS, type=float,
-                        dest='setFractions', metavar=('train', 'val', 'test'),
+    parser.add_argument('--set-fractions', nargs=3, default=pid.DEFAULT_SET_FRACTIONS, type=float,
+                        dest='set_fractions', metavar=('train', 'val', 'test'),
                         help='proportion of dataset that should be divided into training, validation, and test sets')
     parser.add_argument('--save-splits', dest='save_splits', action='store_true',
                         help='Save a split-file using the random splits from this run')
@@ -89,16 +91,18 @@ def add_training_arguments(parser: argparse.ArgumentParser) -> None:
                              'scales contribute equally; saved with the network and applied automatically when '
                              'predicting')
     add_embedding_cache_argument(parser, plm.TRAIN_CACHE_DIRECTORY)
-    parser.add_argument('--exclude-seq-id', dest='excludeSeqID', action='store_true',
+    parser.add_argument('--exclude-seq-id', dest='exclude_seq_id', action='store_true',
                         help='use if data_file lacks sequence IDs in the first column of each line')
     parser.add_argument('--ignore-warnings', '-w', dest='ignore_warnings', action='store_true',
                         help='Do not display warnings for dataset structure')
 
     parser.add_argument('--probabilistic-classification', dest='probabilistic_classification',
-                        action='store_true', help='Optional implementation for sequence classification')
+                        action='store_true',
+                        help='sequence classification only: report the probability of each class, not just the '
+                             'most likely class')
     parser.add_argument('--include-figs', dest='include_figs', action='store_true',
                         help='Generate figures from training results and save to same location as network')
-    parser.add_argument('--no-stats', dest='ignore_metrics', action='store_true',
+    parser.add_argument('--no-stats', dest='no_stats', action='store_true',
                         help='If passed, do not output a performance stats file.')
 
     add_device_arguments(parser)
@@ -180,10 +184,28 @@ def add_device_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--device', default='auto', choices=devices.DEVICE_CHOICES,
                         help="device to run on: 'auto' (default) uses a CUDA GPU if available, else an "
                              "Apple-silicon GPU (MPS) if available, else the CPU")
-    parser.add_argument('--force-cpu', dest='forceCPU', action='store_true',
-                        help='same as --device cpu (kept for older scripts)')
     parser.add_argument('--gpu-id', dest='gpu_id', type=int,
                         help='index of the CUDA device to use, on machines with more than one NVIDIA GPU')
+    parser.add_argument('--force-cpu', dest='force_cpu', action='store_true',
+                        help=f'same as --device cpu {LEGACY_NOTE}')
+
+
+def check_probabilistic_classification(probabilistic: bool, task: Task) -> None:
+    """Check that class probabilities were only asked for a task that has them (sequence classification)
+
+    Parameters
+    ----------
+    probabilistic : bool
+        Whether --probabilistic-classification was given
+    task : Task
+
+    Raises
+    ------
+    ValueError
+        If probabilities were asked for a regression or residue-mapped task
+    """
+    if probabilistic and (task.per_residue or not task.is_classification):
+        raise ValueError('Probabilistic classification only implemented for sequence classification')
 
 
 def hyperparameters_by_name() -> dict[str, list[tuple[str, HyperParameter]]]:
@@ -363,7 +385,7 @@ def select_device(args: argparse.Namespace) -> torch.device:
     """
 
     requested = args.device
-    if args.forceCPU:
+    if args.force_cpu:
         if requested not in ('auto', 'cpu'):
             raise ValueError(f"--force-cpu cannot be combined with --device {requested}")
         requested = 'cpu'
@@ -482,15 +504,15 @@ def prepare_training_run(args: argparse.Namespace, n_folds: int | None = None) -
         If any argument is invalid, or the datafile does not match the task
     """
 
-    cli.set_random_seed(args.seed)
+    set_random_seed(args.seed)
 
-    data_file = validate_args.check_file_exists(args.data_file, 'Datafile')
+    data_file = arguments.check_file_exists(args.data_file, 'Datafile')
     network_file = os.path.abspath(args.output_network)
-    output_prefix, _ = validate_args.split_file_and_directory(network_file)
+    output_prefix, _ = arguments.output_prefix_and_directory(network_file)
 
     split_file = None
-    if args.split != '':
-        split_file = validate_args.check_file_exists(args.split, 'Split-file')
+    if args.split_file is not None:
+        split_file = arguments.check_file_exists(args.split_file, 'Split-file')
 
     save_splits_output = None
     if args.save_splits:
@@ -499,22 +521,16 @@ def prepare_training_run(args: argparse.Namespace, n_folds: int | None = None) -
     encoder = get_encoder(args.encode, standardize=args.standardize_encoding)
     task = Task(args.datatype, args.classes)
 
-    validate_args.check_positive(args.epochs, 'Number of epochs')
-    validate_args.check_positive(args.batch, 'Batch size')
-
-    for fraction in args.setFractions:
-        validate_args.check_between_zero_and_one(fraction, 'Set fractions')
-    if not math.isclose(sum(args.setFractions), 1.0):
-        raise ValueError('Set fractions must sum to 1.')
-
-    if args.probabilistic_classification and (task.per_residue or not task.is_classification):
-        raise ValueError('Probabilistic classification only implemented for sequence classification')
+    arguments.check_positive(args.epochs, 'Number of epochs')
+    arguments.check_positive(args.batch, 'Batch size')
+    arguments.check_set_fractions(args.set_fractions)
+    check_probabilistic_classification(args.probabilistic_classification, task)
 
     ignore_warnings = args.ignore_warnings or args.silent
     device = select_device(args)
 
-    split_arguments: dict[str, Any] = dict(encoder=encoder, exclude_seq_id=args.excludeSeqID, split_file=split_file,
-                                           percent_val=args.setFractions[1], percent_test=args.setFractions[2],
+    split_arguments: dict[str, Any] = dict(encoder=encoder, exclude_seq_id=args.exclude_seq_id, split_file=split_file,
+                                           percent_val=args.set_fractions[1], percent_test=args.set_fractions[2],
                                            ignore_warnings=ignore_warnings, save_splits_output=save_splits_output)
     cv_sets = None
     if n_folds is None:
@@ -536,7 +552,7 @@ def prepare_training_run(args: argparse.Namespace, n_folds: int | None = None) -
                        output_prefix=output_prefix, train_set=train_set, val_set=val_set, test_set=test_set,
                        cv_sets=cv_sets, batch_size=args.batch, batching=args.batching,
                        probabilistic=args.probabilistic_classification,
-                       include_figs=args.include_figs, write_stats=not args.ignore_metrics,
+                       include_figs=args.include_figs, write_stats=not args.no_stats,
                        verbose=args.verbose, silent=args.silent)
 
 
@@ -560,7 +576,7 @@ def print_run_header(title: str, run: TrainingRun, settings: dict[str, Any]) -> 
     print(title)
     print('-' * len(title))
     if run.verbose:
-        cli.print_settings(False, device=run.device, datatype=run.task.datatype, task=run.task.problem_type,
+        arguments.print_settings(False, device=run.device, datatype=run.task.datatype, task=run.task.problem_type,
                            encoding=run.encoder.name, **settings)
         print()
 

@@ -36,6 +36,9 @@ MISSING_LABEL_TEXT = 'nan'
 # torch.nn.CrossEntropyLoss, so these positions never contribute to the loss.
 IGNORED_CLASS_LABEL = -100
 
+# Default fractions of the data in the training, validation and test sets
+DEFAULT_SET_FRACTIONS = (0.7, 0.15, 0.15)
+
 # Tolerance (in number of samples) used when converting a set fraction into a set
 # size, to absorb floating-point error in the fractions themselves
 SPLIT_SIZE_TOLERANCE = 1e-9
@@ -141,8 +144,8 @@ def parse_lines(lines: list[list[str]], datatype: str) -> list[Sample]:
         try:
             data.append(parse_line(fields, datatype))
         except ValueError as error:
-            raise parrot_exceptions.IOExceptionParrot(
-                f"Data line {line_number} is not valid {datatype}-mapped data: {error}\n  {' '.join(fields)}") from error
+            message = f"Data line {line_number} is not valid {datatype}-mapped data: {error}\n  {' '.join(fields)}"
+            raise parrot_exceptions.IOExceptionParrot(message) from error
     return data
 
 
@@ -828,7 +831,8 @@ def check_sets_not_empty(training_samples: np.ndarray, val_samples: np.ndarray, 
 
 
 def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, split_file: str | None = None,
-                   percent_val: float = 0.15, percent_test: float = 0.15, ignore_warnings: bool = False,
+                   percent_val: float = DEFAULT_SET_FRACTIONS[1], percent_test: float = DEFAULT_SET_FRACTIONS[2],
+                   ignore_warnings: bool = False,
                    save_splits_output: str | None = None) -> tuple[list[Sample], np.ndarray, np.ndarray, np.ndarray]:
     """Parse a datafile and decide which samples go in each set
 
@@ -876,8 +880,8 @@ def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, spl
 
 
 def split_data(data_file: str, task: Task, encoder: SequenceEncoder | None = None, exclude_seq_id: bool = False,
-               split_file: str | None = None, percent_val: float = 0.15, percent_test: float = 0.15,
-               ignore_warnings: bool = False,
+               split_file: str | None = None, percent_val: float = DEFAULT_SET_FRACTIONS[1],
+               percent_test: float = DEFAULT_SET_FRACTIONS[2], ignore_warnings: bool = False,
                save_splits_output: str | None = None) -> tuple[SequenceDataset, SequenceDataset, SequenceDataset]:
     """Divide a datafile into training, validation, and test datasets
 
@@ -936,9 +940,11 @@ def cross_validation_folds(samples: np.ndarray, n_folds: int) -> list[tuple[np.n
 
 
 def split_data_cv(data_file: str, task: Task, encoder: SequenceEncoder | None = None, exclude_seq_id: bool = False,
-                  split_file: str | None = None, percent_val: float = 0.15, percent_test: float = 0.15,
-                  n_folds: int = 5, ignore_warnings: bool = False, save_splits_output: str | None = None
-                  ) -> tuple[list[tuple[SequenceDataset, SequenceDataset]], SequenceDataset, SequenceDataset, SequenceDataset]:
+                  split_file: str | None = None, percent_val: float = DEFAULT_SET_FRACTIONS[1],
+                  percent_test: float = DEFAULT_SET_FRACTIONS[2], n_folds: int = 5, ignore_warnings: bool = False,
+                  save_splits_output: str | None = None
+                  ) -> tuple[list[tuple[SequenceDataset, SequenceDataset]], SequenceDataset, SequenceDataset,
+                             SequenceDataset]:
     """Divide a datafile into training, validation and test sets plus cross-validation folds
 
     The cross-validation folds are made from the combined training and

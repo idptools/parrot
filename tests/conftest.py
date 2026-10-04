@@ -26,7 +26,7 @@ import pytest
 
 from parrot import devices
 from parrot.architectures import registry
-from parrot.tools import cli
+from parrot.reproducibility import set_random_seed
 
 from tests.helpers import TEST_SEED, LinearTestArchitecture
 
@@ -47,7 +47,7 @@ def cpu_unless_requested(request: pytest.FixtureRequest, monkeypatch: pytest.Mon
 @pytest.fixture(autouse=True)
 def seeded_and_clean() -> Iterator[None]:
     """Seed every RNG before each test and close any open figures afterwards."""
-    cli.set_random_seed(TEST_SEED)
+    set_random_seed(TEST_SEED)
     yield
     plt.close('all')
 

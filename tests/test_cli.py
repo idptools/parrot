@@ -368,7 +368,7 @@ def test_train_dotted_output_name(run_cli, tmp_path):
 
 @pytest.mark.parametrize('extra_arguments, error', [
     (['-d', 'sequence', '-c', '3', '-lr', '1.5'], ValueError),
-    (['-d', 'sequence', '-c', '3', '--stop', 'sometimes'], ValueError),
+    (['-d', 'sequence', '-c', '3', '--stop', 'sometimes'], SystemExit),  # not one of argparse's choices
     (['-d', 'sequence', '-c', '3', '-b', '0'], ValueError),
     (['-d', 'sequence', '-c', '3', '-hs', '0'], ValueError),
     (['-d', 'sequence', '-c', '1', '--probabilistic-classification'], ValueError),
@@ -847,7 +847,8 @@ def test_preprocess_residue_class_balance_shuffle_off_keeps_order(run_cli, tmp_p
     ['-d', 'sequence', '-m', 'classification', '--remove-line-duplicates', '--remove-sequence-duplicates'],
 ])
 def test_preprocess_invalid_arguments(run_cli, tmp_path, extra_arguments):
-    with pytest.raises(Exception):
+    # A datatype or mode that is not one of argparse's choices stops with a usage message (SystemExit)
+    with pytest.raises((ValueError, SystemExit)):
         run_cli(parrot_preprocess.main, ['parrot-preprocess', data_path('seq_class_dataset.tsv'),
                                          tmp_path / 'out.tsv', *extra_arguments])
 
