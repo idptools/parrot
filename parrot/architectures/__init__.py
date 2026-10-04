@@ -25,6 +25,9 @@ from parrot.architectures.registry import (available_architectures, build_networ
 # Built-in architectures. Importing each module registers it.
 from parrot.architectures import brnn, classical, cnn, composition, transformer, unet  # noqa: E402,F401
 
+# Architectures for matrix data live with the rest of the matrix code
+import parrot.matrices.architectures  # noqa: E402,F401
+
 DEFAULT_ARCHITECTURE = 'brnn'
 
 __all__ = ['HyperParameter', 'HyperParameterValue', 'ParrotArchitecture', 'available_architectures', 'build_network',

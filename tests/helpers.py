@@ -133,11 +133,17 @@ class LinearTestArchitecture(ParrotArchitecture):
         return (per_residue * mask).sum(dim=1) / lengths[:, None]
 
 
-# Every built-in architecture plus the test-only one. The built-in list is read from the
-# registry, so architectures added to PARROT later are covered by the shared tests
-# automatically. Tests that use these must request the `test_architecture` fixture.
-BUILT_IN_ARCHITECTURES = available_architectures()
+# Every built-in architecture for sequence or residue data, plus the test-only one. The built-in
+# list is read from the registry, so architectures added to PARROT later are covered by the
+# shared tests automatically. Tests that use these must request the `test_architecture` fixture.
+# Architectures for matrix data have their own shared tests (test_matrix_architectures.py).
+BUILT_IN_ARCHITECTURES = [name for name in available_architectures()
+                          if set(get_architecture(name).supported_datatypes) & {'sequence', 'residues'}]
 ARCHITECTURES_UNDER_TEST = BUILT_IN_ARCHITECTURES + [LinearTestArchitecture.name]
+
+# Every built-in architecture for matrix data
+MATRIX_ARCHITECTURES = [name for name in available_architectures()
+                        if 'matrix' in get_architecture(name).supported_datatypes]
 
 
 # Simple, varied sequences used to fit models that are fitted in one step

@@ -142,6 +142,24 @@ tools.preproc, tools.class_balancing and tools.dataset_warnings
 .. automodule:: parrot.tools.dataset_warnings
    :members:
 
+matrices
+--------
+
+.. automodule:: parrot.matrices
+   :members:
+
+.. automodule:: parrot.matrices.data
+   :members:
+
+.. automodule:: parrot.matrices.base
+   :members:
+
+.. automodule:: parrot.matrices.layers
+   :members:
+
+.. automodule:: parrot.matrices.architectures.unet2d
+   :members:
+
 reproducibility.py
 ------------------
 

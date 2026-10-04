@@ -108,3 +108,16 @@ Testing a new architecture
 The test suite reads the list of registered architectures, so a new architecture is automatically checked for the behaviour every architecture must have: output shapes for every task type it supports, padding invariance (with sequences from 1 to 22 residues), gradients flowing through padded batches (or one-step fitting), other encoding sizes, training reducing the loss, predictions, and save/load round trips through ``parrot-predict`` and ``Predictor``. Just run ``pytest``; on a machine with an NVIDIA (CUDA) or Apple-silicon (MPS) GPU, ``tests/test_devices.py`` also checks that the architecture gives the same output on the GPU as on the CPU. Networks may run on the CPU, a CUDA GPU or MPS, so create any tensors inside ``forward`` on ``x.device`` and keep them float32: MPS does not support float64. To also check non-default settings, add them to ``CONFIGURATIONS`` in ``tests/test_architectures.py``, and add tests for anything specific to your architecture there.
 
 ``tests/test_snapshots.py`` pins every built-in architecture's parameter names and outputs (under every combination of its on/off options), so that refactoring can never silently break saved networks. A new architecture adds new cases, so that test will ask you to regenerate the reference files once, with ``python -m tests.test_snapshots``; from then on it protects your architecture too.
+
+Architectures for matrix data
+-----------------------------
+
+Matrix data (the ``'matrix'`` datatype) gives each sequence a matrix of values with one row per residue: a square map of every pair of residues (``Task.width`` is ``None``), or a fixed number of related, ordered columns per residue (``Task.width`` is that number). Everything specific to it lives in ``parrot/matrices/``, and matrix architectures live in ``parrot/matrices/architectures/``, one module each (``unet2d.py`` is the template).
+
+A matrix architecture subclasses ``MatrixArchitecture`` (``parrot/matrices/base.py``) instead of ``ParrotArchitecture``. It declares ``PAIR_CHANNELS`` and ``PAIR_FEATURES`` among its hyperparameters, calls ``self.build_input_grid(pair_channels, pair_features)`` and ``self.build_matrix_readout(num_features)`` in ``__init__``, and in ``forward``:
+
+* gets a channels-first input grid ``[batch, channels, padded_length, width]`` from ``self.input_grid(x, lengths)``, built from the per-residue encoding (pair features of residues i and j for square maps, or residue i's features with an embedding of column j);
+* runs its own 2D body on it, keeping padded cells at zero (``cell_mask``, ``grid_channel_mask`` and ``ChannelLayerNorm2d`` in ``parrot/matrices/layers.py`` help, as in the 1D networks);
+* returns ``self.matrix_readout(features)``: ``[batch, padded_length, width, num_classes]``, made symmetric for symmetric tasks.
+
+Import the module in ``parrot/matrices/architectures/__init__.py`` to register it. ``tests/test_matrix_architectures.py`` reads the registry, so a new matrix architecture is checked automatically for output shapes, padding invariance, symmetric maps, gradients, saving and loading, training, and (with a GPU) the same output on the GPU as on the CPU.

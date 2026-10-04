@@ -68,7 +68,7 @@ def add_training_arguments(parser: argparse.ArgumentParser) -> None:
                         help="REQUIRED. Format of the input data file, must be 'sequence' or 'residues'")
     parser.add_argument('-c', '--classes', type=int, metavar='num_classes', required=True,
                         help='REQUIRED. Number of output classes, for regression put 1')
-    parser.add_argument('--architecture', default=DEFAULT_ARCHITECTURE, choices=available_architectures(),
+    parser.add_argument('--architecture', default=DEFAULT_ARCHITECTURE, choices=command_line_architectures(),
                         help=f'network architecture (default: {DEFAULT_ARCHITECTURE})')
 
     parser.add_argument('-b', '--batch', default=32, type=int, metavar='batch_size',
@@ -213,8 +213,21 @@ def check_probabilistic_classification(probabilistic: bool, task: Task) -> None:
         raise ValueError('Probabilistic classification only implemented for sequence classification')
 
 
+def command_line_architectures() -> list[str]:
+    """The architectures the command-line tools offer: those for a datatype the tools accept
+
+    Returns
+    -------
+    list of str
+        Names of every registered architecture that supports one of
+        COMMAND_LINE_DATATYPES, sorted
+    """
+    return [name for name in available_architectures()
+            if set(get_architecture(name).supported_datatypes) & set(COMMAND_LINE_DATATYPES)]
+
+
 def hyperparameters_by_name() -> dict[str, list[tuple[str, HyperParameter]]]:
-    """Group the hyperparameters of every registered architecture by name
+    """Group the hyperparameters of every architecture the command-line tools offer, by name
 
     Returns
     -------
@@ -224,7 +237,7 @@ def hyperparameters_by_name() -> dict[str, list[tuple[str, HyperParameter]]]:
     """
 
     grouped: dict[str, list[tuple[str, HyperParameter]]] = {}
-    for architecture in available_architectures():
+    for architecture in command_line_architectures():
         for hyperparameter in get_architecture(architecture).hyperparameters:
             grouped.setdefault(hyperparameter.name, []).append((architecture, hyperparameter))
     return grouped

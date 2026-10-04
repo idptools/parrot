@@ -8,6 +8,12 @@ time points). Everything specific to matrix data lives in this package:
 
 - data.py: reading the matrices, checking them against their sequences, and
   padding them into batches
+- base.py: MatrixArchitecture, the interface every matrix architecture
+  implements (building the 2D input grid from per-residue encodings, and the
+  readout)
+- layers.py: 2D building blocks shared by matrix architectures (masks,
+  per-cell normalisation, symmetric maps)
+- architectures/: one module per matrix architecture (unet2d.py)
 
 The rest of PARROT (encodings, training, checkpoints, the hyperparameter
 search) is shared with sequence and residue data.

@@ -47,7 +47,8 @@ SNAPSHOT_DIRECTORY = Path(__file__).parent / 'test_data' / 'snapshots'
 # U-Net's downsampling factor) and the longest, which sets the padded length
 SNAPSHOT_SEQUENCES = ['ACDEFGHIK', 'W', 'PQRSTVWYACDEFGHIKLMNPQ']
 
-SNAPSHOT_TASKS = [Task('sequence', 1), Task('sequence', 3), Task('residues', 1), Task('residues', 3)]
+SNAPSHOT_TASKS = [Task('sequence', 1), Task('sequence', 3), Task('residues', 1), Task('residues', 3),
+                  Task('matrix', 1), Task('matrix', 3, width=4)]
 
 # Significant figures stored for each number: enough to catch any real change, few enough that results
 # agree between machines whose floating-point arithmetic differs in the last bits
@@ -112,7 +113,12 @@ def architecture_configurations() -> list[tuple[str, dict[str, Any]]]:
 def case_id(architecture: str, values: dict[str, Any], task: Task) -> str:
     """A readable, unique name for one (configuration, task) case, e.g. 'cnn global_context=False sequence/3'."""
     settings = ' '.join(f'{name}={value}' for name, value in values.items())
-    return f'{architecture} {settings} {task.datatype}/{task.num_classes}'.replace('  ', ' ')
+    task_name = f'{task.datatype}/{task.num_classes}'
+    if task.width is not None:
+        task_name += f'/width={task.width}'
+    if task.symmetric:
+        task_name += '/symmetric'
+    return f'{architecture} {settings} {task_name}'.replace('  ', ' ')
 
 
 def snapshot_network(architecture: str, values: dict[str, Any], task: Task) -> dict[str, Any]:
@@ -130,12 +136,12 @@ def snapshot_network(architecture: str, values: dict[str, Any], task: Task) -> d
     Returns
     -------
     dict
-        'architecture', 'settings' (`values`) and 'task' ([datatype, number of
-        classes]) of the case; 'hyperparameters' (every value the network
-        recorded); 'parameters' (each
-        state-dict entry's shape, or 'extra' for a fitted model's stored
-        estimator) and 'outputs' (for each sequence of SNAPSHOT_SEQUENCES, the
-        sequence's output, or each real residue's output for residue tasks)
+        'architecture', 'settings' (`values`) and 'task' (Task.to_config()) of
+        the case; 'hyperparameters' (every value the network recorded);
+        'parameters' (each state-dict entry's shape, or 'extra' for a fitted
+        model's stored estimator) and 'outputs' (for each sequence of
+        SNAPSHOT_SEQUENCES, the sequence's output, each real residue's output
+        for residue tasks, or each real cell's output for matrix tasks)
     """
     set_random_seed(TEST_SEED)
     network = ready_network(architecture, task, values)
@@ -150,10 +156,15 @@ def snapshot_network(architecture: str, values: dict[str, Any], task: Task) -> d
 
     outputs = []
     for index, length in enumerate(lengths.tolist()):
-        per_sequence = output[index, :length] if task.per_residue else output[index]
+        if task.is_matrix:
+            per_sequence = output[index, :length, :length if task.width is None else task.width]
+        elif task.per_residue:
+            per_sequence = output[index, :length]
+        else:
+            per_sequence = output[index]
         outputs.append(rounded(per_sequence.tolist()))
 
-    return {'architecture': architecture, 'settings': values, 'task': [task.datatype, task.num_classes],
+    return {'architecture': architecture, 'settings': values, 'task': task.to_config(),
             'hyperparameters': network.hyperparameter_values, 'parameters': parameters, 'outputs': outputs}
 
 
@@ -269,8 +280,7 @@ def test_snapshot_covers_every_configuration():
 @pytest.mark.parametrize('case', sorted(ARCHITECTURE_REFERENCE))
 def test_architecture_matches_snapshot(case):
     expected = ARCHITECTURE_REFERENCE[case]
-    datatype, num_classes = expected['task']
-    actual = snapshot_network(expected['architecture'], expected['settings'], Task(datatype, num_classes))
+    actual = snapshot_network(expected['architecture'], expected['settings'], Task.from_config(expected['task']))
 
     # Saved networks are loaded by parameter name and recorded hyperparameter values: these must match exactly
     assert actual['parameters'] == expected['parameters']

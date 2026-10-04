@@ -38,6 +38,11 @@ from parrot.tasks import IGNORED_CLASS_LABEL, Task
 # How many problem sequence IDs an error message lists before summarising the rest
 MAX_IDS_LISTED = 5
 
+# Two values of a symmetric map closer than this (relative, or absolute near zero) count as equal, allowing for
+# rounding when the map was computed or written
+SYMMETRY_RELATIVE_TOLERANCE = 1e-6
+SYMMETRY_ABSOLUTE_TOLERANCE = 1e-9
+
 
 # .................................................................
 # Reading
@@ -133,7 +138,8 @@ def check_matrix(sequence_id: str, sequence: str, matrix: np.ndarray, task: Task
     IOExceptionParrot
         If the matrix is not two-dimensional, does not have one row per residue
         and the task's number of columns, holds a value that is infinite or not
-        a number, or has no values at all (every value missing)
+        a number, has no values at all (every value missing), or is not
+        symmetric although the task is
     """
     matrix = np.asarray(matrix)
     expected_columns = len(sequence) if task.width is None else task.width
@@ -151,6 +157,9 @@ def check_matrix(sequence_id: str, sequence: str, matrix: np.ndarray, task: Task
                                 'or NaN (missing)')
     if np.all(np.isnan(values)):
         raise IOExceptionParrot(f'Every value of the matrix of {sequence_id} is missing (NaN)')
+    if task.symmetric and not np.allclose(values, values.T, rtol=SYMMETRY_RELATIVE_TOLERANCE,
+                                          atol=SYMMETRY_ABSOLUTE_TOLERANCE, equal_nan=True):
+        raise IOExceptionParrot(f'The matrix of {sequence_id} is not symmetric, but the task is')
     return values
 
 
@@ -217,7 +226,8 @@ def pad_matrix_targets(targets: list[np.ndarray], task: Task, padded_length: int
 
     Padded rows (and, for square maps, padded columns) are marked like missing
     values, so the loss ignores them both: IGNORED_CLASS_LABEL for
-    classification and NaN for regression.
+    classification and NaN for regression. For a symmetric task, the cells
+    below the diagonal are marked missing too, so each pair is counted once.
 
     Parameters
     ----------
@@ -243,6 +253,10 @@ def pad_matrix_targets(targets: list[np.ndarray], task: Task, padded_length: int
     for index, target in enumerate(targets):
         rows, columns = np.shape(target)
         padded[index, :rows, :columns] = target
+
+    if task.symmetric:
+        below_diagonal = np.tril(np.ones((padded_length, width), dtype=bool), k=-1)
+        padded[:, below_diagonal] = IGNORED_CLASS_LABEL if task.is_classification else np.nan
 
     if task.is_classification:
         return torch.from_numpy(padded)

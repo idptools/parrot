@@ -56,18 +56,24 @@ class Task:
         None (the default) means one column per residue, i.e. a square map of
         every pair of residues (such as a contact map); an integer N means N
         columns for every sequence (such as N ordered bins or time points).
+    symmetric : bool, optional
+        Square matrix tasks only: True if every map is symmetric (the value for
+        residues i and j is the value for j and i, as in a contact map). Each
+        pair is then counted once in the loss, and networks predict symmetric maps.
 
     Raises
     ------
     ValueError
         If `datatype` is not one of VALID_DATATYPES, `num_classes` is not a
-        positive integer, or `width` is given for a task that is not 'matrix'
-        or is not a positive integer.
+        positive integer, `width` is given for a task that is not 'matrix' or
+        is not a positive integer, or `symmetric` is set for a task that is not
+        a square matrix task.
     """
 
     datatype: str
     num_classes: int
     width: int | None = None
+    symmetric: bool = False
 
     def __post_init__(self) -> None:
         if self.datatype not in VALID_DATATYPES:
@@ -85,6 +91,9 @@ class Task:
             if isinstance(self.width, bool) or not isinstance(self.width, numbers.Integral) or self.width < 1:
                 raise ValueError(f'The width of a matrix task must be a positive integer, got {self.width!r}')
             object.__setattr__(self, 'width', int(self.width))
+
+        if self.symmetric and not self.is_square:
+            raise ValueError('Only square matrix tasks (one column per residue) can be symmetric')
 
     @property
     def is_classification(self) -> bool:
@@ -118,9 +127,11 @@ class Task:
         config: dict[str, Any] = {'datatype': self.datatype, 'num_classes': self.num_classes}
         if self.is_matrix:
             config['width'] = self.width
+            config['symmetric'] = self.symmetric
         return config
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> 'Task':
         """Rebuild a Task from the dictionary written by to_config()."""
-        return cls(datatype=config['datatype'], num_classes=int(config['num_classes']), width=config.get('width'))
+        return cls(datatype=config['datatype'], num_classes=int(config['num_classes']), width=config.get('width'),
+                   symmetric=bool(config.get('symmetric', False)))
