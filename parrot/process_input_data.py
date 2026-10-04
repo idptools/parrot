@@ -356,6 +356,11 @@ class SequenceDataset(Dataset):
         """Every sequence, in dataset order."""
         return [sample[1] for sample in self.data]
 
+    @property
+    def values(self) -> list[Any]:
+        """The value(s) of every sequence (a number, or one per residue), in dataset order."""
+        return [sample[2] for sample in self.data]
+
 
 def padded_batch_length(longest: int) -> int:
     """The length a batch is padded to, given its longest sequence

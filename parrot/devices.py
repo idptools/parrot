@@ -23,6 +23,7 @@ Licensed under the MIT license.
 
 import contextlib
 from collections.abc import Iterator
+from typing import Any
 
 import torch
 
@@ -142,3 +143,29 @@ def describe_device(device: torch.device) -> str:
     if device.type == 'mps':
         return 'Apple-silicon GPU (MPS)'
     return 'CPU'
+
+
+def cpu_copy(value: Any) -> Any:
+    """Copy a tensor, or a (nested) dictionary or list of tensors such as a state dict, to the CPU
+
+    Tensors are always copied, even if they are already on the CPU, so the copy
+    stays as it is while training goes on changing the original. Anything that
+    is not a tensor (e.g. a fitted scikit-learn model in a classical network's
+    state dict) is kept as it is.
+
+    Parameters
+    ----------
+    value : torch.Tensor, dict, list or anything else
+        What to copy, e.g. network.state_dict() or optimizer.state_dict()
+
+    Returns
+    -------
+    The same structure, with every tensor replaced by a detached copy on the CPU
+    """
+    if isinstance(value, torch.Tensor):
+        return value.detach().to('cpu', copy=True)
+    if isinstance(value, dict):
+        return {key: cpu_copy(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [cpu_copy(item) for item in value]
+    return value

@@ -17,7 +17,7 @@ import pytest
 import torch
 
 from parrot import process_input_data as pid
-from parrot import train_network
+from parrot import prediction
 from parrot.architectures import HyperParameter
 from parrot.checkpoint import load_network, save_network
 from parrot.encode_sequence import get_encoder
@@ -553,7 +553,7 @@ def test_predict_output_format(run_cli, tmp_path, datatype, num_classes, legacy)
     output_lines = [line.split() for line in read_lines(output_file)]
     assert [line[:2] for line in output_lines] == input_lines
 
-    raw_outputs = train_network.predict_sequences(network, [line[1] for line in input_lines], get_encoder('onehot'),
+    raw_outputs = prediction.predict_sequences(network, [line[1] for line in input_lines], get_encoder('onehot'),
                                                   'cpu')
     for seq_id, sequence, *values in output_lines:
         raw = raw_outputs[sequence]

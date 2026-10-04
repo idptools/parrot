@@ -55,7 +55,7 @@ def main():
 
     train_losses, val_losses = train_network.train(network, run.loader(run.train_set, shuffle=True),
                                                    run.loader(run.val_set), run.task, run.device,
-                                                   learn_rate=args.learning_rate, n_epochs=args.epochs,
+                                                   learning_rate=args.learning_rate, n_epochs=args.epochs,
                                                    stop_condition=args.stop, on_improvement=run.save,
                                                    verbose=args.verbose, silent=args.silent)
 

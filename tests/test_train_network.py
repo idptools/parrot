@@ -9,7 +9,7 @@ import torch
 
 from parrot import encode_sequence
 from parrot import process_input_data as pid
-from parrot import train_network
+from parrot import prediction, train_network
 from parrot.architectures import ParrotArchitecture, build_network
 from parrot.tasks import Task
 
@@ -42,7 +42,7 @@ def train_briefly(task_name: str, architecture: str = 'brnn',
     train_set, val_set, test_set, task = load_task(task_name)
     network = build_network(architecture, 20, task)
     train_network.train(network, loader(train_set, task, shuffle=True), loader(val_set, task), task, 'cpu',
-                        learn_rate=0.01, n_epochs=n_epochs, silent=True)
+                        learning_rate=0.01, n_epochs=n_epochs, silent=True)
     return network, test_set, task
 
 
@@ -87,9 +87,11 @@ def test_residue_regression_loss_ignores_padded_targets():
     targets = torch.zeros(2, vectors.shape[1], 1)
 
     with torch.no_grad():
-        loss_a, _ = train_network.compute_batch_loss(network, ([], vectors, targets, lengths), task, criterion, 'cpu')
+        loss_a, _ = train_network.compute_batch_loss(network, pid.Batch([], vectors, targets, lengths), task,
+                                                     criterion, 'cpu')
         targets[0, 3:] = 1000.0  # junk in the padded positions of sequence 0
-        loss_b, _ = train_network.compute_batch_loss(network, ([], vectors, targets, lengths), task, criterion, 'cpu')
+        loss_b, _ = train_network.compute_batch_loss(network, pid.Batch([], vectors, targets, lengths), task,
+                                                     criterion, 'cpu')
 
     assert loss_a.item() == pytest.approx(loss_b.item())
 
@@ -127,7 +129,7 @@ def test_train_returns_losses_and_keeps_best_weights():
     improvements = []
 
     train_losses, val_losses = train_network.train(network, loader(train_set, task, shuffle=True),
-                                                   loader(val_set, task), task, 'cpu', learn_rate=0.01, n_epochs=6,
+                                                   loader(val_set, task), task, 'cpu', learning_rate=0.01, n_epochs=6,
                                                    on_improvement=lambda net: improvements.append(1), silent=True)
 
     assert len(train_losses) == 6 and len(val_losses) == 6
@@ -151,7 +153,7 @@ def test_training_reduces_training_loss(test_architecture, architecture, task_na
     network = build_network(architecture, 20, task)
 
     train_losses, _ = train_network.train(network, loader(train_set, task, 16, shuffle=True), loader(val_set, task),
-                                          task, 'cpu', learn_rate=0.01, n_epochs=8, silent=True)
+                                          task, 'cpu', learning_rate=0.01, n_epochs=8, silent=True)
 
     assert train_losses[-1] < train_losses[0]
 
@@ -164,7 +166,7 @@ def test_one_step_models_are_fitted_by_train(architecture, task_name, capsys):
     saved = []
 
     train_losses, val_losses = train_network.train(network, loader(train_set, task), loader(val_set, task), task,
-                                                   'cpu', learn_rate=0.01, n_epochs=8,
+                                                   'cpu', learning_rate=0.01, n_epochs=8,
                                                    on_improvement=lambda net: saved.append(net))
 
     assert len(train_losses) == 1 and len(val_losses) == 1
@@ -180,7 +182,7 @@ def test_train_auto_stops_when_validation_loss_plateaus():
     min_epochs = 3
 
     _, val_losses = train_network.train(make_network('sequence', 3), loader(train_set, task), loader(val_set, task),
-                                        task, 'cpu', learn_rate=0.0, n_epochs=min_epochs, stop_condition='auto',
+                                        task, 'cpu', learning_rate=0.0, n_epochs=min_epochs, stop_condition='auto',
                                         silent=True)
 
     assert len(val_losses) == min_epochs + 2
@@ -190,7 +192,7 @@ def test_train_rejects_unknown_stop_condition():
     train_set, val_set, _, task = load_task('seq_class')
     with pytest.raises(ValueError, match='stop condition'):
         train_network.train(make_network('sequence', 3), loader(train_set, task), loader(val_set, task), task, 'cpu',
-                            learn_rate=0.01, n_epochs=1, stop_condition='never')
+                            learning_rate=0.01, n_epochs=1, stop_condition='never')
 
 
 def test_plateau_reached():
@@ -204,7 +206,7 @@ def test_train_prints_progress(capsys):
 
     def run(**kwargs):
         train_network.train(make_network('sequence', 3), loader(train_set, task), loader(val_set, task), task, 'cpu',
-                            learn_rate=0.01, n_epochs=6, **kwargs)
+                            learning_rate=0.01, n_epochs=6, **kwargs)
         return capsys.readouterr().out
 
     assert run(silent=True) == ''
@@ -219,7 +221,7 @@ def test_train_prints_progress(capsys):
 def test_predict_labeled(task_name):
     network, test_set, task = train_briefly(task_name)
 
-    labeled = train_network.predict_labeled(network, test_set, task, 'cpu')
+    labeled = prediction.predict_labeled(network, test_set, task, 'cpu')
 
     assert np.isfinite(labeled.loss)
     assert labeled.names == test_set.names and labeled.sequences == test_set.sequences
@@ -236,7 +238,7 @@ def test_predict_labeled(task_name):
 def test_predict_labeled_returns_outputs_in_dataset_order(task_name):
     # Batches are sorted by length, so outputs must be put back in dataset order
     network, test_set, task = train_briefly(task_name)
-    labeled = train_network.predict_labeled(network, test_set, task, 'cpu', batch_size=4)
+    labeled = prediction.predict_labeled(network, test_set, task, 'cpu', batch_size=4)
 
     for (_, sequence, _), output in zip(test_set.data, labeled.outputs):
         with torch.no_grad():
@@ -248,8 +250,8 @@ def test_predict_labeled_returns_outputs_in_dataset_order(task_name):
 def test_predict_labeled_is_independent_of_batch_size(task_name):
     network, test_set, task = train_briefly(task_name)
 
-    one_at_a_time = train_network.predict_labeled(network, test_set, task, 'cpu', batch_size=1)
-    batched = train_network.predict_labeled(network, test_set, task, 'cpu', batch_size=16)
+    one_at_a_time = prediction.predict_labeled(network, test_set, task, 'cpu', batch_size=1)
+    batched = prediction.predict_labeled(network, test_set, task, 'cpu', batch_size=16)
 
     assert one_at_a_time.loss == pytest.approx(batched.loss, rel=1e-5)
     for single, batch in zip(one_at_a_time.outputs, batched.outputs):
@@ -264,7 +266,7 @@ def test_predict_labeled_is_independent_of_batch_size(task_name):
     (Task('sequence', 2), np.array([0.0, 0.0]), True, [0.5, 0.5]),
 ])
 def test_output_to_prediction(task, output, probabilistic, expected):
-    np.testing.assert_allclose(train_network.output_to_prediction(output, task, probabilistic), expected)
+    np.testing.assert_allclose(prediction.output_to_prediction(output, task, probabilistic), expected)
 
 
 # ..........................................................................................
@@ -282,7 +284,7 @@ def test_predict_sequences(test_architecture, architecture, task):
     encoder = encode_sequence.OneHotEncoder()
     sequences = ['ACDEFG', 'KLMNPQRS', 'ACDEFG', 'W']
 
-    predictions = train_network.predict_sequences(network, sequences, encoder, 'cpu', batch_size=2)
+    predictions = prediction.predict_sequences(network, sequences, encoder, 'cpu', batch_size=2)
 
     assert list(predictions.keys()) == ['ACDEFG', 'KLMNPQRS', 'W']
     for sequence, output in predictions.items():
@@ -293,11 +295,11 @@ def test_predict_sequences(test_architecture, architecture, task):
 
 def test_predict_sequences_with_biophysics_encoding():
     network = make_network('sequence', 1, input_size=9)
-    predictions = train_network.predict_sequences(network, ['ACDEF'], encode_sequence.BiophysicsEncoder(), 'cpu')
+    predictions = prediction.predict_sequences(network, ['ACDEF'], encode_sequence.BiophysicsEncoder(), 'cpu')
     assert predictions['ACDEF'].shape == (1,)
 
 
 def test_predict_sequences_print_frequency(capsys):
-    train_network.predict_sequences(make_network('sequence', 1), ['ACD', 'EFG', 'HIK'],
+    prediction.predict_sequences(make_network('sequence', 1), ['ACD', 'EFG', 'HIK'],
                                     encode_sequence.OneHotEncoder(), 'cpu', batch_size=2, print_frequency=2)
     assert capsys.readouterr().out.splitlines() == ['On 0 of 3', 'On 2 of 3']

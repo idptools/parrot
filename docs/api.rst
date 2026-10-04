@@ -67,6 +67,12 @@ train_network.py
 .. automodule:: parrot.train_network
    :members:
 
+prediction.py
+-------------
+
+.. automodule:: parrot.prediction
+   :members:
+
 checkpoint.py
 -------------
 
@@ -77,6 +83,18 @@ reporting.py
 ------------
 
 .. automodule:: parrot.reporting
+   :members:
+
+metrics.py
+----------
+
+.. automodule:: parrot.metrics
+   :members:
+
+figures.py
+----------
+
+.. automodule:: parrot.figures
    :members:
 
 hyperparameter_search.py

@@ -177,9 +177,9 @@ def test_successive_halving_promotes_only_the_best_third_at_each_step():
     assert trainer.promotions and all(rank < finished // 3 for rank, finished in trainer.promotions)
     # Many trials never get past the first stage
     assert sum(len(trial.stage_losses) == 1 for trial in search.trials) >= 10
-    assert best.status == 'completed' and best.epochs == 27
-    assert best.stage_losses[-1] == min(t.stage_losses[-1] for t in search.trials if t.status == 'completed')
-    assert all(t.status in ('completed', 'stopped') for t in search.trials)
+    assert best.status == hs.COMPLETED and best.epochs == 27
+    assert best.stage_losses[-1] == min(t.stage_losses[-1] for t in search.trials if t.status == hs.COMPLETED)
+    assert all(t.status in (hs.COMPLETED, hs.STOPPED) for t in search.trials)
 
 
 def test_search_starts_with_the_defaults_then_a_space_filling_design():
@@ -211,21 +211,25 @@ def test_failed_configurations_are_recorded_and_skipped():
     search = make_search(trainer=trainer)
     best = search.run()
 
-    failed = [trial for trial in search.trials if trial.status.startswith('failed')]
+    failed = [trial for trial in search.trials if trial.status == hs.FAILED]
     assert failed and all(trial.stage_losses == [math.inf] for trial in failed)
     assert best.values['num_layers'] <= 3
 
 
 def test_every_configuration_failing_is_an_error():
     space = hs.SearchSpace('brnn')
-    with pytest.raises(RuntimeError, match='Every configuration failed'):
+    with pytest.raises(RuntimeError, match='Every configuration failed') as raised:
         make_search(trainer=FakeTrainer(space, fail_if=lambda values: True), n_trials=5).run()
+
+    # The first configuration's own error is kept, so a bug is not mistaken for unsuitable configurations
+    assert isinstance(raised.value.__cause__, ValueError)
+    assert 'does not suit the data' in str(raised.value.__cause__)
 
 
 def test_too_few_trials_still_train_one_configuration_fully():
     search = make_search(n_trials=2, max_epochs=27, min_epochs=3)
     best = search.run()
-    assert best.epochs == 27 and best.status == 'completed'
+    assert best.epochs == 27 and best.status == hs.COMPLETED
 
 
 def test_search_stops_when_every_configuration_has_been_tried():
@@ -332,5 +336,5 @@ def test_unsuitable_configuration_fails_without_stopping_the_search():
     search = hs.HyperparameterSearch(space, trainer, 12, 1, rng=np.random.default_rng(0), silent=True)
     best = search.run()
 
-    assert any(trial.status.startswith('failed') for trial in search.trials)  # some num_neighbors > 30
+    assert any(trial.status == hs.FAILED for trial in search.trials)  # some num_neighbors > 30
     assert best.values['num_neighbors'] <= 30

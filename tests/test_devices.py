@@ -28,7 +28,8 @@ from parrot.py_predictor import Predictor
 from parrot.scripts import parrot_optimize, parrot_predict, parrot_train
 from parrot.scripts.common import select_device
 from parrot.tasks import Task
-from parrot.train_network import evaluate_loss, predict_labeled, predict_sequences, train
+from parrot.prediction import predict_labeled, predict_sequences
+from parrot.train_network import evaluate_loss, train
 
 from tests.helpers import (BUILT_IN_ARCHITECTURES, EXAMPLE_TASKS, FITTING_SEQUENCES, architecture_class, data_path,
                            make_network, ready_network, supports)
@@ -177,7 +178,7 @@ def test_parrot_runs_networks_in_full_precision(tf32_allowed):
     dataset = pid.SequenceDataset(data)
     loader = pid.make_dataloader(dataset, task, batch_size=8)
 
-    train(network, loader, loader, task, 'cpu', learn_rate=0.001, n_epochs=1, silent=True)
+    train(network, loader, loader, task, 'cpu', learning_rate=0.001, n_epochs=1, silent=True)
     evaluate_loss(network, loader, task, 'cpu')
     predict_labeled(network, dataset, task, 'cpu')
     predict_sequences(network, dataset.sequences, get_encoder('onehot'), 'cpu')

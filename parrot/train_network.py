@@ -1,10 +1,10 @@
 """
-Core training module of PARROT: training any registered architecture, evaluating
-it on labeled data and making predictions on new sequences.
+Core training module of PARROT: the loss functions, and training any registered
+architecture (or fitting it, for models fitted in one step).
 
 Nothing in this module depends on which architecture is being used; networks
 only need to follow the ParrotArchitecture interface (see
-parrot/architectures/base.py).
+parrot/architectures/base.py). Running a trained network is in prediction.py.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -17,26 +17,27 @@ Licensed under the MIT license.
 """
 
 import itertools
+import math
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
-import numpy as np
 import torch
 import torch.nn as nn
-from scipy.special import softmax
 from torch.utils.data import DataLoader
 
 from parrot import process_input_data as pid
 from parrot.architectures import HyperParameter, ParrotArchitecture
-from parrot.devices import full_float32_precision
-from parrot.architectures.classical import ClassicalModel
 from parrot.architectures.layers import padding_mask
-from parrot.encode_sequence import SequenceEncoder
+from parrot.devices import cpu_copy, full_float32_precision
 from parrot.tasks import Task
 
 # The learning rate is the one hyperparameter shared by every architecture
 LEARNING_RATE = HyperParameter('learning_rate', float, default=0.001, help='initial learning rate',
                                search_range=(1e-5, 1e-2), log_scale=True)
+
+# When training stops: after a fixed number of epochs ('iter'), or once the validation loss stops improving ('auto')
+STOP_CONDITIONS = ('iter', 'auto')
 
 # With --stop auto, the validation loss must fall by at least this fraction relative
 # to every recent epoch to count as still improving
@@ -77,7 +78,7 @@ def build_loss_criterion(task: Task) -> nn.Module:
     return nn.L1Loss(reduction='sum')
 
 
-def compute_batch_loss(network: nn.Module, batch: tuple, task: Task, criterion: nn.Module,
+def compute_batch_loss(network: nn.Module, batch: pid.Batch, task: Task, criterion: nn.Module,
                        device: str | torch.device) -> tuple[torch.Tensor, torch.Tensor]:
     """Run a batch through the network and compute its summed loss
 
@@ -89,8 +90,8 @@ def compute_batch_loss(network: nn.Module, batch: tuple, task: Task, criterion: 
     ----------
     network : torch.nn.Module
         A network following the ParrotArchitecture interface
-    batch : tuple
-        (names, padded vectors, targets, lengths) as produced by collate_batch()
+    batch : Batch
+        A padded batch, as produced by collate_batch()
     task : Task
         The task being trained
     criterion : torch.nn.Module
@@ -107,18 +108,17 @@ def compute_batch_loss(network: nn.Module, batch: tuple, task: Task, criterion: 
         [batch_dim X padded_length X num_classes]
     """
 
-    names, vectors, targets, lengths = batch
-    vectors = vectors.to(device)
-    targets = targets.to(device)
+    vectors = batch.vectors.to(device)
+    targets = batch.targets.to(device)
 
-    outputs = network(vectors, lengths)
+    outputs = network(vectors, batch.lengths)
 
     if task.is_classification and task.per_residue:
         # CrossEntropyLoss expects the class dimension second
         loss = criterion(outputs.permute(0, 2, 1), targets)
     elif task.per_residue:
         # Only real residues with a label (missing labels are NaN)
-        mask = padding_mask(lengths.to(outputs.device), outputs.shape[1]) & ~torch.isnan(targets[..., 0])
+        mask = padding_mask(batch.lengths.to(outputs.device), outputs.shape[1]) & ~torch.isnan(targets[..., 0])
         loss = criterion(outputs[mask], targets[mask])
     else:
         loss = criterion(outputs, targets)
@@ -180,7 +180,7 @@ def evaluate_loss(network: nn.Module, loader: DataLoader, task: Task, device: st
         for batch in loader:
             loss, _ = compute_batch_loss(network, batch, task, criterion, device)
             batch_losses.append(loss.detach())
-            n_sequences += len(batch[0])
+            n_sequences += len(batch.names)
     total_loss = sum_batch_losses(batch_losses)
 
     return total_loss / n_sequences
@@ -188,6 +188,72 @@ def evaluate_loss(network: nn.Module, loader: DataLoader, task: Task, device: st
 
 # .................................................................
 # Training
+
+@dataclass
+class TrainingHistory:
+    """A network's losses after each epoch of training, and the weights from its best epoch
+
+    Attributes
+    ----------
+    train_losses : list of float
+        Average training loss per sequence, one per epoch
+    val_losses : list of float
+        Average validation loss per sequence, one per epoch
+    best_loss : float
+        The lowest validation loss so far (inf before the first epoch)
+    best_epoch : int
+        The epoch (counting from 0) with that loss (0 until an epoch's loss is finite)
+    best_weights : dict or None
+        A CPU copy of the network's weights at that epoch (None until then)
+    """
+
+    train_losses: list[float] = field(default_factory=list)
+    val_losses: list[float] = field(default_factory=list)
+    best_loss: float = math.inf
+    best_epoch: int = 0
+    best_weights: dict[str, Any] | None = None
+
+    def record_epoch(self, train_loss: float, val_loss: float, network: nn.Module) -> bool:
+        """Add an epoch's losses, keeping a copy of the network's weights if it is the best epoch so far
+
+        Parameters
+        ----------
+        train_loss : float
+            The epoch's average training loss per sequence
+        val_loss : float
+            The epoch's average validation loss per sequence
+        network : torch.nn.Module
+            The network, as it is at the end of the epoch
+
+        Returns
+        -------
+        bool
+            True if this epoch's validation loss is the lowest so far
+        """
+        epoch = len(self.val_losses)
+        self.train_losses.append(train_loss)
+        self.val_losses.append(val_loss)
+
+        # Written this way round so that a NaN loss never counts as an improvement
+        if not val_loss < self.best_loss:
+            return False
+
+        self.best_loss = val_loss
+        self.best_epoch = epoch
+        self.best_weights = cpu_copy(network.state_dict())
+        return True
+
+    def restore_best_weights(self, network: nn.Module) -> None:
+        """Load the weights of the best epoch into the network (if any epoch had a finite loss)
+
+        Parameters
+        ----------
+        network : torch.nn.Module
+            The network that was trained
+        """
+        if self.best_weights is not None:
+            network.load_state_dict(self.best_weights)
+
 
 def plateau_reached(val_loss: float, recent_val_losses: list[float], epochs_since_best: int, patience: int) -> bool:
     """Decide whether training with --stop auto should end
@@ -219,8 +285,8 @@ def plateau_reached(val_loss: float, recent_val_losses: list[float], epochs_sinc
 
 
 @full_float32_precision()
-def train(network: nn.Module, train_loader: DataLoader, val_loader: DataLoader, task: Task,
-          device: str | torch.device, learn_rate: float, n_epochs: int, stop_condition: str = 'iter',
+def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: DataLoader, task: Task,
+          device: str | torch.device, learning_rate: float, n_epochs: int, stop_condition: str = 'iter',
           on_improvement: Callable[[nn.Module], None] | None = None, verbose: bool = False,
           silent: bool = False) -> tuple[list[float], list[float]]:
     """Train a network, keeping the weights that perform best on the validation set
@@ -235,7 +301,7 @@ def train(network: nn.Module, train_loader: DataLoader, val_loader: DataLoader, 
 
     Parameters
     ----------
-    network : torch.nn.Module
+    network : ParrotArchitecture
         The network to train (already on `device`)
     train_loader : DataLoader
         Batches of the training set (should shuffle)
@@ -245,7 +311,7 @@ def train(network: nn.Module, train_loader: DataLoader, val_loader: DataLoader, 
         The task being trained
     device : str or torch.device
         Device the network lives on
-    learn_rate : float
+    learning_rate : float
         Initial learning rate for the Adam optimiser
     n_epochs : int
         With stop_condition='iter', the number of epochs to train for. With
@@ -269,52 +335,42 @@ def train(network: nn.Module, train_loader: DataLoader, val_loader: DataLoader, 
         Average validation loss per sequence, for each epoch
     """
 
-    if stop_condition not in ('iter', 'auto'):
+    if stop_condition not in STOP_CONDITIONS:
         raise ValueError(f"Invalid stop condition '{stop_condition}': must be 'auto' or 'iter'.")
 
-    if isinstance(network, ClassicalModel):
+    if not network.trained_by_gradient_descent:
         return fit_in_one_step(network, train_loader, val_loader, task, device, on_improvement, silent)
 
-    optimizer = torch.optim.Adam(network.parameters(), lr=learn_rate)
+    optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
     criterion = build_loss_criterion(task)
+    history = TrainingHistory()
 
-    train_losses: list[float] = []
-    val_losses: list[float] = []
-    best_val_loss = np.inf
-    best_epoch = 0
-    best_weights = None
-
-    # With 'auto' there is no fixed number of epochs: training ends once performance plateaus
+    # With 'auto', n_epochs is both the minimum number of epochs and how many epochs performance must stagnate
+    # for; there is no fixed number of epochs, as training ends once performance plateaus
+    patience_epochs = n_epochs
     epochs = range(n_epochs) if stop_condition == 'iter' else itertools.count()
 
     for epoch in epochs:
         train_loss = train_epoch(network, train_loader, task, criterion, optimizer, device)
         val_loss = evaluate_loss(network, val_loader, task, device)
 
-        stop_now = (stop_condition == 'auto' and epoch >= n_epochs
-                    and plateau_reached(val_loss, val_losses[-n_epochs:], epoch - best_epoch, n_epochs))
+        # Decided before this epoch is recorded, by comparing it with the epochs before it
+        stop_now = (stop_condition == 'auto' and epoch >= patience_epochs
+                    and plateau_reached(val_loss, history.val_losses[-patience_epochs:], epoch - history.best_epoch,
+                                        patience_epochs))
 
-        # Keep a copy of the best weights seen so far
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_epoch = epoch
-            best_weights = {name: tensor.detach().clone() for name, tensor in network.state_dict().items()}
-            if on_improvement is not None:
-                on_improvement(network)
-
-        train_losses.append(train_loss)
-        val_losses.append(val_loss)
+        improved = history.record_epoch(train_loss, val_loss, network)
+        if improved and on_improvement is not None:
+            on_improvement(network)
 
         if not silent and (verbose or epoch % PRINT_EVERY_N_EPOCHS == 0):
-            print('Epoch %d\tLoss %.4f' % (epoch, val_loss))
+            print(f'Epoch {epoch}\tLoss {val_loss:.4f}')
 
         if stop_now:
             break
 
-    if best_weights is not None:
-        network.load_state_dict(best_weights)
-
-    return train_losses, val_losses
+    history.restore_best_weights(network)
+    return history.train_losses, history.val_losses
 
 
 @full_float32_precision()
@@ -349,7 +405,7 @@ def train_epoch(network: nn.Module, loader: DataLoader, task: Task, criterion: n
     for batch in loader:
         loss, _ = compute_batch_loss(network, batch, task, criterion, device)
         batch_losses.append(loss.detach())
-        n_train_sequences += len(batch[0])
+        n_train_sequences += len(batch.names)
 
         optimizer.zero_grad()
         loss.backward()
@@ -358,15 +414,15 @@ def train_epoch(network: nn.Module, loader: DataLoader, task: Task, criterion: n
     return sum_batch_losses(batch_losses) / n_train_sequences
 
 
-def fit_in_one_step(network: ClassicalModel, train_loader: DataLoader, val_loader: DataLoader, task: Task,
+def fit_in_one_step(network: ParrotArchitecture, train_loader: DataLoader, val_loader: DataLoader, task: Task,
                     device: str | torch.device, on_improvement: Callable[[nn.Module], None] | None = None,
                     silent: bool = False) -> tuple[list[float], list[float]]:
     """Fit a model that is not trained by gradient descent, and report its losses
 
     Parameters
     ----------
-    network : ClassicalModel
-        The model to fit
+    network : ParrotArchitecture
+        The model to fit (one with trained_by_gradient_descent = False)
     train_loader : DataLoader
         Batches of the training set
     val_loader : DataLoader
@@ -396,193 +452,6 @@ def fit_in_one_step(network: ClassicalModel, train_loader: DataLoader, val_loade
         on_improvement(network)
 
     if not silent:
-        print('Fitted in one step\tLoss %.4f' % val_loss)
+        print(f'Fitted in one step\tLoss {val_loss:.4f}')
 
     return [train_loss], [val_loss]
-
-
-# .................................................................
-# Evaluation and prediction
-
-@dataclass
-class LabeledPredictions:
-    """Network outputs for every sequence in a labeled dataset
-
-    Attributes
-    ----------
-    names : list of str
-        Sequence IDs
-    sequences : list of str
-        The sequences
-    true_values : list of numpy arrays
-        The true value(s) for each sequence: a scalar for sequence-mapped data,
-        or one value per residue for residue-mapped data
-    outputs : list of numpy arrays
-        The raw network output for each sequence: [num_classes] for
-        sequence-mapped data or [sequence_length X num_classes] for residue-mapped
-        data (classification outputs are logits)
-    loss : float
-        Average loss per sequence, computed with the training loss function
-    """
-
-    names: list[str]
-    sequences: list[str]
-    true_values: list[np.ndarray]
-    outputs: list[np.ndarray]
-    loss: float
-
-
-def unpad_outputs(outputs: torch.Tensor, lengths: torch.Tensor, task: Task) -> list[np.ndarray]:
-    """Split a batch of network outputs into one numpy array per sequence
-
-    Parameters
-    ----------
-    outputs : torch.Tensor
-        Batch output of a network
-    lengths : torch.Tensor
-        The true length of each sequence
-    task : Task
-        The task the network is for
-
-    Returns
-    -------
-    list of numpy arrays
-        [num_classes] per sequence, or [sequence_length X num_classes] per
-        sequence with the padding removed
-    """
-
-    outputs_array = outputs.cpu().numpy()
-    if not task.per_residue:
-        return list(outputs_array)
-    return [outputs_array[i, :length] for i, length in enumerate(lengths.tolist())]
-
-
-@full_float32_precision()
-def predict_labeled(network: nn.Module, dataset: pid.SequenceDataset, task: Task, device: str | torch.device,
-                    batch_size: int = 32) -> LabeledPredictions:
-    """Run a trained network over a labeled dataset (e.g. the test set)
-
-    Parameters
-    ----------
-    network : torch.nn.Module
-        The trained network
-    dataset : SequenceDataset
-        The labeled sequences
-    task : Task
-        The task the network is for
-    device : str or torch.device
-        Device the network lives on
-    batch_size : int, optional
-        Number of sequences evaluated at once (does not affect the results)
-
-    Returns
-    -------
-    LabeledPredictions
-    """
-
-    # Sequences are batched by length (which only affects speed), so the outputs come
-    # out in the batch sampler's order and are put back into dataset order at the end
-    loader = pid.make_dataloader(dataset, task, batch_size, shuffle=False, batching='length')
-    assert loader.batch_sampler is not None
-    loader_order = [index for batch_indices in loader.batch_sampler for index in batch_indices]
-    criterion = build_loss_criterion(task)
-    batch_losses = []
-    outputs_in_loader_order = []
-
-    network.eval()
-    with torch.no_grad():
-        for batch in loader:
-            loss, batch_outputs = compute_batch_loss(network, batch, task, criterion, device)
-            batch_losses.append(loss.detach())
-            outputs_in_loader_order.extend(unpad_outputs(batch_outputs, batch[3], task))
-
-    outputs: list[np.ndarray] = [np.empty(0)] * len(dataset)
-    for index, output in zip(loader_order, outputs_in_loader_order, strict=True):
-        outputs[index] = output
-
-    return LabeledPredictions(names=dataset.names, sequences=dataset.sequences,
-                              true_values=[np.asarray(sample[2]) for sample in dataset.data],
-                              outputs=outputs, loss=sum_batch_losses(batch_losses) / len(dataset))
-
-
-@full_float32_precision()
-def predict_sequences(network: ParrotArchitecture, sequences: list[str], encoder: SequenceEncoder,
-                      device: str | torch.device, batch_size: int = 64,
-                      print_frequency: int | None = None) -> dict[str, np.ndarray]:
-    """Run a trained network over unlabeled sequences
-
-    Parameters
-    ----------
-    network : ParrotArchitecture
-        The trained network (its `task` attribute says how to read the output)
-    sequences : list of str
-        Sequences to predict. Each unique sequence is only run once.
-    encoder : SequenceEncoder
-        The encoder the network was trained with
-    device : str or torch.device
-        Device the network lives on
-    batch_size : int, optional
-        Number of sequences run through the network at once (does not affect
-        the results, since padding is masked)
-    print_frequency : int, optional
-        If given, print a progress update every `print_frequency` sequences
-
-    Returns
-    -------
-    dict
-        Maps each unique sequence to its raw network output: [num_classes] for
-        sequence-mapped networks, [sequence_length X num_classes] for
-        residue-mapped networks
-    """
-
-    # Batch sequences of similar length together, so little computation is spent on padding
-    unique_sequences = list(dict.fromkeys(sequences))
-    by_length = sorted(unique_sequences, key=len)
-    predictions = {}
-
-    network.eval()
-    for start in range(0, len(by_length), batch_size):
-        batch_sequences = by_length[start:start + batch_size]
-
-        if print_frequency is not None:
-            for index in range(start, start + len(batch_sequences)):
-                if index % print_frequency == 0:
-                    print(f'On {index} of {len(unique_sequences)}')
-
-        vectors, lengths = pid.pad_sequence_vectors([encoder.encode(seq) for seq in batch_sequences])
-        with torch.no_grad():
-            outputs = network(vectors.to(device), lengths)
-
-        for sequence, output in zip(batch_sequences, unpad_outputs(outputs, lengths, network.task)):
-            predictions[sequence] = output
-
-    # Return the sequences in the order they were first given
-    return {sequence: predictions[sequence] for sequence in unique_sequences}
-
-
-def output_to_prediction(output: np.ndarray, task: Task, probabilistic: bool = False) -> np.ndarray:
-    """Convert a raw network output into the prediction reported to the user
-
-    Parameters
-    ----------
-    output : numpy array
-        Raw output for one sequence: [num_classes] or [sequence_length X num_classes]
-    task : Task
-        The task the network is for
-    probabilistic : bool, optional
-        For classification, return class probabilities instead of the most
-        likely class
-
-    Returns
-    -------
-    numpy array
-        Regression: the predicted value (scalar) or one value per residue.
-        Classification: the predicted class (scalar) or one class per residue,
-        or, if `probabilistic`, the probability of each class.
-    """
-
-    if not task.is_classification:
-        return output[..., 0]
-    if probabilistic:
-        return softmax(output, axis=-1)
-    return np.argmax(output, axis=-1)

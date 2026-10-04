@@ -23,7 +23,7 @@ from typing import Any
 import torch
 from torch.utils.data import DataLoader
 
-from parrot import devices, plm, reporting, train_network
+from parrot import devices, figures, plm, prediction, reporting
 from parrot import process_input_data as pid
 from parrot.architectures import (DEFAULT_ARCHITECTURE, HyperParameter, HyperParameterValue, ParrotArchitecture,
                                   available_architectures, get_architecture, resolve_hyperparameters)
@@ -557,9 +557,9 @@ def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_los
 
     # Models fitted in one step have no loss curve to plot
     if run.include_figs and network.trained_by_gradient_descent:
-        reporting.plot_training_loss(train_losses, val_losses, run.output_prefix + '_train_val_loss.png')
+        figures.plot_training_loss(train_losses, val_losses, run.output_prefix + '_train_val_loss.png')
 
-    labeled = train_network.predict_labeled(network, run.test_set, run.task, run.device)
+    labeled = prediction.predict_labeled(network, run.test_set, run.task, run.device)
     if not run.silent:
         print('\nTest Loss: %.4f' % labeled.loss)
 

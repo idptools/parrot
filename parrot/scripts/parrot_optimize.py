@@ -91,7 +91,7 @@ def main():
         network = build_network(args.architecture, len(run.encoder), run.task, best).to(run.device)
         train_losses, val_losses = train_network.train(network, run.loader(run.train_set, shuffle=True),
                                                        run.loader(run.val_set), run.task, run.device,
-                                                       learn_rate=learning_rate, n_epochs=args.epochs,
+                                                       learning_rate=learning_rate, n_epochs=args.epochs,
                                                        stop_condition='iter', on_improvement=run.save,
                                                        verbose=args.verbose, silent=args.silent)
 

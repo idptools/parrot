@@ -170,7 +170,7 @@ def architecture_snapshot() -> dict[str, dict[str, Any]]:
 
 def search_record(search: hs.HyperparameterSearch, best: hs.Trial) -> dict[str, Any]:
     """Everything a finished search did: each trial's values, origin, status and losses, and the best trial."""
-    trials = [{'number': trial.number, 'origin': trial.origin, 'status': trial.status, 'epochs': trial.epochs,
+    trials = [{'number': trial.number, 'origin': trial.origin, 'status': trial.status_text, 'epochs': trial.epochs,
                'values': trial.values, 'stage_losses': rounded([float(loss) for loss in trial.stage_losses])}
               for trial in search.trials]
     return {'stages': search.stages, 'best': best.number, 'trials': trials}

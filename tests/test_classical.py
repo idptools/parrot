@@ -9,7 +9,7 @@ import torch
 from scipy.stats import pearsonr
 
 from parrot import process_input_data as pid
-from parrot import train_network
+from parrot import prediction
 from parrot.architectures import build_network
 from parrot.architectures.classical import MINIMUM_PROBABILITY, ClassicalModel
 from parrot.architectures.layers import adjacent_pair_composition, mean_over_residues
@@ -72,7 +72,7 @@ def test_linear_model_recovers_composition_target():
     network = build_network('linear', 20, task, {'alpha': 1e-3})
 
     network.fit(train_loader)
-    labeled = train_network.predict_labeled(network, test_loader.dataset, task, 'cpu')
+    labeled = prediction.predict_labeled(network, test_loader.dataset, task, 'cpu')
 
     predicted = np.array([output[0] for output in labeled.outputs])
     assert pearsonr(np.array(labeled.true_values), predicted)[0] > 0.99
@@ -85,7 +85,7 @@ def test_classifiers_learn_the_example_classes(architecture):
     network = build_network(architecture, 20, task)
 
     network.fit(train_loader)
-    labeled = train_network.predict_labeled(network, test_loader.dataset, task, 'cpu')
+    labeled = prediction.predict_labeled(network, test_loader.dataset, task, 'cpu')
 
     accuracy = np.mean([np.argmax(output) == true for output, true in zip(labeled.outputs, labeled.true_values)])
     assert accuracy > 0.8

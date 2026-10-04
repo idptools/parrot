@@ -19,7 +19,7 @@ import argparse
 import os
 
 from parrot import process_input_data as pid
-from parrot import reporting, train_network
+from parrot import prediction, reporting
 from parrot.checkpoint import load_network
 from parrot.encode_sequence import StandardizedEncoder, get_encoder
 from parrot import plm
@@ -96,23 +96,13 @@ def main():
         print('\n---> Starting predictions...\n')
 
     print_frequency = None if args.silent else args.print_frequency
-    outputs = train_network.predict_sequences(network, sequences, encoder, device, print_frequency=print_frequency)
+    outputs = prediction.predict_sequences(network, sequences, encoder, device, print_frequency=print_frequency)
 
     if not args.silent:
         print('\n---> Prediction complete!')
 
-    decimals = reporting.PROBABILITY_DECIMALS if args.probabilistic_classification else None
-
-    # Write one output line per input line, in the original order, so that every
-    # sequence ID is kept even when the same sequence appears more than once
-    with open(output_file, 'w') as f:
-        for i, seq in enumerate(sequences):
-            prediction = train_network.output_to_prediction(outputs[seq], task, args.probabilistic_classification)
-            values = reporting.format_values(prediction, decimals)
-            if args.excludeSeqID:
-                f.write(f'{seq} {values}\n')
-            else:
-                f.write(f'{seq_ids[i]} {seq} {values}\n')
+    reporting.write_unlabeled_predictions(None if args.excludeSeqID else seq_ids, sequences, outputs, task,
+                                          output_file, args.probabilistic_classification)
 
 
 def check_arguments_match_network(args, network, encoder):

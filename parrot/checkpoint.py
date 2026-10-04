@@ -24,6 +24,7 @@ import torch
 
 from parrot.architectures import ParrotArchitecture, build_network, get_architecture
 from parrot.architectures.registry import fill_legacy_values
+from parrot.devices import cpu_copy
 from parrot.encode_sequence import SequenceEncoder, encoder_from_config, get_encoder
 from parrot.package_version import PARROT_VERSION
 from parrot.tasks import Task
@@ -77,8 +78,8 @@ def cpu_state_dict(network: torch.nn.Module) -> dict[str, Any]:
         Parameter name -> CPU tensor (non-tensor entries, such as the fitted
         scikit-learn model of a classical network, are kept as they are)
     """
-    return {name: value.detach().cpu() if isinstance(value, torch.Tensor) else value
-            for name, value in network.state_dict().items()}
+    state: dict[str, Any] = cpu_copy(network.state_dict())
+    return state
 
 
 def load_network(path: str, device: str | torch.device = 'cpu', legacy_datatype: str | None = None,

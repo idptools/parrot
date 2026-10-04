@@ -12,10 +12,12 @@ Licensed under the MIT license.
 
 '''
 
+from pathlib import Path
+
 import numpy as np
 from scipy.special import softmax  # noqa: F401  (kept importable as py_predictor.softmax)
 
-from parrot import checkpoint, devices, plm, train_network
+from parrot import checkpoint, devices, plm, prediction
 
 
 class Predictor():
@@ -44,7 +46,8 @@ class Predictor():
         Number of data classes. If 1, the network is a regressor; if >1, a
         classifier with n_classes classes.
     task : str
-        "classification" or "regression".
+        "classification" or "regression" (a name kept from earlier versions of
+        PARROT; the network's full Task is network.task).
     num_layers : int or None
         Number of hidden layers, for BRNN networks (None for other architectures).
     hidden_vector_size : int or None
@@ -57,7 +60,8 @@ class Predictor():
         The device predictions run on.
     """
 
-    def __init__(self, saved_weights, dtype=None, device='cpu', embedding_cache=None):
+    def __init__(self, saved_weights: str | Path, dtype: str | None = None, device: str = 'cpu',
+                 embedding_cache: str | Path | None = None) -> None:
         """
         Parameters
         ----------
@@ -84,7 +88,7 @@ class Predictor():
         self.device = devices.resolve_device(device)
         self.network, self.encoder = checkpoint.load_network(str(saved_weights), device=self.device,
                                                              legacy_datatype=dtype)
-        task = self.network.task
+        network_task = self.network.task
 
         if isinstance(self.encoder, plm.PLMEncoder):
             self.encoder.use_device(self.device)
@@ -93,16 +97,17 @@ class Predictor():
         elif embedding_cache is not None:
             raise ValueError('embedding_cache only applies to networks trained on protein language model embeddings')
 
-        if dtype is not None and dtype != task.datatype:
-            raise ValueError(f"dtype '{dtype}' does not match the saved network, which is a '{task.datatype}' network")
+        if dtype is not None and dtype != network_task.datatype:
+            raise ValueError(f"dtype '{dtype}' does not match the saved network, which is a "
+                             f"'{network_task.datatype}' network")
 
-        self.dtype = task.datatype
-        self.n_classes = task.num_classes
-        self.task = task.problem_type
+        self.dtype = network_task.datatype
+        self.n_classes = network_task.num_classes
+        self.task = network_task.problem_type
         self.num_layers = self.network.hyperparameter_values.get('num_layers')
         self.hidden_vector_size = self.network.hyperparameter_values.get('hidden_size')
 
-    def predict(self, seq):
+    def predict(self, seq: str) -> np.ndarray:
         """Use the network to predict values for a single sequence
 
         Parameters
@@ -113,15 +118,17 @@ class Predictor():
         Returns
         -------
         np.ndarray
-            Regression: one value (sequence networks) or one value per residue.
+            Regression: a 1D array of one value (sequence networks) or one value
+            per residue, as earlier versions of PARROT returned it (parrot-predict
+            writes a sequence network's value as a single number instead).
             Classification: the probability of each class, with shape
             [num_classes] (sequence networks) or [len(seq) X num_classes].
         """
 
         seq = seq.upper()
-        output = train_network.predict_sequences(self.network, [seq], self.encoder, self.device)[seq]
+        output = prediction.predict_sequences(self.network, [seq], self.encoder, self.device)[seq]
 
         if self.n_classes > 1:
-            return train_network.output_to_prediction(output, self.network.task, probabilistic=True)
+            return prediction.output_to_prediction(output, self.network.task, probabilistic=True)
 
         return np.asarray(output).flatten()

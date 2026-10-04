@@ -27,7 +27,8 @@ from parrot.architectures import (HyperParameter, ParrotArchitecture, available_
 from parrot.brnn_architecture import BRNN_MtM, BRNN_MtO
 
 # Training, saving and predicting
-from parrot.train_network import evaluate_loss, predict_labeled, predict_sequences, train
+from parrot.prediction import predict_labeled, predict_sequences
+from parrot.train_network import evaluate_loss, train
 from parrot.checkpoint import load_network, save_network
 from parrot.py_predictor import Predictor
 
