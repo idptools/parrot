@@ -35,8 +35,8 @@ from parrot import process_input_data
 from parrot.package_version import PARROT_VERSION
 from parrot.reproducibility import random_generator, set_random_seed
 from parrot.scripts import arguments
-from parrot.scripts.common import LEGACY_NOTE
-from parrot.tasks import VALID_DATATYPES, Task
+from parrot.scripts.common import COMMAND_LINE_DATATYPES, LEGACY_NOTE
+from parrot.tasks import Task
 from parrot.tools import class_balancing, kmer_similarity, mmseqs_search, preproc, splitting
 from parrot.tools.preproc import Line, ProcessingReport
 
@@ -81,7 +81,7 @@ def add_input_arguments(parser: argparse.ArgumentParser) -> None:
                                                 'file that will be manipulated in some way')
     parser.add_argument('output_data_file', help='path to be written to for an output data file. Will overwrite an '
                                                  'existing file')
-    parser.add_argument('-d', '--datatype', required=True, choices=VALID_DATATYPES,
+    parser.add_argument('-d', '--datatype', required=True, choices=COMMAND_LINE_DATATYPES,
                         help="REQUIRED. Format of the input data file, must be 'sequence' or 'residues'")
     parser.add_argument('-m', '--mode', required=True, choices=MODES,
                         help="REQUIRED. Must be either 'classification' or 'regression'")

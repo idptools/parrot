@@ -65,15 +65,14 @@ def build_loss_criterion(task: Task) -> nn.Module:
     Returns
     -------
     torch.nn.Module
-        MSE for residue regression, L1 for sequence regression, and cross-
-        entropy for classification. The cross-entropy loss ignores padded
-        residues and residues with missing labels, which carry the label
-        IGNORED_CLASS_LABEL.
+        MSE for residue and matrix regression, L1 for sequence regression, and
+        cross-entropy for classification. The cross-entropy loss ignores padded
+        positions and missing labels, which carry the label IGNORED_CLASS_LABEL.
     """
 
     if task.is_classification:
         return nn.CrossEntropyLoss(reduction='sum', ignore_index=pid.IGNORED_CLASS_LABEL)
-    if task.per_residue:
+    if task.per_residue or task.is_matrix:
         return nn.MSELoss(reduction='sum')
     return nn.L1Loss(reduction='sum')
 
@@ -113,12 +112,16 @@ def compute_batch_loss(network: nn.Module, batch: pid.Batch, task: Task, criteri
 
     outputs = network(vectors, batch.lengths)
 
-    if task.is_classification and task.per_residue:
-        # CrossEntropyLoss expects the class dimension second
-        loss = criterion(outputs.permute(0, 2, 1), targets)
+    if task.is_classification and (task.per_residue or task.is_matrix):
+        # CrossEntropyLoss expects the class dimension second ([batch, classes, length(, width)])
+        loss = criterion(outputs.movedim(-1, 1), targets)
     elif task.per_residue:
         # Only real residues with a label (missing labels are NaN)
         mask = padding_mask(batch.lengths.to(outputs.device), outputs.shape[1]) & ~torch.isnan(targets[..., 0])
+        loss = criterion(outputs[mask], targets[mask])
+    elif task.is_matrix:
+        # Padded cells are NaN, like missing ones (see matrices.data.pad_matrix_targets)
+        mask = ~torch.isnan(targets[..., 0])
         loss = criterion(outputs[mask], targets[mask])
     else:
         loss = criterion(outputs, targets)

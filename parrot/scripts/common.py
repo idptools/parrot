@@ -32,8 +32,12 @@ from parrot.encode_sequence import get_encoder
 from parrot.sequence_encoder import SequenceEncoder
 from parrot.reproducibility import set_random_seed
 from parrot.scripts import arguments
-from parrot.tasks import VALID_DATATYPES, Task
+from parrot.tasks import Task
 from parrot.tools import dataset_warnings
+
+# The datatypes the command-line tools accept. Matrix data (parrot.matrices) is not offered until the commands
+# can read matrix files and report on matrix predictions.
+COMMAND_LINE_DATATYPES = ('sequence', 'residues')
 
 # Ends the help of every flag kept only so that commands written for earlier versions of PARROT still work
 LEGACY_NOTE = '(kept so that older commands keep working)'
@@ -60,7 +64,7 @@ def add_training_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('data_file', help='path to tsv file with format: <idx> <sequence> <data>')
     parser.add_argument('output_network', help='location to save the trained network')
 
-    parser.add_argument('-d', '--datatype', required=True, choices=VALID_DATATYPES,
+    parser.add_argument('-d', '--datatype', required=True, choices=COMMAND_LINE_DATATYPES,
                         help="REQUIRED. Format of the input data file, must be 'sequence' or 'residues'")
     parser.add_argument('-c', '--classes', type=int, metavar='num_classes', required=True,
                         help='REQUIRED. Number of output classes, for regression put 1')

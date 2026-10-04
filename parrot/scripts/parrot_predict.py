@@ -25,9 +25,9 @@ from parrot.encode_sequence import StandardizedEncoder, get_encoder
 from parrot.sequence_encoder import SequenceEncoder
 from parrot.architectures import ParrotArchitecture
 from parrot.scripts import arguments
-from parrot.scripts.common import (LEGACY_NOTE, add_device_arguments, add_embedding_cache_argument,
-                                   check_probabilistic_classification, prepare_plm_embeddings, select_device)
-from parrot.tasks import VALID_DATATYPES
+from parrot.scripts.common import (COMMAND_LINE_DATATYPES, LEGACY_NOTE, add_device_arguments,
+                                   add_embedding_cache_argument, check_probabilistic_classification,
+                                   prepare_plm_embeddings, select_device)
 
 # By default, progress is printed every this many sequences
 DEFAULT_PRINT_FREQUENCY = 1000
@@ -46,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('saved_network', help='path to the trained network file')
     parser.add_argument('output_file', help='file with sequences and their predicted values')
 
-    parser.add_argument('-d', '--datatype', choices=VALID_DATATYPES,
+    parser.add_argument('-d', '--datatype', choices=COMMAND_LINE_DATATYPES,
                         help="'sequence' or 'residues'. Only needed for networks saved by PARROT versions "
                              "that did not record it; otherwise checked against the saved network.")
     parser.add_argument('-c', '--classes', type=int, metavar='num_classes',

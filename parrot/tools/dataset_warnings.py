@@ -58,8 +58,8 @@ def warn_about_dataset(data: list[list[Any]], task: Task) -> None:
         The task the data is for
     """
     check_duplicate_sequences(data)
-    if task.per_residue:
-        report_missing_residue_labels(data)
+    if task.per_residue or task.is_matrix:
+        report_missing_labels(data, 'residue labels' if task.per_residue else 'matrix values')
     if task.is_classification:
         check_class_imbalance(data)
     else:
@@ -95,7 +95,7 @@ def all_values(data: list[list[Any]]) -> np.ndarray:
     -------
     numpy array of float
     """
-    values = np.hstack([np.asarray(sample[2], dtype=float) for sample in data])
+    values = np.concatenate([np.ravel(np.asarray(sample[2], dtype=float)) for sample in data])
     return values[~np.isnan(values)]
 
 
@@ -123,8 +123,8 @@ def check_duplicate_sequences(data: list[list[Any]]) -> None:
                   + ['', 'This may cause overfitting or overestimation of performance.', ''])
 
 
-def report_missing_residue_labels(data: list[list[Any]]) -> None:
-    """Report how many residue labels are missing (nan) in residue-mapped data
+def report_missing_labels(data: list[list[Any]], kind: str) -> None:
+    """Report how many labels are missing (nan) in residue-mapped or matrix data
 
     Missing labels are ignored during training and evaluation.
 
@@ -133,18 +133,20 @@ def report_missing_residue_labels(data: list[list[Any]]) -> None:
     data : list
         Parsed [seqID, sequence, values] samples, before class labels are
         converted to integers (so missing labels are NaN)
+    kind : str
+        What the labels are, for the message, e.g. 'residue labels'
     """
     missing_per_sequence = [int(np.sum(np.isnan(np.asarray(sample[2], dtype=float)))) for sample in data]
     num_missing = sum(missing_per_sequence)
     if num_missing == 0:
         return
 
-    num_labels = sum(len(sample[2]) for sample in data)
+    num_labels = sum(np.size(sample[2]) for sample in data)
     sequences_with_missing = sum(count > 0 for count in missing_per_sequence)
-    print_warning('NOTE: Some residues have no label (nan).',
-                  [f'{num_missing} of {num_labels} residue labels ({np.around(100 * num_missing / num_labels, 1)}%) '
+    print_warning(f'NOTE: Some {kind} are missing (nan).',
+                  [f'{num_missing} of {num_labels} {kind} ({np.around(100 * num_missing / num_labels, 1)}%) '
                    f'are missing, in {sequences_with_missing} of {len(data)} sequences.',
-                   'These residues are ignored when training and evaluating.', ''])
+                   'These are ignored when training and evaluating.', ''])
 
 
 # .................................................................

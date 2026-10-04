@@ -24,18 +24,10 @@ from torch.utils.data import DataLoader, Dataset, Sampler
 
 from parrot import parrot_exceptions
 from parrot.encode_sequence import OneHotEncoder
+from parrot.matrices import data as matrix_data
 from parrot.sequence_encoder import SequenceEncoder
-from parrot.tasks import VALID_DATATYPES, Task
+from parrot.tasks import IGNORED_CLASS_LABEL, MISSING_LABEL_TEXT, VALID_DATATYPES, Task  # noqa: F401 (labels: see tasks)
 from parrot.tools import dataset_warnings
-
-# Text used in residue-mapped datafiles for a residue with no label (e.g. a residue
-# not observed in a structure). Any capitalisation is accepted.
-MISSING_LABEL_TEXT = 'nan'
-
-# Class label given to padded positions and to residues with missing labels in
-# residue-classification data. This matches the default ignore_index of
-# torch.nn.CrossEntropyLoss, so these positions never contribute to the loss.
-IGNORED_CLASS_LABEL = -100
 
 # Default fractions of the data in the training, validation and test sets
 DEFAULT_SET_FRACTIONS = (0.7, 0.15, 0.15)
@@ -171,6 +163,8 @@ def parse_line(fields: list[str], datatype: str) -> Sample:
     ValueError
         Saying what is wrong with the line
     """
+    if datatype == 'matrix':
+        raise ValueError('matrix data is read with its matrix file (see parrot.matrices.data)')
     if len(fields) < 3:
         raise ValueError(f'expected an ID, a sequence and its value(s), but found {len(fields)} column(s)')
 
@@ -238,7 +232,8 @@ def parse_sequence_value(values: list[str]) -> float:
     return value
 
 
-def parse_file(tsvfile: str, task: Task, exclude_seq_id: bool = False, ignore_warnings: bool = False) -> list[Sample]:
+def parse_file(tsvfile: str, task: Task, exclude_seq_id: bool = False, ignore_warnings: bool = False,
+               matrix_file: str | None = None) -> list[Sample]:
     """Parse a datafile containing sequences and values
 
     Each line of the file should be "<seqID> <sequence> <value(s)>", or
@@ -260,31 +255,48 @@ def parse_file(tsvfile: str, task: Task, exclude_seq_id: bool = False, ignore_wa
     ignore_warnings : bool, optional
         If False, check the dataset against basic heuristics and print warnings
         for common issues (duplicates, class imbalance, skewed values).
+    matrix_file : str, optional
+        Matrix tasks only (and required for them): the .npz file holding each
+        sequence's matrix, named by its sequence ID. The datafile then has
+        '<seqID> <sequence>' on each line (see parrot.matrices.data).
 
     Returns
     -------
     list
         One [seqID, sequence, value(s)] list per data line. Classification labels
-        are ints (or lists of ints for residue-mapped data, with missing labels set
-        to IGNORED_CLASS_LABEL). Missing residue regression values are NaN.
+        are ints (or lists of ints for residue-mapped data, or int matrices for
+        matrix data, with missing labels set to IGNORED_CLASS_LABEL). Missing
+        regression values are NaN.
 
     Raises
     ------
     IOExceptionParrot
-        If the file has no data lines, a line cannot be parsed, or a class label
-        is not an integer in the range [0, num_classes - 1]
+        If the file has no data lines, a line cannot be parsed, a class label
+        is not an integer in the range [0, num_classes - 1], or a matrix does
+        not fit its sequence
+    ValueError
+        If a matrix file is given for a task that is not a matrix task, or
+        missing for one that is
     """
+
+    if task.is_matrix != (matrix_file is not None):
+        raise ValueError('A matrix file is needed for matrix data, and only for matrix data')
 
     lines = read_tsv_raw(tsvfile)
     if not lines:
         raise parrot_exceptions.IOExceptionParrot(f'Datafile {tsvfile} contains no data lines')
 
-    # Add a dummy seqID if none are provided
-    if exclude_seq_id:
-        for line in lines:
-            line.insert(0, '')
-
-    data = parse_lines(lines, task.datatype)
+    if task.is_matrix:
+        if exclude_seq_id:
+            raise ValueError('Matrix data needs sequence IDs: they name each sequence\'s matrix in the matrix file')
+        assert matrix_file is not None
+        data = matrix_data.attach_matrices(lines, matrix_data.read_matrix_file(matrix_file), task)
+    else:
+        # Add a dummy seqID if none are provided
+        if exclude_seq_id:
+            for line in lines:
+                line.insert(0, '')
+        data = parse_lines(lines, task.datatype)
 
     # The warnings run before class labels are converted, because they read missing labels as NaN
     if not ignore_warnings:
@@ -292,7 +304,10 @@ def parse_file(tsvfile: str, task: Task, exclude_seq_id: bool = False, ignore_wa
 
     if task.is_classification:
         for sample in data:
-            sample[2] = _validate_class_labels(sample, task)
+            if task.is_matrix:
+                sample[2] = matrix_data.matrix_class_labels(sample[0], sample[2], task)
+            else:
+                sample[2] = _validate_class_labels(sample, task)
 
     return data
 
@@ -503,7 +518,11 @@ def pad_targets(targets: list[Any], task: Task, padded_length: int) -> torch.Ten
         Residue regression: float32 [batch_dim X padded_length X 1], with padded
         positions set to 0 and missing labels left as NaN (both must be masked
         out of the loss).
+        Matrix data: see matrices.data.pad_matrix_targets.
     """
+
+    if task.is_matrix:
+        return matrix_data.pad_matrix_targets(targets, task, padded_length)
 
     if not task.per_residue:
         if task.is_classification:
@@ -833,8 +852,8 @@ def check_sets_not_empty(training_samples: np.ndarray, val_samples: np.ndarray, 
 
 def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, split_file: str | None = None,
                    percent_val: float = DEFAULT_SET_FRACTIONS[1], percent_test: float = DEFAULT_SET_FRACTIONS[2],
-                   ignore_warnings: bool = False,
-                   save_splits_output: str | None = None) -> tuple[list[Sample], np.ndarray, np.ndarray, np.ndarray]:
+                   ignore_warnings: bool = False, save_splits_output: str | None = None,
+                   matrix_file: str | None = None) -> tuple[list[Sample], np.ndarray, np.ndarray, np.ndarray]:
     """Parse a datafile and decide which samples go in each set
 
     Parameters
@@ -856,6 +875,8 @@ def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, spl
         If True, do not print dataset warnings
     save_splits_output : str, optional
         If given (and no split-file is used), write the random split to this path
+    matrix_file : str, optional
+        Matrix tasks only: the .npz file holding each sequence's matrix (see parse_file())
 
     Returns
     -------
@@ -863,7 +884,8 @@ def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, spl
         (parsed data, training indices, validation indices, test indices)
     """
 
-    data = parse_file(data_file, task, exclude_seq_id=exclude_seq_id, ignore_warnings=ignore_warnings)
+    data = parse_file(data_file, task, exclude_seq_id=exclude_seq_id, ignore_warnings=ignore_warnings,
+                      matrix_file=matrix_file)
 
     if split_file is not None:
         training_samples, val_samples, test_samples = read_split_file(split_file, len(data))
@@ -883,7 +905,8 @@ def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, spl
 def split_data(data_file: str, task: Task, encoder: SequenceEncoder | None = None, exclude_seq_id: bool = False,
                split_file: str | None = None, percent_val: float = DEFAULT_SET_FRACTIONS[1],
                percent_test: float = DEFAULT_SET_FRACTIONS[2], ignore_warnings: bool = False,
-               save_splits_output: str | None = None) -> tuple[SequenceDataset, SequenceDataset, SequenceDataset]:
+               save_splits_output: str | None = None,
+               matrix_file: str | None = None) -> tuple[SequenceDataset, SequenceDataset, SequenceDataset]:
     """Divide a datafile into training, validation, and test datasets
 
     Parameters
@@ -894,7 +917,7 @@ def split_data(data_file: str, task: Task, encoder: SequenceEncoder | None = Non
         The task the data is for
     encoder : SequenceEncoder, optional
         How to encode sequences (default one-hot)
-    exclude_seq_id, split_file, percent_val, percent_test, ignore_warnings, save_splits_output
+    exclude_seq_id, split_file, percent_val, percent_test, ignore_warnings, save_splits_output, matrix_file
         See load_and_split()
 
     Returns
@@ -905,7 +928,8 @@ def split_data(data_file: str, task: Task, encoder: SequenceEncoder | None = Non
 
     data, training_samples, val_samples, test_samples = load_and_split(
         data_file, task, exclude_seq_id=exclude_seq_id, split_file=split_file, percent_val=percent_val,
-        percent_test=percent_test, ignore_warnings=ignore_warnings, save_splits_output=save_splits_output)
+        percent_test=percent_test, ignore_warnings=ignore_warnings, save_splits_output=save_splits_output,
+        matrix_file=matrix_file)
 
     return (SequenceDataset(data, training_samples, encoder),
             SequenceDataset(data, val_samples, encoder),
@@ -943,7 +967,7 @@ def cross_validation_folds(samples: np.ndarray, n_folds: int) -> list[tuple[np.n
 def split_data_cv(data_file: str, task: Task, encoder: SequenceEncoder | None = None, exclude_seq_id: bool = False,
                   split_file: str | None = None, percent_val: float = DEFAULT_SET_FRACTIONS[1],
                   percent_test: float = DEFAULT_SET_FRACTIONS[2], n_folds: int = 5, ignore_warnings: bool = False,
-                  save_splits_output: str | None = None
+                  save_splits_output: str | None = None, matrix_file: str | None = None
                   ) -> tuple[list[tuple[SequenceDataset, SequenceDataset]], SequenceDataset, SequenceDataset,
                              SequenceDataset]:
     """Divide a datafile into training, validation and test sets plus cross-validation folds
@@ -953,7 +977,8 @@ def split_data_cv(data_file: str, task: Task, encoder: SequenceEncoder | None = 
 
     Parameters
     ----------
-    data_file, task, encoder, exclude_seq_id, split_file, percent_val, percent_test, ignore_warnings, save_splits_output
+    data_file, task, encoder, exclude_seq_id, split_file, percent_val, percent_test, ignore_warnings,
+    save_splits_output, matrix_file
         See split_data()
     n_folds : int, optional
         Number of cross-validation folds (default 5)
@@ -967,7 +992,8 @@ def split_data_cv(data_file: str, task: Task, encoder: SequenceEncoder | None = 
 
     data, training_samples, val_samples, test_samples = load_and_split(
         data_file, task, exclude_seq_id=exclude_seq_id, split_file=split_file, percent_val=percent_val,
-        percent_test=percent_test, ignore_warnings=ignore_warnings, save_splits_output=save_splits_output)
+        percent_test=percent_test, ignore_warnings=ignore_warnings, save_splits_output=save_splits_output,
+        matrix_file=matrix_file)
 
     cv_samples = np.append(training_samples, val_samples)
     if n_folds > len(cv_samples):

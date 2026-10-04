@@ -23,6 +23,7 @@ from scipy.special import softmax
 from parrot import process_input_data as pid
 from parrot.architectures import ParrotArchitecture
 from parrot.devices import full_float32_precision
+from parrot.matrices.data import unpad_matrix_outputs
 from parrot.sequence_encoder import SequenceEncoder
 from parrot.tasks import Task
 from parrot.train_network import build_loss_criterion, compute_batch_loss, sum_batch_losses
@@ -71,11 +72,14 @@ def unpad_outputs(outputs: torch.Tensor, lengths: torch.Tensor, task: Task) -> l
     Returns
     -------
     list of numpy arrays
-        [num_classes] per sequence, or [sequence_length X num_classes] per
-        sequence with the padding removed
+        [num_classes] per sequence, [sequence_length X num_classes] per
+        sequence, or (matrix tasks) [sequence_length X width X num_classes] per
+        sequence, with the padding removed
     """
 
     outputs_array = outputs.cpu().numpy()
+    if task.is_matrix:
+        return unpad_matrix_outputs(outputs_array, lengths.tolist(), task)
     if not task.per_residue:
         return list(outputs_array)
     return [outputs_array[i, :length] for i, length in enumerate(lengths.tolist())]
