@@ -157,6 +157,12 @@ matrices
 .. automodule:: parrot.matrices.layers
    :members:
 
+.. automodule:: parrot.matrices.output
+   :members:
+
+.. automodule:: parrot.matrices.figures
+   :members:
+
 .. automodule:: parrot.matrices.architectures.unet2d
    :members:
 

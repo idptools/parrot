@@ -120,6 +120,12 @@ def test_load_legacy_weights(tmp_path, datatype, num_classes):
     torch.testing.assert_close(outputs_for(network, encoder, 'ACDEFG'), outputs_for(original, encoder, 'ACDEFG'))
 
 
+def test_legacy_weights_are_never_matrix_networks(tmp_path):
+    _, path = save_legacy_weights(tmp_path, 'residues', 1)
+    with pytest.raises(ValueError, match="not a 'matrix' network"):
+        load_network(path, legacy_datatype='matrix')
+
+
 def test_load_legacy_weights_requires_datatype(tmp_path):
     _, path = save_legacy_weights(tmp_path, 'sequence', 1)
     with pytest.raises(ValueError, match='datatype'):

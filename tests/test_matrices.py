@@ -1,7 +1,7 @@
 """
 Tests for matrix data (parrot.matrices): the 'matrix' task, reading and checking
-matrix files, padding matrices into batches, the masked loss, and unpadding
-network outputs.
+matrix files, padding matrices into batches, the masked loss, unpadding network
+outputs, metrics, and every command with matrix data.
 """
 
 import math
@@ -11,10 +11,14 @@ import numpy as np
 import pytest
 import torch
 
-from parrot import prediction, train_network
+from parrot import figures, metrics, prediction, train_network
 from parrot import process_input_data as pid
+from parrot.checkpoint import load_network
 from parrot.matrices import data as matrix_data
+from parrot.matrices.output import name_matrices, write_matrix_predictions
 from parrot.parrot_exceptions import IOExceptionParrot
+from parrot.py_predictor import Predictor
+from parrot.scripts import parrot_optimize, parrot_predict, parrot_preprocess, parrot_train
 from parrot.tasks import IGNORED_CLASS_LABEL, Task
 from parrot.tools import dataset_warnings
 
@@ -289,3 +293,200 @@ def test_class_imbalance_is_checked_over_every_matrix_value(capsys):
     data[0][2][0, 0] = 1.0
     dataset_warnings.warn_about_dataset(data, SQUARE_CLASSES)
     assert 'Severe class imbalance' in capsys.readouterr().out
+
+
+# ..........................................................................................
+# Metrics
+
+def test_metrics_count_each_pair_of_a_symmetric_map_once():
+    """Only the upper triangle (and diagonal) of a symmetric map is scored, as in training"""
+    true = [np.array([[1.0, 2.0], [2.0, 3.0]])]
+    predicted = [np.array([[1.0, 2.0], [-50.0, 3.0]])]   # the lower triangle is never looked at
+    task = Task('matrix', 1, symmetric=True)
+    true_flat, predicted_flat = metrics.labelled_values(true, predicted, task)
+    np.testing.assert_array_equal(true_flat, [1.0, 2.0, 3.0])
+    np.testing.assert_array_equal(predicted_flat, [1.0, 2.0, 3.0])
+
+
+def test_metrics_pool_matrices_of_different_sizes():
+    true = [np.eye(3), np.eye(5)]
+    scores = metrics.performance_metrics(true, [2 * matrix + 1 for matrix in true], Task('matrix', 1))
+    assert scores['Pearson R'] == pytest.approx(1.0)
+
+
+# ..........................................................................................
+# Commands
+
+def write_command_data(directory: Path, kind: str = 'square', num_sequences: int = 40) -> tuple[str, str]:
+    """A dataset for the commands: symmetric square maps ('square'), class maps ('classes') or 5 columns ('width5')."""
+    rng = np.random.default_rng(20)
+    sequences, matrices = {}, {}
+    for index in range(num_sequences):
+        length = int(rng.integers(4, 16))
+        sequence = ''.join(rng.choice(list('ACDEFGHIKLMNPQRSTVWY'), size=length))
+        separation = np.abs(np.arange(length)[:, None] - np.arange(length)[None, :])
+        if kind == 'square':
+            matrix = np.exp(-separation / 3.0)
+        elif kind == 'classes':
+            matrix = (separation <= 2).astype(float)
+        else:
+            matrix = np.tile(np.linspace(0, 1, 5), (length, 1))
+        sequences[f'id{index}'], matrices[f'id{index}'] = sequence, matrix
+    return write_matrix_data(directory, matrices, sequences)
+
+
+def train_matrix(run_cli, datafile, matrix_file, network, *arguments):
+    """Run parrot-train on matrix data for 2 epochs on the CPU."""
+    run_cli(parrot_train.main, ['parrot-train', datafile, network, '-d', 'matrix', '--matrix-file', matrix_file,
+                                '-e', 2, '--device', 'cpu', '--silent', *arguments])
+
+
+def test_train_square_maps_writes_every_output(run_cli, tmp_path):
+    datafile, matrix_file = write_command_data(tmp_path)
+    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'net.pt', '-c', 1, '--symmetric', '--include-figs')
+
+    network, _ = load_network(str(tmp_path / 'net.pt'))
+    assert network.name == 'unet2d' and network.task == Task('matrix', 1, symmetric=True)
+    for suffix in ('_matrix_scatterplot.png', '_matrix_examples.png', '_train_val_loss.png',
+                   '_performance_stats.txt'):
+        assert (tmp_path / f'net{suffix}').is_file(), suffix
+
+    predictions = np.load(tmp_path / 'net_predictions.npz')
+    sequences = dict(line.split() for line in Path(datafile).read_text().splitlines())
+    assert predictions.files and all(predictions[name].shape == (len(sequences[name]),) * 2
+                                     for name in predictions.files)
+
+
+def test_train_classes_and_fixed_width(run_cli, tmp_path):
+    datafile, matrix_file = write_command_data(tmp_path, 'classes')
+    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'classes.pt', '-c', 2, '--include-figs')
+    assert (tmp_path / 'classes_matrix_CM.png').is_file()
+
+    datafile, matrix_file = write_command_data(tmp_path, 'width5')
+    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'width5.pt', '-c', 1, '--matrix-width', 5)
+    network, _ = load_network(str(tmp_path / 'width5.pt'))
+    assert network.task == Task('matrix', 1, width=5)
+
+
+@pytest.mark.parametrize('arguments, error, message', [
+    (['-d', 'matrix', '-c', 1], ValueError, 'needs --matrix-file'),
+    (['-d', 'sequence', '-c', 1, '--matrix-file', 'MATRICES'], ValueError, 'only applies to matrix data'),
+    (['-d', 'matrix', '-c', 1, '--matrix-file', 'MATRICES', '--symmetric', '--matrix-width', 5], ValueError,
+     'Only square matrix tasks'),
+    (['-d', 'matrix', '-c', 1, '--matrix-file', 'MATRICES', '--max-matrix-length', 10], ValueError,
+     'longer than --max-matrix-length'),
+    (['-d', 'matrix', '-c', 1, '--matrix-file', 'MATRICES', '--exclude-seq-id'], ValueError, 'needs sequence IDs'),
+])
+def test_train_rejects_invalid_matrix_options(run_cli, tmp_path, arguments, error, message):
+    datafile, matrix_file = write_command_data(tmp_path)
+    arguments = [matrix_file if argument == 'MATRICES' else argument for argument in arguments]
+    with pytest.raises(error, match=message):
+        run_cli(parrot_train.main, ['parrot-train', datafile, tmp_path / 'net.pt', '-e', 1, '--device', 'cpu',
+                                    '--silent', *arguments])
+
+
+def test_optimize_matrix_data(run_cli, tmp_path):
+    datafile, matrix_file = write_command_data(tmp_path)
+    run_cli(parrot_optimize.main, ['parrot-optimize', datafile, tmp_path / 'opt.pt', '-d', 'matrix', '-c', 1,
+                                   '--matrix-file', matrix_file, '-e', 2, '--trials', 2, '--device', 'cpu',
+                                   '--silent'])
+    assert 'architecture: unet2d' in (tmp_path / 'opt_optimal_hyperparams.txt').read_text()
+    assert (tmp_path / 'opt_predictions.npz').is_file()
+
+
+@pytest.mark.parametrize('exclude_ids', [False, True])
+def test_predict_writes_one_matrix_per_sequence(run_cli, tmp_path, exclude_ids):
+    datafile, matrix_file = write_command_data(tmp_path)
+    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'net.pt', '-c', 1)
+    lines = Path(datafile).read_text().splitlines()[:3]
+    sequence_file = tmp_path / 'new.txt'
+    sequence_file.write_text('\n'.join(line.split()[1] if exclude_ids else line for line in lines) + '\n')
+
+    run_cli(parrot_predict.main, ['parrot-predict', sequence_file, tmp_path / 'net.pt', tmp_path / 'out',
+                                  '--device', 'cpu', '--silent', *(['--exclude-seq-id'] if exclude_ids else [])])
+
+    predictions = np.load(tmp_path / 'out.npz')   # '.npz' is added to the output name
+    names = ['1', '2', '3'] if exclude_ids else [line.split()[0] for line in lines]
+    assert predictions.files == names
+    assert [predictions[name].shape for name in names] == [(len(line.split()[1]),) * 2 for line in lines]
+
+
+def test_predictor_returns_a_matrix(run_cli, tmp_path):
+    datafile, matrix_file = write_command_data(tmp_path)
+    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'net.pt', '-c', 1, '--symmetric')
+    predicted = Predictor(tmp_path / 'net.pt').predict('ACDEFG')
+    assert predicted.shape == (6, 6) and np.allclose(predicted, predicted.T)
+
+
+def test_preprocess_splits_matrix_data(run_cli, tmp_path):
+    datafile, matrix_file = write_command_data(tmp_path)
+    output = tmp_path / 'processed.tsv'
+    run_cli(parrot_preprocess.main, ['parrot-preprocess', datafile, output, '-d', 'matrix', '-m', 'regression',
+                                     '--split', 'random', '--max-length', 12, '--matrix-file', matrix_file,
+                                     '--seed', 1])
+
+    report = (tmp_path / 'processed_preprocess_report.txt').read_text()
+    assert 'Checked: every sequence has a matrix' in report
+    assert all(len(line.split()) == 2 and len(line.split()[1]) <= 12 for line in output.read_text().splitlines())
+    # The original matrix file works with the processed datafile and its split-file
+    train_matrix(run_cli, str(output), matrix_file, tmp_path / 'net.pt', '-c', 1, '--split',
+                 tmp_path / 'processed_split_file.txt')
+
+
+@pytest.mark.parametrize('arguments, message', [
+    (['-d', 'matrix', '-m', 'classification', '--class-balance'], 'does not apply to matrix data'),
+    (['-d', 'matrix', '-m', 'classification', '--recode-classes'], 'does not apply to matrix data'),
+    (['-d', 'matrix', '-m', 'regression', '--deduplicate', 'merge'], 'does not apply to matrix data'),
+    (['-d', 'sequence', '-m', 'regression', '--matrix-width', 4], 'only applies to matrix data'),
+])
+def test_preprocess_rejects_options_that_do_not_suit_matrix_data(run_cli, tmp_path, arguments, message):
+    datafile, _ = write_command_data(tmp_path)
+    with pytest.raises(ValueError, match=message):
+        run_cli(parrot_preprocess.main, ['parrot-preprocess', datafile, tmp_path / 'out.tsv', *arguments])
+
+
+def test_preprocess_matrix_lines_must_be_an_id_and_a_sequence(run_cli, tmp_path):
+    datafile = tmp_path / 'data.tsv'
+    datafile.write_text('a ACD 1 2 3\n')
+    with pytest.raises(ValueError, match="'<ID> <sequence>'"):
+        run_cli(parrot_preprocess.main, ['parrot-preprocess', datafile, tmp_path / 'out.tsv', '-d', 'matrix',
+                                         '-m', 'regression'])
+
+
+def test_preprocess_checks_matrix_classes_against_the_matrices(run_cli, tmp_path):
+    """Three-class maps pass the output check (the class count comes from the matrices)."""
+    datafile, matrix_file = write_command_data(tmp_path, 'classes')
+    matrices = {name: 2 * matrix for name, matrix in np.load(matrix_file).items()}   # classes 0 and 2
+    np.savez(matrix_file, **matrices)
+    run_cli(parrot_preprocess.main, ['parrot-preprocess', datafile, tmp_path / 'out.tsv', '-d', 'matrix',
+                                     '-m', 'classification', '--matrix-file', matrix_file])
+    assert 'Checked: every sequence has a matrix' in (tmp_path / 'out_preprocess_report.txt').read_text()
+
+
+def test_predicted_matrices_keep_any_sequence_id(tmp_path):
+    """IDs that are also numpy.savez's argument names, or hold '|' and '/', are written and read back unchanged."""
+    matrices = {'file': np.eye(2), 'allow_pickle': np.ones((3, 3), np.float32), 'sp|P1|X/1-5': np.zeros((2, 4, 3))}
+    path = write_matrix_predictions(str(tmp_path / 'predictions'), matrices)
+
+    assert path.endswith('predictions.npz')
+    loaded = np.load(path)
+    assert loaded.files == list(matrices)
+    for name, matrix in matrices.items():
+        np.testing.assert_array_equal(loaded[name], matrix)
+        assert loaded[name].dtype == matrix.dtype
+
+
+def test_predicted_matrices_need_unique_ids():
+    with pytest.raises(ValueError, match='repeated: a'):
+        name_matrices(['a', 'b', 'a'], [np.eye(2)] * 3)
+    with pytest.raises(ValueError, match='not empty'):
+        name_matrices(['', 'b'], [np.eye(2)] * 2)
+
+
+def test_large_matrix_scatterplots_show_a_warned_sample(monkeypatch):
+    monkeypatch.setattr(figures, 'MAX_SCATTER_POINTS', 10)
+    true_values, predicted_values = np.arange(25.0), np.arange(25.0) + 1
+    with pytest.warns(UserWarning, match='random sample of 10 of the 25 values'):
+        true_shown, predicted_shown = figures.scatter_sample(true_values, predicted_values)
+    assert len(true_shown) == 10
+    np.testing.assert_array_equal(predicted_shown, true_shown + 1)   # pairs stay together

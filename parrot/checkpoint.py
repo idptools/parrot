@@ -36,6 +36,9 @@ CHECKPOINT_FORMAT_VERSION = 1
 # Key that identifies a file as a self-describing PARROT checkpoint
 FORMAT_VERSION_KEY = 'parrot_checkpoint_format'
 
+# The datatypes of networks saved as weights only, by versions of PARROT before checkpoints (all were BRNNs)
+LEGACY_DATATYPES = ('sequence', 'residues')
+
 
 def save_network(path: str, network: ParrotArchitecture, encoder: SequenceEncoder) -> None:
     """Save a network, and everything needed to rebuild it, to a single file
@@ -173,6 +176,9 @@ def _network_from_legacy_weights(state_dict: dict[str, torch.Tensor], datatype: 
     if datatype is None:
         raise ValueError('This network was saved by an older version of PARROT and does not record its datatype; '
                          "please specify whether it is a 'sequence' or 'residues' network.")
+    if datatype not in LEGACY_DATATYPES:
+        raise ValueError(f"This network was saved by an older version of PARROT, so it is a 'sequence' or 'residues' "
+                         f"network, not a '{datatype}' network.")
 
     shape = infer_legacy_brnn_shape(state_dict)
     encoder = get_encoder(encoding)

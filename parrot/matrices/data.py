@@ -8,7 +8,7 @@ A matrix dataset has two files:
   with line numbers apply unchanged);
 - a NumPy .npz file holding one array per sequence ID, of shape
   [sequence length X number of columns], written for example with
-  numpy.savez_compressed('targets.npz', **{sequence_id: matrix, ...}).
+  ``numpy.savez_compressed('targets.npz', **{sequence_id: matrix, ...})``.
 
 Each matrix has one row per residue, and either one column per residue (a
 square map of every pair of residues; Task.width is None) or the same number of

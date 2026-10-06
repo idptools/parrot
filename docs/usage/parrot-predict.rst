@@ -15,7 +15,7 @@ Where `seq_file` specifies a file containing a list of sequences. Each line of `
 **Optional flags:**
 
 	*  ``--help`` / ``-h`` : Display a help message.
-	*  ``--datatype`` / ``-d`` : 'sequence' or 'residues'. Required only for networks saved by earlier versions of PARROT; otherwise, if given, it is checked against the saved network.
+	*  ``--datatype`` / ``-d`` : 'sequence', 'residues' or 'matrix'. Required only for networks saved by earlier versions of PARROT (which are always 'sequence' or 'residues' networks); otherwise, if given, it is checked against the saved network.
 	*  ``--classes`` / ``-c`` : The number of classes (1 for regression). If given, it is checked against the saved network.
 	*  ``--encode`` : The encoding the network was trained with ('onehot', 'biophysics' or the path to a user encoding file). Only needed for networks saved by earlier versions of PARROT that were not trained with one-hot encoding; otherwise, if given, it is checked against the saved network.
 	*  ``--num-layers`` / ``-nl`` and ``--hidden-size`` / ``-hs`` : No longer needed; accepted (and ignored) so that existing commands keep working.
@@ -31,3 +31,5 @@ Where `seq_file` specifies a file containing a list of sequences. Each line of `
 **Output:**
 
 ``parrot-predict`` will produce a single text file as output, as well as status updates to the console (if ``--silent`` is not specified). This file will be formatted similarly to the original datafiles used for network training: each row contains a sequence ID (exluded if the flag ``--exclude-seq-id`` is given), an amino acid sequence, and the prediction values for that sequence. There is one output row for every sequence in `seq_file`, in the same order, so if the same sequence appears more than once (e.g. under different IDs) it will appear more than once in the output.
+
+For networks trained on matrix data, the predictions are instead written as a NumPy ``.npz`` archive with one predicted matrix per sequence, named by its sequence ID (``.npz`` is added to `output_file` if it does not end with it); see the "Matrix data" page.

@@ -28,7 +28,7 @@ Steps are always carried out in the order below, and each is optional.
 
 **Required flags:**
 
-    *  ``--datatype`` / ``-d`` : 'sequence' (one value per sequence) or 'residues' (one value per residue).
+    *  ``--datatype`` / ``-d`` : 'sequence' (one value per sequence), 'residues' (one value per residue) or 'matrix' (a matrix of values per sequence, held in a separate ``.npz`` file; see below).
     *  ``--mode`` / ``-m`` : 'classification' or 'regression'.
 
 **General flags:**
@@ -139,6 +139,16 @@ For **sequence** data, every class is capped at the same size. The cap is lowere
 For **residue** data, each sequence contains residues of several classes, so sequences are removed one at a time. Each removal is the one, among ``--cb-block-size`` randomly drawn sequences, that improves the balance most. If none of them improves it, every remaining sequence is checked before stopping. A removal that would make the balance worse, or remove a class entirely, is never made. The imbalance after each removal is written to ``<output>_class_balance_trace.csv``.
 
 Balancing keeps the input order of the lines.
+
+Matrix data
+-----------
+
+For matrix data (``-d matrix``) the datafile holds ``<ID> <sequence>`` on each line, and the matrices are in a separate ``.npz`` file. Cleaning, deduplication (``first`` or ``drop``) and splitting work as for other data, and every sequence keeps its ID, so the original matrix file works with the processed datafile and split-file unchanged. Options that change values (``--recode-classes``, ``--class-balance`` and ``--deduplicate merge``) do not apply, since the values are in the matrix file.
+
+    *  ``--matrix-file`` : The ``.npz`` matrix file. If given, the final check also checks that every sequence of the output has a matrix that fits it.
+    *  ``--matrix-width`` : The number of columns of fixed-width matrices (leave it out for square maps); used by that check.
+
+See the "Matrix data" page for the file formats.
 
 Output
 ------

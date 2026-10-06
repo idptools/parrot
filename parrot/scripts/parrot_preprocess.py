@@ -32,6 +32,7 @@ from typing import Any
 import numpy as np
 
 from parrot import process_input_data
+from parrot.matrices.data import read_matrix_file
 from parrot.package_version import PARROT_VERSION
 from parrot.reproducibility import random_generator, set_random_seed
 from parrot.scripts import arguments
@@ -72,6 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_duplicate_arguments(parser)
     add_splitting_arguments(parser)
     add_balancing_arguments(parser)
+    add_matrix_arguments(parser)
     return parser
 
 
@@ -186,6 +188,17 @@ def add_balancing_arguments(parser: argparse.ArgumentParser) -> None:
                        help=f'no longer has any effect: balancing always keeps the input order {LEGACY_NOTE}')
 
 
+def add_matrix_arguments(parser: argparse.ArgumentParser) -> None:
+    """Matrix data (-d matrix): the datafile holds '<ID> <sequence>' lines, and the values are in a matrix file."""
+    group = parser.add_argument_group('matrix data (-d matrix)')
+    group.add_argument('--matrix-file', dest='matrix_file', metavar='file.npz',
+                       help="the NumPy .npz file of each sequence's matrix, named by its sequence ID: if given, the "
+                            'output is checked against it (the file itself is not changed, and works with the output '
+                            'as it is, since every sequence keeps its ID)')
+    group.add_argument('--matrix-width', dest='matrix_width', type=int, metavar='N',
+                       help='every matrix has N columns (default: one per residue); used when checking the output')
+
+
 def check_arguments(args: argparse.Namespace) -> None:
     """Check the options before reading any data
 
@@ -221,6 +234,39 @@ def check_arguments(args: argparse.Namespace) -> None:
     check_options_match_split_method(args)
     if args.split_method is not None:
         check_split_settings(args)
+    check_matrix_options(args)
+
+
+def check_matrix_options(args: argparse.Namespace) -> None:
+    """Check the options make sense for the datatype: matrix options only for matrix data, and no option that
+    changes values for it (its values are in the matrix file, which preprocessing does not change)
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed arguments
+
+    Raises
+    ------
+    ValueError
+        For the first option that does not
+    FileNotFoundError
+        If the matrix file does not exist
+    """
+    if args.datatype != 'matrix':
+        for flag, given in (('--matrix-file', args.matrix_file is not None),
+                            ('--matrix-width', args.matrix_width is not None)):
+            if given:
+                raise ValueError(f'{flag} only applies to matrix data (-d matrix)')
+        return
+
+    for flag, given in (('--recode-classes', args.recode_classes), ('--class-balance', args.class_balance),
+                        ('--deduplicate merge', args.deduplicate == 'merge')):
+        if given:
+            raise ValueError(f'{flag} changes values, so it does not apply to matrix data (whose values are in the '
+                             'matrix file); cleaning, removing duplicates and splitting do')
+    if args.matrix_file is not None:
+        arguments.check_file_exists(args.matrix_file, 'Matrix file')
 
 
 def check_options_match_split_method(args: argparse.Namespace) -> None:
@@ -331,14 +377,14 @@ def read_lines(args: argparse.Namespace, report: ProcessingReport) -> list[Line]
 
 
 def check_lines(lines: list[Line], datatype: str) -> None:
-    """Check every line has an ID, a sequence and the right number of values
+    """Check every line has an ID, a sequence and the right number of values (none, for matrix data)
 
     Parameters
     ----------
     lines : list
         Lines split into fields
     datatype : str
-        'sequence' or 'residues'
+        'sequence', 'residues' or 'matrix'
 
     Raises
     ------
@@ -346,6 +392,11 @@ def check_lines(lines: list[Line], datatype: str) -> None:
         For the first line that does not
     """
     for number, line in enumerate(lines, start=1):
+        if datatype == 'matrix':
+            if len(line) != 2:
+                raise ValueError(f"Data line {number} has {len(line)} column(s); matrix data has '<ID> <sequence>' "
+                                 f'on each line (the values are in the matrix file): {" ".join(line)}')
+            continue
         if len(line) < 3:
             raise ValueError(f'Data line {number} has {len(line)} column(s); expected <ID> <sequence> <value(s)>: '
                              f'{" ".join(line)}')
@@ -687,7 +738,10 @@ def write_outputs(lines: list[Line], splits: list[str] | None, args: argparse.Na
     report.section('Output')
     split_file = output_prefix + '_split_file.txt'
     preproc.write_dataset(lines, splits, output, split_file, report)
-    check_output(output, split_file if splits is not None else None, args.datatype, classification, report)
+    if args.datatype == 'matrix':
+        check_matrix_output(output, split_file if splits is not None else None, args, report)
+    else:
+        check_output(output, split_file if splits is not None else None, args.datatype, classification, report)
 
     report_file = output_prefix + '_preprocess_report.txt'
     report.write(report_file)
@@ -726,6 +780,56 @@ def check_output(datafile: str, split_file: str | None, datatype: str, classific
     report.add(f'Checked: PARROT reads the output as {datatype}-mapped '
                + (f'classification data with {num_classes} classes' if classification else 'regression data')
                + (', and the split-file matches it' if split_file is not None else ''))
+
+
+
+def matrix_class_count(matrix_file: str) -> int:
+    """How many classes the matrices hold: one more than the largest label (and at least 2)
+
+    Labels that are not whole numbers are left for parse_file() to report.
+
+    Parameters
+    ----------
+    matrix_file : str
+        A .npz matrix file
+
+    Returns
+    -------
+    int
+    """
+    largest_labels = [np.nanmax(matrix) for matrix in read_matrix_file(matrix_file).values()
+                      if not np.all(np.isnan(matrix))]
+    return max(int(max(largest_labels, default=0)) + 1, 2)
+
+
+def check_matrix_output(datafile: str, split_file: str | None, args: argparse.Namespace,
+                        report: ProcessingReport) -> None:
+    """Check PARROT can read the output as matrix data (with the matrix file, if one was given)
+
+    Parameters
+    ----------
+    datafile : str
+    split_file : str or None
+    args : argparse.Namespace
+    report : ProcessingReport
+    """
+    if args.matrix_file is None:
+        report.add('Not checked against the matrices: give --matrix-file to check every sequence has a matrix that '
+                   'fits it')
+        return
+
+    try:
+        num_classes = 1 if args.mode == 'regression' else matrix_class_count(args.matrix_file)
+        task = Task('matrix', num_classes, width=args.matrix_width)
+        data = process_input_data.parse_file(datafile, task, ignore_warnings=True, matrix_file=args.matrix_file)
+        if split_file is not None:
+            process_input_data.read_split_file(split_file, num_samples=len(data))
+    except ValueError as error:
+        report.add(f'WARNING: PARROT cannot train on the output with {args.matrix_file} as it is: {error}')
+        print(report.lines[-1])
+        return
+    report.add(f'Checked: every sequence has a matrix in {args.matrix_file} that fits it'
+               + (', and the split-file matches the output' if split_file is not None else ''))
 
 
 if __name__ == '__main__':

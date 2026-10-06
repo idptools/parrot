@@ -120,9 +120,11 @@ class Predictor():
         np.ndarray
             Regression: a 1D array of one value (sequence networks) or one value
             per residue, as earlier versions of PARROT returned it (parrot-predict
-            writes a sequence network's value as a single number instead).
+            writes a sequence network's value as a single number instead), or
+            the predicted matrix (matrix networks).
             Classification: the probability of each class, with shape
-            [num_classes] (sequence networks) or [len(seq) X num_classes].
+            [num_classes] (sequence networks), [len(seq) X num_classes] (residue
+            networks) or [len(seq) X width X num_classes] (matrix networks).
         """
 
         seq = seq.upper()
@@ -130,5 +132,7 @@ class Predictor():
 
         if self.n_classes > 1:
             return prediction.output_to_prediction(output, self.network.task, probabilistic=True)
+        if self.network.task.is_matrix:
+            return prediction.output_to_prediction(output, self.network.task)
 
         return np.asarray(output).flatten()

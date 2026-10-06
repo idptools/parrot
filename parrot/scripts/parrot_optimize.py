@@ -62,7 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     """Search for good hyperparameters, then save and report on a network trained with the best ones."""
-    args = build_parser().parse_args()
+    args = common.parse_training_arguments(build_parser())
     n_trials = check_search_arguments(args)
 
     # Any architecture hyperparameter given on the command line is fixed rather than searched

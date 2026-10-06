@@ -76,7 +76,7 @@ def grid_channel_mask(mask: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
 # Features and outputs
 
 def separation_feature(padded_length: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
-    """How far apart residues i and j are along the sequence, as log(1 + |i - j|), for every cell of a square map
+    """How far apart residues i and j are along the sequence, as log(1 + abs(i - j)), for every cell of a square map
 
     The log keeps the feature on the same scale as the others however long the
     sequence, while still telling near neighbours apart.

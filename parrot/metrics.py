@@ -32,7 +32,7 @@ METRIC_DECIMALS = 3
 
 
 def flatten(values: Sequence[np.ndarray]) -> np.ndarray:
-    """Concatenate per-sequence values (scalars or per-residue arrays) into one 1D array.
+    """Concatenate per-sequence values (scalars, per-residue arrays or matrices) into one 1D array.
 
     Parameters
     ----------
@@ -43,15 +43,32 @@ def flatten(values: Sequence[np.ndarray]) -> np.ndarray:
     -------
     numpy array
     """
-    return np.concatenate([np.atleast_1d(value) for value in values])
+    return np.concatenate([np.ravel(value) for value in values])
+
+
+def upper_triangles(matrices: Sequence[np.ndarray]) -> list[np.ndarray]:
+    """The cells on and above the diagonal of each square matrix: each pair of residues once, for symmetric maps.
+
+    Parameters
+    ----------
+    matrices : list of numpy arrays
+        Square matrices
+
+    Returns
+    -------
+    list of numpy arrays
+        One 1D array per matrix
+    """
+    return [np.asarray(matrix)[np.triu_indices(len(matrix))] for matrix in matrices]
 
 
 def labelled_values(true_values: Sequence[np.ndarray], predictions: Sequence[np.ndarray], task: Task,
                     probabilistic: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """Pool true and predicted values across sequences, keeping only labelled ones
 
-    Residues with missing labels are dropped, so metrics and figures describe
-    only residues that have a true value.
+    Residues (or matrix cells) with missing labels are dropped, so metrics and
+    figures describe only values that are known. For symmetric matrix tasks
+    each pair of residues is counted once.
 
     Parameters
     ----------
@@ -73,6 +90,10 @@ def labelled_values(true_values: Sequence[np.ndarray], predictions: Sequence[np.
 
     if probabilistic:
         return flatten(true_values), np.vstack(predictions)
+
+    # A symmetric map holds each pair of residues twice: count it once, as training does
+    if task.symmetric:
+        true_values, predictions = upper_triangles(true_values), upper_triangles(predictions)
 
     true_flat = flatten(true_values)
     predicted_flat = flatten(predictions)

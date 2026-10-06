@@ -22,6 +22,8 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 
 from parrot import figures
+from parrot.matrices import figures as matrix_figures
+from parrot.matrices.output import name_matrices, write_matrix_predictions
 from parrot.metrics import METRIC_DECIMALS, performance_metrics
 from parrot.prediction import LabeledPredictions, output_to_prediction
 from parrot.process_input_data import missing_label_mask
@@ -35,9 +37,13 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
                         include_figs: bool = False, write_stats: bool = True) -> None:
     """Write everything describing performance on the test set
 
-    Always writes "<output_prefix>_predictions.tsv". Also writes
+    Always writes the predictions: "<output_prefix>_predictions.tsv", or for
+    matrix tasks "<output_prefix>_predictions.npz" (one predicted matrix per
+    test sequence, named by its ID). Also writes
     "<output_prefix>_performance_stats.txt" if `write_stats`, and the figures
-    appropriate to the task if `include_figs` (see figures.plot_test_results).
+    appropriate to the task if `include_figs` (see figures.plot_test_results;
+    for matrix tasks also "<output_prefix>_matrix_examples.png", heatmaps of a
+    few test sequences).
 
     Parameters
     ----------
@@ -58,8 +64,11 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
     predictions = [output_to_prediction(output, task, probabilistic) for output in labeled.outputs]
     decimals = PROBABILITY_DECIMALS if probabilistic else None
 
-    write_predictions(labeled.names, labeled.sequences, labeled.true_values, predictions, task,
-                      output_prefix + '_predictions.tsv', decimals=decimals)
+    if task.is_matrix:
+        write_matrix_predictions(output_prefix + '_predictions.npz', name_matrices(labeled.names, predictions))
+    else:
+        write_predictions(labeled.names, labeled.sequences, labeled.true_values, predictions, task,
+                          output_prefix + '_predictions.tsv', decimals=decimals)
 
     if write_stats:
         metrics = performance_metrics(labeled.true_values, predictions, task, probabilistic)
@@ -67,6 +76,9 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
 
     if include_figs:
         figures.plot_test_results(labeled.true_values, predictions, task, output_prefix, probabilistic)
+        if task.is_matrix:
+            matrix_figures.plot_matrix_examples(labeled.names, labeled.true_values, predictions, task,
+                                                output_prefix + '_matrix_examples.png')
 
 
 # .................................................................
@@ -157,13 +169,18 @@ def write_predictions(names: Sequence[str], sequences: Sequence[str], true_value
 
 def write_unlabeled_predictions(names: Sequence[str] | None, sequences: Sequence[str],
                                 outputs: Mapping[str, np.ndarray], task: Task, output_path: str,
-                                probabilistic: bool = False) -> None:
+                                probabilistic: bool = False) -> str:
     """Write predictions for unlabeled sequences (as parrot-predict does)
 
     One line per input sequence, in input order, so every sequence ID is kept
     even when the same sequence appears more than once:
         <name> <sequence> <prediction(s)>
     or, without names, <sequence> <prediction(s)>.
+
+    For matrix tasks the predictions are instead written as a .npz archive
+    with one matrix per input sequence, named by its sequence ID (or, without
+    names, by its line number, counting from 1); '.npz' is added to
+    `output_path` if it does not end with it.
 
     Parameters
     ----------
@@ -180,7 +197,17 @@ def write_unlabeled_predictions(names: Sequence[str] | None, sequences: Sequence
     probabilistic : bool, optional
         For classification, write the probability of each class (to
         PROBABILITY_DECIMALS places) rather than the most likely class
+
+    Returns
+    -------
+    str
+        The path written
     """
+
+    if task.is_matrix:
+        matrix_names = list(names) if names is not None else [str(number) for number in range(1, len(sequences) + 1)]
+        matrices = [output_to_prediction(outputs[sequence], task, probabilistic) for sequence in sequences]
+        return write_matrix_predictions(output_path, name_matrices(matrix_names, matrices))
 
     decimals = PROBABILITY_DECIMALS if probabilistic else None
     with open(output_path, 'w') as fh:
@@ -191,6 +218,7 @@ def write_unlabeled_predictions(names: Sequence[str] | None, sequences: Sequence
                 fh.write(f'{sequence} {values}\n')
             else:
                 fh.write(f'{names[index]} {sequence} {values}\n')
+    return output_path
 
 
 def write_performance_metrics(metrics: dict[str, float], output_path: str) -> None:

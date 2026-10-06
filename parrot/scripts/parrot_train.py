@@ -47,7 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     """Train a network with the given hyperparameters, save it, and report its performance on the test set."""
-    args = build_parser().parse_args()
+    args = common.parse_training_arguments(build_parser())
 
     # Check the training-specific arguments before any data is loaded
     arguments.check_fraction(args.learning_rate, 'Learning rate')

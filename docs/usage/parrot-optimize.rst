@@ -23,13 +23,13 @@ Where `data_file` specifies the path to the whitespace-separated datafile and `o
 
 **Required flags:**
 
-	*  ``--datatype`` / ``-d`` : Describes how values are formatted in `datafile`. Should be 'sequence' if there is a single value per sequence, or 'residues' if there are values for every residue in each sequence. See the example datasets in the **data** folder for more information.
+	*  ``--datatype`` / ``-d`` : Describes how values are formatted in `datafile`. Should be 'sequence' if there is a single value per sequence, 'residues' if there are values for every residue in each sequence, or 'matrix' if each sequence has a matrix of values (see the "Matrix data" page). See the example datasets in the **data** folder for more information.
 	*  ``--classes`` / ``-c`` : The number of classes for the machine learning task. If the task is regression, then specify '1'.
 
 **Optional flags:**
 
 	*  ``--help`` / ``-h`` : Display a help message.
-	*  ``--architecture`` : The network architecture to optimize (default is 'brnn').
+	*  ``--architecture`` : The network architecture to optimize (default is 'brnn', or 'unet2d' for matrix data).
 	*  Architecture hyperparameter flags (e.g. ``--hidden-size``, ``--kernel-size``, ``--attention-pooling-off``) : Fix these hyperparameters instead of searching them.
 	*  ``--batch`` / ``-b`` : Training minibatch size (default is 32). Must be a positive integer, and for most datasets should be in the range of 8-256. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance, but are not explicitly required.
 	*  ``--batching`` : How training sequences are grouped into batches: ``length`` (default) or ``random``. ``length`` puts sequences of similar length in the same batch (still re-randomised every epoch), so far less time is spent on padding; for datasets whose lengths vary widely this makes training several-fold faster. ``random`` shuffles freely, as earlier versions of PARROT did. Because padding never affects a network's output, this changes which sequences share a batch during training but nothing else.
@@ -45,6 +45,7 @@ Where `data_file` specifies the path to the whitespace-separated datafile and `o
 	*  ``--encode`` : Include this flag to specify the numeric encoding scheme for each amino acid. Available options are 'onehot' (default), 'biophysics', a protein language model (e.g. 'esm2_t12_35M_UR50D'; see "Protein language model encodings"), or user-specified. If you wish to manually specify an encoding scheme, provide a path to a text file describing the amino acid to vector mapping. Example encoding files are provided in the **/data** folder.
 	*  ``--embedding-cache`` : Protein language model encodings only. Directory in which to store the embedding of every sequence, so each is computed only once (default: a ``parrot_train_embeddings`` directory next to *output_network*). Point several runs at the same directory to share embeddings. See "Protein language model encodings".
 	*  ``--standardize-encoding`` : Standardize every feature of the encoding to mean 0 and standard deviation 1 across the amino acids (or other characters) the encoding defines, so that features measured on very different scales contribute equally. Recommended for ``biophysics`` and most user encodings; see "Standardizing an encoding" on the ``parrot-train`` page. The standardization is saved with the network and applied automatically by ``parrot-predict`` and ``Predictor``.
+	*  ``--matrix-file``, ``--matrix-width``, ``--symmetric``, ``--max-matrix-length`` : Matrix data only; as for ``parrot-train`` (see the "Matrix data" page).
 	*  ``--exclude-seq-id`` : Include this flag if the `data_file` is formatted without sequence IDs as the first column in each row.
 	*  ``--probabilistic-classification`` : Include this flag to output class predictions as continuous values [0-1], based on the probability that the input sample belongs to each class. Currently only implemented for sequence classification. This flag also modifies the output figures and output performance stats. (NOTE: This is a new feature, let us know if you run into any issues!)
 	*  ``--include-figs`` : Include this flag to generate images based on network training and performance on test set. Figures will be saved to same directory as specified by *output_network* using same naming convention.

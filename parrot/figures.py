@@ -18,6 +18,7 @@ Licensed under the MIT license.
 """
 
 import contextlib
+import warnings
 from collections.abc import Iterator, Sequence
 
 import matplotlib.pyplot as plt
@@ -46,6 +47,11 @@ REFERENCE_LINE_WIDTH = 0.75
 
 # Area of each point in a scatterplot, in points^2
 SCATTER_POINT_SIZE = 6
+
+# Scatterplots of matrix data with more cells than this (a test set of 100 sequences of 300 residues has 9 million)
+# show a random sample of this many, drawn with a fixed seed so the same results always give the same figure
+MAX_SCATTER_POINTS = 100_000
+SCATTER_SAMPLE_SEED = 0
 
 # matplotlib settings applied to every figure. Arial is used if it is installed, and otherwise the closest
 # sans-serif font matplotlib has. Font type 42 (TrueType) keeps text as editable text in PDF and PostScript
@@ -97,10 +103,12 @@ def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[n
                       output_prefix: str, probabilistic: bool = False) -> None:
     """Save the figure(s) appropriate to the task
 
-    Regression gives a scatterplot ("_seq_scatterplot.png" or
-    "_res_scatterplot.png"), classification a confusion matrix ("_seq_CM.png"
-    or "_res_CM.png"), and probabilistic classification ROC and
-    precision-recall curves ("_ROC_curve.png" and "_PR_curve.png").
+    Regression gives a scatterplot ("_seq_scatterplot.png", "_res_scatterplot.png"
+    or "_matrix_scatterplot.png"), classification a confusion matrix
+    ("_seq_CM.png", "_res_CM.png" or "_matrix_CM.png"), and probabilistic
+    classification ROC and precision-recall curves ("_ROC_curve.png" and
+    "_PR_curve.png"). Residue and matrix values are pooled over every sequence
+    (matrix scatterplots show at most MAX_SCATTER_POINTS cells; see scatter_sample).
 
     Parameters
     ----------
@@ -116,16 +124,39 @@ def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[n
         True if `predictions` are class probabilities
     """
 
-    data_label = 'res' if task.per_residue else 'seq'
+    data_label = 'matrix' if task.is_matrix else 'res' if task.per_residue else 'seq'
     true_flat, predicted_flat = labelled_values(true_values, predictions, task, probabilistic)
 
     if not task.is_classification:
+        if task.is_matrix:
+            true_flat, predicted_flat = scatter_sample(true_flat, predicted_flat)
         regression_scatterplot(true_flat, predicted_flat, f'{output_prefix}_{data_label}_scatterplot.png')
     elif probabilistic:
         plot_roc_curve(true_flat, predicted_flat, output_prefix + '_ROC_curve.png')
         plot_precision_recall_curve(true_flat, predicted_flat, output_prefix + '_PR_curve.png')
     else:
         plot_confusion_matrix(true_flat, predicted_flat, task.num_classes, f'{output_prefix}_{data_label}_CM.png')
+
+
+def scatter_sample(true_values: np.ndarray, predicted_values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """The values a scatterplot shows: all of them, or (with a warning) a random sample of MAX_SCATTER_POINTS if there
+    are more
+
+    Parameters
+    ----------
+    true_values, predicted_values : numpy arrays
+        Paired values
+
+    Returns
+    -------
+    (numpy array, numpy array)
+    """
+    if len(true_values) <= MAX_SCATTER_POINTS:
+        return true_values, predicted_values
+    warnings.warn(f'The scatterplot shows a random sample of {MAX_SCATTER_POINTS:,} of the {len(true_values):,} values; '
+                  'the performance metrics use every value')
+    chosen = np.random.default_rng(SCATTER_SAMPLE_SEED).choice(len(true_values), MAX_SCATTER_POINTS, replace=False)
+    return true_values[chosen], predicted_values[chosen]
 
 
 # .................................................................

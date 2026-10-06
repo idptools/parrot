@@ -7,6 +7,8 @@ PARROT can train several kinds of model on the same data. Choose one with ``--ar
 * **neural networks** (``brnn``, ``cnn``, ``unet``, ``transformer``, ``composition``), trained epoch by epoch, which work for all four task types (sequence or residue data, regression or classification);
 * **simple models** (``linear``, ``svm``, ``random_forest``, ``knn``) from scikit-learn, fitted in one step to a fixed summary of each sequence, which work for sequence-mapped data only.
 
+Matrix data (a matrix of values per sequence) has its own architecture, ``unet2d``, a 2D U-Net described on the "Matrix data" page; it is the default for matrix data.
+
 Every model works with every encoding, and the saved network records which model it is, so ``parrot-predict`` needs no extra flags.
 
 Each architecture has its own hyperparameters, set with the flags listed below (and shown under "architecture hyperparameters" in ``parrot-train --help``). Passing a flag that the chosen architecture does not have is an error. In ``parrot-optimize``, hyperparameters marked as searched (over a range of numbers or a set of choices) are tuned automatically, along with the learning rate; any hyperparameter you set on the command line is fixed at that value instead, and the rest keep their defaults.

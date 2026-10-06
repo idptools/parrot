@@ -44,7 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument('seq_file', help='path to tsv file with format: <idx> <sequence>')
     parser.add_argument('saved_network', help='path to the trained network file')
-    parser.add_argument('output_file', help='file with sequences and their predicted values')
+    parser.add_argument('output_file', help='file with sequences and their predicted values (for matrix networks, '
+                                            'a NumPy .npz archive of one matrix per sequence, named by sequence ID)')
 
     parser.add_argument('-d', '--datatype', choices=COMMAND_LINE_DATATYPES,
                         help="'sequence' or 'residues'. Only needed for networks saved by PARROT versions "
@@ -110,8 +111,10 @@ def main() -> None:
     if not args.silent:
         print('\n---> Prediction complete!')
 
-    reporting.write_unlabeled_predictions(seq_ids, sequences, outputs, network.task, output_file,
-                                          args.probabilistic_classification)
+    written = reporting.write_unlabeled_predictions(seq_ids, sequences, outputs, network.task, output_file,
+                                                    args.probabilistic_classification)
+    if not args.silent:
+        print(f'Predictions written to {written}')
 
 
 def print_prediction_settings(args: argparse.Namespace, seq_file: str, saved_network: str, output_file: str,
