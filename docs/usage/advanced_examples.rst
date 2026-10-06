@@ -13,7 +13,7 @@ This flag determines the stop condition for network training. Currently, there a
 
 .. code-block:: bash
 
-    parrot-train data/seq_regress_dataset.tsv stop_example.pt --datatype sequence -c 1 -nl 2 -hs 5 -lr 0.001 -e 10 -b 32 -v --stop auto
+    parrot-train brnn data/seq_regress_dataset.tsv stop_example.pt --datatype sequence -c 1 -nl 2 -hs 5 -lr 0.001 -e 10 -b 32 -v --stop auto
 
 .. code-block:: bash
 
@@ -60,7 +60,7 @@ This flag allows the user to set the proportions of data that will be a part of 
 
 .. code-block:: bash
 
-    parrot-train data/seq_regress_dataset.tsv setfractions_network.pt --datatype sequence -c 1 -e 200 --set-fractions 0.5 0.45 0.05
+    parrot-train brnn data/seq_regress_dataset.tsv setfractions_network.pt --datatype sequence -c 1 -e 200 --set-fractions 0.5 0.45 0.05
 
 Notice that the output predictions file from this command has fewer datapoints because of the reduced test set. Most likely, the accuracy will be a little worse then the default proportions because the training set is also smaller.
 
@@ -69,7 +69,7 @@ In some cases, users might want precise control over over the training, validati
 
 .. code-block:: bash
 
-    parrot-train data/seq_regress_dataset.tsv manualsplit_network.pt --datatype sequence -c 1 -e 200 --split data/split_file.tsv 
+    parrot-train brnn data/seq_regress_dataset.tsv manualsplit_network.pt --datatype sequence -c 1 -e 200 --split data/split_file.tsv 
 
 This can especially be useful if you wish to perform k-fold cross-validation on your dataset, as you can prepare k different split_files that each specify a particular 1/kth of your dataset into the test set.
 
@@ -98,7 +98,7 @@ solvation free energy       (not recorded)                free energy of solvati
 
 .. code-block:: bash
 
-    parrot-train data/seq_regress_dataset.tsv biophysics_network.pt -d sequence -c 1 -nl 2 -hs 10 -e 200 --encode biophysics
+    parrot-train brnn data/seq_regress_dataset.tsv biophysics_network.pt -d sequence -c 1 -nl 2 -hs 10 -e 200 --encode biophysics
 
 The biophysical features are on very different scales (molecular weight is in the hundreds, while the aromatic flag is 0 or 1), so we recommend adding ``--standardize-encoding``, which rescales every feature to mean 0 and standard deviation 1 across the amino acids (see "Standardizing an encoding" on the ``parrot-train`` page).
 
@@ -106,13 +106,13 @@ More powerfully, PARROT also allows the user to manually specify their own encod
 
 .. code-block:: bash
 
-    parrot-train data/seq_regress_dataset.tsv userencode_network.pt -d sequence -c 1 -nl 2 -hs 10 -e 200 --encode data/encoding_example.txt
+    parrot-train brnn data/seq_regress_dataset.tsv userencode_network.pt -d sequence -c 1 -nl 2 -hs 10 -e 200 --encode data/encoding_example.txt
 
 With the ``--encode`` flag and a user-provided file, PARROT is even flexible enough to work on nucleotide sequences! To illustrate this, we've included the file "nucleotide_encoding.txt" which can be passed in via this flag to one-hot encode nucleotide sequences. We've also included an example sequence regression dataset (melting temperature prediction) with nucleotide sequences: "nucleotide_dataset.tsv".
 
 .. code-block:: bash
 
-    parrot-train data/nucleotide_dataset.txt nucleotide_network.pt -d sequence -c 1 -nl 2 -hs 10 -e 200 --encode data/nucleotide_encoding.txt
+    parrot-train brnn data/nucleotide_dataset.txt nucleotide_network.pt -d sequence -c 1 -nl 2 -hs 10 -e 200 --encode data/nucleotide_encoding.txt
 
 **Probabilistic classification with --probabilistic-classification:**
 
@@ -163,7 +163,7 @@ Usage is almost identical to ``parrot-train``. For example, on the residue class
 
 .. code-block:: bash
 
-    parrot-optimize data/res_class_dataset.tsv optimize_example.pt -d residues -c 3 -e 30 --trials 20 --seed 1
+    parrot-optimize brnn data/res_class_dataset.tsv optimize_example.pt -d residues -c 3 -e 30 --trials 20 --seed 1
 
 We do not specify the number of layers, the hidden size or the learning rate: these are searched. The most important choice is ``--epochs``, the number of epochs a configuration is trained for if it survives to the end (and so the final network's training): choose it as you would for ``parrot-train``, e.g. by looking at a training and validation loss curve. Here we use 20 trials to keep the example short; the default is 50.
 
@@ -214,7 +214,7 @@ As well as the usual ``parrot-train`` output, ``optimize_example_optimal_hyperpa
     4  initial  stopped  3  20.8106      3.47937e-05  17  5
     ...
 
-Hyperparameters you give on the command line are fixed rather than searched, e.g. ``--architecture cnn --channels 32`` searches everything except the number of channels. For small datasets, ``--cv-folds 5`` scores each configuration by 5-fold cross-validation instead of on the validation set.
+Hyperparameters you give on the command line are fixed rather than searched, e.g. ``parrot-optimize cnn ... --channels 32`` searches everything except the number of channels. For small datasets, ``--cv-folds 5`` scores each configuration by 5-fold cross-validation instead of on the validation set.
 
 Integrating trained PARROT networks into Python workflows:
 ----------------------------------------------------------

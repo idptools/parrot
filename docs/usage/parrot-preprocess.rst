@@ -16,7 +16,7 @@ Where *data_file* is a standard PARROT datafile and *output_file* is where the p
 
     $ parrot-preprocess data.tsv clean.tsv -d sequence -m classification \
         --deduplicate merge --split homology --class-balance --seed 1
-    $ parrot-train clean.tsv network.pt -d sequence -c 3 --split clean_split_file.txt
+    $ parrot-train brnn clean.tsv network.pt -d sequence -c 3 --split clean_split_file.txt
 
 Steps are always carried out in the order below, and each is optional.
 

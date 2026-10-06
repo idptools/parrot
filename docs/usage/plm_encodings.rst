@@ -18,7 +18,7 @@ Sequences must be written in uppercase one-letter codes. Besides the 20 standard
 
 .. code-block:: bash
 
-    parrot-train data.tsv net.pt -d residues -c 1 --encode esm2_t12_35M_UR50D
+    parrot-train brnn data.tsv net.pt -d residues -c 1 --encode esm2_t12_35M_UR50D
     parrot-predict sequences.txt net.pt predictions.txt
 
 Choosing a model

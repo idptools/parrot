@@ -7,7 +7,7 @@ As well as one value per sequence or one value per residue, PARROT can learn a *
 * **Square maps** (L x L for a sequence of L residues): one value for every pair of residues, such as a contact map, a distance map, or the strength of interaction between two residues. Maps can be symmetric (``--symmetric``) or not.
 * **Fixed-width matrices** (L x N, with ``--matrix-width N``): N values for every residue, where the N columns are related and ordered (for example a property measured at N temperatures, or a distribution over N bins), rather than N unrelated features.
 
-Matrix data uses the ``matrix`` datatype (``-d matrix``) and, by default, the ``unet2d`` architecture, a 2D U-Net (see below). It works with every encoding, regression and classification, and the ``parrot-train``, ``parrot-optimize``, ``parrot-predict`` and ``parrot-preprocess`` commands.
+Matrix data is the ``matrix`` datatype, and is learnt by the ``unet2d`` architecture, a 2D U-Net (see below): ``parrot-train unet2d`` and ``parrot-optimize unet2d``, which need no ``-d``. It works with every encoding, regression and classification, and the ``parrot-train``, ``parrot-optimize``, ``parrot-predict`` and ``parrot-preprocess`` commands.
 
 Input files
 -----------
@@ -43,11 +43,11 @@ Training
 
 .. code-block:: bash
 
-    $ parrot-train data.tsv network.pt -d matrix -c 1 --matrix-file matrices.npz --symmetric --include-figs
+    $ parrot-train unet2d data.tsv network.pt -c 1 --matrix-file matrices.npz --symmetric --include-figs
 
 The flags for matrix data are:
 
-    *  ``--matrix-file`` : the ``.npz`` matrix file (required for ``-d matrix``).
+    *  ``--matrix-file`` : the ``.npz`` matrix file (required).
     *  ``--matrix-width`` : the number of columns, for fixed-width matrices. Leave it out for square maps.
     *  ``--symmetric`` : the maps are symmetric (square maps only).
     *  ``--max-matrix-length`` : square maps only; the longest sequence allowed (default 512). A square map takes memory in proportion to the square of the sequence length: a 512-residue map has about 262,000 cells, and the 2D U-Net with its default settings keeps roughly 1-3 kB per cell while training, so one such sequence needs up to about 1 GB. Longer sequences are an error rather than a crash part-way through training; remove them (e.g. ``parrot-preprocess --max-length``), or raise the limit if your GPU has the memory. Lower ``--batch`` as well when sequences are long.

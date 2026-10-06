@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 """
-Usage: $ parrot-optimize data_file output_network <flags>
+Usage: $ parrot-optimize <architecture> data_file output_network <flags>
 
 Search for good hyperparameters for a network architecture on a dataset, then
 train and test a network with the best ones. See parrot/hyperparameter_search.py
-for how the search works, and use the '-h' flag for the options.
+for how the search works. Each architecture is a subcommand with its own options
+(see training_parser.py); use 'parrot-optimize -h' for the architectures, and
+'parrot-optimize <architecture> -h' for an architecture's options.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -22,57 +24,78 @@ from typing import Any
 from torch.utils.data import DataLoader
 
 from parrot import hyperparameter_search, train_network
-from parrot.architectures import HyperParameterValue, ParrotArchitecture, build_network
+from parrot.architectures import HyperParameterValue, ParrotArchitecture, build_network, get_architecture
 from parrot.reproducibility import random_generator
-from parrot.scripts import common
+from parrot.scripts import common, training_parser
 
 # Number of configurations tried by default
 DEFAULT_TRIALS = 50
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """The command-line arguments of parrot-optimize
+    """The command-line arguments of parrot-optimize: one subcommand per architecture
 
     Returns
     -------
     argparse.ArgumentParser
     """
-    parser = argparse.ArgumentParser(description='Search for good hyperparameters, then train and test a PARROT network '
-                                                 'with them.')
-    common.add_training_arguments(parser)
-    common.add_hyperparameter_arguments(parser)
+    return training_parser.build_parser('Search for good hyperparameters, then train and test a PARROT network with '
+                                        'them.', training_loop_options=[successive_halving_options()],
+                                        command_options=[search_options()], describe_search=True)
 
-    search = parser.add_argument_group('hyperparameter search')
-    search.add_argument('--trials', type=int, default=None,
-                        help=f'number of hyperparameter configurations to try (default {DEFAULT_TRIALS})')
-    search.add_argument('--max-iter', dest='max_iter', type=int, default=None,
-                        help=f'same as --trials {common.LEGACY_NOTE}')
-    search.add_argument('--min-epochs', dest='min_epochs', type=int, default=None,
-                        help='epochs every configuration is first trained for; the best ones continue for longer, up '
-                             'to --epochs (default: --epochs / reduction-factor^2, at least 1)')
-    search.add_argument('--reduction-factor', dest='reduction_factor', type=int,
-                        default=hyperparameter_search.REDUCTION_FACTOR,
-                        help='at each stage the best 1/reduction-factor of the configurations continue, for '
-                             f'reduction-factor times as many epochs (default {hyperparameter_search.REDUCTION_FACTOR})')
-    search.add_argument('--cv-folds', dest='cv_folds', type=int, default=None,
-                        help='score each configuration by k-fold cross-validation over the training and validation '
-                             'data, instead of on the validation set (about k times slower; for small datasets)')
-    return parser
+
+def search_options() -> argparse.ArgumentParser:
+    """The options of the search itself (every architecture)
+
+    Returns
+    -------
+    argparse.ArgumentParser
+    """
+    options = argparse.ArgumentParser(add_help=False)
+    group = options.add_argument_group('hyperparameter search')
+    group.add_argument('--trials', type=int, default=None,
+                       help=f'number of hyperparameter configurations to try (default {DEFAULT_TRIALS})')
+    group.add_argument('--max-iter', dest='max_iter', type=int, default=None,
+                       help=f'same as --trials {common.LEGACY_NOTE}')
+    group.add_argument('--cv-folds', dest='cv_folds', type=int, default=None,
+                       help='score each configuration by k-fold cross-validation over the training and validation '
+                            'data, instead of on the validation set (about k times slower; for small datasets)')
+    return options
+
+
+def successive_halving_options() -> argparse.ArgumentParser:
+    """How long configurations are trained for at each stage of the search (networks trained by gradient descent)
+
+    Returns
+    -------
+    argparse.ArgumentParser
+    """
+    options = argparse.ArgumentParser(add_help=False)
+    group = options.add_argument_group('hyperparameter search')
+    group.add_argument('--min-epochs', dest='min_epochs', type=int, default=None,
+                       help='epochs every configuration is first trained for; the best ones continue for longer, up '
+                            'to --epochs (default: --epochs / reduction-factor^2, at least 1)')
+    group.add_argument('--reduction-factor', dest='reduction_factor', type=int,
+                       default=hyperparameter_search.REDUCTION_FACTOR,
+                       help='at each stage the best 1/reduction-factor of the configurations continue, for '
+                            f'reduction-factor times as many epochs (default {hyperparameter_search.REDUCTION_FACTOR})')
+    return options
 
 
 def main() -> None:
     """Search for good hyperparameters, then save and report on a network trained with the best ones."""
-    args = common.parse_training_arguments(build_parser())
+    args = training_parser.parse_arguments(build_parser())
     n_trials = check_search_arguments(args)
 
     # Any architecture hyperparameter given on the command line is fixed rather than searched
-    fixed_hyperparameters = common.given_hyperparameters(args)
+    fixed_hyperparameters = training_parser.given_hyperparameters(args)
 
     run = common.prepare_training_run(args, n_folds=args.cv_folds)
-    common.print_run_header('PARROT with hyperparameter search', run,
-                            dict(architecture=args.architecture, **fixed_hyperparameters, batch_size=args.batch,
-                                 batching=args.batching, epochs=args.epochs, trials=n_trials,
-                                 cv_folds=args.cv_folds or 'none (validation set)'))
+    settings: dict[str, Any] = dict(architecture=args.architecture, **fixed_hyperparameters)
+    if get_architecture(args.architecture).trained_by_gradient_descent:
+        settings.update(batch_size=args.batch, batching=args.batching, epochs=args.epochs)
+    settings.update(trials=n_trials, cv_folds=args.cv_folds or 'none (validation set)')
+    common.print_run_header('PARROT with hyperparameter search', run, settings)
 
     space = hyperparameter_search.SearchSpace(args.architecture, fixed_hyperparameters)
     trainer = hyperparameter_search.TrialTrainer(space, search_loaders(run), len(run.encoder), run.task, run.device)

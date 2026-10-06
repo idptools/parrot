@@ -27,7 +27,7 @@ Let's train a network with ``parrot-train`` that learns how to classify sequence
 
 .. code-block:: bash
 
-    parrot-train data/seq_class_dataset.tsv seq_class_network.pt --datatype sequence --classes 3
+    parrot-train brnn data/seq_class_dataset.tsv seq_class_network.pt --datatype sequence --classes 3
 
 Training has a stochastic component, so running this multiple times will yield slightly different results. The output to console should look something like:
 
@@ -112,7 +112,7 @@ The remaining two flags we will add are ``--verbose`` and ``--include-figs``. "V
 
 .. code-block:: bash
 
-    parrot-train data/seq_class_dataset.tsv seq_class_network.pt --datatype sequence --classes 3 --batch 8 --epochs 200 --include-figs --verbose
+    parrot-train brnn data/seq_class_dataset.tsv seq_class_network.pt --datatype sequence --classes 3 --batch 8 --epochs 200 --include-figs --verbose
 
 Let's look at the figures that we generated: "seq_class_network_train_val_loss.png" and "seq_class_network_seq_CM.png"
 
@@ -147,7 +147,7 @@ In terms of command-line syntax, the only difference in the ``parrot-train`` com
 
 .. code-block:: bash
 
-    parrot-train data/seq_regress_dataset.tsv seq_regress_network.pt --datatype sequence --classes 1 -nl 2 -hs 20 -b 8 --epochs 200 --include-figs
+    parrot-train brnn data/seq_regress_dataset.tsv seq_regress_network.pt --datatype sequence --classes 1 -nl 2 -hs 20 -b 8 --epochs 200 --include-figs
 
 You might notice that this network seems to train a bit slower than the previous example. This is because our network has an additional layer. Increasing the ``-nl`` hyperparameter increases training time, but creates a more complex network that may be better at discerning patterns from data. 
 
@@ -183,7 +183,7 @@ Despite this major difference, the ``parrot-train`` command is similar to the ab
 
 .. code-block:: bash
 
-    parrot-train data/res_class_dataset.tsv res_class_network.pt --datatype residues --classes 3 -lr 0.0001 -e 200 -b 8 --include-figs
+    parrot-train brnn data/res_class_dataset.tsv res_class_network.pt --datatype residues --classes 3 -lr 0.0001 -e 200 -b 8 --include-figs
 
 This produces more files to the output directory. If we look at the performance stats file, we can see this network is not perfectly accurate.
 
@@ -206,7 +206,7 @@ The final kind of machine learning task that PARROT can handle is regression on 
 
 .. code-block:: bash
 
-    parrot-train data/res_regress_dataset.tsv res_regress_network.pt -d residues -c 1 -e 300 -b 8 --include-figs
+    parrot-train brnn data/res_regress_dataset.tsv res_regress_network.pt -d residues -c 1 -e 300 -b 8 --include-figs
 
 The output from this command is analogous to the other examples. Like the sequence regression task, specifying ``--include-figs`` with a residue regression task will produce a scatter plot that shows the network's performance on the test set.
 

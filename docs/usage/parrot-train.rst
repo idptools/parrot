@@ -2,43 +2,51 @@
  parrot-train
 ==============
 
-``parrot-train`` is the primary command for training a PARROT network. In the most basic usage, the user specifies their data and an output location and a trained bi-directional LSTM network will be created along with an estimate of network predictive performance on randomly chosen test samples. There are many optional arguments to ``parrot-train`` that allow users to specify network parameters, create helpful output images, and otherwise modify PARROT to meet their needs.
+``parrot-train`` is the primary command for training a PARROT network. In the most basic usage, the user chooses a network architecture, specifies their data and an output location, and a trained network will be created along with an estimate of network predictive performance on randomly chosen test samples. There are many optional arguments to ``parrot-train`` that allow users to specify network parameters, create helpful output images, and otherwise modify PARROT to meet their needs.
 
 Once PARROT is installed, the user can run ``parrot-train`` from the command line:
 
 .. code-block:: bash
 	
-	$ parrot-train data_file output_network <flags>
+	$ parrot-train <architecture> data_file output_network <flags>
 
-Where *data_file* specifies the path to the whitespace-separated datafile and *output_network* is the path to where the final trained network will be saved. It is recommended, but not required, that networks are saved using a ".pt" file extension, following the PyTorch convention.
+Where *architecture* is the network to train (see below), *data_file* specifies the path to the whitespace-separated datafile and *output_network* is the path to where the final trained network will be saved. It is recommended, but not required, that networks are saved using a ".pt" file extension, following the PyTorch convention. For example:
+
+.. code-block:: bash
+
+	$ parrot-train brnn data.tsv network.pt -d sequence -c 1 -hs 20 -nl 2
+	$ parrot-train cnn data.tsv network.pt -d residues -c 3 --channels 32
+	$ parrot-train knn data.tsv network.pt -c 1 --num-neighbors 10
+
+Each architecture is a subcommand, and offers only the options that apply to it: its own hyperparameters, the training options if it is trained epoch by epoch, and the matrix-data options if it learns matrices. ``parrot-train -h`` lists the architectures, and ``parrot-train <architecture> -h`` lists an architecture's options with their defaults.
 
 For residue-mapped data, a residue with no label (e.g. a residue with no experimental measurement) can be written as ``nan`` in *data_file*. These residues are ignored in training, in performance metrics and in figures, and their true value is written as ``nan`` in the prediction output. Every sequence needs at least one labelled residue, and sequence-mapped data cannot contain missing values.
 
+**Architectures:**
+
+	*  ``brnn``, ``cnn``, ``unet``, ``transformer`` and ``composition`` : neural networks for sequence or residue data. ``brnn`` is the bidirectional LSTM PARROT has always used.
+	*  ``linear``, ``svm``, ``random_forest`` and ``knn`` : simple models for sequence data, fitted in one step, so they have no learning rate, epochs or batch size.
+	*  ``unet2d`` : a 2D U-Net for matrix data (see the "Matrix data" page).
+
+Each architecture's hyperparameters, and advice on choosing one, are on the "Architectures" page.
+
+**Commands from earlier versions of PARROT:** a command with no architecture, such as ``parrot-train data.tsv network.pt -d sequence -c 1 -nl 2``, still works and trains a ``brnn``, exactly as before. ``--architecture cnn`` anywhere in such a command trains that architecture instead.
+
 **Required flags:**
 
-	*  ``--datatype`` / ``-d`` : Describes how values are formatted in `datafile`. Should be 'sequence' if there is a single value per sequence, 'residues' if there are values for every residue in each sequence, or 'matrix' if each sequence has a matrix of values (given in a separate ``--matrix-file``; see the "Matrix data" page). See the example datasets in the **/data** folder for more information.
+	*  ``--datatype`` / ``-d`` : Describes how values are formatted in `datafile`. Should be 'sequence' if there is a single value per sequence, or 'residues' if there are values for every residue in each sequence. See the example datasets in the **/data** folder for more information. Architectures that support only one datatype (the simple models, which learn 'sequence' data, and ``unet2d``, which learns 'matrix' data) do not need it.
 	*  ``--classes`` / ``-c`` : The number of classes for the machine learning task. If the task is regression, then specify '1' (without the quote marks).
 
-**Optional flags:**
+**Optional flags, for every architecture:**
 
 	*  ``--help`` / ``-h`` : Display a help message.
-	*  ``--architecture`` : The model to train: 'brnn' (default; the bidirectional LSTM PARROT has always used), 'cnn', 'unet', 'transformer' or 'composition' (an order-independent baseline), or, for sequence-mapped data only, the simple models 'linear', 'svm', 'random_forest' or 'knn'. For matrix data, 'unet2d' (the default for it). Each architecture has its own hyperparameter flags, described on the "Architectures" page and listed under "architecture hyperparameters" in ``parrot-train --help``; passing a hyperparameter that the chosen architecture does not have is an error.
-	*  ``--learning-rate`` / ``-lr`` : Learning rate of the network (default is 0.001). Must be a float between 0 and 1.
-	*  ``--num-layers`` / ``-nl`` : (brnn) Number of hidden layers in the network (default is 1). Must be a positive integer.
-	*  ``--hidden-size`` / ``-hs`` : (brnn) Size of hidden vectors within the network (default is 10). Must be a positive integer.
-	*  ``--batch`` / ``-b`` : Training minibatch size (default is 32). Must be a positive integer, and for most datasets should be in the range of 8-256. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance, but are not explicitly required.
-	*  ``--batching`` : How training sequences are grouped into batches: ``length`` (default) or ``random``. ``length`` puts sequences of similar length in the same batch (still re-randomised every epoch), so far less time is spent on padding; for datasets whose lengths vary widely this makes training several-fold faster. ``random`` shuffles freely, as earlier versions of PARROT did. Because padding never affects a network's output, this changes which sequences share a batch during training but nothing else.
-	*  ``--epochs`` / ``-e`` : Number of training epochs (default is 100). Has different behavior depending on what is specified by the ``--stop`` flag.
-	*  ``--stop`` : Stop condition to terminate training. Must be either 'auto' or 'iter' (default is 'iter'). If 'iter', then train for exactly ``-e`` epochs and stop. If 'auto', then train until performance has plateaued for ``-e`` epochs. If using 'auto', be careful not to indicate a large number of epochs, as this can take much longer than is necessary.
 	*  ``--split`` : Path to a "split-file" for manually dividing dataset into training, validation and test sets. The file should contain three lines, corresponding to training, validation and test sets respectively. Each line should have integers separated by whitespace, with the integers specify which sequences/lines in the `datafile` (0-indexed) will belong to which dataset. See **/data** folder for examples. If a split-file is not provided, default behavior is for PARROT to randomly divide data into training, validation and test sets. Random splits put close homologues on both sides of the split; ``parrot-preprocess --split homology`` writes a datafile and split-file in which they are not.
 	*  ``--set-fractions`` : Include this flag to manually set the proportions of the data belonging to the training, validation and test sets. This option must be followed by three floats (representing train, validation, and test) between 0 and 1 that cumulatively sum to 1. By default, PARROT uses splits of 70:15:15. Note that the ``--split`` flag overrides these values.
 	*  ``--save-splits`` : Include this flag if you would like PARROT to produce a split-file based on its random partitioning of data into training/validation/test sets, which can be useful for replication and/or testing multiple networks on the same data. Output split-file will be saved in the same folder as *output_network* using the same name followed by "_split_file.txt". This flag is overridden if a split-file is manually provided. (NOTE: This is a new feature, let us know if you run into any issues!)
 	*  ``--encode`` : Include this flag to specify the numeric encoding scheme for each amino acid. Available options are 'onehot' (default), 'biophysics', a protein language model (e.g. 'esm2_t12_35M_UR50D'; see "Protein language model encodings"), or user-specified. If you wish to manually specify an encoding scheme, provide a path to a text file describing the amino acid to vector mapping. Example encoding files are provided in the **/data** folder.
 	*  ``--embedding-cache`` : Protein language model encodings only. Directory in which to store the embedding of every sequence, so each is computed only once (default: a ``parrot_train_embeddings`` directory next to *output_network*). Point several runs at the same directory to share embeddings. See "Protein language model encodings".
 	*  ``--standardize-encoding`` : Standardize every feature of the encoding to mean 0 and standard deviation 1 across the amino acids (or other characters) the encoding defines, so that features measured on very different scales contribute equally. Recommended for ``biophysics`` and most user encodings; see "Standardizing an encoding" on the ``parrot-train`` page. The standardization is saved with the network and applied automatically by ``parrot-predict`` and ``Predictor``.
-	*  ``--matrix-file``, ``--matrix-width``, ``--symmetric``, ``--max-matrix-length`` : Matrix data only; see the "Matrix data" page.
 	*  ``--exclude-seq-id`` : Include this flag if the `data_file` is formatted without sequence IDs as the first column in each row.
-	*  ``--probabilistic-classification`` : Include this flag to output class predictions as continuous values [0-1], based on the probability that the input sample belongs to each class. Currently only implemented for sequence classification. This flag also modifies the output figures and output performance stats. (NOTE: This is a new feature, let us know if you run into any issues!)
 	*  ``--include-figs`` : Include this flag to generate images based on network training and performance on test set. Figures will be saved to same directory as specified by *output_network* using same naming convention.
 	*  ``--no-stats`` : Include this flag to prevent a "_performance_stats.txt" file from being output.
 	*  ``--ignore-warnings`` : By default, PARROT checks your data for a few criteria and prints warnings if it doesn't meet some basic heuristics. Use this flag to silence these warnings (network training occurs unimpeded in either case).
@@ -48,6 +56,22 @@ For residue-mapped data, a residue with no label (e.g. a residue with no experim
 	*  ``--seed`` : Integer random seed. Providing a seed makes the random train/validation/test split and network training reproducible: re-running on the same machine and device (CPU, CUDA or MPS) gives the same results. By default no seed is set.
 	*  ``--verbose`` / ``-v`` : Include this flag to produce more descriptive output to terminal.
 	*  ``--silent`` : Include this flag to produce no output to terminal.
+
+**Training flags, for networks trained epoch by epoch (every architecture except the simple models):**
+
+	*  ``--learning-rate`` / ``-lr`` : Learning rate of the network (default is 0.001). Must be a float between 0 and 1.
+	*  ``--batch`` / ``-b`` : Training minibatch size (default is 32). Must be a positive integer, and for most datasets should be in the range of 8-256. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance, but are not explicitly required.
+	*  ``--batching`` : How training sequences are grouped into batches: ``length`` (default) or ``random``. ``length`` puts sequences of similar length in the same batch (still re-randomised every epoch), so far less time is spent on padding; for datasets whose lengths vary widely this makes training several-fold faster. ``random`` shuffles freely, as earlier versions of PARROT did. Because padding never affects a network's output, this changes which sequences share a batch during training but nothing else.
+	*  ``--epochs`` / ``-e`` : Number of training epochs (default is 100). Has different behavior depending on what is specified by the ``--stop`` flag.
+	*  ``--stop`` : Stop condition to terminate training. Must be either 'auto' or 'iter' (default is 'iter'). If 'iter', then train for exactly ``-e`` epochs and stop. If 'auto', then train until performance has plateaued for ``-e`` epochs. If using 'auto', be careful not to indicate a large number of epochs, as this can take much longer than is necessary.
+
+**Sequence data (every architecture except unet2d):**
+
+	*  ``--probabilistic-classification`` : Include this flag to output class predictions as continuous values [0-1], based on the probability that the input sample belongs to each class. Currently only implemented for sequence classification. This flag also modifies the output figures and output performance stats. (NOTE: This is a new feature, let us know if you run into any issues!)
+
+**Matrix data (unet2d):**
+
+	*  ``--matrix-file`` (required), ``--matrix-width``, ``--symmetric``, ``--max-matrix-length`` : see the "Matrix data" page.
 
 **Standardizing an encoding:**
 

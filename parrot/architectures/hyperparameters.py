@@ -7,8 +7,9 @@ command-line flag and help (parrot-train), whether and how parrot-optimize
 searches it, the checks applied to its value, and the value used for networks
 saved before it existed.
 
-Hyperparameters that several architectures share are declared once, at the end
-of this module, so their flags, defaults and help always agree.
+Hyperparameters that several architectures have in common are declared once,
+at the end of this module, so the same flag means the same thing for each of
+them.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -223,9 +224,9 @@ class HyperParameter:
 
 
 # ..........................................................................................
-# Hyperparameters shared by several architectures, declared once so their flags, defaults and help agree.
-# (parrot-train builds one flag per hyperparameter name, so architectures that share a name must share
-# its declaration.)
+# Hyperparameters several architectures have in common, declared once so their flags, defaults and help agree.
+# (Each architecture has its own parrot-train subcommand, so an architecture that needs a different default can
+# declare its own.)
 
 DROPOUT = HyperParameter('dropout', float, default=0.0, help='dropout probability', minimum=0.0, maximum=1.0,
                          search_range=(0.0, 0.5))

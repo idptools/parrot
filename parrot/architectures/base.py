@@ -59,12 +59,14 @@ class ParrotArchitecture(nn.Module):
     name : str
         Registry key used to select the architecture (e.g. 'brnn').
     description : str
-        One-line description shown in command-line help.
+        One-line description, shown in the list of architectures in
+        command-line help. `name` is the architecture's subcommand of
+        parrot-train and parrot-optimize.
     hyperparameters : tuple of HyperParameter
         The architecture's hyperparameters.
     supported_datatypes : tuple of str
-        The datatypes ('sequence', 'residues') the architecture can be used for.
-        Defaults to both.
+        The datatypes ('sequence', 'residues', 'matrix') the architecture can be
+        used for. Defaults to ('sequence', 'residues').
     trained_by_gradient_descent : bool
         True (default) for networks trained epoch by epoch with a learning rate.
         False for models fitted in a single step by fit() (see classical.py).

@@ -336,8 +336,8 @@ def write_command_data(directory: Path, kind: str = 'square', num_sequences: int
 
 
 def train_matrix(run_cli, datafile, matrix_file, network, *arguments):
-    """Run parrot-train on matrix data for 2 epochs on the CPU."""
-    run_cli(parrot_train.main, ['parrot-train', datafile, network, '-d', 'matrix', '--matrix-file', matrix_file,
+    """Run parrot-train unet2d on matrix data for 2 epochs on the CPU."""
+    run_cli(parrot_train.main, ['parrot-train', 'unet2d', datafile, network, '--matrix-file', matrix_file,
                                 '-e', 2, '--device', 'cpu', '--silent', *arguments])
 
 
@@ -368,26 +368,36 @@ def test_train_classes_and_fixed_width(run_cli, tmp_path):
     assert network.task == Task('matrix', 1, width=5)
 
 
-@pytest.mark.parametrize('arguments, error, message', [
-    (['-d', 'matrix', '-c', 1], ValueError, 'needs --matrix-file'),
-    (['-d', 'sequence', '-c', 1, '--matrix-file', 'MATRICES'], ValueError, 'only applies to matrix data'),
-    (['-d', 'matrix', '-c', 1, '--matrix-file', 'MATRICES', '--symmetric', '--matrix-width', 5], ValueError,
-     'Only square matrix tasks'),
-    (['-d', 'matrix', '-c', 1, '--matrix-file', 'MATRICES', '--max-matrix-length', 10], ValueError,
-     'longer than --max-matrix-length'),
-    (['-d', 'matrix', '-c', 1, '--matrix-file', 'MATRICES', '--exclude-seq-id'], ValueError, 'needs sequence IDs'),
+@pytest.mark.parametrize('arguments, message', [
+    (['unet2d', '-c', 1], 'needs --matrix-file'),
+    (['unet2d', '-c', 1, '--matrix-file', 'MATRICES', '--symmetric', '--matrix-width', 5], 'Only square matrix tasks'),
+    (['unet2d', '-c', 1, '--matrix-file', 'MATRICES', '--max-matrix-length', 10], 'longer than --max-matrix-length'),
+    (['unet2d', '-c', 1, '--matrix-file', 'MATRICES', '--exclude-seq-id'], 'needs sequence IDs'),
 ])
-def test_train_rejects_invalid_matrix_options(run_cli, tmp_path, arguments, error, message):
+def test_train_rejects_invalid_matrix_options(run_cli, tmp_path, arguments, message):
     datafile, matrix_file = write_command_data(tmp_path)
-    arguments = [matrix_file if argument == 'MATRICES' else argument for argument in arguments]
-    with pytest.raises(error, match=message):
-        run_cli(parrot_train.main, ['parrot-train', datafile, tmp_path / 'net.pt', '-e', 1, '--device', 'cpu',
-                                    '--silent', *arguments])
+    architecture, *options = [matrix_file if argument == 'MATRICES' else argument for argument in arguments]
+    with pytest.raises(ValueError, match=message):
+        run_cli(parrot_train.main, ['parrot-train', architecture, datafile, tmp_path / 'net.pt', '-e', 1,
+                                    '--device', 'cpu', '--silent', *options])
+
+
+@pytest.mark.parametrize('arguments', [
+    ['brnn', '-d', 'sequence', '-c', 1, '--matrix-file', 'MATRICES'],   # only matrix architectures read matrices
+    ['brnn', '-d', 'matrix', '-c', 1],                                  # 1D networks cannot learn matrices
+    ['unet2d', '-d', 'sequence', '-c', 1],                              # unet2d only learns matrices
+    ['unet2d', '-c', 1, '--probabilistic-classification'],             # class probabilities are for sequences
+])
+def test_train_offers_matrix_options_only_to_matrix_architectures(run_cli, tmp_path, arguments):
+    datafile, matrix_file = write_command_data(tmp_path)
+    architecture, *options = [matrix_file if argument == 'MATRICES' else argument for argument in arguments]
+    with pytest.raises(SystemExit):
+        run_cli(parrot_train.main, ['parrot-train', architecture, datafile, tmp_path / 'net.pt', *options])
 
 
 def test_optimize_matrix_data(run_cli, tmp_path):
     datafile, matrix_file = write_command_data(tmp_path)
-    run_cli(parrot_optimize.main, ['parrot-optimize', datafile, tmp_path / 'opt.pt', '-d', 'matrix', '-c', 1,
+    run_cli(parrot_optimize.main, ['parrot-optimize', 'unet2d', datafile, tmp_path / 'opt.pt', '-c', 1,
                                    '--matrix-file', matrix_file, '-e', 2, '--trials', 2, '--device', 'cpu',
                                    '--silent'])
     assert 'architecture: unet2d' in (tmp_path / 'opt_optimal_hyperparams.txt').read_text()

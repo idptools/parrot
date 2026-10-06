@@ -18,7 +18,7 @@ import torch
 
 from parrot import process_input_data as pid
 from parrot import prediction
-from parrot.architectures import HyperParameter
+from parrot.architectures import get_architecture
 from parrot.checkpoint import load_network, save_network
 from parrot.encode_sequence import get_encoder
 from parrot.scripts import common, parrot_cvsplit, parrot_optimize, parrot_predict, parrot_preprocess, parrot_train
@@ -42,9 +42,11 @@ def write_subset(write_lines: Callable[[str, list[str]], str], filename: str, n_
 
 
 def run_train(run_cli: Callable[..., Any], data_file: str, output_network: str | Path, datatype: str,
-              num_classes: int, *extra_arguments: Any) -> None:
-    arguments = ['parrot-train', data_file, output_network, '-d', datatype, '-c', num_classes,
-                 '-e', QUICK_EPOCHS, *extra_arguments]
+              num_classes: int, *extra_arguments: Any, architecture: str = 'brnn') -> None:
+    """Run `parrot-train <architecture>` for QUICK_EPOCHS epochs (models fitted in one step have no epochs)."""
+    epochs = ['-e', QUICK_EPOCHS] if get_architecture(architecture).trained_by_gradient_descent else []
+    arguments = ['parrot-train', architecture, data_file, output_network, '-d', datatype, '-c', num_classes,
+                 *epochs, *extra_arguments]
     run_cli(parrot_train.main, arguments)
 
 
@@ -84,7 +86,7 @@ def test_train_all_tasks(run_cli, tmp_path, task_name, figure_suffix):
 
 def test_train_hyperparameter_flags(run_cli, tmp_path):
     run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1,
-              '-hs', '6', '--num-layers', '2', '--architecture', 'brnn', '--silent')
+              '-hs', '6', '--num-layers', '2', '--silent', architecture='brnn')
 
     network, _ = load_network(str(tmp_path / 'net.pt'))
     assert network.hyperparameter_values == {'hidden_size': 6, 'num_layers': 2, 'attention_pooling': True,
@@ -102,7 +104,7 @@ def test_train_hyperparameter_flags(run_cli, tmp_path):
 ])
 def test_train_on_off_flags(run_cli, tmp_path, architecture, flags, expected):
     run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1,
-              '--architecture', architecture, '--silent', *flags)
+              '--silent', *flags, architecture=architecture)
 
     network, _ = load_network(str(tmp_path / 'net.pt'))
     assert {name: network.hyperparameter_values[name] for name in expected} == expected
@@ -110,16 +112,17 @@ def test_train_on_off_flags(run_cli, tmp_path, architecture, flags, expected):
 
 @pytest.mark.parametrize('architecture, flag', [('brnn', '--global-context-off'), ('transformer', '--global-context-off'),
                                                 ('composition', '--loglength-feedforward-off')])
-def test_train_rejects_on_off_flags_the_architecture_does_not_have(run_cli, tmp_path, architecture, flag):
-    with pytest.raises(ValueError, match=f'{flag} is not a hyperparameter'):
+def test_train_rejects_on_off_flags_the_architecture_does_not_have(run_cli, tmp_path, architecture, flag, capsys):
+    with pytest.raises(SystemExit):
         run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1,
-                  '--architecture', architecture, '--silent', flag)
+                  '--silent', flag, architecture=architecture)
+    assert f'unrecognized arguments: {flag}' in capsys.readouterr().err
 
 
 def test_train_other_architecture(run_cli, tmp_path, test_architecture):
     """A newly registered architecture is available to parrot-train and parrot-predict with no other changes"""
     run_train(run_cli, data_path('res_class_dataset.tsv'), tmp_path / 'net.pt', 'residues', 3,
-              '--architecture', 'test_linear', '--hidden-units', '6', '--include-figs', '--silent')
+              '--hidden-units', '6', '--include-figs', '--silent', architecture='test_linear')
 
     network, _ = load_network(str(tmp_path / 'net.pt'))
     assert isinstance(network, test_architecture)
@@ -134,15 +137,16 @@ def test_train_other_architecture(run_cli, tmp_path, test_architecture):
         assert len(labels) == len(sequence)
 
 
-@pytest.mark.parametrize('extra_arguments', [
-    ['--hidden-units', '6'],                                   # belongs to test_linear, not brnn
-    ['--architecture', 'test_linear', '--hidden-size', '6'],   # belongs to brnn, not test_linear
+@pytest.mark.parametrize('architecture, flag', [
+    ('brnn', '--hidden-units'),        # belongs to test_linear, not brnn
+    ('test_linear', '--hidden-size'),  # belongs to brnn, not test_linear
 ])
-def test_train_rejects_hyperparameters_of_other_architectures(run_cli, tmp_path, test_architecture,
-                                                              extra_arguments):
-    with pytest.raises(ValueError, match='is not a hyperparameter'):
+def test_train_rejects_hyperparameters_of_other_architectures(run_cli, tmp_path, test_architecture, architecture,
+                                                              flag, capsys):
+    with pytest.raises(SystemExit):
         run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1,
-                  '--silent', *extra_arguments)
+                  '--silent', flag, '6', architecture=architecture)
+    assert f'unrecognized arguments: {flag} 6' in capsys.readouterr().err
 
 
 @pytest.mark.parametrize('architecture, flags', [
@@ -154,7 +158,7 @@ def test_train_rejects_hyperparameters_of_other_architectures(run_cli, tmp_path,
 def test_train_and_predict_with_each_architecture(run_cli, tmp_path, architecture, flags, task_name):
     filename, datatype, num_classes = EXAMPLE_TASKS[task_name]
     run_train(run_cli, data_path(filename), tmp_path / 'net.pt', datatype, num_classes,
-              '--architecture', architecture, *flags, '--silent')
+              *flags, '--silent', architecture=architecture)
 
     network, _ = load_network(str(tmp_path / 'net.pt'))
     assert network.name == architecture
@@ -167,22 +171,12 @@ def test_train_and_predict_with_each_architecture(run_cli, tmp_path, architectur
     assert len(read_lines(output_file)) == len(pid.read_tsv_raw(data_path('seqfile.txt')))
 
 
-@pytest.mark.parametrize('flags', [['--architecture', 'cnn', '--pooling', 'sum'],
-                                   ['--architecture', 'cnn', '--kernel-size', '4'],
-                                   ['--architecture', 'unet', '--upsampling', 'bilinear']])
-def test_train_rejects_invalid_choices(run_cli, tmp_path, flags):
+@pytest.mark.parametrize('architecture, flags', [('cnn', ['--pooling', 'sum']), ('cnn', ['--kernel-size', '4']),
+                                                 ('unet', ['--upsampling', 'bilinear'])])
+def test_train_rejects_invalid_choices(run_cli, tmp_path, architecture, flags):
     with pytest.raises(SystemExit):
-        run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1, *flags)
-
-
-@pytest.mark.parametrize('second, problem', [
-    (HyperParameter('num_layers', float, 2.0, 'help', cli_aliases=('-nl',)), 'different types'),
-    (HyperParameter('num_layers', int, 2, 'help'), 'different command-line aliases'),
-])
-def test_shared_hyperparameters_must_be_able_to_share_a_flag(second, problem):
-    first = HyperParameter('num_layers', int, 1, 'help', cli_aliases=('-nl',))
-    with pytest.raises(ValueError, match=problem):
-        common.check_shared_declarations('num_layers', [first, second])
+        run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1, *flags,
+                  architecture=architecture)
 
 
 def test_batch_size_warnings(capsys):
@@ -196,18 +190,13 @@ def test_batch_size_warnings(capsys):
     assert 'large relative to the number of samples' in capsys.readouterr().out
 
 
-def test_shared_on_off_hyperparameters_must_share_a_default():
-    on, off = HyperParameter('extra', bool, True, 'help'), HyperParameter('extra', bool, False, 'help')
-    with pytest.raises(ValueError, match='different defaults'):
-        common.check_shared_declarations('extra', [on, off])
-
-
-@pytest.mark.parametrize('flags', [['--architecture', 'cnn', '--dropout', '1.5'],
-                                   ['--architecture', 'composition', '--num-hidden-layers', '-1'],
-                                   ['--architecture', 'linear', '--alpha', '0']])
-def test_train_rejects_out_of_range_values(run_cli, tmp_path, flags):
+@pytest.mark.parametrize('architecture, flags', [('cnn', ['--dropout', '1.5']),
+                                                 ('composition', ['--num-hidden-layers', '-1']),
+                                                 ('linear', ['--alpha', '0'])])
+def test_train_rejects_out_of_range_values(run_cli, tmp_path, architecture, flags):
     with pytest.raises(ValueError):
-        run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1, *flags)
+        run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1, *flags,
+                  architecture=architecture)
 
 
 @pytest.mark.parametrize('architecture, flags', [
@@ -220,7 +209,7 @@ def test_train_rejects_out_of_range_values(run_cli, tmp_path, flags):
 def test_train_and_predict_one_step_models(run_cli, tmp_path, architecture, flags, task_name, capsys):
     filename, datatype, num_classes = EXAMPLE_TASKS[task_name]
     run_train(run_cli, data_path(filename), tmp_path / 'net.pt', datatype, num_classes,
-              '--architecture', architecture, *flags, '--include-figs', '--ignore-warnings')
+              *flags, '--include-figs', '--ignore-warnings', architecture=architecture)
 
     assert 'fitted in one step' in capsys.readouterr().out
     # There is no loss curve to plot for a model fitted in one step, but the test-set figure is made
@@ -238,10 +227,11 @@ def test_train_and_predict_one_step_models(run_cli, tmp_path, architecture, flag
     assert values_per_line == {num_classes}
 
 
-def test_one_step_models_reject_residue_data(run_cli, tmp_path):
-    with pytest.raises(ValueError, match='only supports sequence-mapped data'):
+def test_one_step_models_reject_residue_data(run_cli, tmp_path, capsys):
+    with pytest.raises(SystemExit):
         run_train(run_cli, data_path('res_regress_dataset.tsv'), tmp_path / 'net.pt', 'residues', 1,
-                  '--architecture', 'svm', '--silent')
+                  '--silent', architecture='svm')
+    assert "invalid choice: 'residues'" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize('num_classes', [1, 3])
@@ -266,10 +256,19 @@ def test_train_with_missing_residue_labels(run_cli, tmp_path, write_lines, num_c
     assert os.path.isfile(tmp_path / ('net_res_CM.png' if num_classes > 1 else 'net_res_scatterplot.png'))
 
 
-def test_train_rejects_unknown_architecture(run_cli, tmp_path):
+@pytest.mark.parametrize('old_form, message', [
+    (False, "'not_an_architecture' is neither an architecture nor an existing datafile"),
+    (True, "invalid choice: 'not_an_architecture'"),
+])
+def test_train_rejects_unknown_architecture(run_cli, tmp_path, old_form, message, capsys):
+    data_and_task = [data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', '-d', 'sequence', '-c', '1']
+    if old_form:
+        arguments = [*data_and_task, '--architecture', 'not_an_architecture']
+    else:
+        arguments = ['not_an_architecture', *data_and_task]
     with pytest.raises(SystemExit):
-        run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1,
-                  '--architecture', 'not_an_architecture')
+        run_cli(parrot_train.main, ['parrot-train', *arguments])
+    assert message in capsys.readouterr().err
 
 
 def test_train_is_reproducible_with_seed(run_cli, tmp_path):
@@ -394,10 +393,15 @@ def test_train_rejects_invalid_residues_before_training(run_cli, tmp_path, write
     assert not (tmp_path / 'net.pt').exists()
 
 
-def test_train_missing_data_file(run_cli, tmp_path):
+def test_train_missing_data_file(run_cli, tmp_path, capsys):
     with pytest.raises(FileNotFoundError):
+        run_train(run_cli, str(tmp_path / 'missing.tsv'), tmp_path / 'net.pt', 'sequence', 1)
+
+    # Without a subcommand the datafile comes first, so a missing one could also be a misspelt architecture
+    with pytest.raises(SystemExit):
         run_cli(parrot_train.main, ['parrot-train', tmp_path / 'missing.tsv', tmp_path / 'net.pt',
                                     '-d', 'sequence', '-c', '1'])
+    assert 'is neither an architecture nor an existing datafile' in capsys.readouterr().err
 
 
 def test_train_missing_output_directory(run_cli, tmp_path):
@@ -410,9 +414,10 @@ def test_train_missing_output_directory(run_cli, tmp_path):
 # parrot-optimize (the hyperparameter search runs for real, on small data with few trials and epochs)
 
 def run_optimize(run_cli: Callable[..., Any], data_file: str, output_network: str | Path, datatype: str,
-                 num_classes: int, *extra_arguments: Any) -> None:
-    run_cli(parrot_optimize.main, ['parrot-optimize', data_file, output_network, '-d', datatype, '-c', num_classes,
-                                   '--seed', '1', '--silent', *extra_arguments])
+                 num_classes: int, *extra_arguments: Any, architecture: str = 'brnn') -> None:
+    """Run `parrot-optimize <architecture>`, seeded and silent."""
+    run_cli(parrot_optimize.main, ['parrot-optimize', architecture, data_file, output_network, '-d', datatype,
+                                   '-c', num_classes, '--seed', '1', '--silent', *extra_arguments])
 
 
 def read_trials(path: str | Path) -> list[dict[str, str]]:
@@ -450,7 +455,7 @@ def test_optimize_is_reproducible_with_seed(run_cli, tmp_path, write_lines):
     data_file = write_subset(write_lines, 'res_regress_dataset.tsv', 60)
     for name in ['first', 'second']:
         run_optimize(run_cli, data_file, tmp_path / f'{name}.pt', 'residues', 1, '-e', '3', '--trials', '4',
-                     '--architecture', 'cnn', '--channels', '8')
+                     '--channels', '8', architecture='cnn')
     assert read_lines(tmp_path / 'first_hyperparameter_trials.tsv') == \
         read_lines(tmp_path / 'second_hyperparameter_trials.tsv')
 
@@ -458,7 +463,7 @@ def test_optimize_is_reproducible_with_seed(run_cli, tmp_path, write_lines):
 def test_optimize_other_architecture(run_cli, tmp_path, write_lines, test_architecture):
     data_file = write_subset(write_lines, 'res_regress_dataset.tsv', 60)
     run_optimize(run_cli, data_file, tmp_path / 'net.pt', 'residues', 1, '-e', '2', '--trials', '3',
-                 '--architecture', 'test_linear')
+                 architecture='test_linear')
 
     assert read_lines(tmp_path / 'net_optimal_hyperparams.txt')[0] == 'architecture: test_linear'
     network, _ = load_network(str(tmp_path / 'net.pt'))
@@ -469,7 +474,7 @@ def test_optimize_with_fixed_hyperparameters(run_cli, tmp_path, write_lines):
     """Hyperparameters given to parrot-optimize are fixed rather than searched"""
     data_file = write_subset(write_lines, 'seq_regress_dataset.tsv', 60)
     run_optimize(run_cli, data_file, tmp_path / 'net.pt', 'sequence', 1, '-e', '2', '--trials', '3',
-                 '--architecture', 'cnn', '--channels', '12', '--pooling', 'max', '--attention-pooling-off')
+                 '--channels', '12', '--pooling', 'max', '--attention-pooling-off', architecture='cnn')
 
     # Only the learning rate, num_blocks, kernel_size and dropout were searched
     header = [line for line in read_lines(tmp_path / 'net_hyperparameter_trials.tsv') if not line.startswith('#')][0]
@@ -485,7 +490,7 @@ def test_optimize_with_fixed_hyperparameters(run_cli, tmp_path, write_lines):
 def test_optimize_with_cross_validation(run_cli, tmp_path, write_lines):
     data_file = write_subset(write_lines, 'seq_class_dataset.tsv', 60)
     run_optimize(run_cli, data_file, tmp_path / 'net.pt', 'sequence', 3, '-e', '2', '--trials', '3',
-                 '--cv-folds', '3', '--architecture', 'composition')
+                 '--cv-folds', '3', architecture='composition')
 
     assert len(read_trials(tmp_path / 'net_hyperparameter_trials.tsv')) == 3
     network, _ = load_network(str(tmp_path / 'net.pt'))
@@ -495,7 +500,7 @@ def test_optimize_with_cross_validation(run_cli, tmp_path, write_lines):
 
 def test_optimize_one_step_model(run_cli, tmp_path):
     run_optimize(run_cli, data_path('seq_class_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 3,
-                 '--architecture', 'random_forest', '--num-trees', '20', '--trials', '4')
+                 '--num-trees', '20', '--trials', '4', architecture='random_forest')
 
     # No learning rate is searched or recorded for a model fitted in one step
     lines = read_lines(tmp_path / 'net_optimal_hyperparams.txt')
@@ -524,8 +529,8 @@ def test_optimize_invalid_search_arguments(run_cli, tmp_path, extra_arguments):
 
 def test_optimize_invalid_set_fractions(run_cli, tmp_path):
     with pytest.raises(ValueError, match='sum to 1'):
-        run_cli(parrot_optimize.main, ['parrot-optimize', data_path('seq_class_dataset.tsv'), tmp_path / 'net.pt',
-                                       '-d', 'sequence', '-c', '3', '--set-fractions', '0.5', '0.1', '0.1'])
+        run_optimize(run_cli, data_path('seq_class_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 3,
+                     '--set-fractions', '0.5', '0.1', '0.1')
 
 
 # ..........................................................................................

@@ -11,16 +11,16 @@ How the pieces fit together
 * ``parrot/architectures/`` contains the architectures. ``base.py`` defines the ``ParrotArchitecture`` base class (including the readout most architectures end with), ``hyperparameters.py`` defines the ``HyperParameter`` declaration and the hyperparameters several architectures share, ``registry.py`` maps names to architectures and builds networks, ``layers.py`` holds shared building blocks, each neural architecture lives in its own module (``brnn.py``, ``composition.py``, ``cnn.py``, ``unet.py``, ``transformer.py``), and ``classical.py`` holds the simple scikit-learn models.
 * ``parrot/encode_sequence.py`` defines the encoders that turn sequences into vectors (one-hot, biophysics, or a user file).
 * ``parrot/train_network.py`` trains networks (and fits the classical models); ``parrot/prediction.py`` runs trained networks; ``parrot/metrics.py``, ``parrot/figures.py`` and ``parrot/reporting.py`` measure, plot and write how a network performs; ``parrot/checkpoint.py`` saves and loads networks.
-* ``parrot/scripts/common.py`` holds everything the command-line tools share, including generating a command-line flag for every architecture hyperparameter.
+* ``parrot/scripts/training_parser.py`` builds the command line of ``parrot-train`` and ``parrot-optimize``: a subcommand for every registered architecture, with a flag for each of its hyperparameters. ``parrot/scripts/common.py`` holds the rest of what the command-line tools share.
 
 The interface
 -------------
 
 An architecture is a subclass of ``ParrotArchitecture`` with:
 
-* ``name``: the name used with ``--architecture`` and stored in saved networks.
-* ``description``: a one-line description.
-* ``hyperparameters``: a tuple of ``HyperParameter`` declarations. Each one gets a command-line flag (``hidden_size`` becomes ``--hidden-size``, plus any ``cli_aliases``). A hyperparameter is an ``int``, a ``float``, a ``bool`` (an on/off switch, whose flag turns it off if it is on by default, e.g. ``--attention-pooling-off``, or on otherwise), or a ``str`` with a fixed set of ``choices`` (e.g. a pooling method); numbers can have a ``minimum`` (inclusive, or exclusive with ``exclusive_minimum=True``) and ``maximum`` and, if ``parrot-optimize`` should tune them, a ``search_range`` (searched on a log scale if ``log_scale=True``); settings with a fixed set of values (choices or on/off) can instead declare ``search_choices``, the values ``parrot-optimize`` tries. Architectures that use the same hyperparameter name share the flag, so they must agree on its type and aliases (and, for on/off options, its default); ``hyperparameters.py`` declares the shared ones (``DROPOUT``, ``POOLING``, ``GLOBAL_CONTEXT``, ``ATTENTION_POOLING``, ``LOGLENGTH_FEEDFORWARD``), so use those rather than writing your own.
+* ``name``: the name of the architecture's ``parrot-train`` and ``parrot-optimize`` subcommand, also stored in saved networks.
+* ``description``: a one-line description, shown in the list of architectures in ``parrot-train -h``.
+* ``hyperparameters``: a tuple of ``HyperParameter`` declarations. Each one gets a command-line flag (``hidden_size`` becomes ``--hidden-size``, plus any ``cli_aliases``). A hyperparameter is an ``int``, a ``float``, a ``bool`` (an on/off switch, whose flag turns it off if it is on by default, e.g. ``--attention-pooling-off``, or on otherwise), or a ``str`` with a fixed set of ``choices`` (e.g. a pooling method); numbers can have a ``minimum`` (inclusive, or exclusive with ``exclusive_minimum=True``) and ``maximum`` and, if ``parrot-optimize`` should tune them, a ``search_range`` (searched on a log scale if ``log_scale=True``); settings with a fixed set of values (choices or on/off) can instead declare ``search_choices``, the values ``parrot-optimize`` tries. Each architecture's subcommand has its own flags, so a hyperparameter's declaration only has to suit its own architecture. Where several architectures have the same setting, ``hyperparameters.py`` declares it once (``DROPOUT``, ``POOLING``, ``GLOBAL_CONTEXT``, ``ATTENTION_POOLING``, ``LOGLENGTH_FEEDFORWARD``), so use those where they fit, so that the same flag means the same thing everywhere.
 * When you add a hyperparameter to an existing architecture, networks saved before it existed do not record it. Give it a ``legacy_value`` (the value that reproduces those networks, e.g. ``False`` for a new feature) and they will be rebuilt with that value rather than the default, so they still load and predict as before.
 * ``__init__(self, input_size, task, <one keyword argument per hyperparameter>)``, which must pass every hyperparameter value to ``super().__init__``. The values are checked there (a missing, misspelt or invalid one is an error) and saved with the network, which is how it is rebuilt when loaded.
 * ``forward(self, x, lengths=None)``. ``x`` is a zero-padded batch of shape ``[batch, padded_length, input_size]`` and ``lengths`` holds the true length of each sequence (``None`` for an unpadded batch). Return ``[batch, num_classes]`` for sequence-mapped tasks or ``[batch, padded_length, num_classes]`` for residue-mapped tasks. Classification outputs are unnormalized logits.
@@ -39,7 +39,7 @@ Most architectures end the same way: a linear layer maps each residue's features
 
 The names of a network's submodules are stored in saved networks (its weights are saved under names such as ``blocks.0.conv.weight``), so once networks have been saved with an architecture, its submodules must never be renamed.
 
-Two optional class attributes cover models that do not fit the default pattern: ``supported_datatypes`` (default ``('sequence', 'residues')``) restricts an architecture to one kind of data, and ``trained_by_gradient_descent = False`` marks models that are fitted in one step rather than trained epoch by epoch. For the latter, subclass ``ClassicalModel`` in ``parrot/architectures/classical.py``: it already computes sequence features, fits, predicts and saves, so a new scikit-learn model only needs its hyperparameters and a ``make_estimator()`` method returning the estimator.
+Two optional class attributes cover models that do not fit the default pattern: ``supported_datatypes`` (default ``('sequence', 'residues')``) restricts an architecture to one kind of data, and ``trained_by_gradient_descent = False`` marks models that are fitted in one step rather than trained epoch by epoch. For the latter, subclass ``ClassicalModel`` in ``parrot/architectures/classical.py``: it already computes sequence features, fits, predicts and saves, so a new scikit-learn model only needs its hyperparameters and a ``make_estimator()`` method returning the estimator. These two attributes also decide which options the architecture's subcommand offers: ``-d`` lists only the datatypes it supports (and is not needed if there is only one), only architectures trained by gradient descent get the training options (``-e``, ``-b``, ``-lr`` and so on), and only architectures for matrix data get the matrix-data options.
 
 Example
 -------
@@ -96,8 +96,8 @@ That is all. The new architecture can now be used everywhere:
 
 .. code-block:: bash
 
-    $ parrot-train data/seq_regress_dataset.tsv my_network.pt -d sequence -c 1 --architecture my_architecture --hidden-size 64
-    $ parrot-optimize data/seq_regress_dataset.tsv my_network.pt -d sequence -c 1 --architecture my_architecture
+    $ parrot-train my_architecture data/seq_regress_dataset.tsv my_network.pt -d sequence -c 1 --hidden-size 64
+    $ parrot-optimize my_architecture data/seq_regress_dataset.tsv my_network.pt -d sequence -c 1
     $ parrot-predict data/seqfile.txt my_network.pt predictions.txt
 
 and from Python with ``parrot.build_network('my_architecture', input_size, task, {...})`` or ``parrot.py_predictor.Predictor('my_network.pt')``.
