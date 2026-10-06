@@ -44,7 +44,7 @@ import sys
 from collections.abc import Collection, Sequence
 from typing import Any
 
-from parrot import plm
+from parrot import nardini, plm
 from parrot import process_input_data as pid
 from parrot.architectures import (DEFAULT_ARCHITECTURE, HyperParameter, HyperParameterValue, ParrotArchitecture,
                                   available_architectures, get_architecture, resolve_hyperparameters)
@@ -274,12 +274,17 @@ def data_options() -> argparse.ArgumentParser:
     group = options.add_argument_group('encoding')
     group.add_argument('--encode', default='onehot', type=str, metavar='encoding_scheme',
                        help="'onehot' (default), 'biophysics', a protein language model (e.g. "
-                            "'esm2_t12_35M_UR50D'), or a path to a user-created scheme")
+                            "'esm2_t12_35M_UR50D'), a path to a user-created scheme, or (sequence data only) "
+                            "'nardini', the NARDINI+ features of the whole sequence, alone or after another "
+                            "encoding (e.g. 'onehot+nardini')")
     group.add_argument('--standardize-encoding', dest='standardize_encoding', action='store_true',
                        help='standardize every feature of the encoding to mean 0 and standard deviation 1 across '
                             'the amino acids (or other characters) it defines, so that features on different '
                             'scales contribute equally; saved with the network and applied automatically when '
                             'predicting')
+    group.add_argument('--nardini-scrambles', dest='nardini_scrambles', type=int, metavar='num_scrambles',
+                       help='NARDINI encodings only: scrambles of each sequence used for its patterning z-scores '
+                            f'(default {nardini.DEFAULT_NUM_SCRAMBLES:,}; the cost grows in proportion)')
     add_embedding_cache_argument(group, plm.TRAIN_CACHE_DIRECTORY)
     return options
 

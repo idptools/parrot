@@ -11,6 +11,7 @@ Welcome to PARROT's documentation!
    usage/architectures
    usage/matrix_data
    usage/plm_encodings
+   usage/nardini_encoding
    usage/parrot-optimize
    usage/parrot-predict
    usage/parrot-cvsplit

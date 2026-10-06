@@ -17,8 +17,9 @@ Licensed under the MIT license.
 
 import argparse
 import os
+from typing import Any
 
-from parrot import plm, prediction, reporting
+from parrot import nardini, plm, prediction, reporting
 from parrot import process_input_data as pid
 from parrot.checkpoint import load_network
 from parrot.encode_sequence import StandardizedEncoder, get_encoder
@@ -27,7 +28,7 @@ from parrot.architectures import ParrotArchitecture
 from parrot.scripts import arguments
 from parrot.scripts.common import (COMMAND_LINE_DATATYPES, LEGACY_NOTE, add_device_arguments,
                                    add_embedding_cache_argument, check_probabilistic_classification,
-                                   prepare_plm_embeddings, select_device)
+                                   prepare_encoding, select_device)
 
 # By default, progress is printed every this many sequences
 DEFAULT_PRINT_FREQUENCY = 1000
@@ -99,10 +100,10 @@ def main() -> None:
     seq_ids, sequences = read_sequence_file(seq_file, args.exclude_seq_id)
     encoder.check_sequences(sequences)
 
-    # Protein language model encodings: embed every sequence once, into a cache next to the output
-    prepare_plm_embeddings(encoder, sequences, args.embedding_cache,
-                           os.path.join(os.path.dirname(output_file), plm.PREDICT_CACHE_DIRECTORY), device,
-                           'parrot-predict', args.silent)
+    # Protein language model and NARDINI encodings: encode every sequence once, into a cache next to the output
+    prepare_encoding(encoder, sequences, args.embedding_cache,
+                     os.path.join(os.path.dirname(output_file), plm.PREDICT_CACHE_DIRECTORY), device,
+                     'parrot-predict', args.silent)
 
     if not args.silent:
         print('\n---> Starting predictions...\n')
@@ -168,11 +169,33 @@ def check_arguments_match_network(args: argparse.Namespace, network: ParrotArchi
         raise ValueError(f'--classes {args.classes} does not match the saved network, which has '
                          f'{task.num_classes} output(s)')
 
-    # A standardized network's encoding is checked against the encoding it standardizes
-    saved_base = encoder.base if isinstance(encoder, StandardizedEncoder) else encoder
-    if args.encode is not None and get_encoder(args.encode).to_config() != saved_base.to_config():
+    if args.encode is not None and comparable_config(get_encoder(args.encode)) != comparable_config(encoder):
         raise ValueError(f"--encode {args.encode} does not match the encoding stored with the saved network "
                          f"('{encoder.name}'). The --encode flag can be left out.")
+
+
+def comparable_config(encoder: SequenceEncoder) -> dict[str, Any]:
+    """What an encoding given with --encode must match: the saved encoding, without the settings --encode cannot give
+
+    A standardized encoding is compared by the encoding it standardizes, and a
+    NARDINI encoding by its per-residue encoding alone (its number of scrambles,
+    seed and SPARROW version are settings of the saved network).
+
+    Parameters
+    ----------
+    encoder : SequenceEncoder
+
+    Returns
+    -------
+    dict
+    """
+    if isinstance(encoder, StandardizedEncoder):
+        return comparable_config(encoder.base)
+    if isinstance(encoder, nardini.NardiniEncoder):
+        residue = encoder.residue_encoder
+        return {'name': nardini.NARDINI_ENCODING,
+                'residue_encoding': comparable_config(residue) if residue is not None else None}
+    return encoder.to_config()
 
 
 def read_sequence_file(seq_file: str, exclude_seq_id: bool) -> tuple[list[str] | None, list[str]]:

@@ -55,6 +55,12 @@ encode_sequence.py
 .. automodule:: parrot.encode_sequence
    :members:
 
+nardini.py
+----------
+
+.. automodule:: parrot.nardini
+   :members:
+
 process_input_data.py
 ---------------------
 

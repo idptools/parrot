@@ -192,13 +192,15 @@ def window_starts(length: int, window: int, overlap: int) -> list[int]:
 # The on-disk cache
 
 class EmbeddingCache:
-    """On-disk store of per-residue embeddings for one model
+    """On-disk store of the embeddings one model gives each sequence
 
     Embeddings live in <directory>/<model name>.h5, an HDF5 file with one
-    dataset per sequence ([length X embedding size], float16), named by the
-    SHA-256 hash of the sequence and grouped by the hash's first two characters.
-    Each dataset also stores the sequence itself, which is checked on reading.
-    A README.md in the directory describes what is there.
+    dataset per sequence, named by the SHA-256 hash of the sequence and grouped
+    by the hash's first two characters. A dataset is [length X embedding size]
+    for per-residue embeddings (PLMs), or [embedding size] for one vector per
+    sequence (NARDINI features; see parrot/nardini.py). Each dataset also
+    stores the sequence itself, which is checked on reading. A README.md in the
+    directory describes what is there.
 
     Only one process may write to a cache at a time; a <model>.h5.lock file
     marks a cache that is being written.
@@ -208,17 +210,24 @@ class EmbeddingCache:
     directory : Path
         The cache directory
     model_name : str
-        The PLM whose embeddings are stored
+        What produced the embeddings (a PLM, or NARDINI with its settings)
     embedding_size : int
-        Length of each residue's embedding
+        Length of each residue's embedding (or of each sequence's vector)
+    per_residue : bool
+        True if each residue has an embedding, False if each sequence has one vector
+    storage_dtype : numpy dtype
+        The precision embeddings are stored at
     path : Path
         The HDF5 file
     """
 
-    def __init__(self, directory: str | Path, model_name: str, embedding_size: int) -> None:
+    def __init__(self, directory: str | Path, model_name: str, embedding_size: int, per_residue: bool = True,
+                 storage_dtype: Any = STORAGE_DTYPE) -> None:
         self.directory = Path(directory).resolve()
         self.model_name = model_name
         self.embedding_size = embedding_size
+        self.per_residue = per_residue
+        self.storage_dtype = np.dtype(storage_dtype)
         self.path = self.directory / f'{model_name}.h5'
         self._reader: Any = None
 
@@ -237,7 +246,7 @@ class EmbeddingCache:
         return [sequence for sequence in unique if self.key(sequence) not in reader]
 
     def get(self, sequence: str) -> np.ndarray:
-        """The cached [len(sequence) X embedding size] float16 embedding of a sequence
+        """The cached embedding of a sequence, at the precision it is stored
 
         Raises
         ------
@@ -254,12 +263,14 @@ class EmbeddingCache:
         return np.asarray(dataset[()])
 
     def write(self, embeddings: dict[str, np.ndarray]) -> None:
-        """Add embeddings (sequence -> [length X embedding size] array) to the cache
+        """Add embeddings (sequence -> [length X embedding size] array, or [embedding size] vector) to the cache
 
         Raises
         ------
         RuntimeError
             If another process is writing to the cache
+        ValueError
+            If the file holds embeddings from something else, or an embedding has the wrong shape
         """
         import h5py
 
@@ -269,6 +280,7 @@ class EmbeddingCache:
             if 'model' not in store.attrs:
                 store.attrs['model'] = self.model_name
                 store.attrs['embedding_size'] = self.embedding_size
+                store.attrs['per_residue'] = self.per_residue
             if store.attrs['model'] != self.model_name or store.attrs['embedding_size'] != self.embedding_size:
                 raise ValueError(f'{self.path} holds embeddings from a different model')
 
@@ -277,16 +289,24 @@ class EmbeddingCache:
                 key = self.key(sequence)
                 if key in store:
                     continue
-                if embedding.shape != (len(sequence), self.embedding_size):
-                    raise ValueError(f'Embedding of shape {embedding.shape} does not match a sequence of length '
-                                     f'{len(sequence)} and embedding size {self.embedding_size}')
-                dataset = store.create_dataset(key, data=embedding.astype(STORAGE_DTYPE))
+                expected_shape = (len(sequence), self.embedding_size) if self.per_residue else (self.embedding_size,)
+                if embedding.shape != expected_shape:
+                    raise ValueError(f'Embedding of shape {embedding.shape} does not match the expected shape '
+                                     f'{expected_shape} (a sequence of length {len(sequence)})')
+                dataset = store.create_dataset(key, data=embedding.astype(self.storage_dtype))
                 dataset.attrs['sequence'] = sequence
                 added_sequences += 1
                 added_residues += len(sequence)
 
             store.attrs['num_sequences'] = int(store.attrs.get('num_sequences', 0)) + added_sequences
             store.attrs['num_residues'] = int(store.attrs.get('num_residues', 0)) + added_residues
+
+    def stored_layout(self) -> tuple[int, bool, str]:
+        """(values per embedding, whether embeddings are per residue, storage dtype), as recorded in the file."""
+        reader = self._open_reader()
+        first = next((group[name] for group in reader.values() for name in group), None)
+        storage_dtype = first.dtype.name if first is not None else self.storage_dtype.name
+        return int(reader.attrs.get('embedding_size', 0)), bool(reader.attrs.get('per_residue', True)), storage_dtype
 
     def summary(self) -> tuple[int, int, int]:
         """(number of sequences, number of residues, file size in bytes) of the cache."""
@@ -346,25 +366,25 @@ def write_cache_readme(directory: Path, program: str) -> None:
     rows = []
     total_bytes = 0
     for path in sorted(directory.glob('*.h5')):
-        model_name = path.stem
-        known = PLM_MODELS.get(model_name)
-        cache = EmbeddingCache(directory, model_name, known.embedding_size if known is not None else 0)
+        cache = EmbeddingCache(directory, path.stem, 0)
+        embedding_size, per_residue, _ = cache.stored_layout()
         num_sequences, num_residues, num_bytes = cache.summary()
         cache.close()
         total_bytes += num_bytes
-        rows.append(f'| `{path.name}` | {model_name} | {cache.embedding_size} | {num_sequences:,} | {num_residues:,} | '
+        values = f'{embedding_size} per {"residue" if per_residue else "sequence"}'
+        rows.append(f'| `{path.name}` | {path.stem} | {values} | {num_sequences:,} | {num_residues:,} | '
                     f'{human_size(num_bytes)} |')
 
     updated = datetime.datetime.now().isoformat(timespec='seconds')
-    text = f"""# PARROT protein-language-model embedding cache
+    text = f"""# PARROT embedding cache
 
-This directory holds per-residue embeddings computed by a protein language model (PLM) for PARROT. It was created by `{program}` and last updated on {updated}.
+This directory holds encodings that are slow to compute, for PARROT: per-residue embeddings from a protein language model (PLM), and NARDINI+ features of whole sequences. It was created by `{program}` and last updated on {updated}.
 
-Running the PLM is by far the slowest part of using a PLM encoding, so every sequence is embedded once and stored here. Training reads these embeddings every epoch instead of recomputing them, and any later command that uses the same model and cache directory (training another network, or predicting the same sequences again) skips sequences that are already here.
+Computing these is by far the slowest part of using such an encoding, so every sequence is encoded once and stored here. Training reads the stored values every epoch instead of recomputing them, and any later command that uses the same encoding and cache directory (training another network, or predicting the same sequences again) skips sequences that are already here.
 
 ## Contents
 
-| File | Model | Values per residue | Sequences | Residues | Size on disk |
+| File | Encoding | Values | Sequences | Residues | Size on disk |
 |---|---|---|---|---|---|
 {chr(10).join(rows)}
 
@@ -372,9 +392,10 @@ Total: {human_size(total_bytes)}.
 
 ## Format
 
-Each `<model>.h5` file is an HDF5 file with one dataset per sequence, of shape [sequence length X values per residue], stored as 16-bit floats. Datasets are named by the SHA-256 hash of the sequence (grouped by its first two characters), and each records the sequence itself as an attribute. Each value is the model's final-layer representation of that residue (after the model's last layer norm), computed with the whole sequence as context. Sequences longer than the model was trained on ({ESM2_MAX_WINDOW:,} residues for ESM-2, {ESMC_MAX_WINDOW:,} for ESM C) are embedded in overlapping windows of that length, and residues covered by more than one window get the average.
+Each file is an HDF5 file with one dataset per sequence. Datasets are named by the SHA-256 hash of the sequence (grouped by its first two characters), and each records the sequence itself as an attribute.
 
-The size is about (number of residues) x (values per residue) x 2 bytes.
+- **PLM embeddings** (`<model>.h5`): each dataset has shape [sequence length X values per residue], stored as 16-bit floats. Each value is the model's final-layer representation of that residue (after the model's last layer norm), computed with the whole sequence as context. Sequences longer than the model was trained on ({ESM2_MAX_WINDOW:,} residues for ESM-2, {ESMC_MAX_WINDOW:,} for ESM C) are embedded in overlapping windows of that length, and residues covered by more than one window get the average. The size is about (number of residues) x (values per residue) x 2 bytes.
+- **NARDINI+ features** (`nardini_*.h5`): each dataset is one vector of NARDINI+ z-scores for the whole sequence, stored as 32-bit floats, computed by SPARROW with the settings in the file name (the compositional background, the number of scrambles and the random seed). See PARROT's documentation on NARDINI encodings.
 
 ## Reusing or deleting this cache
 

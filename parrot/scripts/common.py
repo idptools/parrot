@@ -23,7 +23,7 @@ from typing import Any
 import torch
 from torch.utils.data import DataLoader
 
-from parrot import devices, figures, plm, prediction, reporting
+from parrot import devices, figures, nardini, plm, prediction, reporting
 from parrot import process_input_data as pid
 from parrot.architectures import ParrotArchitecture, get_architecture
 from parrot.checkpoint import save_network
@@ -116,14 +116,17 @@ def add_embedding_cache_argument(parser: 'argparse._ActionsContainer', default_n
     """
 
     parser.add_argument('--embedding-cache', dest='embedding_cache', metavar='directory',
-                        help='protein language model encodings only: directory in which to store the per-residue '
-                             f'embeddings (default: a "{default_name}" directory next to the output). Point several '
-                             'runs at the same directory to embed each sequence only once')
+                        help='protein language model and NARDINI encodings only: directory in which to store each '
+                             f'sequence\'s encoding (default: a "{default_name}" directory next to the output). Point '
+                             'several runs at the same directory to encode each sequence only once')
 
 
-def prepare_plm_embeddings(encoder: SequenceEncoder, sequences: list[str], cache_directory: str | None,
-                           default_directory: str, device: torch.device, program: str, silent: bool) -> None:
-    """Embed every sequence a command will encode, if the encoding is a protein language model
+def prepare_encoding(encoder: SequenceEncoder, sequences: list[str], cache_directory: str | None,
+                     default_directory: str, device: torch.device, program: str, silent: bool) -> None:
+    """Encode every sequence a command will need ahead of time, for encodings that are slow to compute
+
+    Protein language model embeddings and NARDINI features are computed once,
+    into the embedding cache; every other encoding is computed as it is needed.
 
     Parameters
     ----------
@@ -145,17 +148,23 @@ def prepare_plm_embeddings(encoder: SequenceEncoder, sequences: list[str], cache
     Raises
     ------
     ValueError
-        If --embedding-cache was given for an encoding that is not a protein language model
+        If --embedding-cache was given for an encoding that does not use the cache
     """
+    directory = cache_directory if cache_directory is not None else default_directory
+
+    if isinstance(encoder, nardini.NardiniEncoder):
+        encoder.use_cache(directory)
+        encoder.prepare(sequences, program, silent=silent)
+        return
 
     if not isinstance(encoder, plm.PLMEncoder):
         if cache_directory is not None:
-            raise ValueError('--embedding-cache only applies to protein language model encodings, not '
+            raise ValueError('--embedding-cache only applies to protein language model and NARDINI encodings, not '
                              f"'{encoder.name}'")
         return
 
     encoder.use_device(device)
-    encoder.use_cache(cache_directory if cache_directory is not None else default_directory)
+    encoder.use_cache(directory)
     encoder.prepare(sequences, program, silent=silent)
 
     # Every sequence is now cached, so the model's memory can be freed
@@ -353,9 +362,10 @@ def prepare_training_run(args: argparse.Namespace, n_folds: int | None = None) -
     if args.save_splits:
         save_splits_output = output_prefix + '_split_file.txt'
 
-    encoder = get_encoder(args.encode, standardize=args.standardize_encoding)
+    encoder = get_encoder(args.encode, standardize=args.standardize_encoding, nardini_scrambles=args.nardini_scrambles)
     check_matrix_arguments(args)
     task = Task(args.datatype, args.classes, width=args.matrix_width, symmetric=args.symmetric)
+    nardini.check_task(encoder, task)
 
     arguments.check_positive(args.epochs, 'Number of epochs')
     arguments.check_positive(args.batch, 'Batch size')
@@ -384,9 +394,9 @@ def prepare_training_run(args: argparse.Namespace, n_folds: int | None = None) -
     encoder.check_sequences(every_sequence)
     if task.is_square:
         check_matrix_lengths(every_sequence, args.max_matrix_length)
-    prepare_plm_embeddings(encoder, every_sequence, args.embedding_cache,
-                           os.path.join(os.path.dirname(network_file), plm.TRAIN_CACHE_DIRECTORY), device,
-                           os.path.basename(sys.argv[0]), args.silent)
+    prepare_encoding(encoder, every_sequence, args.embedding_cache,
+                     os.path.join(os.path.dirname(network_file), plm.TRAIN_CACHE_DIRECTORY), device,
+                     os.path.basename(sys.argv[0]), args.silent)
 
     return TrainingRun(task=task, encoder=encoder, device=device, network_file=network_file,
                        output_prefix=output_prefix, train_set=train_set, val_set=val_set, test_set=test_set,

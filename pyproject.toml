@@ -36,6 +36,9 @@ optimize = []
 # Do not also install Meta's fair-esm alongside esm: both use the import name `esm`.
 plm = ["transformers>=4.40", "h5py>=3.10"]
 esmc = ["esm>=3.1", "h5py>=3.10"]
+# NARDINI+ sequence features (--encode nardini) also need SPARROW, which is installed from GitHub:
+# pip install git+https://github.com/idptools/sparrow.git
+nardini = ["h5py>=3.10"]
 
 # The command-line tools
 [project.scripts]
@@ -76,7 +79,7 @@ files = ["parrot"]
 
 # These packages do not ship type information
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "h5py", "transformers", "esm.*", "versioningit"]
+module = ["sklearn.*", "h5py", "transformers", "esm.*", "versioningit", "sparrow", "sparrow.*"]
 ignore_missing_imports = true
 
 [tool.versioningit]

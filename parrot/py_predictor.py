@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 from scipy.special import softmax  # noqa: F401  (kept importable as py_predictor.softmax)
 
-from parrot import checkpoint, devices, plm, prediction
+from parrot import checkpoint, devices, nardini, plm, prediction
 
 
 class Predictor():
@@ -77,9 +77,10 @@ class Predictor():
             language model (PLM) embeddings, the PLM also runs here, so a GPU
             ('auto') is much faster.
         embedding_cache : str or Path, optional
-            PLM networks only: a directory in which to store embeddings, so
-            sequences predicted again are not re-embedded. By default nothing
-            is stored and each sequence is embedded when predicted.
+            PLM and NARDINI networks only: a directory in which to store each
+            sequence's encoding, so sequences predicted again are not encoded
+            again. By default nothing is stored and each sequence is encoded
+            when predicted.
         """
 
         if dtype is not None and dtype not in ['sequence', 'residues']:
@@ -94,8 +95,12 @@ class Predictor():
             self.encoder.use_device(self.device)
             if embedding_cache is not None:
                 self.encoder.use_cache(embedding_cache)
+        elif isinstance(self.encoder, nardini.NardiniEncoder):
+            if embedding_cache is not None:
+                self.encoder.use_cache(embedding_cache)
         elif embedding_cache is not None:
-            raise ValueError('embedding_cache only applies to networks trained on protein language model embeddings')
+            raise ValueError('embedding_cache only applies to networks trained on protein language model embeddings '
+                             'or NARDINI features')
 
         if dtype is not None and dtype != network_task.datatype:
             raise ValueError(f"dtype '{dtype}' does not match the saved network, which is a "

@@ -34,7 +34,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from parrot import plm
+from parrot import nardini, plm
 from parrot.sequence_encoder import STANDARD_AMINO_ACIDS
 
 # SequenceEncoder and check_characters live in sequence_encoder.py; they are also importable from here, where
@@ -527,19 +527,25 @@ BUILT_IN_ENCODERS: dict[str, type[SequenceEncoder]] = {OneHotEncoder.name: OneHo
                                                        BiophysicsEncoder.name: BiophysicsEncoder}
 
 
-def get_encoder(encoding: str, standardize: bool = False) -> SequenceEncoder:
+def get_encoder(encoding: str, standardize: bool = False, nardini_scrambles: int | None = None) -> SequenceEncoder:
     """Build the encoder described by a command-line style encoding string
 
     Parameters
     ----------
     encoding : str
         'onehot', 'biophysics', the name of a protein language model (e.g.
-        'esm2_t12_35M_UR50D'; see parrot.plm), or the path to a user
-        encoding file
+        'esm2_t12_35M_UR50D'; see parrot.plm), the path to a user encoding
+        file, 'nardini' (NARDINI+ features of the whole sequence; see
+        parrot.nardini), or one of the others but a protein language model
+        followed by '+nardini' (e.g. 'onehot+nardini')
     standardize : bool, optional
         If True, standardize every feature of the encoding across its
-        alphabet (see StandardizedEncoder). Not available for protein
-        language models.
+        alphabet (see StandardizedEncoder); for '<encoding>+nardini', of the
+        per-residue encoding. Not available for protein language models or
+        'nardini' alone.
+    nardini_scrambles : int, optional
+        NARDINI encodings only: scrambles per sequence for the patterning
+        z-scores (default nardini.DEFAULT_NUM_SCRAMBLES)
 
     Returns
     -------
@@ -549,7 +555,15 @@ def get_encoder(encoding: str, standardize: bool = False) -> SequenceEncoder:
     ------
     FileNotFoundError
         If `encoding` is not a built-in name and no such file exists
+    ValueError
+        If the options do not apply to the encoding
     """
+
+    if nardini.is_nardini_encoding(encoding):
+        return get_nardini_encoder(encoding, standardize, nardini_scrambles)
+    if nardini_scrambles is not None:
+        raise ValueError(f"--nardini-scrambles only applies to NARDINI encodings (e.g. 'nardini' or "
+                         f"'onehot+nardini'), not '{encoding}'")
 
     if plm.is_plm_encoding(encoding):
         if standardize:
@@ -565,10 +579,48 @@ def get_encoder(encoding: str, standardize: bool = False) -> SequenceEncoder:
         encoder = UserEncoder(encoding)
     else:
         raise FileNotFoundError(f"Encoding file does not exist: '{encoding}' (built-in encodings are "
-                                f"{', '.join(BUILT_IN_ENCODERS)}; protein language models are "
-                                f"{', '.join(plm.PLM_MODELS)})")
+                                f"{', '.join(BUILT_IN_ENCODERS)} and '{nardini.NARDINI_ENCODING}', which can follow "
+                                f"another with '+', e.g. 'onehot+{nardini.NARDINI_ENCODING}'; protein language models "
+                                f"are {', '.join(plm.PLM_MODELS)})")
 
     return StandardizedEncoder(encoder) if standardize else encoder
+
+
+def get_nardini_encoder(encoding: str, standardize: bool, num_scrambles: int | None) -> nardini.NardiniEncoder:
+    """Build the encoder for 'nardini' or '<per-residue encoding>+nardini'
+
+    Parameters
+    ----------
+    encoding : str
+        'nardini', or a per-residue encoding name followed by '+nardini'
+    standardize : bool
+        Standardize the per-residue encoding (see get_encoder())
+    num_scrambles : int or None
+        Scrambles per sequence (None for the default)
+
+    Returns
+    -------
+    NardiniEncoder
+
+    Raises
+    ------
+    ValueError
+        If 'nardini' alone is standardized, or combined with a protein language model
+    """
+    residue_name = nardini.residue_encoding_name(encoding)
+    residue_encoder = None
+    if residue_name is None:
+        if standardize:
+            raise ValueError("--standardize-encoding does not apply to 'nardini' alone: the NARDINI+ features are "
+                             'already z-scores, and there is no per-amino-acid table to standardize')
+    elif plm.is_plm_encoding(residue_name):
+        raise ValueError(f"NARDINI features cannot be combined with a protein language model ('{encoding}'); combine "
+                         "them with 'onehot', 'biophysics' or an encoding file")
+    else:
+        residue_encoder = get_encoder(residue_name, standardize=standardize)
+
+    scrambles = num_scrambles if num_scrambles is not None else nardini.DEFAULT_NUM_SCRAMBLES
+    return nardini.NardiniEncoder(residue_encoder, num_scrambles=scrambles)
 
 
 def encoder_from_config(config: dict[str, Any]) -> SequenceEncoder:
@@ -591,6 +643,11 @@ def encoder_from_config(config: dict[str, Any]) -> SequenceEncoder:
 
     if config['name'] == plm.PLM_CONFIG_NAME:
         return plm.encoder_from_plm_config(config)
+
+    if config['name'] == nardini.NARDINI_ENCODING:
+        residue_config = config['residue_encoding']
+        residue_encoder = encoder_from_config(residue_config) if residue_config is not None else None
+        return nardini.encoder_from_nardini_config(config, residue_encoder)
 
     if config['name'] == STANDARDIZED_NAME:
         return StandardizedEncoder(encoder_from_config(config['base']), mean=config['mean'], scale=config['scale'])

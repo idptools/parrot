@@ -180,7 +180,7 @@ def test_prepare_reports_size_and_embeds_each_sequence_once(fake_plm, tmp_path, 
     assert 'Every sequence is already embedded' in capsys.readouterr().out
 
     readme = (tmp_path / 'cache' / 'README.md').read_text()
-    assert f'| `{MODEL}.h5` | {MODEL} | {EMBEDDING_SIZE} | 2 | 15 |' in readme
+    assert f'| `{MODEL}.h5` | {MODEL} | {EMBEDDING_SIZE} per residue | 2 | 15 |' in readme
     assert 'created by `parrot-train`' in readme
 
 
