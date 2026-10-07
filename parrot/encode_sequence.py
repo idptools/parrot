@@ -364,7 +364,7 @@ class UserEncoder(SequenceEncoder):
         if encode_file is not None:
             self.encode_file = os.path.abspath(encode_file)
             if not os.path.isfile(self.encode_file):
-                raise FileNotFoundError('Encoding file does not exist.')
+                raise FileNotFoundError(f'Encoding file does not exist: {encode_file}')
             self.encode_dict, self.input_size = parse_encode_file(self.encode_file)
         else:
             assert table is not None

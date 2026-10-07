@@ -27,6 +27,7 @@ import pytest
 from parrot import devices
 from parrot.architectures import registry
 from parrot.reproducibility import set_random_seed
+from parrot.scripts import arguments as arguments_module
 
 from tests.helpers import TEST_SEED, LinearTestArchitecture
 
@@ -56,10 +57,13 @@ def seeded_and_clean() -> Iterator[None]:
 def run_cli(monkeypatch: pytest.MonkeyPatch) -> Callable[[Callable[[], Any], list[Any]], Any]:
     """Return a function that runs a PARROT command-line main() with the given arguments.
 
-    The first argument is the program name, exactly as it would appear in sys.argv.
+    The first argument is the program name, exactly as it would appear in sys.argv. Errors in the input propagate
+    as exceptions (as with PARROT_TRACEBACK=1), so tests can check them; tests/test_arguments.py checks the messages
+    users see instead.
     """
     def _run(main_function: Callable[[], Any], arguments: list[Any]) -> Any:
         monkeypatch.setattr(sys, 'argv', [str(argument) for argument in arguments])
+        monkeypatch.setenv(arguments_module.TRACEBACK_VARIABLE, '1')
         return main_function()
     return _run
 

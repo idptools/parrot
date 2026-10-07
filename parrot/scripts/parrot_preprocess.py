@@ -41,6 +41,8 @@ from parrot.tasks import Task
 from parrot.tools import class_balancing, kmer_similarity, mmseqs_search, preproc, splitting
 from parrot.tools.preproc import Line, ProcessingReport
 
+PROGRAM_NAME = 'parrot-preprocess'
+
 # The two kinds of data, as given with --mode
 MODES = ('classification', 'regression')
 
@@ -66,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     argparse.ArgumentParser
     """
     parser = argparse.ArgumentParser(
-        description='parrot-preprocess cleans, deduplicates, splits (without leakage between sets) and class-balances '
+        prog=PROGRAM_NAME, description='parrot-preprocess cleans, deduplicates, splits (without leakage between sets) and class-balances '
                     'a PARROT datafile, writing a processed datafile, a matching split-file and a report.')
     add_input_arguments(parser)
     add_cleaning_arguments(parser)
@@ -79,20 +81,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 def add_input_arguments(parser: argparse.ArgumentParser) -> None:
     """The files, the kind of data, and general options."""
-    parser.add_argument('input_data_file', help='path to tsv file with format: <idx> <sequence> <data>. This is the '
-                                                'file that will be manipulated in some way')
-    parser.add_argument('output_data_file', help='path to be written to for an output data file. Will overwrite an '
-                                                 'existing file')
+    parser.add_argument('input_data_file', help="the datafile to process: '<ID> <sequence> <value(s)>' on each line "
+                                                "(for matrix data, '<ID> <sequence>')")
+    parser.add_argument('output_data_file', help='where to write the processed datafile (an existing file is '
+                                                 'overwritten)')
     parser.add_argument('-d', '--datatype', required=True, choices=COMMAND_LINE_DATATYPES,
-                        help="REQUIRED. Format of the input data file, must be 'sequence' or 'residues'")
+                        help="REQUIRED. Format of the datafile: 'sequence' (one value per sequence), 'residues' (one "
+                             "value per residue) or 'matrix' (a matrix per sequence, in a separate .npz file)")
     parser.add_argument('-m', '--mode', required=True, choices=MODES,
-                        help="REQUIRED. Must be either 'classification' or 'regression'")
-    parser.add_argument('--delimiter', type=str,
-                        help='If a non-whitespace delimiter was used in an input file, this allows the user to define '
-                             'an alternative character.')
-    parser.add_argument('-v', '--verbose', action='store_true', help='Print the report of what was done as it happens')
-    parser.add_argument('--seed', type=int, default=None,
-                        help='Random seed for a reproducible split and class balancing (default: not seeded)')
+                        help="REQUIRED. 'classification' (the values are class labels) or 'regression'")
+    parser.add_argument('--delimiter', type=str, metavar='character',
+                        help='the character separating the columns of the datafile (default: any whitespace)')
+    parser.add_argument('-v', '--verbose', action='store_true', help='print the report of what was done as it happens')
+    parser.add_argument('--seed', type=int, default=None, metavar='seed',
+                        help='random seed, for a reproducible split and class balancing (default: not seeded)')
 
 
 def add_cleaning_arguments(parser: argparse.ArgumentParser) -> None:
@@ -101,14 +103,15 @@ def add_cleaning_arguments(parser: argparse.ArgumentParser) -> None:
     cleaning.add_argument('--uppercase', action='store_true', help='convert every sequence to upper case')
     cleaning.add_argument('--remove-nonstandard', dest='remove_nonstandard', action='store_true',
                           help='remove sequences containing anything other than the 20 standard amino acids')
-    cleaning.add_argument('--min-length', dest='min_length', type=int, help='remove sequences shorter than this')
-    cleaning.add_argument('--max-length', dest='max_length', type=int, help='remove sequences longer than this')
+    cleaning.add_argument('--min-length', dest='min_length', type=int, metavar='residues',
+                          help='remove sequences shorter than this')
+    cleaning.add_argument('--max-length', dest='max_length', type=int, metavar='residues',
+                          help='remove sequences longer than this')
 
     parser.add_argument('--recode-classes', action='store_true',
-                        help='Flag which, if set to true, will read in class data regardless of if it would have been '
-                             'valid in PARROT and recode it in a parrot-compliant format (0,1,2,...[n]) where there '
-                             'are n-1 classes. Missing labels (nan) are kept as they are. The mapping is written to '
-                             '<output>_class_mapping.txt next to the output file.')
+                        help='classification: recode the class labels, whatever they are (e.g. text), as 0, 1, ..., '
+                             'n-1 for n classes, keeping missing labels (nan); the mapping is written to '
+                             '<output>_class_mapping.txt')
 
 
 def add_duplicate_arguments(parser: argparse.ArgumentParser) -> None:
@@ -120,9 +123,9 @@ def add_duplicate_arguments(parser: argparse.ArgumentParser) -> None:
                                  "(classification; residues whose copies disagree become nan); 'first' keeps the "
                                  "first copy; 'drop' removes every copy")
     duplicates.add_argument('--remove-line-duplicates', action='store_true',
-                            help='Remove lines that are exact copies of an earlier line (same ID, sequence and values)')
+                            help='remove lines that are exact copies of an earlier line (same ID, sequence and values)')
     duplicates.add_argument('--remove-sequence-duplicates', action='store_true',
-                            help='Remove every copy of any sequence that appears more than once (same as '
+                            help='remove every copy of any sequence that appears more than once (same as '
                                  '--deduplicate drop)')
 
 
@@ -145,21 +148,21 @@ def add_splitting_arguments(parser: argparse.ArgumentParser) -> None:
     group.add_argument('--groups', metavar='file',
                        help='file of "<sequence ID> <group>" lines: records in the same group (e.g. overlapping tiles '
                             'of one protein) are always put in the same set')
-    group.add_argument('--homology-evalue', dest='homology_evalue', type=float,
+    group.add_argument('--homology-evalue', dest='homology_evalue', type=float, metavar='evalue',
                        help='homology and kmer: a similarity with at most this E-value links two sequences '
                             f'(default {defaults.max_evalue:g})')
-    group.add_argument('--homology-coverage', dest='homology_coverage', type=float,
+    group.add_argument('--homology-coverage', dest='homology_coverage', type=float, metavar='fraction',
                        help='homology and kmer: ...if it covers at least this fraction of the shorter sequence '
                             f'(default {defaults.min_coverage:g})')
     group.add_argument('--no-masking', dest='no_masking', action='store_true',
                        help='homology and kmer: do not mask low-complexity regions, so similarity in them also links '
                             'sequences (even more stringent)')
     group.add_argument('--mmseqs', metavar='path', help='homology: MMseqs2 executable (default: mmseqs on the PATH)')
-    group.add_argument('--threads', type=int, help='homology: threads for MMseqs2 (default: every CPU)')
-    group.add_argument('--mmseqs-sensitivity', dest='mmseqs_sensitivity', type=float,
+    group.add_argument('--threads', type=int, metavar='threads', help='homology: threads for MMseqs2 (default: every CPU)')
+    group.add_argument('--mmseqs-sensitivity', dest='mmseqs_sensitivity', type=float, metavar='sensitivity',
                        help=f'homology: MMseqs2 search sensitivity, {MIN_MMSEQS_SENSITIVITY:g} to '
                             f'{MAX_MMSEQS_SENSITIVITY:g} (default {defaults.sensitivity:g}, the most sensitive)')
-    group.add_argument('--kmer-size', dest='kmer_size', type=int,
+    group.add_argument('--kmer-size', dest='kmer_size', type=int, metavar='residues',
                        help=f'kmer: length of the shared words, {kmer_similarity.MIN_KMER_SIZE} to '
                             f'{kmer_similarity.MAX_KMER_SIZE} (default {kmer_similarity.KmerCriteria.kmer_size}; '
                             'smaller finds more distant relatives but is slower and more easily misled by chance '
@@ -170,20 +173,20 @@ def add_balancing_arguments(parser: argparse.ArgumentParser) -> None:
     """Class balancing (classification only)."""
     group = parser.add_argument_group('class balancing (classification only)')
     group.add_argument('--class-balance', action='store_true',
-                       help='Down-sample the more common classes so classes are balanced (only the training set, if '
-                            'the data are split). For residues, the balance score after each removal is written to '
-                            '<output>_class_balance_trace.csv next to the output file')
-    group.add_argument('--cb-block-size', type=int, default=None,
-                       help='If --class-balance used with residues, the number of randomly drawn sequences considered '
-                            f'for each removal (default {class_balancing.DEFAULT_BLOCK_SIZE}; larger makes better '
-                            'choices, more slowly)')
+                       help='down-sample the more common classes so classes are balanced (only the training set, if '
+                            'the data are split); for residue data, the balance after each removal is written to '
+                            '<output>_class_balance_trace.csv')
+    group.add_argument('--cb-block-size', type=int, default=None, metavar='sequences',
+                       help='residue data: the number of randomly drawn sequences considered for each removal '
+                            f'(default {class_balancing.DEFAULT_BLOCK_SIZE}; larger makes better choices, more slowly)')
     group.add_argument('--cb-max-fraction-removed', type=float, default=class_balancing.DEFAULT_MAX_FRACTION_REMOVED,
-                       help='If --class-balance used, defines what fraction of the data could be removed in pursuit of '
-                            f'a balanced dataset. Default = {class_balancing.DEFAULT_MAX_FRACTION_REMOVED}')
+                       metavar='fraction',
+                       help='the largest fraction of the sequences balancing may remove '
+                            f'(default {class_balancing.DEFAULT_MAX_FRACTION_REMOVED})')
     group.add_argument('--cb-balance-threshold', type=float, default=class_balancing.DEFAULT_BALANCE_THRESHOLD,
-                       help="If --class-balance used, defines the balance ratio (most numerous class / least numerous "
-                            "class) threshold used to say if a dataset is 'balanced'. Default = "
-                            f'{class_balancing.DEFAULT_BALANCE_THRESHOLD}')
+                       metavar='ratio',
+                       help='the data count as balanced once the most common class has at most this many times as '
+                            f'many members as the least common (default {class_balancing.DEFAULT_BALANCE_THRESHOLD})')
     group.add_argument('--cb-shuffle-off', action='store_true',
                        help=f'no longer has any effect: balancing always keeps the input order {LEGACY_NOTE}')
 
@@ -213,15 +216,17 @@ def check_arguments(args: argparse.Namespace) -> None:
         If the options are invalid or inconsistent
     RuntimeError
         If --split homology was asked for but MMseqs2 cannot be found
+    FileNotFoundError
+        If the input datafile does not exist
     """
+    arguments.check_file_exists(args.input_data_file, 'Datafile')
     if args.recode_classes and args.mode != 'classification':
-        raise ValueError('If we are trying to recode classes the data mode must be classification')
+        raise ValueError('--recode-classes only applies to classification data (-m classification)')
     if args.class_balance and args.mode != 'classification':
         raise ValueError('Class balancing (--class-balance) only applies to classification data '
                          '(--mode classification)')
     if args.remove_line_duplicates and args.remove_sequence_duplicates:
-        raise ValueError('Cannot request to remove both line duplicates (--remove-line-duplicates) and sequence '
-                         'duplicates (--remove-sequence-duplicates). Must be one or the other')
+        raise ValueError('Give either --remove-line-duplicates or --remove-sequence-duplicates, not both')
     if args.remove_sequence_duplicates and args.deduplicate is not None:
         raise ValueError('--remove-sequence-duplicates is the same as --deduplicate drop; give one or the other')
 
@@ -335,8 +340,16 @@ def check_split_settings(args: argparse.Namespace) -> None:
 # The steps
 
 def main() -> None:
+    """parrot-preprocess's entry point: run it, reporting mistakes in its input as a message (see arguments.run_command)."""
+    arguments.run_command(PROGRAM_NAME, run)
+
+
+def run() -> None:
     """Process a datafile, step by step, and write the result, a split-file (if split) and a report."""
     args = build_parser().parse_args()
+
+    # With --verbose the report, which is printed as it is written, starts with the same line
+    arguments.print_startup(PROGRAM_NAME, silent=args.verbose)
     check_arguments(args)
     set_random_seed(args.seed)
     rng = random_generator()
@@ -345,7 +358,7 @@ def main() -> None:
     output_prefix, _ = arguments.output_prefix_and_directory(output)
     classification = args.mode == 'classification'
     report = ProcessingReport(verbose=args.verbose)
-    report.add(f'parrot-preprocess (PARROT {PARROT_VERSION}), {datetime.now().isoformat(timespec="seconds")}')
+    report.add(f'{PROGRAM_NAME} (PARROT {PARROT_VERSION}), {datetime.now().isoformat(timespec="seconds")}')
     report.add(f'Input: {os.path.abspath(args.input_data_file)} ({args.datatype}-mapped {args.mode})')
 
     lines = read_lines(args, report)

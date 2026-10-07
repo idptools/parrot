@@ -1,6 +1,6 @@
 """
-Checking the arguments of PARROT's command-line tools, and printing what a
-command is about to do.
+Checking the arguments of PARROT's command-line tools, printing what a
+command is about to do, and reporting mistakes in a command's input.
 
 argparse checks the type of each argument and, where an option has a fixed set
 of values, that the value is one of them (`choices=`). The checks here cover
@@ -19,23 +19,64 @@ Licensed under the MIT license.
 
 import math
 import os
-from collections.abc import Sequence
+import sys
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from parrot.package_version import PARROT_VERSION
 
-# Setting names are padded to this width when settings are printed, so the values line up
-SETTING_NAME_WIDTH = 14
-
 # Separator line printed under headings
 RULE = '...................................'
+
+# Errors that mean something about a command's input is wrong: a file that does not exist, an invalid option or
+# datafile, a package an option needs, a device that is not available. They are reported as a message, not a
+# traceback. Any other error is a bug in PARROT, and keeps its traceback.
+INPUT_ERRORS = (ValueError, OSError, ImportError, RuntimeError)
+
+# Set this environment variable (to anything) to see the full traceback of input errors as well
+TRACEBACK_VARIABLE = 'PARROT_TRACEBACK'
+
+# Exit codes: an error in the input, and a command stopped with Ctrl-C (the shell convention, 128 + SIGINT)
+INPUT_ERROR_EXIT_CODE = 1
+INTERRUPTED_EXIT_CODE = 130
 
 
 # .................................................................
 # Printing
 
+def run_command(program_name: str, command: Callable[[], None]) -> None:
+    """Run a command, reporting mistakes in its input as a one-line message rather than a traceback
+
+    Parameters
+    ----------
+    program_name : str
+        Name of the command, e.g. 'parrot-train'
+    command : function
+        The command itself (it reads its own arguments)
+
+    Raises
+    ------
+    SystemExit
+        With INPUT_ERROR_EXIT_CODE after an input error (see INPUT_ERRORS), or
+        INTERRUPTED_EXIT_CODE if the command was stopped with Ctrl-C
+    """
+    try:
+        command()
+    except INPUT_ERRORS as error:
+        if os.environ.get(TRACEBACK_VARIABLE):
+            raise
+        print(f'{program_name}: error: {error}\n(For the full traceback, run again with {TRACEBACK_VARIABLE}=1.)',
+              file=sys.stderr)
+        sys.exit(INPUT_ERROR_EXIT_CODE)
+    except KeyboardInterrupt:
+        if os.environ.get(TRACEBACK_VARIABLE):
+            raise
+        print(f'\n{program_name}: stopped', file=sys.stderr)
+        sys.exit(INTERRUPTED_EXIT_CODE)
+
+
 def print_startup(program_name: str, silent: bool) -> None:
-    """Print the name and version of the command being run (unless `silent`)
+    """Print the name of the command being run and PARROT's version (unless `silent`)
 
     Parameters
     ----------
@@ -44,11 +85,8 @@ def print_startup(program_name: str, silent: bool) -> None:
     silent : bool
         If True, print nothing
     """
-    if silent:
-        return
-    print(f'\n{program_name} (version {PARROT_VERSION})')
-    print(RULE)
-    print('Developed by Dan Griffith\n   Holehouse lab, WUSTL\n\n')
+    if not silent:
+        print(f'{program_name} (PARROT {PARROT_VERSION})')
 
 
 def print_settings(silent: bool, **settings: Any) -> None:
@@ -65,8 +103,9 @@ def print_settings(silent: bool, **settings: Any) -> None:
         return
     print('Settings:')
     print(RULE)
+    name_width = max(len(name) for name in settings)
     for name, value in settings.items():
-        print(f'{name:<{SETTING_NAME_WIDTH}}: {value}')
+        print(f'{name:<{name_width}} : {value}')
 
 
 # .................................................................
@@ -94,7 +133,7 @@ def check_file_exists(path: str, description: str) -> str:
     """
     absolute_path = os.path.abspath(path)
     if not os.path.isfile(absolute_path):
-        raise FileNotFoundError(f'{description} does not exist.')
+        raise FileNotFoundError(f'{description} does not exist: {path}')
     return absolute_path
 
 
@@ -124,7 +163,7 @@ def output_prefix_and_directory(path: str) -> tuple[str, str]:
     directory, filename = os.path.split(path)
     directory = os.path.join(directory, '')
     if not os.path.exists(directory):
-        raise FileNotFoundError(f'{directory} does not exist.')
+        raise FileNotFoundError(f'The output directory does not exist: {directory}')
     prefix = os.path.join(directory, os.path.splitext(filename)[0])
     return prefix, directory
 

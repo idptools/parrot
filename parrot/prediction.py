@@ -172,17 +172,17 @@ def predict_sequences(network: ParrotArchitecture, sequences: list[str], encoder
     for start in range(0, len(by_length), batch_size):
         batch_sequences = by_length[start:start + batch_size]
 
-        if print_frequency is not None:
-            for index in range(start, start + len(batch_sequences)):
-                if index % print_frequency == 0:
-                    print(f'On {index} of {len(unique_sequences)}')
-
         vectors, lengths = pid.pad_sequence_vectors([encoder.encode(seq) for seq in batch_sequences])
         with torch.no_grad():
             outputs = network(vectors.to(device), lengths)
 
         for sequence, output in zip(batch_sequences, unpad_outputs(outputs, lengths, network.task)):
             predictions[sequence] = output
+
+        # Report progress each time another print_frequency sequences have been predicted
+        done = start + len(batch_sequences)
+        if print_frequency is not None and done // print_frequency > start // print_frequency:
+            print(f'  predicted {done:,} of {len(unique_sequences):,} sequences')
 
     # Return the sequences in the order they were first given
     return {sequence: predictions[sequence] for sequence in unique_sequences}

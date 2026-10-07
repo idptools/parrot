@@ -10,9 +10,9 @@ First, let's generate the 10 different split-files using ``parrot-cvsplit``. Eac
 
 .. code-block:: bash
     
-    parrot-cvsplit data/seq_regress_dataset.tsv output/cv_example_splits -k 10 -t 0.8
+    parrot-cvsplit data/seq_regress_dataset.tsv cv_test/cv_example_splits -k 10 -t 0.8
 
-This should generate 10 files in /output named cv_example_splits_cv[0-9].txt
+This should generate 10 files in the cv_test directory, named cv_example_splits_cv[0-9].txt
 
 **10-fold CV training**
 
@@ -22,33 +22,41 @@ If you like, you can also use the ``--include-figs`` flag to assess how each of 
 
 .. code-block:: bash
 
-    parrot-train brnn datasets/seq_regress_dataset.tsv cv_test/network0.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv0.txt 
+    parrot-train brnn data/seq_regress_dataset.tsv cv_test/network0.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv0.txt 
 
-    PARROT with user-specified parameters
-    -------------------------------------
+    parrot-train (PARROT <version>)
+    Running on: CPU
+
+    Training brnn: bidirectional LSTM (the original PARROT network)
+    ---------------------------------------------------------------
+    Data: 216 training, 54 validation and 30 test sequences (regression, one value per sequence)
+
     Validation set loss per epoch:
-    Epoch 0 Loss 3.4118
-    Epoch 5 Loss 0.7524
-    Epoch 10    Loss 0.7530
-    .
-    .
-    .
-    Epoch 235   Loss 0.1220
-    Epoch 240   Loss 0.1229
-    Epoch 245   Loss 0.1248
+    Epoch 1 Loss 3.2910
+    Epoch 5 Loss 0.9424
+    Epoch 10    Loss 0.9374
+    Epoch 15    Loss 0.9328
+    Epoch 20    Loss 0.9271
+    ...
+    Epoch 240   Loss 0.0637
+    Epoch 245   Loss 0.0565
+    Epoch 250   Loss 0.0608
+    Lowest validation loss 0.0564, at epoch 248 of 250: the network from that epoch is kept
 
-    Test Loss: 0.0335   
+    Test set: loss 0.0431, Pearson R 0.997, Spearman R 0.997
+    Network saved to /home/user/parrot_examples/cv_test/network0.pt
+    Also written there: network0_predictions.tsv, network0_performance_stats.txt   
 
 Now repeat this command 9 more times, for each of the cross-validation folds. I used the ``--silent`` flag to prevent additional output to terminal, but this is totally optional.
 
 .. code-block:: bash
 
-    parrot-train brnn datasets/seq_regress_dataset.tsv cv_test/network1.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv1.txt --silent
-    parrot-train brnn datasets/seq_regress_dataset.tsv cv_test/network2.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv2.txt --silent
+    parrot-train brnn data/seq_regress_dataset.tsv cv_test/network1.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv1.txt --silent
+    parrot-train brnn data/seq_regress_dataset.tsv cv_test/network2.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv2.txt --silent
     .
     .
     .
-    parrot-train brnn datasets/seq_regress_dataset.tsv cv_test/network9.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv9.txt --silent
+    parrot-train brnn data/seq_regress_dataset.tsv cv_test/network9.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv9.txt --silent
 
 All of this could also be accomplished using a wrapper shell script. In fact, for larger datasets this is recommended so that you don't have sit around and wait for the network to train each fold.
     
@@ -72,6 +80,6 @@ Finally, now that we have a good estimate of how reliable our networks' predicti
 
 .. code-block:: bash
 
-    parrot-train brnn datasets/seq_regress_dataset.tsv cv_test/final_cvnetwork.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 350 --set-fractions 0.79 0.2 0.01
+    parrot-train brnn data/seq_regress_dataset.tsv cv_test/final_cvnetwork.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 350 --set-fractions 0.79 0.2 0.01
 
 Now if we want, we can use final_cvnetwork.pt to predict unlabeled sequences with ``parrot-predict``.

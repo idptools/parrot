@@ -44,7 +44,7 @@ import sys
 from collections.abc import Collection, Sequence
 from typing import Any
 
-from parrot import nardini, plm
+from parrot import nardini, plm, train_network
 from parrot import process_input_data as pid
 from parrot.architectures import (DEFAULT_ARCHITECTURE, HyperParameter, HyperParameterValue, ParrotArchitecture,
                                   available_architectures, get_architecture, resolve_hyperparameters)
@@ -71,13 +71,15 @@ HELP_FLAGS = ('-h', '--help')
 # .................................................................
 # The parser
 
-def build_parser(description: str, training_loop_options: Sequence[argparse.ArgumentParser] = (),
+def build_parser(program_name: str, description: str, training_loop_options: Sequence[argparse.ArgumentParser] = (),
                  command_options: Sequence[argparse.ArgumentParser] = (),
                  describe_search: bool = False) -> argparse.ArgumentParser:
     """The command line of a training command, with one subcommand per registered architecture
 
     Parameters
     ----------
+    program_name : str
+        The command's name, e.g. 'parrot-train'
     description : str
         What the command does, shown in its help and in each subcommand's
     training_loop_options : list of argparse.ArgumentParser, optional
@@ -95,7 +97,7 @@ def build_parser(description: str, training_loop_options: Sequence[argparse.Argu
     -------
     argparse.ArgumentParser
     """
-    parser = argparse.ArgumentParser(description=description)
+    parser = argparse.ArgumentParser(prog=program_name, description=description)
     commands = parser.add_subparsers(dest='architecture', required=True, metavar='architecture',
                                      title='architectures',
                                      description=f"Run '{parser.prog} <architecture> -h' to see an architecture's "
@@ -259,17 +261,20 @@ def data_options() -> argparse.ArgumentParser:
     options.add_argument('output_network', help='location to save the trained network')
 
     group = options.add_argument_group('data')
+    default_fractions = ' '.join(str(fraction) for fraction in pid.DEFAULT_SET_FRACTIONS)
     group.add_argument('--split', dest='split_file', default=None, metavar='split_file',
-                       help='file indicating how to split datafile into training, validation, and test sets')
+                       help='a split-file giving the training, validation and test sets (e.g. from parrot-preprocess '
+                            '--split); without one, the data are split at random')
     group.add_argument('--set-fractions', nargs=3, default=pid.DEFAULT_SET_FRACTIONS, type=float,
                        dest='set_fractions', metavar=('train', 'val', 'test'),
-                       help='proportion of dataset that should be divided into training, validation, and test sets')
+                       help=f'fractions of the data in the training, validation and test sets of a random split '
+                            f'(default {default_fractions})')
     group.add_argument('--save-splits', dest='save_splits', action='store_true',
-                       help='Save a split-file using the random splits from this run')
+                       help='save the random split as a split-file (<output>_split_file.txt), to reuse with --split')
     group.add_argument('--exclude-seq-id', dest='exclude_seq_id', action='store_true',
-                       help='use if data_file lacks sequence IDs in the first column of each line')
+                       help='the datafile has no sequence IDs: each line starts with the sequence')
     group.add_argument('--ignore-warnings', '-w', dest='ignore_warnings', action='store_true',
-                       help='Do not display warnings for dataset structure')
+                       help='do not print warnings about the data (e.g. class imbalance)')
 
     group = options.add_argument_group('encoding')
     group.add_argument('--encode', default='onehot', type=str, metavar='encoding_scheme',
@@ -299,9 +304,9 @@ def shared_training_loop_options() -> argparse.ArgumentParser:
     options = argparse.ArgumentParser(add_help=False)
     group = options.add_argument_group('training')
     group.add_argument('-e', '--epochs', default=DEFAULT_EPOCHS, type=int, metavar='num_epochs',
-                       help=f'number of training epochs (def={DEFAULT_EPOCHS})')
+                       help=f'number of training epochs (default {DEFAULT_EPOCHS})')
     group.add_argument('-b', '--batch', default=DEFAULT_BATCH_SIZE, type=int, metavar='batch_size',
-                       help=f'size of training batch (def={DEFAULT_BATCH_SIZE})')
+                       help=f'sequences per training batch (default {DEFAULT_BATCH_SIZE})')
     group.add_argument('--batching', default=pid.DEFAULT_BATCHING, choices=pid.BATCHING_CHOICES,
                        help="how training sequences are grouped into batches: 'length' (default) batches sequences "
                             "of similar length together, so little time is spent on padding; 'random' shuffles "
@@ -326,11 +331,15 @@ def hyperparameter_options(architecture: type[ParrotArchitecture], describe_sear
     -------
     argparse.ArgumentParser
     """
+    description = None
+    if describe_search:
+        description = 'Any hyperparameter given here is fixed at that value; the search tunes the others it searches'
+        if architecture.trained_by_gradient_descent:
+            description += f', and the learning rate ({search_description(train_network.LEARNING_RATE)})'
+        description += '.'
+
     options = argparse.ArgumentParser(add_help=False)
-    group = options.add_argument_group(
-        f'{architecture.name} hyperparameters',
-        description='Any hyperparameter given here is fixed at that value; the search tunes the others it '
-                    'searches.' if describe_search else None)
+    group = options.add_argument_group(f'{architecture.name} hyperparameters', description=description)
 
     for hyperparameter in architecture.hyperparameters:
         help_text = hyperparameter_help(hyperparameter, describe_search)
@@ -412,6 +421,7 @@ def matrix_options() -> argparse.ArgumentParser:
                        help='square maps only: every map is symmetric, so each pair of residues counts once and the '
                             'network predicts symmetric maps')
     group.add_argument('--max-matrix-length', dest='max_matrix_length', type=int, default=DEFAULT_MAX_MATRIX_LENGTH,
+                       metavar='residues',
                        help='square maps only: refuse sequences longer than this, as memory grows with length^2 '
                             f'(default {DEFAULT_MAX_MATRIX_LENGTH})')
     return options
@@ -442,18 +452,17 @@ def output_options() -> argparse.ArgumentParser:
     options = argparse.ArgumentParser(add_help=False)
     group = options.add_argument_group('output')
     group.add_argument('--include-figs', dest='include_figs', action='store_true',
-                       help='Generate figures from training results and save to same location as network')
+                       help='save figures of the training and of the test-set performance next to the network')
     group.add_argument('--no-stats', dest='no_stats', action='store_true',
-                       help='If passed, do not output a performance stats file.')
+                       help='do not write the test-set performance statistics file')
     group.add_argument('--verbose', '-v', action='store_true',
-                       help='Flag which, if provided, causes output to terminal to be more descriptive')
-    group.add_argument('--silent', action='store_true',
-                       help='Flag which, if provided, ensures no output is generated to the terminal')
+                       help='print every setting, and the validation loss after every epoch')
+    group.add_argument('--silent', action='store_true', help='print nothing')
 
     group = options.add_argument_group('device and reproducibility')
     add_device_arguments(group)
-    group.add_argument('--seed', type=int, default=None,
-                       help='Random seed for reproducible data splits and network training (default: not seeded)')
+    group.add_argument('--seed', type=int, default=None, metavar='seed',
+                       help='random seed, for a reproducible data split and training (default: not seeded)')
     return options
 
 

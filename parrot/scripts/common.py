@@ -15,6 +15,7 @@ Licensed under the MIT license.
 """
 
 import argparse
+import math
 import os
 import sys
 from dataclasses import dataclass
@@ -28,6 +29,7 @@ from parrot import process_input_data as pid
 from parrot.architectures import ParrotArchitecture, get_architecture
 from parrot.checkpoint import save_network
 from parrot.encode_sequence import get_encoder
+from parrot.metrics import METRIC_DECIMALS
 from parrot.reproducibility import set_random_seed
 from parrot.sequence_encoder import SequenceEncoder
 from parrot.scripts import arguments
@@ -41,6 +43,13 @@ COMMAND_LINE_DATATYPES = ('sequence', 'residues', 'matrix')
 # with its default settings keeps roughly 1-3 kB per cell while training (an estimate from its layer sizes), so one
 # such sequence needs up to about 1 GB. Longer sequences are refused unless --max-matrix-length is raised.
 DEFAULT_MAX_MATRIX_LENGTH = 512
+
+# What each datatype means, for describing a run's data
+DATATYPE_DESCRIPTIONS = {
+    'sequence': 'one value per sequence',
+    'residues': 'one value per residue',
+    'matrix': 'a matrix per sequence',
+}
 
 # Ends the help of every flag kept only so that commands written for earlier versions of PARROT still work
 LEGACY_NOTE = '(kept so that older commands keep working)'
@@ -183,7 +192,7 @@ def add_device_arguments(parser: 'argparse._ActionsContainer') -> None:
     parser.add_argument('--device', default='auto', choices=devices.DEVICE_CHOICES,
                         help="device to run on: 'auto' (default) uses a CUDA GPU if available, else an "
                              "Apple-silicon GPU (MPS) if available, else the CPU")
-    parser.add_argument('--gpu-id', dest='gpu_id', type=int,
+    parser.add_argument('--gpu-id', dest='gpu_id', type=int, metavar='index',
                         help='index of the CUDA device to use, on machines with more than one NVIDIA GPU')
     parser.add_argument('--force-cpu', dest='force_cpu', action='store_true',
                         help=f'same as --device cpu {LEGACY_NOTE}')
@@ -316,13 +325,15 @@ def warn_about_batch_size(batch_size: int, num_training_sequences: int) -> None:
         Sequences in the training set (or in one cross-validation fold's training set)
     """
     if batch_size > LARGE_BATCH_SIZE:
-        dataset_warnings.print_warning('WARNING: Using a very large batch size.',
-                                       ['', 'This may decrease model accuracy.', ''])
+        dataset_warnings.print_warning(f'WARNING: The batch size ({batch_size}) is very large.',
+                                       ['This may lower accuracy; consider a smaller --batch.'])
 
+    batches_per_epoch = math.ceil(num_training_sequences / batch_size)
     if num_training_sequences // batch_size <= MIN_BATCHES_PER_EPOCH:
         dataset_warnings.print_warning(
-            'WARNING: Batch size is large relative to the number of samples in the training set.',
-            ['', 'This may decrease training efficiency.', ''])
+            f'WARNING: The batch size ({batch_size}) is large for {num_training_sequences:,} training sequences '
+            f'({batches_per_epoch} batches per epoch).',
+            ['Few updates per epoch may make training less efficient; consider a smaller --batch.'])
 
 
 def prepare_training_run(args: argparse.Namespace, n_folds: int | None = None) -> TrainingRun:
@@ -407,16 +418,16 @@ def prepare_training_run(args: argparse.Namespace, n_folds: int | None = None) -
 
 
 def print_run_header(title: str, run: TrainingRun, settings: dict[str, Any]) -> None:
-    """Print the banner shown at the start of training (and, if verbose, the settings)
+    """Print the heading shown at the start of training: what is trained, on what data (and, if verbose, every setting)
 
     Parameters
     ----------
     title : str
-        First line of the banner
+        First line of the heading
     run : TrainingRun
         The run being started
     settings : dict
-        Settings to list in verbose mode, in addition to the device and task
+        Settings to list in verbose mode, in addition to the device, task and encoding
     """
 
     if run.silent:
@@ -425,10 +436,38 @@ def print_run_header(title: str, run: TrainingRun, settings: dict[str, Any]) -> 
     print()
     print(title)
     print('-' * len(title))
+    print(describe_data(run))
     if run.verbose:
-        arguments.print_settings(False, device=run.device, datatype=run.task.datatype, task=run.task.problem_type,
-                           encoding=run.encoder.name, **settings)
         print()
+        arguments.print_settings(False, device=run.device, datatype=run.task.datatype, task=run.task.problem_type,
+                                 classes=run.task.num_classes, encoding=run.encoder.name, **settings)
+    print()
+
+
+def describe_data(run: TrainingRun) -> str:
+    """One line on the data a run trains on: how many sequences each set has, and what is being predicted
+
+    Parameters
+    ----------
+    run : TrainingRun
+
+    Returns
+    -------
+    str
+    """
+    task = run.task
+    predicted = DATATYPE_DESCRIPTIONS[task.datatype]
+    if task.is_classification:
+        predicted = f'classification into {task.num_classes} classes, {predicted}'
+    else:
+        predicted = f'regression, {predicted}'
+
+    description = (f'Data: {len(run.train_set):,} training, {len(run.val_set):,} validation and '
+                   f'{len(run.test_set):,} test sequences ({predicted})')
+    if run.cv_sets is not None:
+        description += (f'; configurations are scored by {len(run.cv_sets)}-fold cross-validation over the training '
+                        'and validation sequences')
+    return description
 
 
 def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_losses: list[float],
@@ -446,14 +485,46 @@ def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_los
     """
 
     run.save(network)
+    written = []
 
     # Models fitted in one step have no loss curve to plot
     if run.include_figs and network.trained_by_gradient_descent:
-        figures.plot_training_loss(train_losses, val_losses, run.output_prefix + '_train_val_loss.png')
+        written.append(run.output_prefix + '_train_val_loss.png')
+        figures.plot_training_loss(train_losses, val_losses, written[-1])
 
     labeled = prediction.predict_labeled(network, run.test_set, run.task, run.device)
+    metrics, test_files = reporting.report_test_results(labeled, run.task, run.output_prefix,
+                                                        probabilistic=run.probabilistic,
+                                                        include_figs=run.include_figs, write_stats=run.write_stats)
     if not run.silent:
-        print('\nTest Loss: %.4f' % labeled.loss)
+        print_test_results(labeled.loss, metrics)
+        print_written_files(run.network_file, written + test_files)
 
-    reporting.report_test_results(labeled, run.task, run.output_prefix, probabilistic=run.probabilistic,
-                                  include_figs=run.include_figs, write_stats=run.write_stats)
+
+def print_test_results(loss: float, metrics: dict[str, float]) -> None:
+    """Print the test-set loss and performance metrics on one line
+
+    Parameters
+    ----------
+    loss : float
+        The test-set loss
+    metrics : dict
+        Metric name -> value (see metrics.performance_metrics)
+    """
+    values = [f'loss {loss:.4f}'] + [f'{name} {value:.{METRIC_DECIMALS}f}' for name, value in metrics.items()]
+    print(f'\nTest set: {", ".join(values)}')
+
+
+def print_written_files(network_file: str, other_files: list[str]) -> None:
+    """Say where the network was saved, and what else was written next to it
+
+    Parameters
+    ----------
+    network_file : str
+        The saved network
+    other_files : list of str
+        Every other file written (in the network's directory)
+    """
+    print(f'Network saved to {network_file}')
+    if other_files:
+        print(f'Also written there: {", ".join(os.path.basename(path) for path in other_files)}')

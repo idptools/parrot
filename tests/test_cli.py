@@ -8,6 +8,7 @@ directory.
 """
 
 import os
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -184,10 +185,10 @@ def test_batch_size_warnings(capsys):
     assert capsys.readouterr().out == ''
 
     common.warn_about_batch_size(1024, 100000)
-    assert 'very large batch size' in capsys.readouterr().out
+    assert 'The batch size (1024) is very large' in capsys.readouterr().out
 
     common.warn_about_batch_size(32, 200)
-    assert 'large relative to the number of samples' in capsys.readouterr().out
+    assert 'The batch size (32) is large for 200 training sequences (7 batches per epoch)' in capsys.readouterr().out
 
 
 @pytest.mark.parametrize('architecture, flags', [('cnn', ['--dropout', '1.5']),
@@ -211,7 +212,7 @@ def test_train_and_predict_one_step_models(run_cli, tmp_path, architecture, flag
     run_train(run_cli, data_path(filename), tmp_path / 'net.pt', datatype, num_classes,
               *flags, '--include-figs', '--ignore-warnings', architecture=architecture)
 
-    assert 'fitted in one step' in capsys.readouterr().out
+    assert 'Fitted in one step: validation loss' in capsys.readouterr().out
     # There is no loss curve to plot for a model fitted in one step, but the test-set figure is made
     assert not os.path.isfile(tmp_path / 'net_train_val_loss.png')
     assert os.path.isfile(tmp_path / ('net_seq_CM.png' if num_classes > 1 else 'net_seq_scatterplot.png'))
@@ -356,8 +357,13 @@ def test_train_verbose_prints_settings(run_cli, tmp_path, capsys):
               '--ignore-warnings')
 
     output = capsys.readouterr().out
-    assert 'device' in output and 'hidden_size   : 10' in output and 'architecture  : brnn' in output
-    assert 'Test Loss' in output
+    settings = {name.strip(): value for name, value in
+                (line.split(' : ', 1) for line in output.splitlines() if ' : ' in line)}
+    assert 'device' in settings
+    assert settings.items() >= {'architecture': 'brnn', 'hidden_size': '10', 'epochs': QUICK_EPOCHS,
+                                'stop': 'iter'}.items()
+    assert 'Data: 210 training, 45 validation and 45 test sequences' in output
+    assert 'Test set: loss' in output and 'Network saved to' in output
 
 
 def test_train_dotted_output_name(run_cli, tmp_path):
@@ -904,3 +910,52 @@ def test_train_with_standardized_encoding_then_predict(run_cli, tmp_path, task_n
     run_predict(run_cli, str(seq_file), network_file, tmp_path / 'out2.txt', '--encode', 'biophysics')
     with pytest.raises(ValueError, match='does not match'):
         run_predict(run_cli, str(seq_file), network_file, tmp_path / 'out3.txt', '--encode', 'onehot')
+
+
+# ..........................................................................................
+# What users see when their input is wrong
+
+@pytest.mark.parametrize('main_function, arguments', [
+    (parrot_train.main, ['parrot-train', 'brnn', 'missing.tsv', 'net.pt', '-d', 'sequence', '-c', '1']),
+    (parrot_optimize.main, ['parrot-optimize', 'brnn', 'missing.tsv', 'net.pt', '-d', 'sequence', '-c', '1']),
+    (parrot_predict.main, ['parrot-predict', 'missing.txt', 'net.pt', 'out.txt']),
+    (parrot_preprocess.main, ['parrot-preprocess', 'missing.tsv', 'out.tsv', '-d', 'sequence', '-m', 'regression']),
+    (parrot_cvsplit.main, ['parrot-cvsplit', 'missing.tsv', 'cv']),
+], ids=['train', 'optimize', 'predict', 'preprocess', 'cvsplit'])
+def test_every_command_reports_input_errors_without_a_traceback(monkeypatch, capsys, tmp_path, main_function,
+                                                                 arguments):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, 'argv', arguments)
+    monkeypatch.delenv('PARROT_TRACEBACK', raising=False)
+    with pytest.raises(SystemExit) as exit_info:
+        main_function()
+
+    assert exit_info.value.code == 1
+    error = capsys.readouterr().err
+    assert error.startswith(f'{arguments[0]}: error: ') and 'does not exist: missing.' in error
+    assert 'Traceback' not in error
+
+
+def test_wrong_number_of_classes_points_to_c(run_cli, tmp_path):
+    with pytest.raises(ValueError, match=r'with 2 classes \(-c 2\) the labels must be 0 to 1, got 2\. Set -c'):
+        run_train(run_cli, data_path('seq_class_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 2)
+    with pytest.raises(ValueError, match=r'whole numbers, got .*use -c 1 \(regression\)'):
+        run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 3)
+
+
+def test_lowercase_sequences_get_a_hint(run_cli, tmp_path, write_lines):
+    data_file = write_lines('lower.tsv', ['a acdefg 1.0'] + [f'n{index} ACDEFG {index}.0' for index in range(30)])
+    with pytest.raises(ValueError, match='must be written in upper case'):
+        run_train(run_cli, data_file, tmp_path / 'net.pt', 'sequence', 1)
+
+
+def test_predict_prints_settings_only_when_verbose(run_cli, tmp_path, capsys):
+    run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1, '--silent')
+    capsys.readouterr()
+    for verbose in (False, True):
+        run_cli(parrot_predict.main, ['parrot-predict', data_path('seqfile.txt'), tmp_path / 'net.pt',
+                                      tmp_path / 'out.txt', *(['--verbose'] if verbose else [])])
+        output = capsys.readouterr().out
+        assert output.startswith('parrot-predict (PARROT ')
+        assert 'Predicting 6 sequences with a brnn network (sequence-mapped regression; onehot encoding)' in output
+        assert ('Settings:' in output) == verbose

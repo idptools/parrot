@@ -50,7 +50,12 @@ def check_characters(sequences: Iterable[str], valid: set[str]) -> None:
             shown = sequence
             if len(sequence) > MAX_SHOWN_SEQUENCE_LENGTH:
                 shown = sequence[:MAX_SHOWN_SEQUENCE_LENGTH - 3] + '...'
-            raise ValueError(f'Invalid amino acid detected: {sorted(invalid)[0]} (in sequence {shown})')
+            character = sorted(invalid)[0]
+            message = f'Invalid amino acid detected: {character} (in sequence {shown})'
+            if character.islower() and character.upper() in valid:
+                message += ('. Sequences must be written in upper case (parrot-preprocess --uppercase converts a '
+                            'datafile)')
+            raise ValueError(message)
 
 
 class SequenceEncoder:

@@ -100,7 +100,7 @@ def save_figure(fig: Figure, output_path: str) -> None:
 
 
 def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[np.ndarray], task: Task,
-                      output_prefix: str, probabilistic: bool = False) -> None:
+                      output_prefix: str, probabilistic: bool = False) -> list[str]:
     """Save the figure(s) appropriate to the task
 
     Regression gives a scatterplot ("_seq_scatterplot.png", "_res_scatterplot.png"
@@ -122,6 +122,11 @@ def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[n
         Path and filename prefix for the figures
     probabilistic : bool, optional
         True if `predictions` are class probabilities
+
+    Returns
+    -------
+    list of str
+        The files written
     """
 
     data_label = 'matrix' if task.is_matrix else 'res' if task.per_residue else 'seq'
@@ -130,12 +135,19 @@ def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[n
     if not task.is_classification:
         if task.is_matrix:
             true_flat, predicted_flat = scatter_sample(true_flat, predicted_flat)
-        regression_scatterplot(true_flat, predicted_flat, f'{output_prefix}_{data_label}_scatterplot.png')
-    elif probabilistic:
-        plot_roc_curve(true_flat, predicted_flat, output_prefix + '_ROC_curve.png')
-        plot_precision_recall_curve(true_flat, predicted_flat, output_prefix + '_PR_curve.png')
-    else:
-        plot_confusion_matrix(true_flat, predicted_flat, task.num_classes, f'{output_prefix}_{data_label}_CM.png')
+        scatterplot_path = f'{output_prefix}_{data_label}_scatterplot.png'
+        regression_scatterplot(true_flat, predicted_flat, scatterplot_path)
+        return [scatterplot_path]
+
+    if probabilistic:
+        roc_path, precision_recall_path = output_prefix + '_ROC_curve.png', output_prefix + '_PR_curve.png'
+        plot_roc_curve(true_flat, predicted_flat, roc_path)
+        plot_precision_recall_curve(true_flat, predicted_flat, precision_recall_path)
+        return [roc_path, precision_recall_path]
+
+    confusion_matrix_path = f'{output_prefix}_{data_label}_CM.png'
+    plot_confusion_matrix(true_flat, predicted_flat, task.num_classes, confusion_matrix_path)
+    return [confusion_matrix_path]
 
 
 def scatter_sample(true_values: np.ndarray, predicted_values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

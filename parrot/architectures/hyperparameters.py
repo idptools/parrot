@@ -249,8 +249,7 @@ GLOBAL_CONTEXT = HyperParameter(
 
 ATTENTION_POOLING = HyperParameter(
     'attention_pooling', bool, default=True, legacy_value=False,
-    help='sequence tasks only: pool residue features with learned attention weights (when off, --pooling is '
-         'used, or for the BRNN its final hidden states)')
+    help='sequence tasks only: pool residue features with learned attention weights (when off, --pooling is used)')
 
 LOGLENGTH_FEEDFORWARD = HyperParameter(
     'loglength_feedforward', bool, default=True, legacy_value=False,

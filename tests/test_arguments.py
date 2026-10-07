@@ -75,7 +75,7 @@ def test_check_set_fractions():
 def test_print_startup(capsys):
     arguments.print_startup('parrot-train', silent=False)
     output = capsys.readouterr().out
-    assert f'parrot-train (version {parrot.__version__})' in output
+    assert output == f'parrot-train (PARROT {parrot.__version__})\n'
     assert 'parrot-predict' not in output
 
     arguments.print_startup('parrot-train', silent=True)
@@ -83,9 +83,11 @@ def test_print_startup(capsys):
 
 
 def test_print_settings(capsys):
-    arguments.print_settings(False, hidden_size=10, dtype='sequence')
-    output = capsys.readouterr().out
-    assert 'hidden_size   : 10' in output and 'dtype         : sequence' in output
+    arguments.print_settings(False, hidden_size=10, datatype='sequence', loglength_feedforward=True)
+    output = capsys.readouterr().out.splitlines()
+    # Values line up after the longest name
+    assert output[2:] == ['hidden_size           : 10', 'datatype              : sequence',
+                          'loglength_feedforward : True']
 
     arguments.print_settings(True, hidden_size=10)
     assert capsys.readouterr().out == ''
@@ -128,3 +130,55 @@ def test_random_generator_follows_the_seed():
     first = reproducibility.random_generator().random()
     reproducibility.set_random_seed(7)
     assert reproducibility.random_generator().random() == first
+
+
+# ..........................................................................................
+# Reporting errors in a command's input
+
+def failing_command(error: BaseException):
+    def command() -> None:
+        raise error
+    return command
+
+
+@pytest.mark.parametrize('error', [ValueError('Set -c to the number of classes'),
+                                   FileNotFoundError('Datafile does not exist: data.tsv'),
+                                   ImportError('NARDINI encodings need SPARROW'),
+                                   RuntimeError('CUDA was requested but is not available')])
+def test_input_errors_are_reported_as_a_message(monkeypatch, capsys, error):
+    monkeypatch.delenv(arguments.TRACEBACK_VARIABLE, raising=False)
+    with pytest.raises(SystemExit) as exit_info:
+        arguments.run_command('parrot-train', failing_command(error))
+
+    assert exit_info.value.code == arguments.INPUT_ERROR_EXIT_CODE
+    message = capsys.readouterr().err
+    assert message.startswith(f'parrot-train: error: {error}\n')
+    assert 'Traceback' not in message and f'{arguments.TRACEBACK_VARIABLE}=1' in message
+
+
+def test_traceback_variable_shows_the_traceback(monkeypatch):
+    monkeypatch.setenv(arguments.TRACEBACK_VARIABLE, '1')
+    with pytest.raises(ValueError, match='bad input'):
+        arguments.run_command('parrot-train', failing_command(ValueError('bad input')))
+
+
+def test_unexpected_errors_keep_their_traceback(monkeypatch):
+    """Anything but an input error is a bug, which needs its traceback to be fixed"""
+    monkeypatch.delenv(arguments.TRACEBACK_VARIABLE, raising=False)
+    with pytest.raises(KeyError):
+        arguments.run_command('parrot-train', failing_command(KeyError('hidden_size')))
+
+
+def test_stopping_a_command_with_ctrl_c(monkeypatch, capsys):
+    monkeypatch.delenv(arguments.TRACEBACK_VARIABLE, raising=False)
+    with pytest.raises(SystemExit) as exit_info:
+        arguments.run_command('parrot-predict', failing_command(KeyboardInterrupt()))
+    assert exit_info.value.code == arguments.INTERRUPTED_EXIT_CODE
+    assert 'parrot-predict: stopped' in capsys.readouterr().err
+
+
+def test_missing_files_are_named(tmp_path):
+    with pytest.raises(FileNotFoundError, match='Datafile does not exist: nowhere.tsv'):
+        arguments.check_file_exists('nowhere.tsv', 'Datafile')
+    with pytest.raises(FileNotFoundError, match='output directory does not exist'):
+        arguments.output_prefix_and_directory(str(tmp_path / 'missing' / 'net.pt'))

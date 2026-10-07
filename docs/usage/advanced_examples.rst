@@ -17,39 +17,59 @@ This flag determines the stop condition for network training. Currently, there a
 
 .. code-block:: bash
 
-    PARROT with user-specified parameters
-    -------------------------------------
-    Train on:   cpu
-    Datatype:   sequence
-    ML Task:    regression
-    Learning rate:  0.001000
-    Number of layers:   2
-    Hidden vector size: 5
-    Batch size: 32
+    parrot-train (PARROT <version>)
+    Running on: CPU
+
+    WARNING: The batch size (32) is large for 210 training sequences (7 batches per epoch).
+      Few updates per epoch may make training less efficient; consider a smaller --batch.
+
+    Training brnn: bidirectional LSTM (the original PARROT network)
+    ---------------------------------------------------------------
+    Data: 210 training, 45 validation and 45 test sequences (regression, one value per sequence)
+
+    Settings:
+    ...................................
+    device                : cpu
+    datatype              : sequence
+    task                  : regression
+    classes               : 1
+    encoding              : onehot
+    architecture          : brnn
+    hidden_size           : 5
+    num_layers            : 2
+    attention_pooling     : True
+    loglength_feedforward : True
+    learning_rate         : 0.001
+    epochs                : 10
+    stop                  : auto
+    batch_size            : 32
+    batching              : length
 
     Validation set loss per epoch:
-
-    Epoch 0 Loss 0.1779
-    Epoch 1 Loss 0.1752
-    Epoch 2 Loss 0.1727
+    Epoch 1 Loss 4.4503
+    Epoch 2 Loss 4.3991
+    Epoch 3 Loss 4.3470
+    Epoch 4 Loss 4.2920
+    Epoch 5 Loss 4.2322
+    Epoch 6 Loss 4.1654
+    Epoch 7 Loss 4.0888
+    Epoch 8 Loss 3.9989
+    Epoch 9 Loss 3.8907
+    Epoch 10    Loss 3.7613
     ...
-    Epoch 98    Loss 0.0456
-    Epoch 99    Loss 0.0456
-    Epoch 100   Loss 0.0456
-    Epoch 101   Loss 0.0456
-    Epoch 102   Loss 0.0456
-    Epoch 103   Loss 0.0456
-    Epoch 104   Loss 0.0456
-    Epoch 105   Loss 0.0456
-    Epoch 106   Loss 0.0456
-    Epoch 107   Loss 0.0456
-    Epoch 108   Loss 0.0456
-    Epoch 109   Loss 0.0456
-    Epoch 110   Loss 0.0455
-    Epoch 111   Loss 0.0455
-    Epoch 112   Loss 0.0455
+    Epoch 238   Loss 0.1435
+    Epoch 239   Loss 0.1335
+    Epoch 240   Loss 0.1236
+    Epoch 241   Loss 0.1241
+    Epoch 242   Loss 0.1253
+    Stopped after 242 epochs, as the validation loss had stopped improving
+    Lowest validation loss 0.1230, at epoch 231 of 242: the network from that epoch is kept
 
-Training stops here because performance has stopped improving. Worth mentioning: in some cases such as this dataset, 'auto' can actually get stuck in a local minimum well before the network is fully trained. Be mindful of this when using 'auto' stop condition.
+    Test set: loss 0.0814, Pearson R 0.994, Spearman R 0.997
+    Network saved to /home/user/parrot_examples/stop_example.pt
+    Also written there: stop_example_predictions.tsv, stop_example_performance_stats.txt
+
+Training stops here because performance has stopped improving, as the output says, and the network from the epoch with the lowest validation loss is kept. Worth mentioning: 'auto' can stop in a local minimum well before the network is fully trained. Be mindful of this when using 'auto' stop condition.
 
 You might also notice that in this example, the validation loss is listed for every single epoch instead of every 5. This is simply because the verbose ``-v`` flag was provided.
 
@@ -199,7 +219,7 @@ The search first describes what it will try, then reports each configuration's v
       trial  20 (model  )  epochs   30  val loss 9.917    learning_rate=0.00843449  hidden_size=8  num_layers=1
     Best configuration (trial 14, validation loss 9.902):
       learning_rate=0.00864999  hidden_size=5  num_layers=1  loglength_feedforward=True
-    Test Loss: 10.8989
+    ...
 
 With ``--epochs 30`` there are three stages: every configuration is trained for 3 epochs, the best third of them continue to 10 epochs, and the best third of those to 30. Trial 1 is PARROT's default hyperparameters, trials 2-9 are spread evenly over the search space, and from trial 10 the search mostly suggests configurations near the best so far ("model"), with some drawn at random. Configurations that are clearly worse, such as those with very small learning rates, are stopped after 3 epochs. The best configuration has already been trained for the full 30 epochs, so it becomes the final network, which is then tested on the held-out test set exactly as in ``parrot-train``.
 

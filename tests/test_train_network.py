@@ -210,7 +210,10 @@ def test_train_prints_progress(capsys):
         return capsys.readouterr().out
 
     assert run(silent=True) == ''
-    assert run().count('Epoch') == 2  # epochs 0 and 5
+    output = run()
+    assert [line.split('\t')[0] for line in output.splitlines() if line.startswith('Epoch')] == \
+        ['Epoch 1', 'Epoch 5', 'Epoch 6']  # the first, every fifth and the last, counting from 1
+    assert 'Lowest validation loss' in output and 'of 6: the network from that epoch is kept' in output
     assert run(verbose=True).count('Epoch') == 6
 
 
@@ -302,4 +305,12 @@ def test_predict_sequences_with_biophysics_encoding():
 def test_predict_sequences_print_frequency(capsys):
     prediction.predict_sequences(make_network('sequence', 1), ['ACD', 'EFG', 'HIK'],
                                     encode_sequence.OneHotEncoder(), 'cpu', batch_size=2, print_frequency=2)
-    assert capsys.readouterr().out.splitlines() == ['On 0 of 3', 'On 2 of 3']
+    assert capsys.readouterr().out.splitlines() == ['  predicted 2 of 3 sequences']
+
+
+def test_auto_stop_says_why_training_ended(capsys):
+    train_set, val_set, _, task = load_task('seq_class')
+    train_network.train(make_network('sequence', 3), loader(train_set, task), loader(val_set, task), task, 'cpu',
+                        learning_rate=0.5, n_epochs=2, stop_condition='auto')
+    output = capsys.readouterr().out
+    assert 'Stopped after' in output and 'as the validation loss had stopped improving' in output

@@ -33,46 +33,49 @@ Training has a stochastic component, so running this multiple times will yield s
 
 .. code-block:: bash
 
-    #############################################
-    WARNING: Batch size is large relative to the number of samples in the training set.
+    parrot-train (PARROT <version>)
+    Running on: CPU
 
+    WARNING: The batch size (32) is large for 210 training sequences (7 batches per epoch).
+      Few updates per epoch may make training less efficient; consider a smaller --batch.
 
-    This may decrease training efficiency.
+    Training brnn: bidirectional LSTM (the original PARROT network)
+    ---------------------------------------------------------------
+    Data: 210 training, 45 validation and 45 test sequences (classification into 3 classes, one value per sequence)
 
-    #############################################
-
-
-    PARROT with user-specified parameters
-    -------------------------------------
     Validation set loss per epoch:
-    Epoch 0 Loss 1.0972
-    Epoch 5 Loss 1.0831
-    Epoch 10    Loss 1.0446
-    Epoch 15    Loss 0.8525
-    Epoch 20    Loss 0.6279
-    Epoch 25    Loss 0.3620
-    Epoch 30    Loss 0.2419
-    Epoch 35    Loss 0.2805
-    Epoch 40    Loss 0.2273
-    Epoch 45    Loss 0.1774
-    Epoch 50    Loss 0.2103
-    Epoch 55    Loss 0.1682
-    Epoch 60    Loss 0.1524
-    Epoch 65    Loss 0.1488
-    Epoch 70    Loss 0.1498
-    Epoch 75    Loss 0.1464
-    Epoch 80    Loss 0.1448
-    Epoch 85    Loss 0.1564
-    Epoch 90    Loss 0.1593
-    Epoch 95    Loss 0.1581
+    Epoch 1 Loss 1.1090
+    Epoch 5 Loss 1.0705
+    Epoch 10    Loss 0.9838
+    Epoch 15    Loss 0.6952
+    Epoch 20    Loss 0.3426
+    Epoch 25    Loss 0.2577
+    Epoch 30    Loss 0.1628
+    Epoch 35    Loss 0.1470
+    Epoch 40    Loss 0.1381
+    Epoch 45    Loss 0.1390
+    Epoch 50    Loss 0.1335
+    Epoch 55    Loss 0.1264
+    Epoch 60    Loss 0.1133
+    Epoch 65    Loss 0.1184
+    Epoch 70    Loss 0.1017
+    Epoch 75    Loss 0.1197
+    Epoch 80    Loss 0.1216
+    Epoch 85    Loss 0.1226
+    Epoch 90    Loss 0.1243
+    Epoch 95    Loss 0.1256
+    Epoch 100   Loss 0.1264
+    Lowest validation loss 0.0927, at epoch 69 of 100: the network from that epoch is kept
 
-    Test Loss: 0.1507
+    Test set: loss 0.1472, Matthews Correlation Coef 0.934, F1 Score 0.956, Accuracy 0.956
+    Network saved to /home/user/parrot_examples/seq_class_network.pt
+    Also written there: seq_class_network_predictions.tsv, seq_class_network_performance_stats.txt
     
 First we notice that there is a message warning us that our batch size is too large. This isn't super problematic and we can ignore it for now. In future runs, we will decrease our batch size using the ``--batch`` flag (by default it's set to 32, which is pretty large relative to our dataset of only 300 sequences). Also note that you can explicitly hide warning messages with the ``--ignore-warnings`` flag.
 
-Turning to the actual training results, we can see that our validation set loss decreases for a while, then plateaus around 0.14-0.15. This is pretty typical, generally this loss will decrease up to a certain point, then start to increase as the network begins to overfit on the training data. Don't worry about this overfitting, since the final network that PARROT returns will be from the iteration that produced the lowest validation set loss.
+Turning to the actual training results, we can see that our validation set loss decreases for a while, then levels off around 0.1-0.13 and starts to creep up again. This is pretty typical, generally this loss will decrease up to a certain point, then start to increase as the network begins to overfit on the training data. Don't worry about this overfitting, since the final network that PARROT returns will be from the epoch that produced the lowest validation set loss (here epoch 69, as the line after the losses says). PARROT then applies that network to the test set and prints how well it does, and lists the files it wrote.
 
-If you look in the current directory, you should also see three files: our trained network "seq_class_network.pt", a predictions file "seq_class_network_predictions.tsv", and a performance stats summary file "seq_class_network_performace_stats.txt". The network file can be used to make predictions on new sequences with ``parrot-predict`` but is not readable by eye. The second file is a bit more interesting to look at:
+If you look in the current directory, you should also see those three files: our trained network "seq_class_network.pt", a predictions file "seq_class_network_predictions.tsv", and a performance stats summary file "seq_class_network_performance_stats.txt". The network file can be used to make predictions on new sequences with ``parrot-predict`` but is not readable by eye. The second file is a bit more interesting to look at:
 
 .. code-block:: bash
 
@@ -96,9 +99,9 @@ The performance stats file is an extension of these test set predictions:
 
 .. code-block:: bash
 
-    Matthews Correlation Coef : 1.000
-    F1 Score : 1.000
-    Accuracy : 1.000
+    Matthews Correlation Coef : 0.934
+    F1 Score : 0.956
+    Accuracy : 0.956
 
 This file quantifies performance on the test set using a variety of different metrics, which vary between classification and regression tasks. For classification, as shown here, this file reports on the accuracy, F1 score and MCC of our predictions. You can always prevent this file from being output by providing the ``--no-stats`` flag. See "Machine Learning Resources" (or Google!) for more information on how to interpret these metrics.
 

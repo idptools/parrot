@@ -87,7 +87,7 @@ def test_empty_datafile_is_an_error(write_lines):
 def test_invalid_class_labels_are_datafile_errors(write_lines):
     """A bad label is a problem with the datafile; it is still a ValueError, as it always was"""
     path = write_lines('labels.tsv', ['a ACD 0', 'b EFG 5'])
-    with pytest.raises(IOExceptionParrot, match='between 0 and 2'):
+    with pytest.raises(IOExceptionParrot, match='labels must be 0 to 2'):
         pid.parse_file(path, Task('sequence', 3), ignore_warnings=True)
     assert issubclass(IOExceptionParrot, ValueError)
 
@@ -163,14 +163,14 @@ def test_parse_file_exclude_seq_id(write_lines):
 @pytest.mark.parametrize('label', ['3', '-1'])
 def test_parse_file_sequence_class_out_of_range(write_lines, label):
     path = write_lines('data.tsv', ['id1 ACD 0', f'id2 EFG {label}'])
-    with pytest.raises(ValueError, match='between 0 and 2'):
+    with pytest.raises(ValueError, match='labels must be 0 to 2'):
         pid.parse_file(path, Task('sequence', 3))
 
 
 def test_parse_file_sequence_class_must_be_integer(write_lines):
     """A label of 1.5 must not be silently truncated to class 1"""
     path = write_lines('data.tsv', ['id1 ACD 0', 'id2 EFG 1.5'])
-    with pytest.raises(ValueError, match='must be integers'):
+    with pytest.raises(ValueError, match='must be whole numbers'):
         pid.parse_file(path, Task('sequence', 3))
 
 
@@ -182,13 +182,13 @@ def test_parse_file_sequence_class_accepts_integer_valued_floats(write_lines):
 
 def test_parse_file_residue_class_out_of_range(write_lines):
     path = write_lines('data.tsv', ['id1 ACD 0 1 3'])
-    with pytest.raises(ValueError, match='between 0 and 2'):
+    with pytest.raises(ValueError, match='labels must be 0 to 2'):
         pid.parse_file(path, Task('residues', 3))
 
 
 def test_parse_file_residue_class_must_be_integer(write_lines):
     path = write_lines('data.tsv', ['id1 ACD 0 1.5 2'])
-    with pytest.raises(ValueError, match='must be integers'):
+    with pytest.raises(ValueError, match='must be whole numbers'):
         pid.parse_file(path, Task('residues', 3))
 
 
@@ -209,7 +209,7 @@ def test_parse_file_residue_regression_with_missing_labels(write_lines):
 
 def test_parse_file_missing_labels_still_validated(write_lines):
     path = write_lines('data.tsv', ['id1 ACD 0 nan 5'])
-    with pytest.raises(ValueError, match='between 0 and 2'):
+    with pytest.raises(ValueError, match='labels must be 0 to 2'):
         pid.parse_file(path, Task('residues', 3))
 
 

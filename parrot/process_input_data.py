@@ -339,14 +339,18 @@ def _validate_class_labels(sample: Sample, task: Task) -> int | list[int]:
     missing = np.isnan(labels)
     present = labels[~missing]
 
-    if np.any(present != np.round(present)):
+    not_whole = present[present != np.round(present)]
+    if len(not_whole):
         raise parrot_exceptions.IOExceptionParrot(
-            f'Invalid class label on entry {sample[0]}.\nClass labels must be integers, got {sample[2]}')
+            f'Invalid class label on entry {sample[0]}: class labels must be whole numbers, got {not_whole[0]:g}. '
+            'If these are values to predict rather than classes, use -c 1 (regression).')
 
-    if np.any(present < 0) or np.any(present >= task.num_classes):
+    out_of_range = present[(present < 0) | (present >= task.num_classes)]
+    if len(out_of_range):
         raise parrot_exceptions.IOExceptionParrot(
-            f'Invalid class label on entry {sample[0]}.\nClass labels must be between 0 and {task.num_classes - 1}, '
-            f'got {sample[2]}')
+            f'Invalid class label on entry {sample[0]}: with {task.num_classes} classes (-c {task.num_classes}) the '
+            f'labels must be 0 to {task.num_classes - 1}, got {out_of_range[0]:g}. Set -c to the number of classes '
+            'in the data.')
 
     integer_labels = [IGNORED_CLASS_LABEL if is_missing else int(label) for label, is_missing in zip(labels, missing)]
     if task.per_residue:

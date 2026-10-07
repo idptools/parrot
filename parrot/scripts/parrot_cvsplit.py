@@ -29,6 +29,8 @@ from parrot import process_input_data as pid
 from parrot.reproducibility import set_random_seed
 from parrot.scripts import arguments
 
+PROGRAM_NAME = 'parrot-cvsplit'
+
 # Number of folds made by default
 DEFAULT_FOLDS = 10
 
@@ -43,31 +45,37 @@ def build_parser() -> argparse.ArgumentParser:
     -------
     argparse.ArgumentParser
     """
-    parser = argparse.ArgumentParser(description='Generate K split-files for K-fold cross-validation')
-    parser.add_argument('data_file', help='Path to tsv file with format: <idx> <sequence> <data>')
+    parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
+                                     description='Write one split-file per fold for k-fold cross-validation.')
+    parser.add_argument('data_file', help="the datafile: '<ID> <sequence> <value(s)>' on each line")
     parser.add_argument('output_splitfiles',
-                        help='Location and name to save the split-files as "<output_splitfiles>_cv#.txt" for each of '
-                             'k-folds')
-    parser.add_argument('-k', '--k-folds', default=DEFAULT_FOLDS, type=int, metavar='K', dest='num_folds',
-                        help=f'number of CV folds (def={DEFAULT_FOLDS})')
+                        help="path and name prefix of the split-files, written as '<output_splitfiles>_cv<fold>.txt'")
+    parser.add_argument('-k', '--k-folds', default=DEFAULT_FOLDS, type=int, metavar='folds', dest='num_folds',
+                        help=f'number of cross-validation folds (default {DEFAULT_FOLDS})')
     parser.add_argument('-t', '--training-fraction', default=DEFAULT_TRAINING_FRACTION, type=float,
-                        dest='training_fraction',
-                        help='Fraction of the non-test set data to use as training data '
-                             f'(def={DEFAULT_TRAINING_FRACTION})')
-    parser.add_argument('--seed', type=int, default=None,
-                        help='Random seed for reproducible split-files (default: not seeded)')
+                        dest='training_fraction', metavar='fraction',
+                        help='fraction of each fold\'s non-test sequences used for training, the rest being for '
+                             f'validation (default {DEFAULT_TRAINING_FRACTION})')
+    parser.add_argument('--seed', type=int, default=None, metavar='seed',
+                        help='random seed, for reproducible split-files (default: not seeded)')
     return parser
 
 
 def main() -> None:
+    """parrot-cvsplit's entry point: run it, reporting mistakes in its input as a message (see arguments.run_command)."""
+    arguments.run_command(PROGRAM_NAME, run)
+
+
+def run() -> None:
     """Write one split-file per cross-validation fold."""
     args = build_parser().parse_args()
+    arguments.print_startup(PROGRAM_NAME, silent=False)
     set_random_seed(args.seed)
 
     data_file = arguments.check_file_exists(args.data_file, 'Datafile')
     arguments.check_fraction(args.training_fraction, 'Training fraction')
     if args.num_folds <= 1:
-        raise ValueError(f'Must have >1 CV folds. Provided: {args.num_folds}.')
+        raise ValueError(f'--k-folds must be at least 2, got {args.num_folds}')
     prefix, _ = arguments.output_prefix_and_directory(os.path.abspath(args.output_splitfiles))
 
     # Blank and comment lines are skipped exactly as they are when the datafile is read for training,

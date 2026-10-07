@@ -42,9 +42,6 @@ LARGE_STANDARD_DEVIATION = 5.0
 # Principles of Statistics)
 LARGE_SKEWNESS = 1.0
 
-# Width of the line of '#' framing each warning
-BANNER_WIDTH = 45
-
 
 def warn_about_dataset(data: list[list[Any]], task: Task) -> None:
     """Run every check that applies to a dataset, printing a warning for each problem found
@@ -67,7 +64,7 @@ def warn_about_dataset(data: list[list[Any]], task: Task) -> None:
 
 
 def print_warning(heading: str, details: list[str]) -> None:
-    """Print a warning framed by lines of '#' so it stands out from the rest of the output
+    """Print a warning: its heading, then its details indented beneath it (blank details are left out)
 
     Parameters
     ----------
@@ -76,11 +73,11 @@ def print_warning(heading: str, details: list[str]) -> None:
     details : list of str
         Lines explaining the problem and what it may cause
     """
-    print('\n' + '#' * BANNER_WIDTH)
-    print(heading + '\n')
+    print()
+    print(heading)
     for line in details:
-        print(line)
-    print('#' * BANNER_WIDTH + '\n')
+        if line:
+            print(f'  {line}')
 
 
 def all_values(data: list[list[Any]]) -> np.ndarray:

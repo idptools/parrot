@@ -366,14 +366,39 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
         if improved and on_improvement is not None:
             on_improvement(network)
 
-        if not silent and (verbose or epoch % PRINT_EVERY_N_EPOCHS == 0):
-            print(f'Epoch {epoch}\tLoss {val_loss:.4f}')
+        # Epochs are shown counting from 1: the first, every PRINT_EVERY_N_EPOCHS-th and the last
+        number = epoch + 1
+        last = stop_now or (stop_condition == 'iter' and number == n_epochs)
+        if not silent and (verbose or number == 1 or number % PRINT_EVERY_N_EPOCHS == 0 or last):
+            print(f'Epoch {number}\tLoss {val_loss:.4f}')
 
         if stop_now:
             break
 
     history.restore_best_weights(network)
+    if not silent:
+        print_training_summary(history, stopped_early=stop_condition == 'auto')
     return history.train_losses, history.val_losses
+
+
+def print_training_summary(history: TrainingHistory, stopped_early: bool) -> None:
+    """Say how training ended, and which epoch's network is kept (the one with the lowest validation loss)
+
+    Parameters
+    ----------
+    history : TrainingHistory
+        The finished training
+    stopped_early : bool
+        True if training stopped once the validation loss plateaued (--stop auto)
+    """
+    epochs = len(history.val_losses)
+    if stopped_early:
+        print(f'Stopped after {epochs} epochs, as the validation loss had stopped improving')
+    if history.best_weights is None:
+        print('No epoch had a finite validation loss, so the network after the last epoch is kept')
+        return
+    print(f'Lowest validation loss {history.best_loss:.4f}, at epoch {history.best_epoch + 1} of {epochs}: the '
+          'network from that epoch is kept')
 
 
 @full_float32_precision()
@@ -456,6 +481,6 @@ def fit_in_one_step(network: ParrotArchitecture, train_loader: DataLoader, val_l
         on_improvement(network)
 
     if not silent:
-        print(f'Fitted in one step\tLoss {val_loss:.4f}')
+        print(f'Fitted in one step: validation loss {val_loss:.4f}')
 
     return [train_loss], [val_loss]

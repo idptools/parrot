@@ -34,7 +34,7 @@ PROBABILITY_DECIMALS = 4
 
 
 def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: str, probabilistic: bool = False,
-                        include_figs: bool = False, write_stats: bool = True) -> None:
+                        include_figs: bool = False, write_stats: bool = True) -> tuple[dict[str, float], list[str]]:
     """Write everything describing performance on the test set
 
     Always writes the predictions: "<output_prefix>_predictions.tsv", or for
@@ -59,26 +59,39 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
         Whether to save figures
     write_stats : bool, optional
         Whether to write the performance-metrics file
+
+    Returns
+    -------
+    dict
+        The performance metrics (computed whether or not they are written)
+    list of str
+        The files written
     """
 
     predictions = [output_to_prediction(output, task, probabilistic) for output in labeled.outputs]
     decimals = PROBABILITY_DECIMALS if probabilistic else None
+    written = []
 
     if task.is_matrix:
-        write_matrix_predictions(output_prefix + '_predictions.npz', name_matrices(labeled.names, predictions))
+        written.append(write_matrix_predictions(output_prefix + '_predictions.npz',
+                                                name_matrices(labeled.names, predictions)))
     else:
-        write_predictions(labeled.names, labeled.sequences, labeled.true_values, predictions, task,
-                          output_prefix + '_predictions.tsv', decimals=decimals)
+        written.append(output_prefix + '_predictions.tsv')
+        write_predictions(labeled.names, labeled.sequences, labeled.true_values, predictions, task, written[-1],
+                          decimals=decimals)
 
+    metrics = performance_metrics(labeled.true_values, predictions, task, probabilistic)
     if write_stats:
-        metrics = performance_metrics(labeled.true_values, predictions, task, probabilistic)
-        write_performance_metrics(metrics, output_prefix + '_performance_stats.txt')
+        written.append(output_prefix + '_performance_stats.txt')
+        write_performance_metrics(metrics, written[-1])
 
     if include_figs:
-        figures.plot_test_results(labeled.true_values, predictions, task, output_prefix, probabilistic)
+        written += figures.plot_test_results(labeled.true_values, predictions, task, output_prefix, probabilistic)
         if task.is_matrix:
-            matrix_figures.plot_matrix_examples(labeled.names, labeled.true_values, predictions, task,
-                                                output_prefix + '_matrix_examples.png')
+            written.append(output_prefix + '_matrix_examples.png')
+            matrix_figures.plot_matrix_examples(labeled.names, labeled.true_values, predictions, task, written[-1])
+
+    return metrics, written
 
 
 # .................................................................

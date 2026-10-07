@@ -24,6 +24,8 @@ from parrot import train_network
 from parrot.architectures import build_network
 from parrot.scripts import arguments, common, training_parser
 
+PROGRAM_NAME = 'parrot-train'
+
 # With --stop auto, --epochs is how many epochs performance must stagnate for, so beyond this many epochs
 # training can take a long time (a rule of thumb, warned about rather than refused)
 LONG_AUTO_STOP_EPOCHS = 10
@@ -36,8 +38,8 @@ def build_parser() -> argparse.ArgumentParser:
     -------
     argparse.ArgumentParser
     """
-    return training_parser.build_parser('Train and test a PARROT network with user-specified hyperparameters.',
-                                        training_loop_options=[learning_options()])
+    return training_parser.build_parser(PROGRAM_NAME, 'Train and test a PARROT network with user-specified '
+                                        'hyperparameters.', training_loop_options=[learning_options()])
 
 
 def learning_options() -> argparse.ArgumentParser:
@@ -51,7 +53,7 @@ def learning_options() -> argparse.ArgumentParser:
     group = options.add_argument_group('training')
     group.add_argument('-lr', '--learning-rate', default=train_network.LEARNING_RATE.default, type=float,
                        metavar='learning_rate',
-                       help=f'learning rate of the optimizer (def={train_network.LEARNING_RATE.default})')
+                       help=f'learning rate of the optimizer (default {train_network.LEARNING_RATE.default})')
     group.add_argument('--stop', default='iter', choices=train_network.STOP_CONDITIONS,
                        help="training stop condition: 'iter' trains for --epochs epochs (default); 'auto' trains "
                             "until the validation loss has not improved for --epochs epochs")
@@ -59,8 +61,14 @@ def learning_options() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """parrot-train's entry point: run it, reporting mistakes in its input as a message (see arguments.run_command)."""
+    arguments.run_command(PROGRAM_NAME, run)
+
+
+def run() -> None:
     """Train a network with the given hyperparameters, save it, and report its performance on the test set."""
     args = training_parser.parse_arguments(build_parser())
+    arguments.print_startup(PROGRAM_NAME, args.silent)
 
     # Check the training-specific arguments before any data is loaded
     arguments.check_fraction(args.learning_rate, 'Learning rate')
@@ -74,13 +82,11 @@ def main() -> None:
 
     settings: dict[str, Any] = dict(architecture=args.architecture, **hyperparameters)
     if network.trained_by_gradient_descent:
-        settings.update(learning_rate=args.learning_rate, batch_size=args.batch, batching=args.batching)
-    common.print_run_header('PARROT with user-specified parameters', run, settings)
-    if not run.silent:
-        if network.trained_by_gradient_descent:
-            print("Validation set loss per epoch:")
-        else:
-            print(f"The '{args.architecture}' model is fitted in one step.")
+        settings.update(learning_rate=args.learning_rate, epochs=args.epochs, stop=args.stop, batch_size=args.batch,
+                        batching=args.batching)
+    common.print_run_header(f'Training {args.architecture}: {network.description}', run, settings)
+    if not run.silent and network.trained_by_gradient_descent:
+        print('Validation set loss per epoch:')
 
     train_losses, val_losses = train_network.train(network, run.loader(run.train_set, shuffle=True),
                                                    run.loader(run.val_set), run.task, run.device,

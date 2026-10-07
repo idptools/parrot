@@ -19,6 +19,8 @@ https://github.com/idptools/parrot
 Licensed under the MIT license.
 """
 
+import dataclasses
+
 import torch
 import torch.nn as nn
 from torch.func import functional_call
@@ -28,6 +30,12 @@ from parrot.architectures.hyperparameters import ATTENTION_POOLING, LOGLENGTH_FE
 from parrot.architectures.layers import padding_mask, resolve_lengths
 from parrot.architectures.registry import register_architecture
 from parrot.tasks import Task
+
+# Attention pooling, as for the other networks; the BRNN's alternative is its final hidden states rather than --pooling
+BRNN_ATTENTION_POOLING = dataclasses.replace(
+    ATTENTION_POOLING,
+    help='sequence tasks only: summarise each sequence by pooling the LSTM output at every residue with learned '
+         'attention weights (when off, by the final hidden states of the two directions, as PARROT always did)')
 
 
 def run_lstm(lstm: nn.LSTM, x: torch.Tensor,
@@ -203,7 +211,7 @@ class BRNN(ParrotArchitecture):
                        cli_aliases=('-hs',), minimum=1, search_range=(5, 50)),
         HyperParameter('num_layers', int, default=1, help='number of LSTM layers per direction',
                        cli_aliases=('-nl',), minimum=1, search_range=(1, 5)),
-        ATTENTION_POOLING,
+        BRNN_ATTENTION_POOLING,
         LOGLENGTH_FEEDFORWARD,
     )
 

@@ -30,6 +30,8 @@ from parrot.scripts.common import (COMMAND_LINE_DATATYPES, LEGACY_NOTE, add_devi
                                    add_embedding_cache_argument, check_probabilistic_classification,
                                    prepare_encoding, select_device)
 
+PROGRAM_NAME = 'parrot-predict'
+
 # By default, progress is printed every this many sequences
 DEFAULT_PRINT_FREQUENCY = 1000
 
@@ -41,49 +43,56 @@ def build_parser() -> argparse.ArgumentParser:
     -------
     argparse.ArgumentParser
     """
-    parser = argparse.ArgumentParser(description='Make predictions with a trained PARROT network.')
+    parser = argparse.ArgumentParser(prog=PROGRAM_NAME, description='Make predictions with a trained PARROT network.')
 
-    parser.add_argument('seq_file', help='path to tsv file with format: <idx> <sequence>')
-    parser.add_argument('saved_network', help='path to the trained network file')
-    parser.add_argument('output_file', help='file with sequences and their predicted values (for matrix networks, '
-                                            'a NumPy .npz archive of one matrix per sequence, named by sequence ID)')
-
-    parser.add_argument('-d', '--datatype', choices=COMMAND_LINE_DATATYPES,
-                        help="'sequence' or 'residues'. Only needed for networks saved by PARROT versions "
-                             "that did not record it; otherwise checked against the saved network.")
-    parser.add_argument('-c', '--classes', type=int, metavar='num_classes',
-                        help='Number of output classes (1 for regression). Optional; checked against the saved network.')
-    parser.add_argument('--encode', default=None, type=str, metavar='encoding_scheme',
-                        help="'onehot', 'biophysics', or a path to a user-created scheme. Only needed for networks "
-                             "saved by older PARROT versions that were not trained with one-hot encoding.")
+    parser.add_argument('seq_file', help="the sequences to predict: '<ID> <sequence>' on each line (or just "
+                                         "'<sequence>', with --exclude-seq-id)")
+    parser.add_argument('saved_network', help='the trained network (from parrot-train or parrot-optimize)')
+    parser.add_argument('output_file', help='where to write the predictions (for matrix networks, a NumPy .npz '
+                                            'archive of one matrix per sequence, named by sequence ID)')
 
     parser.add_argument('--exclude-seq-id', dest='exclude_seq_id', action='store_true',
-                        help='use if data_file lacks sequence IDs in the first column of each line')
+                        help='the sequence file has no sequence IDs, just one sequence per line')
     parser.add_argument('--probabilistic-classification', dest='probabilistic_classification',
                         action='store_true',
                         help='sequence classification only: report the probability of each class, not just the '
                              'most likely class')
-    add_device_arguments(parser)
     add_embedding_cache_argument(parser, plm.PREDICT_CACHE_DIRECTORY)
-    parser.add_argument('--silent', action='store_true',
-                        help="Flag which, if provided, ensures no output is generated to the terminal")
-    parser.add_argument('--print-frequency', default=DEFAULT_PRINT_FREQUENCY, type=int,
-                        help='how often to print progress, in number of sequences predicted '
-                             f'(default {DEFAULT_PRINT_FREQUENCY})')
+    add_device_arguments(parser)
+    parser.add_argument('--verbose', '-v', action='store_true', help='print every setting before predicting')
+    parser.add_argument('--silent', action='store_true', help='print nothing')
+    parser.add_argument('--print-frequency', default=DEFAULT_PRINT_FREQUENCY, type=int, metavar='num_sequences',
+                        help=f'print progress every this many sequences (default {DEFAULT_PRINT_FREQUENCY})')
 
-    parser.add_argument('-hs', '--hidden-size', type=int, metavar='hidden_size',
-                        help=f'ignored: the network size is read from the saved network {LEGACY_NOTE}')
-    parser.add_argument('-nl', '--num-layers', type=int, metavar='num_layers',
-                        help=f'ignored: the network size is read from the saved network {LEGACY_NOTE}')
+    # Everything below is read from networks saved by this version of PARROT
+    saved = parser.add_argument_group(
+        'recorded in the saved network',
+        'Networks saved by this version of PARROT record these, so they are only needed for networks saved by earlier '
+        'versions (which recorded only their weights); otherwise, if given, they are checked against the network.')
+    saved.add_argument('-d', '--datatype', choices=COMMAND_LINE_DATATYPES,
+                       help="'sequence' or 'residues' (networks saved by earlier versions are never 'matrix' networks)")
+    saved.add_argument('-c', '--classes', type=int, metavar='num_classes',
+                       help='number of output classes (1 for regression)')
+    saved.add_argument('--encode', default=None, type=str, metavar='encoding_scheme',
+                       help="the encoding the network was trained with (default for earlier networks: 'onehot')")
+    saved.add_argument('-hs', '--hidden-size', type=int, metavar='hidden_size',
+                       help=f'ignored: the network size is read from the saved network {LEGACY_NOTE}')
+    saved.add_argument('-nl', '--num-layers', type=int, metavar='num_layers',
+                       help=f'ignored: the network size is read from the saved network {LEGACY_NOTE}')
     return parser
 
 
 def main() -> None:
+    """parrot-predict's entry point: run it, reporting mistakes in its input as a message (see arguments.run_command)."""
+    arguments.run_command(PROGRAM_NAME, run)
+
+
+def run() -> None:
     """Predict values for every sequence in a sequence file with a saved network, and write them to a file."""
     args = build_parser().parse_args()
-    arguments.print_startup('parrot-predict', args.silent)
+    arguments.print_startup(PROGRAM_NAME, args.silent)
     if (args.hidden_size is not None or args.num_layers is not None) and not args.silent:
-        print('Note: --hidden-size and --num-layers are ignored; the network size is read from the saved network\n')
+        print('Note: --hidden-size and --num-layers are ignored; the network size is read from the saved network')
 
     seq_file = arguments.check_file_exists(args.seq_file, 'Sequence file')
     saved_network = arguments.check_file_exists(args.saved_network, 'Saved network')
@@ -95,22 +104,22 @@ def main() -> None:
                                     legacy_encoding=args.encode or 'onehot')
     check_arguments_match_network(args, network, encoder)
     check_probabilistic_classification(args.probabilistic_classification, network.task)
-    print_prediction_settings(args, seq_file, saved_network, output_file, network, encoder)
 
     seq_ids, sequences = read_sequence_file(seq_file, args.exclude_seq_id)
     encoder.check_sequences(sequences)
+    if args.verbose:
+        print_prediction_settings(args, seq_file, saved_network, output_file, network, encoder)
 
     # Protein language model and NARDINI encodings: encode every sequence once, into a cache next to the output
     prepare_encoding(encoder, sequences, args.embedding_cache,
                      os.path.join(os.path.dirname(output_file), plm.PREDICT_CACHE_DIRECTORY), device,
-                     'parrot-predict', args.silent)
+                     PROGRAM_NAME, args.silent)
 
     if not args.silent:
-        print('\n---> Starting predictions...\n')
+        print(f'Predicting {len(sequences):,} sequences with a {network.name} network '
+              f'({network.task.datatype}-mapped {network.task.problem_type}; {encoder.name} encoding)')
     print_frequency = None if args.silent else args.print_frequency
     outputs = prediction.predict_sequences(network, sequences, encoder, device, print_frequency=print_frequency)
-    if not args.silent:
-        print('\n---> Prediction complete!')
 
     written = reporting.write_unlabeled_predictions(seq_ids, sequences, outputs, network.task, output_file,
                                                     args.probabilistic_classification)
@@ -120,12 +129,12 @@ def main() -> None:
 
 def print_prediction_settings(args: argparse.Namespace, seq_file: str, saved_network: str, output_file: str,
                               network: ParrotArchitecture, encoder: SequenceEncoder) -> None:
-    """Print the files, network and options a prediction run uses (unless --silent)
+    """Print the files, network and options a prediction run uses (with the same names as parrot-train's settings)
 
     Parameters
     ----------
     args : argparse.Namespace
-        The parsed arguments
+        Parsed command-line arguments
     seq_file, saved_network, output_file : str
         Absolute paths of the sequence file, the network and the output file
     network : ParrotArchitecture
@@ -134,9 +143,9 @@ def print_prediction_settings(args: argparse.Namespace, seq_file: str, saved_net
         The encoding saved with it
     """
     task = network.task
-    arguments.print_settings(args.silent, sequence_file=seq_file, network_file=saved_network, output_file=output_file,
-                             architecture=network.name, **network.hyperparameter_values, dtype=task.datatype,
-                             num_classes=task.num_classes, problem_type=task.problem_type, encode=encoder.name,
+    arguments.print_settings(False, sequence_file=seq_file, network_file=saved_network, output_file=output_file,
+                             datatype=task.datatype, task=task.problem_type, classes=task.num_classes,
+                             encoding=encoder.name, architecture=network.name, **network.hyperparameter_values,
                              exclude_seq_id=args.exclude_seq_id,
                              probabilistic_classification=args.probabilistic_classification)
 
@@ -236,9 +245,15 @@ def read_sequence_file(seq_file: str, exclude_seq_id: bool) -> tuple[list[str] |
         expected_format = '<seqID> <sequence>'
 
     for line in lines:
-        if len(line) != expected_columns:
-            raise ValueError(f"Lines in the sequence file should have the format {expected_format}, but found: {' '.join(line)}\n"
-                             "(use --exclude-seq-id if the file has no sequence IDs)")
+        if len(line) == expected_columns:
+            continue
+        if len(line) > expected_columns:
+            hint = ('it looks like a datafile, with values to predict; the sequence file has no values' if
+                    len(line) > 2 else 'use --exclude-seq-id only if the file has no sequence IDs')
+        else:
+            hint = 'use --exclude-seq-id if the file has no sequence IDs'
+        raise ValueError(f"Lines in the sequence file should have the format {expected_format}, but found: "
+                         f"{' '.join(line)} ({hint})")
 
     if exclude_seq_id:
         return None, [line[0] for line in lines]

@@ -51,3 +51,20 @@ Example datasets
 ----------------
 
 Example data that can be used with PARROT can be found in the **/data** folder on GitHub. Examples of usage with these datasets can be found in the documentation.
+
+When something goes wrong
+-------------------------
+
+If a command's input has a problem (a file that does not exist, a datafile that does not match the options given, an option that does not apply), the command stops with a one-line message saying what is wrong, for example:
+
+.. code-block:: bash
+
+    parrot-train: error: Datafile does not exist: data.tsv
+
+To also see the full Python traceback (for example, to report a problem), run the command again with the environment variable ``PARROT_TRACEBACK`` set:
+
+.. code-block:: bash
+
+    PARROT_TRACEBACK=1 parrot-train brnn data.tsv network.pt -d sequence -c 1
+
+Errors that are not a problem with the input are bugs in PARROT; they always show their traceback, and we would be grateful if you reported them on GitHub.

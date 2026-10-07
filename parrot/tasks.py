@@ -81,7 +81,8 @@ class Task:
 
         if (isinstance(self.num_classes, bool) or not isinstance(self.num_classes, numbers.Integral)
                 or self.num_classes < 1):
-            raise ValueError('Number of classes must be a positive integer.')
+            raise ValueError(f'The number of classes must be a positive integer (1 for regression), got '
+                             f'{self.num_classes!r}')
         # Store a plain int even if given a NumPy integer (e.g. read from an array's shape)
         object.__setattr__(self, 'num_classes', int(self.num_classes))
 

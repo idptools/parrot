@@ -98,7 +98,9 @@ The network file records the base encoding and the exact mean and standard devia
 
 **Output:**
 
-After running ``parrot-train``, at least three files will be saved to the directory specified by *output_network*. One contains the saved network, which can be used with ``parrot-predict``. As well as the network weights, this file records the architecture, its hyperparameters, the datatype, the number of classes and the encoding, so none of these need to be given again when making predictions. The other file with the suffix "_predictions.tsv" contains the true values and predicted values for all of the sequences in the test set. The final "_performance_stats.txt" file quantifies a variety of performance metrics on the test set. Output text detailing network performance across training is also printed to terminal by default.
+After running ``parrot-train``, at least three files will be saved to the directory specified by *output_network*. One contains the saved network, which can be used with ``parrot-predict``. As well as the network weights, this file records the architecture, its hyperparameters, the datatype, the number of classes and the encoding, so none of these need to be given again when making predictions. The other file with the suffix "_predictions.tsv" contains the true values and predicted values for all of the sequences in the test set. The final "_performance_stats.txt" file quantifies a variety of performance metrics on the test set.
+
+Unless ``--silent`` is given, ``parrot-train`` also prints how the data were split, the validation loss as training goes (for the first epoch, every fifth and the last; every epoch with ``--verbose``), which epoch had the lowest validation loss (the network from that epoch is the one saved), the test-set loss and performance metrics, and every file it wrote.
 
 For matrix data, the test-set predictions are instead written to a "_predictions.npz" file, and the figures include heatmaps of example test sequences; see the "Matrix data" page.
 
