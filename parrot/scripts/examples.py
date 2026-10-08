@@ -1,0 +1,384 @@
+"""
+The guide each command prints with --show-examples: what the command does,
+examples of how to use it, and how it works.
+
+Every command has a --show-examples option (see add_examples_argument()), which
+prints the command's header and guide and exits, like --help, without needing
+any other arguments.
+
+.............................................................................
+idptools-parrot was developed by the Holehouse lab
+     Original release ---- 2020
+
+Question/comments/concerns? Raise an issue on github:
+https://github.com/idptools/parrot
+
+Licensed under the MIT license.
+"""
+
+import argparse
+import datetime
+from collections.abc import Sequence
+from typing import Any
+
+from parrot.scripts.arguments import EXAMPLES_FLAG, header
+
+TRAIN_GUIDE = '''
+parrot-train: train a network, then test it on sequences it has not seen
+=========================================================================
+
+What it does
+------------
+parrot-train reads a datafile of sequences and the values to predict for them,
+splits it into training, validation and test sets, and trains a network of the
+architecture you choose on the training set. It keeps the network from the
+epoch with the lowest loss on the validation set, saves it, and reports how
+well it predicts the test set, which it never saw while training. It also
+writes <network>_info.txt, which describes how the network was trained in
+enough detail for a paper's methods section.
+
+Examples
+--------
+Predict one value per sequence (regression) with the original PARROT network,
+a bidirectional LSTM:
+
+    parrot-train brnn --input-file data.tsv --output-network network.pt --split kmer -d sequence --regression
+
+Classify every residue into one of three classes with a convolutional
+network, saving figures of the training and of the test-set results:
+
+    parrot-train cnn --input-file data.tsv --output-network network.pt --split kmer -d residues --classification --num-classes 3 --include-figs
+
+Choose the hyperparameters yourself (each architecture's are listed by
+parrot-train <architecture> -h):
+
+    parrot-train brnn --input-file data.tsv --output-network network.pt --split kmer -d sequence --regression -hs 20 -nl 2 -lr 0.0005 -e 200
+
+A fast baseline that ignores the order of residues: k-nearest neighbours on
+sequence composition (these simple models learn one value per sequence, so -d
+is not needed):
+
+    parrot-train knn --input-file data.tsv --output-network network.pt --split kmer --regression
+
+Choose how the data are divided into training, validation and test sets
+(--split). 'mmseqs' (which needs MMseqs2) and 'kmer' keep similar sequences in
+the same set, so that no test sequence has a close relative in the training
+set; 'random' does not, so it can flatter the test results. Each aims for the
+fractions given by --set-fractions (70:15:15 by default), and --save-splits
+keeps the split as a split-file to reuse:
+
+    parrot-train brnn --input-file data.tsv --output-network network.pt --split mmseqs --set-fractions 0.8 0.1 0.1 -d sequence --regression
+    parrot-train brnn --input-file data.tsv --output-network network.pt --split random --save-splits -d sequence --regression
+
+Train on a split-file, e.g. from parrot-preprocess, which also cleans the data
+and lets you change what counts as similar:
+
+    parrot-preprocess data.tsv clean.tsv -d sequence -m regression --split kmer --kmer-size 3
+    parrot-train brnn --input-file clean.tsv --output-network network.pt --split clean_split_file.txt -d sequence --regression
+
+Encode residues with a protein language model, or add each sequence's NARDINI+
+features to every residue:
+
+    parrot-train cnn --input-file data.tsv --output-network network.pt --split kmer -d residues --regression --encode esm2_t12_35M_UR50D
+    parrot-train brnn --input-file data.tsv --output-network network.pt --split kmer -d sequence --regression --encode onehot+nardini
+
+Learn a matrix for each sequence (e.g. a contact map) with a 2D U-Net:
+
+    parrot-train unet2d --input-file data.tsv --output-network network.pt --split kmer --regression --matrix-file maps.npz --symmetric
+
+How it works
+------------
+1. The datafile (--input-file) has '<ID> <sequence> <value(s)>' on each line:
+   one value per sequence (-d sequence) or one per residue (-d residues). The
+   values are numbers to predict (--regression) or classes labelled 0, 1, ...
+   (--classification, with --num-classes). Every line is checked first.
+2. The data are divided into training, validation and test sets (--split),
+   as a split-file says or by one of parrot-preprocess's methods: 'mmseqs' or
+   'kmer' put similar sequences (found by MMseqs2, or by PARROT's own k-mer
+   search) in the same set and then remove any sequence still similar to one
+   in another set; 'random' assigns sequences at random, keeping identical
+   ones together. A method aims for --set-fractions (70:15:15 by default). If
+   a file has the name given to --split, it is read as a split-file, even if
+   the name is also a method's. --seed makes the split, and training,
+   repeatable.
+3. Each residue is encoded as a vector of numbers (--encode; one-hot by
+   default).
+4. The network is trained for -e epochs (100 by default). After every epoch
+   its loss on the validation set is measured, and the network from the epoch
+   with the lowest validation loss is the one kept, so training for too long
+   does no harm. With --stop auto, training instead ends once the validation
+   loss stops improving. The simple models (linear, svm, random_forest, knn)
+   are fitted in one step instead.
+5. The kept network is saved as --output-network (with '.pt' added if the
+   name does not end with it); the file records its architecture,
+   hyperparameters, task and encoding, so parrot-predict needs only the file.
+   It is then tested: predictions for the test set go to
+   <network>_predictions.tsv, and performance metrics to
+   <network>_performance_stats.txt (and figures, with --include-figs).
+6. <network>_info.txt records everything about how the network was trained:
+   the exact command, software versions, the data (with a checksum of the
+   datafile), the split, the encoding, the architecture and its number of
+   parameters, the loss, optimizer, epochs and the epoch kept, and the results.
+
+See also
+--------
+parrot-train -h                   the architectures you can train
+parrot-train <architecture> -h    an architecture's options and hyperparameters
+parrot-optimize                   choose the hyperparameters for you
+parrot-predict                    predict new sequences with a trained network
+'''
+
+OPTIMIZE_GUIDE = '''
+parrot-optimize: find good hyperparameters, then train and test a network
+=========================================================================
+
+What it does
+------------
+parrot-optimize searches for good hyperparameters for an architecture on your
+data, then trains and tests a network with the best ones. It writes the same
+files as parrot-train, plus the chosen hyperparameters and a record of every
+configuration it tried.
+
+Examples
+--------
+Search the BRNN's hidden size and number of layers, and the learning rate:
+
+    parrot-optimize brnn --input-file data.tsv --output-network network.pt --split kmer -d sequence --regression
+
+A shorter search for a CNN on residue data, with the number of channels fixed
+(any hyperparameter you give is fixed rather than searched):
+
+    parrot-optimize cnn --input-file data.tsv --output-network network.pt --split kmer -d residues --classification --num-classes 3 -e 30 --trials 20 --channels 64
+
+For a small dataset, score each configuration by 5-fold cross-validation
+rather than on a single validation set (about 5 times slower):
+
+    parrot-optimize composition --input-file data.tsv --output-network network.pt --split kmer -d sequence --regression --cv-folds 5
+
+See what an architecture searches, and over what values:
+
+    parrot-optimize cnn -h
+
+How it works
+------------
+1. The datafile is read, checked and split exactly as by parrot-train.
+2. The first configuration tried is PARROT's defaults, and the next few are
+   spread evenly over the search space. After that, new configurations are
+   suggested where good results have clustered so far (a tree-structured
+   Parzen estimator, TPE), with a third drawn at random so the whole space
+   keeps being explored.
+3. Successive halving keeps the search cheap: every configuration is first
+   trained for a few epochs, and only the best third of each stage continue,
+   for three times as many epochs, up to --epochs (with -e 30, the stages are
+   3, 10 and 30 epochs). Poor configurations are dropped early.
+4. Each configuration is scored by its lowest validation loss, exactly as
+   parrot-train chooses its best epoch (with --cv-folds, by its average over
+   the folds).
+5. The best configuration's network is saved and tested on the test set.
+   <network>_optimal_hyperparams.txt gives its hyperparameters,
+   <network>_hyperparameter_trials.tsv records every trial as it finishes, and
+   <network>_info.txt describes how the network was trained, including the
+   search.
+
+The default 50 trials cost about as much as 15-20 parrot-train runs with the
+same --epochs, so a GPU helps.
+
+See also
+--------
+parrot-optimize -h                    the architectures you can search
+parrot-optimize <architecture> -h     what is searched, and the search options
+'''
+
+PREDICT_GUIDE = '''
+parrot-predict: predict new sequences with a trained network
+============================================================
+
+What it does
+------------
+parrot-predict uses a network trained by parrot-train or parrot-optimize to
+predict values for new sequences. The network file records how the network was
+trained (its architecture, task and encoding), so no other options are needed.
+
+Examples
+--------
+Predict every sequence in a file of '<ID> <sequence>' lines:
+
+    parrot-predict sequences.txt network.pt predictions.txt
+
+The same, for a file with just one sequence on each line:
+
+    parrot-predict sequences.txt network.pt predictions.txt --exclude-seq-id
+
+For classification, the probability of each class rather than just the most
+likely one (for residue networks, each residue's probabilities are written as
+one comma-separated token, e.g. 0.91,0.06,0.03):
+
+    parrot-predict sequences.txt network.pt predictions.txt --probabilistic-classification
+
+On the CPU, printing nothing (e.g. in a script):
+
+    parrot-predict sequences.txt network.pt predictions.txt --device cpu --silent
+
+From Python, one sequence at a time:
+
+    from parrot import Predictor
+    predictor = Predictor('network.pt')
+    values = predictor.predict('MKVLAAGIVGLLLA')
+
+How it works
+------------
+1. The network and the encoding it was trained with are loaded from its file.
+   (Networks saved by PARROT 1.x record only their weights, so they need
+   --datatype, and --encode if they were not trained on one-hot encoding.)
+2. Every sequence is checked first, so a residue the encoding cannot read
+   stops the command before anything is predicted.
+3. Sequences are predicted in batches of similar length, and each unique
+   sequence is predicted once.
+4. The output has one line per line of the sequence file, in the same order:
+   the ID, the sequence, and its predicted value(s), one per sequence or one
+   per residue. Networks for matrix data write a NumPy .npz archive instead,
+   with one matrix per sequence ID.
+'''
+
+PREPROCESS_GUIDE = '''
+parrot-preprocess: get a datafile ready for training
+====================================================
+
+What it does
+------------
+parrot-preprocess turns a datafile into one ready for training. It can clean
+sequences, recode class labels, deal with duplicate sequences, split the data
+into training, validation and test sets with no leakage between them, and
+balance the classes of the training set. It writes the processed datafile, a
+matching split-file to train on with parrot-train --split, and a report of
+every step.
+
+Examples
+--------
+Split regression data so that no test sequence has a close relative in the
+training set (needs nothing but PARROT), then train on the split:
+
+    parrot-preprocess data.tsv clean.tsv -d sequence -m regression --split kmer --seed 1
+    parrot-train brnn --input-file clean.tsv --output-network network.pt --split clean_split_file.txt -d sequence --regression
+
+The most thorough split, which also finds distant homologues with MMseqs2
+(installed separately, e.g. conda install -c conda-forge -c bioconda mmseqs2):
+
+    parrot-preprocess data.tsv clean.tsv -d sequence -m regression --split homology
+
+Clean a classification dataset: convert sequences to upper case, remove those
+with non-standard residues or fewer than 10 residues, merge duplicate
+sequences, split at random and balance the classes of the training set:
+
+    parrot-preprocess data.tsv clean.tsv -d sequence -m classification --uppercase --remove-nonstandard --min-length 10 --deduplicate merge --split random --class-balance
+
+Recode class labels written as text (e.g. 'nuclear', 'cytoplasmic') as the
+numbers 0, 1, ... that PARROT needs:
+
+    parrot-preprocess data.tsv clean.tsv -d sequence -m classification --recode-classes
+
+How it works
+------------
+The steps always run in this order, and each is optional:
+
+1. Cleaning (--uppercase, --remove-nonstandard, --min-length, --max-length).
+2. Recoding class labels (--recode-classes); the mapping is written to
+   <output>_class_mapping.txt.
+3. Deduplication (--deduplicate merge, first or drop, and
+   --remove-line-duplicates).
+4. Splitting (--split homology, kmer or random). Similar sequences are grouped
+   and whole groups are assigned to sets, then anything still similar to a
+   sequence in another set is removed (keeping test, then validation, then
+   training sequences).
+5. Balancing the classes of the training set (--class-balance).
+
+Every step is recorded in <output>_preprocess_report.txt (-v also prints it),
+which ends by checking that parrot-train can read the output.
+'''
+
+CVSPLIT_GUIDE = '''
+parrot-cvsplit: split-files for k-fold cross-validation
+=======================================================
+
+What it does
+------------
+parrot-cvsplit writes one split-file per fold for k-fold cross-validation.
+Each fold's test set is a different tenth (or 1/k) of the data, and the rest
+of that fold is divided into training and validation sets.
+
+Examples
+--------
+Ten folds, then train a network on each of them:
+
+    parrot-cvsplit data.tsv cv/splits -k 10 --seed 1
+    parrot-train brnn --input-file data.tsv --output-network cv/network0.pt --split cv/splits_cv0.txt -d sequence --regression
+    ...
+    parrot-train brnn --input-file data.tsv --output-network cv/network9.pt --split cv/splits_cv9.txt -d sequence --regression
+
+Five folds, training on 90% of each fold's non-test sequences:
+
+    parrot-cvsplit data.tsv cv/splits -k 5 -t 0.9
+
+How it works
+------------
+The sequences are shuffled (repeatably, with --seed) and divided into k folds
+of near-equal size. Fold i is the test set of split-file i, and the other
+sequences are divided between its training set (-t, 0.8 by default) and its
+validation set. Each split-file has three lines, giving the training,
+validation and test sets as line numbers of the datafile (counting from 0, and
+skipping blank and comment lines), as parrot-train --split expects.
+
+Folds are drawn at random, so close relatives can end up in different sets;
+parrot-preprocess --split makes splits that keep them together. To score
+hyperparameters by cross-validation, use parrot-optimize --cv-folds.
+'''
+
+# Each command's guide, by the command's name
+GUIDES = {
+    'parrot-train': TRAIN_GUIDE,
+    'parrot-optimize': OPTIMIZE_GUIDE,
+    'parrot-predict': PREDICT_GUIDE,
+    'parrot-preprocess': PREPROCESS_GUIDE,
+    'parrot-cvsplit': CVSPLIT_GUIDE,
+}
+
+
+class ShowExamplesAction(argparse.Action):
+    """An option that prints a command's header and guide, then exits (like --help)
+
+    argparse runs an option's action as soon as it reads the option, so the
+    guide is shown even if the command's other arguments are missing.
+    """
+
+    def __init__(self, option_strings: Sequence[str], dest: str, program_name: str, **kwargs: Any) -> None:
+        """
+        Parameters
+        ----------
+        option_strings, dest
+            Passed on by argparse
+        program_name : str
+            The command whose guide to show, e.g. 'parrot-train'
+        """
+        super().__init__(option_strings, dest, nargs=0, default=argparse.SUPPRESS, **kwargs)
+        self.program_name = program_name
+
+    def __call__(self, parser: argparse.ArgumentParser, namespace: argparse.Namespace, values: Any,
+                 option_string: str | None = None) -> None:
+        """Print the header and guide, and exit."""
+        print(header(self.program_name, datetime.datetime.now(), examples_hint=False))
+        print(GUIDES[self.program_name].strip('\n'))
+        parser.exit()
+
+
+def add_examples_argument(parser: 'argparse._ActionsContainer', program_name: str) -> None:
+    """Add --show-examples, which prints the command's guide (see GUIDES) and exits
+
+    Parameters
+    ----------
+    parser : argparse.ArgumentParser or argument group
+        Where to add the option
+    program_name : str
+        The command, e.g. 'parrot-train'
+    """
+    parser.add_argument(EXAMPLES_FLAG, action=ShowExamplesAction, program_name=program_name,
+                        help='show examples of how to use this command, what it does and how it works, then exit')

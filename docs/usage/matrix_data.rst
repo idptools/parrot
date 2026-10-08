@@ -43,7 +43,7 @@ Training
 
 .. code-block:: bash
 
-    $ parrot-train unet2d data.tsv network.pt -c 1 --matrix-file matrices.npz --symmetric --include-figs
+    $ parrot-train unet2d --input-file data.tsv --output-network network.pt --split kmer --regression --matrix-file matrices.npz --symmetric --include-figs
 
 The flags for matrix data are:
 

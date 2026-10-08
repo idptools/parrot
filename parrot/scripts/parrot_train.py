@@ -68,7 +68,7 @@ def main() -> None:
 def run() -> None:
     """Train a network with the given hyperparameters, save it, and report its performance on the test set."""
     args = training_parser.parse_arguments(build_parser())
-    arguments.print_startup(PROGRAM_NAME, args.silent)
+    arguments.print_header(PROGRAM_NAME, args.silent)
 
     # Check the training-specific arguments before any data is loaded
     arguments.check_fraction(args.learning_rate, 'Learning rate')
@@ -77,7 +77,7 @@ def run() -> None:
         print(f"Warning: Stop condition is set to 'auto' and num_epochs > {LONG_AUTO_STOP_EPOCHS}. "
               'Network training may take a long time.\n')
 
-    run = common.prepare_training_run(args)
+    run = common.prepare_training_run(args, PROGRAM_NAME)
     network = build_network(args.architecture, len(run.encoder), run.task, hyperparameters).to(run.device)
 
     settings: dict[str, Any] = dict(architecture=args.architecture, **hyperparameters)
@@ -94,7 +94,8 @@ def run() -> None:
                                                    stop_condition=args.stop, on_improvement=run.save,
                                                    verbose=args.verbose, silent=args.silent)
 
-    common.finish_training_run(run, network, train_losses, val_losses)
+    training = dict(learning_rate=args.learning_rate, epochs=args.epochs, stop=args.stop)
+    common.finish_training_run(run, network, train_losses, val_losses, training)
 
 
 if __name__ == '__main__':

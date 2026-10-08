@@ -34,7 +34,8 @@ class OffByDefaultTestArchitecture(ParrotArchitecture):
 def required_arguments(architecture: str) -> list[str]:
     """The fewest arguments an architecture's subcommand accepts (-d only where there is a choice)."""
     datatype = ['-d', 'sequence'] if len(get_architecture(architecture).supported_datatypes) > 1 else []
-    return [architecture, 'data.tsv', 'net.pt', *datatype, '-c', '1']
+    return [architecture, '--input-file', 'data.tsv', '--output-network', 'net', '--split', 'random', *datatype,
+            '--regression']
 
 
 def parse(command: ModuleType, arguments: list[str]):
@@ -139,8 +140,11 @@ def test_matrix_options_are_offered_to_matrix_architectures_only():
         parse(parrot_train, [*required_arguments('brnn'), '--matrix-file', 'maps.npz'])
 
 
-def test_class_probabilities_are_offered_to_architectures_for_sequence_data_only():
+def test_class_probabilities_are_offered_to_architectures_for_sequence_or_residue_data_only():
     assert parse(parrot_train, [*required_arguments('cnn'), '--probabilistic-classification']).probabilistic_classification
+    residue_classes = ['unet', '--input-file', 'data.tsv', '--output-network', 'net', '--split', 'random',
+                       '-d', 'residues', '--classification', '--num-classes', '3', '--probabilistic-classification']
+    assert parse(parrot_train, residue_classes).probabilistic_classification
     with pytest.raises(SystemExit):
         parse(parrot_train, [*required_arguments('unet2d'), '--probabilistic-classification'])
 
@@ -165,40 +169,43 @@ def test_datatype_is_inferred_when_an_architecture_supports_only_one(architectur
 
 def test_datatype_is_required_when_an_architecture_supports_several():
     with pytest.raises(SystemExit):
-        parse(parrot_train, ['brnn', 'data.tsv', 'net.pt', '-c', '1'])
+        parse(parrot_train, ['brnn', '--input-file', 'data.tsv', '--output-network', 'net', '--regression'])
 
 
 # ..........................................................................................
-# Commands written before subcommands existed
+# The task, and commands that do not start with an architecture
 
-@pytest.mark.parametrize('arguments, rewritten', [
-    ([], []),
-    (['-h'], ['-h']),
-    (['cnn', 'data.tsv', 'net.pt'], ['cnn', 'data.tsv', 'net.pt']),
-    (['data.tsv', 'net.pt', '-d', 'sequence'], ['brnn', 'data.tsv', 'net.pt', '-d', 'sequence']),
-    (['data.tsv', 'net.pt', '--architecture', 'cnn', '-c', '1'], ['cnn', 'data.tsv', 'net.pt', '-c', '1']),
-    (['--architecture=unet', 'data.tsv', 'net.pt'], ['unet', 'data.tsv', 'net.pt']),
-    (['data.tsv', 'net.pt', '--architecture'], ['brnn', 'data.tsv', 'net.pt', '--architecture']),
+@pytest.mark.parametrize('task_arguments, regression, classification, num_classes', [
+    (['--regression'], True, False, None),
+    (['--classification', '--num-classes', '3'], False, True, 3),
 ])
-def test_old_commands_are_rewritten_to_start_with_their_architecture(arguments, rewritten):
-    assert training_parser.with_architecture_first(arguments, BUILT_IN_ARCHITECTURES) == rewritten
+def test_task_options_are_parsed(task_arguments, regression, classification, num_classes):
+    arguments = ['brnn', '--input-file', 'data.tsv', '--output-network', 'net', '--split', 'random', '-d', 'sequence',
+                 *task_arguments]
+    args = parse(parrot_train, arguments)
+    assert (args.regression, args.classification, args.num_classes) == (regression, classification, num_classes)
 
 
 @pytest.mark.parametrize('command', TRAINING_COMMANDS, ids=['train', 'optimize'])
-def test_old_commands_parse_as_before(command):
-    data_file = data_path('seq_regress_dataset.tsv')
-    brnn = parse(command, [data_file, 'net.pt', '-d', 'sequence', '-c', '1', '-hs', '7'])
-    assert brnn.architecture == 'brnn' and training_parser.given_hyperparameters(brnn) == {'hidden_size': 7}
-
-    cnn = parse(command, [data_file, 'net.pt', '-d', 'sequence', '-c', '1', '--architecture', 'cnn', '--channels', '8'])
-    assert cnn.architecture == 'cnn' and training_parser.given_hyperparameters(cnn) == {'channels': 8}
-
-
-def test_misspelt_architecture_is_reported_clearly(capsys):
+def test_split_is_required(command, capsys):
+    arguments = ['brnn', '--input-file', 'data.tsv', '--output-network', 'net', '-d', 'sequence', '--regression']
     with pytest.raises(SystemExit):
-        parse(parrot_train, ['cnnn', 'data.tsv', 'net.pt', '-d', 'sequence', '-c', '1'])
-    error = capsys.readouterr().err
-    assert "'cnnn' is neither an architecture nor an existing datafile" in error and 'cnn' in error
+        parse(command, arguments)
+    assert 'the following arguments are required: --split' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize('arguments, problem', [
+    ([], None),
+    (['-h'], None),
+    (['cnn', '--input-file', 'data.tsv'], None),
+    (['data.tsv', '--show-examples'], None),   # asking for examples always works
+    (['--input-file', 'data.tsv'], 'give the architecture first'),
+    ([data_path('seq_regress_dataset.tsv'), 'net.pt', '-c', '1'], 'now takes the architecture first'),
+    (['cnnn', '--input-file', 'data.tsv'], "'cnnn' is not an architecture"),
+], ids=['nothing', 'help', 'architecture', 'examples', 'no-architecture', 'old-style', 'misspelt'])
+def test_commands_that_do_not_start_with_an_architecture_are_explained(arguments, problem):
+    found = training_parser.first_argument_problem(arguments, 'parrot-train')
+    assert (found is None) if problem is None else (problem in found)
 
 
 # ..........................................................................................
@@ -221,9 +228,12 @@ def test_only_optimize_help_describes_the_search(capsys):
 
 
 @pytest.mark.parametrize('architecture, usage', [
-    ('brnn', 'brnn data_file output_network -d {sequence,residues} -c num_classes [options]'),
-    ('knn', 'knn data_file output_network -c num_classes [options]'),
-    ('unet2d', 'unet2d data_file output_network -c num_classes --matrix-file file.npz [options]'),
+    ('brnn', 'brnn --input-file file --output-network name --split {mmseqs,kmer,random,file} '
+             '-d {sequence,residues} (--regression | --classification --num-classes N) [options]'),
+    ('knn', 'knn --input-file file --output-network name --split {mmseqs,kmer,random,file} '
+            '(--regression | --classification --num-classes N) [options]'),
+    ('unet2d', 'unet2d --input-file file --output-network name --split {mmseqs,kmer,random,file} '
+               '(--regression | --classification --num-classes N) --matrix-file file.npz [options]'),
 ])
 def test_usage_lists_the_required_arguments(architecture, usage, capsys):
     assert usage in help_text(parrot_train, [architecture, '-h'], capsys)

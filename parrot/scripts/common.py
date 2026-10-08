@@ -17,7 +17,7 @@ Licensed under the MIT license.
 import argparse
 import math
 import os
-import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,7 +32,8 @@ from parrot.encode_sequence import get_encoder
 from parrot.metrics import METRIC_DECIMALS
 from parrot.reproducibility import set_random_seed
 from parrot.sequence_encoder import SequenceEncoder
-from parrot.scripts import arguments
+from parrot.scripts import arguments, network_info
+from parrot.scripts.data_split import DataSplit, data_split_from_args
 from parrot.tasks import Task
 from parrot.tools import dataset_warnings
 
@@ -50,6 +51,9 @@ DATATYPE_DESCRIPTIONS = {
     'residues': 'one value per residue',
     'matrix': 'a matrix per sequence',
 }
+
+# Networks are saved with this extension (added to --output-network if it does not end with it)
+NETWORK_EXTENSION = '.pt'
 
 # Ends the help of every flag kept only so that commands written for earlier versions of PARROT still work
 LEGACY_NOTE = '(kept so that older commands keep working)'
@@ -194,12 +198,11 @@ def add_device_arguments(parser: 'argparse._ActionsContainer') -> None:
                              "Apple-silicon GPU (MPS) if available, else the CPU")
     parser.add_argument('--gpu-id', dest='gpu_id', type=int, metavar='index',
                         help='index of the CUDA device to use, on machines with more than one NVIDIA GPU')
-    parser.add_argument('--force-cpu', dest='force_cpu', action='store_true',
-                        help=f'same as --device cpu {LEGACY_NOTE}')
+    parser.add_argument('--force-cpu', action=arguments.RetiredOption, replacement='use --device cpu')
 
 
 def check_probabilistic_classification(probabilistic: bool, task: Task) -> None:
-    """Check that class probabilities were only asked for a task that has them (sequence classification)
+    """Check that class probabilities were only asked for a task that has them (sequence or residue classification)
 
     Parameters
     ----------
@@ -210,14 +213,14 @@ def check_probabilistic_classification(probabilistic: bool, task: Task) -> None:
     Raises
     ------
     ValueError
-        If probabilities were asked for a regression or residue-mapped task
+        If probabilities were asked for regression, or for matrix data
     """
-    if probabilistic and (task.per_residue or not task.is_classification):
-        raise ValueError('Probabilistic classification only implemented for sequence classification')
+    if probabilistic and (not task.is_classification or task.is_matrix):
+        raise ValueError('Probabilistic classification applies to sequence and residue classification only')
 
 
 def select_device(args: argparse.Namespace) -> torch.device:
-    """Choose the device from the --device, --force-cpu and --gpu-id arguments
+    """Choose the device from the --device and --gpu-id arguments
 
     Parameters
     ----------
@@ -231,19 +234,12 @@ def select_device(args: argparse.Namespace) -> torch.device:
     Raises
     ------
     ValueError
-        If --force-cpu is combined with a --device other than cpu or auto, or
-        the arguments are otherwise inconsistent (see devices.resolve_device)
+        If the arguments are inconsistent (see devices.resolve_device)
     RuntimeError
         If the requested device is not available
     """
 
-    requested = args.device
-    if args.force_cpu:
-        if requested not in ('auto', 'cpu'):
-            raise ValueError(f"--force-cpu cannot be combined with --device {requested}")
-        requested = 'cpu'
-
-    device = devices.resolve_device(requested, args.gpu_id)
+    device = devices.resolve_device(args.device, args.gpu_id)
     if not getattr(args, 'silent', False):
         print(f'Running on: {devices.describe_device(device)}')
     return device
@@ -258,6 +254,16 @@ class TrainingRun:
 
     Attributes
     ----------
+    program_name : str
+        The command running, e.g. 'parrot-train'
+    data_file : str
+        Absolute path of the datafile
+    split_description : str
+        How the data were divided into training, validation and test sets
+    seed : int or None
+        The random seed (None if not seeded)
+    saved_split_file : str or None
+        The split-file written with --save-splits, if any
     task : Task
         The task being trained
     encoder : SequenceEncoder
@@ -288,6 +294,11 @@ class TrainingRun:
         Print nothing
     """
 
+    program_name: str
+    data_file: str
+    split_description: str
+    seed: int | None
+    saved_split_file: str | None
     task: Task
     encoder: SequenceEncoder
     device: torch.device
@@ -336,13 +347,79 @@ def warn_about_batch_size(batch_size: int, num_training_sequences: int) -> None:
             ['Few updates per epoch may make training less efficient; consider a smaller --batch.'])
 
 
-def prepare_training_run(args: argparse.Namespace, n_folds: int | None = None) -> TrainingRun:
+def network_path(name: str) -> str:
+    """The file a network is saved to: `name`, with NETWORK_EXTENSION added if it does not end with it
+
+    Parameters
+    ----------
+    name : str
+        The --output-network argument
+
+    Returns
+    -------
+    str
+    """
+    return name if name.endswith(NETWORK_EXTENSION) else name + NETWORK_EXTENSION
+
+
+def number_of_classes(args: argparse.Namespace) -> int:
+    """The number of outputs the task needs: 1 for --regression, --num-classes for --classification
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Arguments parsed by training_parser.parse_arguments()
+
+    Returns
+    -------
+    int
+
+    Raises
+    ------
+    ValueError
+        If --num-classes is missing for --classification, given for --regression, or less than 2
+    """
+    if args.regression:
+        if args.num_classes is not None:
+            raise ValueError('--num-classes only applies to --classification (regression has one output)')
+        return 1
+    if args.num_classes is None:
+        raise ValueError('--classification needs --num-classes: the number of classes (labelled 0, 1, ...)')
+    if args.num_classes < 2:
+        raise ValueError(f'--num-classes must be at least 2 for classification, got {args.num_classes}')
+    return int(args.num_classes)
+
+
+def describe_split(data_split: DataSplit, n_folds: int | None) -> str:
+    """How the data are divided into training, validation and test sets, in words
+
+    Parameters
+    ----------
+    data_split : DataSplit
+        The split, once applied to the data
+    n_folds : int or None
+        Number of cross-validation folds, if configurations are scored by cross-validation
+
+    Returns
+    -------
+    str
+    """
+    description = data_split.description()
+    if n_folds is not None:
+        description += (f'; hyperparameter configurations scored by {n_folds}-fold cross-validation over the training '
+                        'and validation sequences')
+    return description
+
+
+def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: int | None = None) -> TrainingRun:
     """Validate the shared arguments, then load and split the data
 
     Parameters
     ----------
     args : argparse.Namespace
         Arguments parsed by training_parser.parse_arguments()
+    program_name : str
+        The command running, e.g. 'parrot-train'
     n_folds : int, optional
         If given, also divide the training + validation data into this many
         cross-validation folds
@@ -361,35 +438,31 @@ def prepare_training_run(args: argparse.Namespace, n_folds: int | None = None) -
 
     set_random_seed(args.seed)
 
-    data_file = arguments.check_file_exists(args.data_file, 'Datafile')
-    network_file = os.path.abspath(args.output_network)
+    data_file = arguments.check_file_exists(args.input_file, 'Input file')
+    network_file = os.path.abspath(network_path(args.output_network))
     output_prefix, _ = arguments.output_prefix_and_directory(network_file)
 
-    split_file = None
-    if args.split_file is not None:
-        split_file = arguments.check_file_exists(args.split_file, 'Split-file')
-
+    data_split = data_split_from_args(args)
     save_splits_output = None
     if args.save_splits:
         save_splits_output = output_prefix + '_split_file.txt'
 
     encoder = get_encoder(args.encode, standardize=args.standardize_encoding, nardini_scrambles=args.nardini_scrambles)
     check_matrix_arguments(args)
-    task = Task(args.datatype, args.classes, width=args.matrix_width, symmetric=args.symmetric)
+    task = Task(args.datatype, number_of_classes(args), width=args.matrix_width, symmetric=args.symmetric)
     nardini.check_task(encoder, task)
 
     arguments.check_positive(args.epochs, 'Number of epochs')
     arguments.check_positive(args.batch, 'Batch size')
-    arguments.check_set_fractions(args.set_fractions)
     check_probabilistic_classification(args.probabilistic_classification, task)
 
     ignore_warnings = args.ignore_warnings or args.silent
     device = select_device(args)
 
-    split_arguments: dict[str, Any] = dict(encoder=encoder, exclude_seq_id=args.exclude_seq_id, split_file=split_file,
-                                           percent_val=args.set_fractions[1], percent_test=args.set_fractions[2],
-                                           ignore_warnings=ignore_warnings, save_splits_output=save_splits_output,
-                                           matrix_file=args.matrix_file)
+    # The split-file, or the method, is applied as the data are read (see data_split.DataSplit)
+    split_arguments: dict[str, Any] = dict(encoder=encoder, exclude_seq_id=args.exclude_seq_id,
+                                           assign_sets=data_split, ignore_warnings=ignore_warnings,
+                                           save_splits_output=save_splits_output, matrix_file=args.matrix_file)
     cv_sets = None
     if n_folds is None:
         train_set, val_set, test_set = pid.split_data(data_file, task, **split_arguments)
@@ -407,9 +480,12 @@ def prepare_training_run(args: argparse.Namespace, n_folds: int | None = None) -
         check_matrix_lengths(every_sequence, args.max_matrix_length)
     prepare_encoding(encoder, every_sequence, args.embedding_cache,
                      os.path.join(os.path.dirname(network_file), plm.TRAIN_CACHE_DIRECTORY), device,
-                     os.path.basename(sys.argv[0]), args.silent)
+                     program_name, args.silent)
 
-    return TrainingRun(task=task, encoder=encoder, device=device, network_file=network_file,
+    return TrainingRun(program_name=program_name, data_file=data_file,
+                       split_description=describe_split(data_split, n_folds), seed=args.seed,
+                       saved_split_file=save_splits_output,
+                       task=task, encoder=encoder, device=device, network_file=network_file,
                        output_prefix=output_prefix, train_set=train_set, val_set=val_set, test_set=test_set,
                        cv_sets=cv_sets, batch_size=args.batch, batching=args.batching,
                        probabilistic=args.probabilistic_classification,
@@ -471,8 +547,9 @@ def describe_data(run: TrainingRun) -> str:
 
 
 def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_losses: list[float],
-                        val_losses: list[float]) -> None:
-    """Save the trained network, then evaluate and report on the test set
+                        val_losses: list[float], training: dict[str, Any],
+                        search: list[tuple[str, str]] | None = None, other_files: Sequence[str] = ()) -> None:
+    """Save the trained network, evaluate and report on the test set, and describe how the network was trained
 
     Parameters
     ----------
@@ -482,10 +559,19 @@ def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_los
         The trained network (holding its best weights)
     train_losses, val_losses : list of float
         Loss per epoch, as returned by train_network.train()
+    training : dict
+        The training settings, for the info file: 'learning_rate', 'epochs'
+        and 'stop' (networks trained by gradient descent only)
+    search : list of (str, str), optional
+        parrot-optimize's description of its hyperparameter search, for the info file
+    other_files : list of str, optional
+        Other files the command wrote, to list with the rest
     """
 
     run.save(network)
-    written = []
+    written = list(other_files)
+    if run.saved_split_file is not None:
+        written.append(run.saved_split_file)
 
     # Models fitted in one step have no loss curve to plot
     if run.include_figs and network.trained_by_gradient_descent:
@@ -496,9 +582,17 @@ def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_los
     metrics, test_files = reporting.report_test_results(labeled, run.task, run.output_prefix,
                                                         probabilistic=run.probabilistic,
                                                         include_figs=run.include_figs, write_stats=run.write_stats)
+    written += test_files
+
+    info_file = run.output_prefix + '_info.txt'
+    sections = network_info.info_sections(run, network, training, train_losses, val_losses, labeled.loss, metrics,
+                                          written, search)
+    network_info.write_network_info(info_file, run.network_file, sections)
+    written.insert(0, info_file)
+
     if not run.silent:
         print_test_results(labeled.loss, metrics)
-        print_written_files(run.network_file, written + test_files)
+        print_written_files(run.network_file, written)
 
 
 def print_test_results(loss: float, metrics: dict[str, float]) -> None:

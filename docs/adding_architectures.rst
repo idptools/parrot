@@ -96,8 +96,8 @@ That is all. The new architecture can now be used everywhere:
 
 .. code-block:: bash
 
-    $ parrot-train my_architecture data/seq_regress_dataset.tsv my_network.pt -d sequence -c 1 --hidden-size 64
-    $ parrot-optimize my_architecture data/seq_regress_dataset.tsv my_network.pt -d sequence -c 1
+    $ parrot-train my_architecture --input-file data/seq_regress_dataset.tsv --output-network my_network --split random -d sequence --regression --hidden-size 64
+    $ parrot-optimize my_architecture --input-file data/seq_regress_dataset.tsv --output-network my_network --split random -d sequence --regression
     $ parrot-predict data/seqfile.txt my_network.pt predictions.txt
 
 and from Python with ``parrot.build_network('my_architecture', input_size, task, {...})`` or ``parrot.py_predictor.Predictor('my_network.pt')``.

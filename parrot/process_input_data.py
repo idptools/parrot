@@ -15,7 +15,7 @@ Licensed under the MIT license.
 
 import functools
 import math
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any, NamedTuple
 
 import numpy as np
@@ -59,6 +59,9 @@ PAD_STEPS_PER_DOUBLING = 8
 
 # A parsed datafile line: [sequence ID, sequence, value(s)]
 Sample = list[Any]
+
+# Decides which samples go in each set: given the parsed data, returns the (training, validation, test) indices
+SetAssigner = Callable[[list[Sample]], tuple[np.ndarray, np.ndarray, np.ndarray]]
 
 
 # .................................................................
@@ -343,14 +346,14 @@ def _validate_class_labels(sample: Sample, task: Task) -> int | list[int]:
     if len(not_whole):
         raise parrot_exceptions.IOExceptionParrot(
             f'Invalid class label on entry {sample[0]}: class labels must be whole numbers, got {not_whole[0]:g}. '
-            'If these are values to predict rather than classes, use -c 1 (regression).')
+            'If these are values to predict rather than classes, use --regression.')
 
     out_of_range = present[(present < 0) | (present >= task.num_classes)]
     if len(out_of_range):
         raise parrot_exceptions.IOExceptionParrot(
-            f'Invalid class label on entry {sample[0]}: with {task.num_classes} classes (-c {task.num_classes}) the '
-            f'labels must be 0 to {task.num_classes - 1}, got {out_of_range[0]:g}. Set -c to the number of classes '
-            'in the data.')
+            f'Invalid class label on entry {sample[0]}: with {task.num_classes} classes (--num-classes '
+            f'{task.num_classes}) the labels must be 0 to {task.num_classes - 1}, got {out_of_range[0]:g}. Set '
+            '--num-classes to the number of classes in the data.')
 
     integer_labels = [IGNORED_CLASS_LABEL if is_missing else int(label) for label, is_missing in zip(labels, missing)]
     if task.per_residue:
@@ -857,7 +860,8 @@ def check_sets_not_empty(training_samples: np.ndarray, val_samples: np.ndarray, 
 def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, split_file: str | None = None,
                    percent_val: float = DEFAULT_SET_FRACTIONS[1], percent_test: float = DEFAULT_SET_FRACTIONS[2],
                    ignore_warnings: bool = False, save_splits_output: str | None = None,
-                   matrix_file: str | None = None) -> tuple[list[Sample], np.ndarray, np.ndarray, np.ndarray]:
+                   matrix_file: str | None = None, assign_sets: SetAssigner | None = None
+                   ) -> tuple[list[Sample], np.ndarray, np.ndarray, np.ndarray]:
     """Parse a datafile and decide which samples go in each set
 
     Parameters
@@ -881,6 +885,12 @@ def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, spl
         If given (and no split-file is used), write the random split to this path
     matrix_file : str, optional
         Matrix tasks only: the .npz file holding each sequence's matrix (see parse_file())
+    assign_sets : callable, optional
+        If given (and no split-file is), decides the sets instead of a random
+        split: it receives the parsed data and returns the (training,
+        validation, test) indices, e.g. a split that keeps similar sequences
+        together (see scripts/data_split.py). A sample may be left out of
+        every set.
 
     Returns
     -------
@@ -896,10 +906,13 @@ def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, spl
         check_sets_not_empty(training_samples, val_samples, test_samples, f'in split-file {split_file}')
         return data, training_samples, val_samples, test_samples
 
-    training_samples, val_samples, test_samples = random_split_indices(len(data), percent_val, percent_test)
-    check_sets_not_empty(training_samples, val_samples, test_samples,
-                         f'when {len(data)} sequences are split with validation and test fractions of '
-                         f'{percent_val} and {percent_test}. Use more data, larger fractions or a split-file.')
+    if assign_sets is not None:
+        training_samples, val_samples, test_samples = assign_sets(data)
+    else:
+        training_samples, val_samples, test_samples = random_split_indices(len(data), percent_val, percent_test)
+        check_sets_not_empty(training_samples, val_samples, test_samples,
+                             f'when {len(data)} sequences are split with validation and test fractions of '
+                             f'{percent_val} and {percent_test}. Use more data, larger fractions or a split-file.')
     if save_splits_output is not None:
         write_split_file(save_splits_output, training_samples, val_samples, test_samples)
 
@@ -909,8 +922,8 @@ def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, spl
 def split_data(data_file: str, task: Task, encoder: SequenceEncoder | None = None, exclude_seq_id: bool = False,
                split_file: str | None = None, percent_val: float = DEFAULT_SET_FRACTIONS[1],
                percent_test: float = DEFAULT_SET_FRACTIONS[2], ignore_warnings: bool = False,
-               save_splits_output: str | None = None,
-               matrix_file: str | None = None) -> tuple[SequenceDataset, SequenceDataset, SequenceDataset]:
+               save_splits_output: str | None = None, matrix_file: str | None = None,
+               assign_sets: SetAssigner | None = None) -> tuple[SequenceDataset, SequenceDataset, SequenceDataset]:
     """Divide a datafile into training, validation, and test datasets
 
     Parameters
@@ -921,7 +934,8 @@ def split_data(data_file: str, task: Task, encoder: SequenceEncoder | None = Non
         The task the data is for
     encoder : SequenceEncoder, optional
         How to encode sequences (default one-hot)
-    exclude_seq_id, split_file, percent_val, percent_test, ignore_warnings, save_splits_output, matrix_file
+    exclude_seq_id, split_file, percent_val, percent_test, ignore_warnings, save_splits_output, matrix_file,
+    assign_sets
         See load_and_split()
 
     Returns
@@ -933,7 +947,7 @@ def split_data(data_file: str, task: Task, encoder: SequenceEncoder | None = Non
     data, training_samples, val_samples, test_samples = load_and_split(
         data_file, task, exclude_seq_id=exclude_seq_id, split_file=split_file, percent_val=percent_val,
         percent_test=percent_test, ignore_warnings=ignore_warnings, save_splits_output=save_splits_output,
-        matrix_file=matrix_file)
+        matrix_file=matrix_file, assign_sets=assign_sets)
 
     return (SequenceDataset(data, training_samples, encoder),
             SequenceDataset(data, val_samples, encoder),
@@ -971,7 +985,8 @@ def cross_validation_folds(samples: np.ndarray, n_folds: int) -> list[tuple[np.n
 def split_data_cv(data_file: str, task: Task, encoder: SequenceEncoder | None = None, exclude_seq_id: bool = False,
                   split_file: str | None = None, percent_val: float = DEFAULT_SET_FRACTIONS[1],
                   percent_test: float = DEFAULT_SET_FRACTIONS[2], n_folds: int = 5, ignore_warnings: bool = False,
-                  save_splits_output: str | None = None, matrix_file: str | None = None
+                  save_splits_output: str | None = None, matrix_file: str | None = None,
+                  assign_sets: SetAssigner | None = None
                   ) -> tuple[list[tuple[SequenceDataset, SequenceDataset]], SequenceDataset, SequenceDataset,
                              SequenceDataset]:
     """Divide a datafile into training, validation and test sets plus cross-validation folds
@@ -982,7 +997,7 @@ def split_data_cv(data_file: str, task: Task, encoder: SequenceEncoder | None = 
     Parameters
     ----------
     data_file, task, encoder, exclude_seq_id, split_file, percent_val, percent_test, ignore_warnings,
-    save_splits_output, matrix_file
+    save_splits_output, matrix_file, assign_sets
         See split_data()
     n_folds : int, optional
         Number of cross-validation folds (default 5)
@@ -997,7 +1012,7 @@ def split_data_cv(data_file: str, task: Task, encoder: SequenceEncoder | None = 
     data, training_samples, val_samples, test_samples = load_and_split(
         data_file, task, exclude_seq_id=exclude_seq_id, split_file=split_file, percent_val=percent_val,
         percent_test=percent_test, ignore_warnings=ignore_warnings, save_splits_output=save_splits_output,
-        matrix_file=matrix_file)
+        matrix_file=matrix_file, assign_sets=assign_sets)
 
     cv_samples = np.append(training_samples, val_samples)
     if n_folds > len(cv_samples):

@@ -16,7 +16,7 @@ Where *data_file* is a standard PARROT datafile and *output_file* is where the p
 
     $ parrot-preprocess data.tsv clean.tsv -d sequence -m classification \
         --deduplicate merge --split homology --class-balance --seed 1
-    $ parrot-train brnn clean.tsv network.pt -d sequence -c 3 --split clean_split_file.txt
+    $ parrot-train brnn --input-file clean.tsv --output-network network.pt -d sequence --classification --num-classes 3 --split clean_split_file.txt
 
 Steps are always carried out in the order below, and each is optional.
 
@@ -34,6 +34,7 @@ Steps are always carried out in the order below, and each is optional.
 **General flags:**
 
     *  ``--help`` / ``-h`` : Display a help message.
+    *  ``--show-examples`` : Print a longer guide to ``parrot-preprocess``: examples of how to use it, what it does and how it works.
     *  ``--delimiter`` : The character separating columns, if not whitespace.
     *  ``--seed`` : Integer random seed, which makes the split and class balancing reproducible. By default no seed is set.
     *  ``--verbose`` / ``-v`` : Print the report as it is written.

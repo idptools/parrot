@@ -2,7 +2,7 @@
  Architectures
 ===============
 
-PARROT can train several kinds of model on the same data. Each is a subcommand of ``parrot-train`` and ``parrot-optimize`` (e.g. ``parrot-train cnn data.tsv network.pt -d residues -c 1``); commands that do not choose one train a ``brnn``, as earlier versions of PARROT did. There are two families:
+PARROT can train several kinds of model on the same data. Each is a subcommand of ``parrot-train`` and ``parrot-optimize`` (e.g. ``parrot-train cnn --input-file data.tsv --output-network network.pt --split kmer -d residues --regression``); commands that do not choose one train a ``brnn``, as earlier versions of PARROT did. There are two families:
 
 * **neural networks** (``brnn``, ``cnn``, ``unet``, ``transformer``, ``composition``), trained epoch by epoch, which work for all four task types (sequence or residue data, regression or classification);
 * **simple models** (``linear``, ``svm``, ``random_forest``, ``knn``) from scikit-learn, fitted in one step to a fixed summary of each sequence, which work for sequence-mapped data only.
@@ -23,7 +23,7 @@ Which architecture should I use?
 * **transformer** is a transformer encoder: every residue attends to every other residue of its sequence, so even one block sees the whole sequence. It is the architecture behind protein language models such as ESM-2, here trained from scratch on your data; transformers usually need more data than the BRNN or CNN to do well.
 * **linear**, **svm**, **random_forest** and **knn** are classic machine-learning models on sequence features (composition and length, optionally dipeptides). They fit in about a second and are strong baselines for sequence-level properties, especially with small datasets.
 
-As always, compare architectures on the same data split (use ``--split`` or ``--seed``) and judge them on the validation set, not the test set.
+As always, compare architectures on the same data split (save one with ``--save-splits`` and give that split-file to every run with ``--split``) and judge them on the validation set, not the test set.
 
 Whole-sequence context, attention pooling and log(length)
 ---------------------------------------------------------

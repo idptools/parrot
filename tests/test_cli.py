@@ -25,7 +25,7 @@ from parrot.encode_sequence import get_encoder
 from parrot.scripts import common, parrot_cvsplit, parrot_optimize, parrot_predict, parrot_preprocess, parrot_train
 from parrot.tasks import Task
 
-from tests.helpers import EXAMPLE_TASKS, data_path, make_network
+from tests.helpers import EXAMPLE_TASKS, data_path, make_network, training_command
 
 # Few epochs keep the end-to-end runs fast; these tests check plumbing, not accuracy
 QUICK_EPOCHS = '2'
@@ -46,9 +46,8 @@ def run_train(run_cli: Callable[..., Any], data_file: str, output_network: str |
               num_classes: int, *extra_arguments: Any, architecture: str = 'brnn') -> None:
     """Run `parrot-train <architecture>` for QUICK_EPOCHS epochs (models fitted in one step have no epochs)."""
     epochs = ['-e', QUICK_EPOCHS] if get_architecture(architecture).trained_by_gradient_descent else []
-    arguments = ['parrot-train', architecture, data_file, output_network, '-d', datatype, '-c', num_classes,
-                 *epochs, *extra_arguments]
-    run_cli(parrot_train.main, arguments)
+    run_cli(parrot_train.main, training_command('parrot-train', architecture, data_file, output_network, datatype,
+                                                num_classes, *epochs, *extra_arguments))
 
 
 # ..........................................................................................
@@ -257,19 +256,12 @@ def test_train_with_missing_residue_labels(run_cli, tmp_path, write_lines, num_c
     assert os.path.isfile(tmp_path / ('net_res_CM.png' if num_classes > 1 else 'net_res_scatterplot.png'))
 
 
-@pytest.mark.parametrize('old_form, message', [
-    (False, "'not_an_architecture' is neither an architecture nor an existing datafile"),
-    (True, "invalid choice: 'not_an_architecture'"),
-])
-def test_train_rejects_unknown_architecture(run_cli, tmp_path, old_form, message, capsys):
-    data_and_task = [data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', '-d', 'sequence', '-c', '1']
-    if old_form:
-        arguments = [*data_and_task, '--architecture', 'not_an_architecture']
-    else:
-        arguments = ['not_an_architecture', *data_and_task]
+def test_train_rejects_unknown_architecture(run_cli, tmp_path, capsys):
+    arguments = training_command('parrot-train', 'not_an_architecture', data_path('seq_regress_dataset.tsv'),
+                                 tmp_path / 'net.pt', 'sequence', 1)
     with pytest.raises(SystemExit):
-        run_cli(parrot_train.main, ['parrot-train', *arguments])
-    assert message in capsys.readouterr().err
+        run_cli(parrot_train.main, arguments)
+    assert "'not_an_architecture' is not an architecture. The architectures are: brnn" in capsys.readouterr().err
 
 
 def test_train_is_reproducible_with_seed(run_cli, tmp_path):
@@ -331,6 +323,37 @@ def test_train_probabilistic_classification(run_cli, tmp_path):
     assert len(probabilities) == 3 and sum(probabilities) == pytest.approx(1.0, abs=1e-3)
 
 
+def residue_probabilities(line: str) -> tuple[str, list[list[float]]]:
+    """The sequence on a line of residue class probabilities, and each residue's probabilities."""
+    _, sequence, *tokens = line.split()
+    return sequence, [[float(value) for value in token.split(',')] for token in tokens]
+
+
+def test_train_and_predict_residue_class_probabilities(run_cli, tmp_path, write_lines):
+    # Some residues have no label, and must be left out of the metrics and figures
+    lines = [line.split() for line in read_lines(data_path('res_class_dataset.tsv'))]
+    for line in lines[::3]:
+        line[3] = 'nan'
+    data_file = write_lines('data.tsv', [' '.join(line) for line in lines])
+    run_train(run_cli, data_file, tmp_path / 'net.pt', 'residues', 3, '--probabilistic-classification',
+              '--include-figs', '--silent')
+
+    assert (tmp_path / 'net_ROC_curve.png').is_file() and (tmp_path / 'net_PR_curve.png').is_file()
+    assert 'Area under ROC' in (tmp_path / 'net_performance_stats.txt').read_text()
+
+    # One comma-separated token of 3 probabilities per residue, each summing to 1
+    for line in read_lines(tmp_path / 'net_predictions.tsv')[1::2]:
+        sequence, residues = residue_probabilities(line)
+        assert len(residues) == len(sequence) and {len(residue) for residue in residues} == {3}
+        assert all(sum(residue) == pytest.approx(1.0, abs=1e-3) for residue in residues)
+
+    run_cli(parrot_predict.main, ['parrot-predict', data_path('seqfile.txt'), tmp_path / 'net.pt',
+                                  tmp_path / 'new.txt', '--probabilistic-classification', '--silent'])
+    for line in read_lines(tmp_path / 'new.txt'):
+        sequence, residues = residue_probabilities(line)
+        assert len(residues) == len(sequence) and {len(residue) for residue in residues} == {3}
+
+
 def test_train_no_stats(run_cli, tmp_path):
     run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1,
               '--no-stats', '--silent')
@@ -341,9 +364,8 @@ def test_train_no_stats(run_cli, tmp_path):
 
 def test_train_auto_stop(run_cli, tmp_path, write_lines):
     data_file = write_subset(write_lines, 'seq_regress_dataset.tsv', 40)
-    run_cli(parrot_train.main, ['parrot-train', data_file, tmp_path / 'net.pt',
-                                '-d', 'sequence', '-c', '1', '-e', '1', '--stop', 'auto', '-lr', '0.05',
-                                '--silent'])
+    run_cli(parrot_train.main, training_command('parrot-train', 'brnn', data_file, tmp_path / 'net.pt', 'sequence', 1,
+                                                '-e', '1', '--stop', 'auto', '-lr', '0.05', '--silent'))
     assert os.path.isfile(tmp_path / 'net.pt')
 
 
@@ -371,49 +393,44 @@ def test_train_dotted_output_name(run_cli, tmp_path):
     assert os.path.isfile(tmp_path / 'net.v2_predictions.tsv')
 
 
-@pytest.mark.parametrize('extra_arguments, error', [
-    (['-d', 'sequence', '-c', '3', '-lr', '1.5'], ValueError),
-    (['-d', 'sequence', '-c', '3', '--stop', 'sometimes'], SystemExit),  # not one of argparse's choices
-    (['-d', 'sequence', '-c', '3', '-b', '0'], ValueError),
-    (['-d', 'sequence', '-c', '3', '-hs', '0'], ValueError),
-    (['-d', 'sequence', '-c', '1', '--probabilistic-classification'], ValueError),
-    (['-d', 'residues', '-c', '3', '--probabilistic-classification'], ValueError),
-    (['-d', 'residues', '-c', '3'], Exception),  # sequence-mapped data passed as residues
-    (['-d', 'sequence', '-c', '3', '--split', 'missing_split.txt'], FileNotFoundError),
-    (['-d', 'sequence', '-c', '3', '--encode', 'missing_encoding.txt'], FileNotFoundError),
+@pytest.mark.parametrize('datatype, num_classes, extra_arguments, error', [
+    ('sequence', 3, ['-lr', '1.5'], ValueError),
+    ('sequence', 3, ['--stop', 'sometimes'], SystemExit),  # not one of argparse's choices
+    ('sequence', 3, ['-b', '0'], ValueError),
+    ('sequence', 3, ['-hs', '0'], ValueError),
+    ('sequence', 1, ['--probabilistic-classification'], ValueError),
+    ('residues', 1, ['--probabilistic-classification'], ValueError),  # probabilities are for classification
+    ('residues', 3, [], Exception),  # sequence-mapped data passed as residues
+    ('sequence', 3, ['--split', 'missing_split.txt'], ValueError),  # neither a file nor a method
+    ('sequence', 3, ['--encode', 'missing_encoding.txt'], FileNotFoundError),
 ])
-def test_train_invalid_arguments(run_cli, tmp_path, extra_arguments, error):
+def test_train_invalid_arguments(run_cli, tmp_path, datatype, num_classes, extra_arguments, error):
     with pytest.raises(error):
-        run_cli(parrot_train.main, ['parrot-train', data_path('seq_class_dataset.tsv'), tmp_path / 'net.pt',
-                                    '-e', QUICK_EPOCHS, '--silent', *extra_arguments])
+        run_cli(parrot_train.main, training_command('parrot-train', 'brnn', data_path('seq_class_dataset.tsv'),
+                                                    tmp_path / 'net.pt', datatype, num_classes, '-e', QUICK_EPOCHS,
+                                                    '--silent', *extra_arguments))
 
 
 @pytest.mark.parametrize('encoding', ['onehot', 'biophysics'])
 def test_train_rejects_invalid_residues_before_training(run_cli, tmp_path, write_lines, encoding):
     # Whichever set the bad sequence lands in, the error comes before any training (so no network is saved)
-    lines = [f's{i} ACDEFGHIKLMNPQ {i % 3}' for i in range(30)] + ['bad ACDEFGHiKLMNPQ 1']
+    # (distinct sequences, since a split keeps identical sequences together)
+    lines = [f's{i} ACDEFGHIKLMNPQ{"W" * i} {i % 3}' for i in range(30)] + ['bad ACDEFGHiKLMNPQ 1']
     with pytest.raises(ValueError, match='Invalid amino acid detected: i'):
-        run_cli(parrot_train.main, ['parrot-train', write_lines('data.tsv', lines), tmp_path / 'net.pt',
-                                    '-d', 'sequence', '-c', '3', '-e', QUICK_EPOCHS, '--encode', encoding,
-                                    '--silent'])
+        run_cli(parrot_train.main, training_command('parrot-train', 'brnn', write_lines('data.tsv', lines),
+                                                    tmp_path / 'net.pt', 'sequence', 3, '-e', QUICK_EPOCHS,
+                                                    '--encode', encoding, '--silent'))
     assert not (tmp_path / 'net.pt').exists()
 
 
-def test_train_missing_data_file(run_cli, tmp_path, capsys):
-    with pytest.raises(FileNotFoundError):
+def test_train_missing_data_file(run_cli, tmp_path):
+    with pytest.raises(FileNotFoundError, match='Input file does not exist'):
         run_train(run_cli, str(tmp_path / 'missing.tsv'), tmp_path / 'net.pt', 'sequence', 1)
-
-    # Without a subcommand the datafile comes first, so a missing one could also be a misspelt architecture
-    with pytest.raises(SystemExit):
-        run_cli(parrot_train.main, ['parrot-train', tmp_path / 'missing.tsv', tmp_path / 'net.pt',
-                                    '-d', 'sequence', '-c', '1'])
-    assert 'is neither an architecture nor an existing datafile' in capsys.readouterr().err
 
 
 def test_train_missing_output_directory(run_cli, tmp_path):
-    with pytest.raises(FileNotFoundError):
-        run_cli(parrot_train.main, ['parrot-train', data_path('seq_class_dataset.tsv'),
-                                    tmp_path / 'missing' / 'net.pt', '-d', 'sequence', '-c', '3'])
+    with pytest.raises(FileNotFoundError, match='output directory does not exist'):
+        run_train(run_cli, data_path('seq_class_dataset.tsv'), tmp_path / 'missing' / 'net.pt', 'sequence', 3)
 
 
 # ..........................................................................................
@@ -422,8 +439,8 @@ def test_train_missing_output_directory(run_cli, tmp_path):
 def run_optimize(run_cli: Callable[..., Any], data_file: str, output_network: str | Path, datatype: str,
                  num_classes: int, *extra_arguments: Any, architecture: str = 'brnn') -> None:
     """Run `parrot-optimize <architecture>`, seeded and silent."""
-    run_cli(parrot_optimize.main, ['parrot-optimize', architecture, data_file, output_network, '-d', datatype,
-                                   '-c', num_classes, '--seed', '1', '--silent', *extra_arguments])
+    run_cli(parrot_optimize.main, training_command('parrot-optimize', architecture, data_file, output_network,
+                                                   datatype, num_classes, '--seed', '1', '--silent', *extra_arguments))
 
 
 def read_trials(path: str | Path) -> list[dict[str, str]]:
@@ -916,8 +933,8 @@ def test_train_with_standardized_encoding_then_predict(run_cli, tmp_path, task_n
 # What users see when their input is wrong
 
 @pytest.mark.parametrize('main_function, arguments', [
-    (parrot_train.main, ['parrot-train', 'brnn', 'missing.tsv', 'net.pt', '-d', 'sequence', '-c', '1']),
-    (parrot_optimize.main, ['parrot-optimize', 'brnn', 'missing.tsv', 'net.pt', '-d', 'sequence', '-c', '1']),
+    (parrot_train.main, training_command('parrot-train', 'brnn', 'missing.tsv', 'net.pt', 'sequence', 1)),
+    (parrot_optimize.main, training_command('parrot-optimize', 'brnn', 'missing.tsv', 'net.pt', 'sequence', 1)),
     (parrot_predict.main, ['parrot-predict', 'missing.txt', 'net.pt', 'out.txt']),
     (parrot_preprocess.main, ['parrot-preprocess', 'missing.tsv', 'out.tsv', '-d', 'sequence', '-m', 'regression']),
     (parrot_cvsplit.main, ['parrot-cvsplit', 'missing.tsv', 'cv']),
@@ -936,15 +953,74 @@ def test_every_command_reports_input_errors_without_a_traceback(monkeypatch, cap
     assert 'Traceback' not in error
 
 
-def test_wrong_number_of_classes_points_to_c(run_cli, tmp_path):
-    with pytest.raises(ValueError, match=r'with 2 classes \(-c 2\) the labels must be 0 to 1, got 2\. Set -c'):
+def test_wrong_number_of_classes_points_to_the_task_options(run_cli, tmp_path):
+    with pytest.raises(ValueError, match=r'with 2 classes \(--num-classes 2\) the labels must be 0 to 1, got 2\. Set '
+                                         '--num-classes'):
         run_train(run_cli, data_path('seq_class_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 2)
-    with pytest.raises(ValueError, match=r'whole numbers, got .*use -c 1 \(regression\)'):
+    with pytest.raises(ValueError, match='whole numbers, got .*use --regression'):
         run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 3)
 
 
+# ..........................................................................................
+# The required options: input, output and task
+
+def test_network_name_gets_pt_and_an_info_file(run_cli, tmp_path):
+    run_train(run_cli, data_path('seq_class_dataset.tsv'), tmp_path / 'my_network', 'sequence', 3, '--silent',
+              '--seed', '1')
+    assert (tmp_path / 'my_network.pt').is_file() and not (tmp_path / 'my_network').exists()
+
+    info = (tmp_path / 'my_network_info.txt').read_text()
+    assert info.startswith('PARROT network: my_network.pt\n')
+    for heading in ('Provenance', 'Data', 'Encoding', 'Architecture', 'Training', 'Results', 'Files'):
+        assert f'\n{heading}\n' in info
+    for fact in ('parrot-train brnn --input-file', 'input file SHA-256', 'classification into 3 classes',
+                 'hidden_size           : 10', 'Adam, learning rate 0.001', 'epoch kept', 'test loss',
+                 'random seed : 1', 'my_network_predictions.tsv'):
+        assert fact in ' '.join(info.split()) or fact in info, fact
+
+
+def test_a_name_ending_in_pt_is_kept(run_cli, tmp_path):
+    run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.v2.pt', 'sequence', 1, '--silent')
+    assert (tmp_path / 'net.v2.pt').is_file() and (tmp_path / 'net.v2_info.txt').is_file()
+
+
+@pytest.mark.parametrize('task_arguments, message', [
+    (['--classification'], '--classification needs --num-classes'),
+    (['--regression', '--num-classes', '3'], '--num-classes only applies to --classification'),
+    (['--classification', '--num-classes', '1'], '--num-classes must be at least 2'),
+])
+def test_task_options_are_checked(run_cli, tmp_path, task_arguments, message):
+    with pytest.raises(ValueError, match=message):
+        run_cli(parrot_train.main, ['parrot-train', 'brnn', '--input-file', data_path('seq_class_dataset.tsv'),
+                                    '--output-network', tmp_path / 'net', '--split', 'random', '-d', 'sequence',
+                                    *task_arguments])
+
+
+@pytest.mark.parametrize('task_arguments, message', [
+    ([], 'one of the arguments --regression --classification is required'),
+    (['--regression', '--classification'], 'not allowed with argument'),
+    (['--regression', '-c', '1'], '-c is no longer an option: use --regression, or --classification with --num-classes'),
+    (['--regression', '--force-cpu'], '--force-cpu is no longer an option: use --device cpu'),
+    (['--regression', '--architecture', 'cnn'], '--architecture is no longer an option'),
+])
+def test_task_options_and_retired_options_are_usage_errors(run_cli, tmp_path, capsys, task_arguments, message):
+    with pytest.raises(SystemExit):
+        run_cli(parrot_train.main, ['parrot-train', 'brnn', '--input-file', data_path('seq_class_dataset.tsv'),
+                                    '--output-network', tmp_path / 'net', '--split', 'random', '-d', 'sequence',
+                                    *task_arguments])
+    assert message in capsys.readouterr().err
+
+
+def test_old_style_commands_are_explained(run_cli, capsys):
+    with pytest.raises(SystemExit):
+        run_cli(parrot_train.main, ['parrot-train', data_path('seq_class_dataset.tsv'), 'net.pt', '-d', 'sequence',
+                                    '-c', '3'])
+    assert 'now takes the architecture first, then the datafile as --input-file' in capsys.readouterr().err
+
+
 def test_lowercase_sequences_get_a_hint(run_cli, tmp_path, write_lines):
-    data_file = write_lines('lower.tsv', ['a acdefg 1.0'] + [f'n{index} ACDEFG {index}.0' for index in range(30)])
+    data_file = write_lines('lower.tsv', ['a acdefg 1.0'] + [f'n{index} ACDEFG{"W" * index} {index}.0'
+                                                             for index in range(30)])
     with pytest.raises(ValueError, match='must be written in upper case'):
         run_train(run_cli, data_file, tmp_path / 'net.pt', 'sequence', 1)
 
@@ -956,6 +1032,6 @@ def test_predict_prints_settings_only_when_verbose(run_cli, tmp_path, capsys):
         run_cli(parrot_predict.main, ['parrot-predict', data_path('seqfile.txt'), tmp_path / 'net.pt',
                                       tmp_path / 'out.txt', *(['--verbose'] if verbose else [])])
         output = capsys.readouterr().out
-        assert output.startswith('parrot-predict (PARROT ')
+        assert ' parrot-predict  |  PARROT ' in output
         assert 'Predicting 6 sequences with a brnn network (sequence-mapped regression; onehot encoding)' in output
         assert ('Settings:' in output) == verbose

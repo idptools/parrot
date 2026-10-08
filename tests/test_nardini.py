@@ -22,7 +22,7 @@ from parrot.py_predictor import Predictor  # noqa: E402
 from parrot.scripts import parrot_predict, parrot_train  # noqa: E402
 from parrot.tasks import Task  # noqa: E402
 
-from tests.helpers import data_path  # noqa: E402
+from tests.helpers import data_path, training_command  # noqa: E402
 
 # Few scrambles keep the tests fast; the features are just as deterministic
 QUICK_SCRAMBLES = 50
@@ -203,11 +203,11 @@ def test_saved_networks_check_sparrow_computes_their_features():
 # The commands
 
 def train_with_nardini(run_cli, data_file, network_file, architecture, encoding, *arguments):
-    datatype = [] if architecture == 'svm' else ['-d', 'sequence']
+    datatype = None if architecture == 'svm' else 'sequence'
     epochs = [] if architecture == 'svm' else ['-e', '2']
-    run_cli(parrot_train.main, ['parrot-train', architecture, data_file, network_file, *datatype, '-c', '1',
-                                '--encode', encoding, '--nardini-scrambles', QUICK_SCRAMBLES, *epochs,
-                                '--device', 'cpu', '--silent', *arguments])
+    run_cli(parrot_train.main, training_command('parrot-train', architecture, data_file, network_file, datatype, 1,
+                                                '--encode', encoding, '--nardini-scrambles', QUICK_SCRAMBLES, *epochs,
+                                                '--device', 'cpu', '--silent', *arguments))
 
 
 @pytest.mark.parametrize('architecture, encoding', [('composition', 'nardini'), ('svm', 'nardini'),
@@ -235,22 +235,23 @@ def test_training_again_reuses_the_cached_features(run_cli, tmp_path, write_line
     data_file = write_datafile(write_lines)
     cache = tmp_path / 'shared_cache'
     for name in ('first', 'second'):
-        run_cli(parrot_train.main, ['parrot-train', 'composition', data_file, tmp_path / f'{name}.pt', '-d', 'sequence',
-                                    '-c', '1', '--encode', 'nardini', '--nardini-scrambles', QUICK_SCRAMBLES, '-e', '1',
-                                    '--device', 'cpu', '--embedding-cache', cache, '--ignore-warnings'])
+        run_cli(parrot_train.main, training_command('parrot-train', 'composition', data_file, tmp_path / f'{name}.pt',
+                                                    'sequence', 1, '--encode', 'nardini', '--nardini-scrambles',
+                                                    QUICK_SCRAMBLES, '-e', '1', '--device', 'cpu', '--embedding-cache',
+                                                    cache, '--ignore-warnings'))
     output = capsys.readouterr().out
     assert '0 already in the cache' in output and '40 already in the cache' in output
 
 
-@pytest.mark.parametrize('arguments, message', [
-    (['-d', 'residues', '--encode', 'nardini'], 'sequence-mapped data'),
-    (['-d', 'sequence', '--nardini-scrambles', '10'], 'only applies to NARDINI encodings'),
+@pytest.mark.parametrize('datatype, arguments, message', [
+    ('residues', ['--encode', 'nardini'], 'sequence-mapped data'),
+    ('sequence', ['--nardini-scrambles', '10'], 'only applies to NARDINI encodings'),
 ])
-def test_train_rejects_nardini_misuse(run_cli, tmp_path, arguments, message):
-    data_file = data_path('res_regress_dataset.tsv' if 'residues' in arguments else 'seq_regress_dataset.tsv')
+def test_train_rejects_nardini_misuse(run_cli, tmp_path, datatype, arguments, message):
+    data_file = data_path('res_regress_dataset.tsv' if datatype == 'residues' else 'seq_regress_dataset.tsv')
     with pytest.raises(ValueError, match=message):
-        run_cli(parrot_train.main, ['parrot-train', 'brnn', data_file, tmp_path / 'net.pt', '-c', '1', '-e', '1',
-                                    '--device', 'cpu', '--silent', *arguments])
+        run_cli(parrot_train.main, training_command('parrot-train', 'brnn', data_file, tmp_path / 'net.pt', datatype,
+                                                    1, '-e', '1', '--device', 'cpu', '--silent', *arguments))
 
 
 def test_predict_refuses_sequences_nardini_cannot_score(run_cli, tmp_path, write_lines):

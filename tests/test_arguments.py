@@ -3,6 +3,7 @@ Tests for checking command-line arguments (parrot.scripts.arguments) and for
 seeding random number generators (parrot.reproducibility).
 """
 
+import datetime
 import os
 import random
 
@@ -72,13 +73,27 @@ def test_check_set_fractions():
 # ..........................................................................................
 # Printing
 
-def test_print_startup(capsys):
-    arguments.print_startup('parrot-train', silent=False)
-    output = capsys.readouterr().out
-    assert output == f'parrot-train (PARROT {parrot.__version__})\n'
-    assert 'parrot-predict' not in output
+def test_header_gives_the_command_version_and_time():
+    started = datetime.datetime(2026, 10, 7, 14, 32, 5)
+    text = arguments.header('parrot-train', started)
+    lines = text.split('\n')
 
-    arguments.print_startup('parrot-train', silent=True)
+    assert all(line in lines for line in arguments.LOGO)
+    assert f' parrot-train  |  PARROT {parrot.__version__}  |  2026-10-07 14:32:05' in lines
+    assert f' Documentation: {arguments.DOCUMENTATION_URL}' in lines
+    assert 'run: parrot-train --show-examples' in text
+    assert '--show-examples' not in arguments.header('parrot-train', started, examples_hint=False)
+
+    # Two rules, as wide as the widest line
+    rules = [line for line in lines if line and set(line) == {'='}]
+    assert len(rules) == 2 and len(rules[0]) == max(len(line) for line in lines)
+
+
+def test_print_header(capsys):
+    arguments.print_header('parrot-predict', silent=False)
+    assert ' parrot-predict  |  PARROT ' in capsys.readouterr().out
+
+    arguments.print_header('parrot-predict', silent=True)
     assert capsys.readouterr().out == ''
 
 

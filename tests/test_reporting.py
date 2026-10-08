@@ -188,9 +188,23 @@ def test_write_performance_metrics(tmp_path):
     (np.int64(2), None, '2'),
     (np.array([0, 2, 1]), None, '0 2 1'),
     (np.array([0.123456, 0.876544]), 4, '0.1235 0.8765'),
+    # Several values per residue (class probabilities): one comma-separated token per residue
+    (np.array([[0.91, 0.06, 0.03], [0.12, 0.8, 0.08]]), 4, '0.91,0.06,0.03 0.12,0.8,0.08'),
 ])
 def test_format_values(values, decimals, expected):
     assert reporting.format_values(values, decimals) == expected
+
+
+def test_probabilistic_metrics_leave_out_residues_with_missing_labels():
+    task = Task('residues', 2)
+    true_values = [np.array([0, pid.IGNORED_CLASS_LABEL, 1]), np.array([1])]
+    probabilities = [np.array([[0.9, 0.1], [0.5, 0.5], [0.2, 0.8]]), np.array([[0.3, 0.7]])]
+    true_flat, probability_rows = metrics.labelled_values(true_values, probabilities, task, probabilistic=True)
+    np.testing.assert_array_equal(true_flat, [0, 1, 1])
+    np.testing.assert_array_equal(probability_rows, [[0.9, 0.1], [0.2, 0.8], [0.3, 0.7]])
+
+    scores = metrics.performance_metrics(true_values, probabilities, task, probabilistic=True)
+    assert scores['Accuracy'] == 1.0 and scores['Area under ROC'] == 1.0
 
 
 def test_write_predictions(tmp_path):

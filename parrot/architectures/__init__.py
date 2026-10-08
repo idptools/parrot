@@ -28,8 +28,6 @@ from parrot.architectures import brnn, classical, cnn, composition, transformer,
 # Architectures for matrix data live with the rest of the matrix code
 import parrot.matrices.architectures  # noqa: E402,F401
 
-# The architecture of commands that do not choose one (written before parrot-train had a subcommand per architecture)
-DEFAULT_ARCHITECTURE = 'brnn'
 
 __all__ = ['HyperParameter', 'HyperParameterValue', 'ParrotArchitecture', 'available_architectures', 'build_network',
-           'get_architecture', 'register_architecture', 'resolve_hyperparameters', 'DEFAULT_ARCHITECTURE']
+           'get_architecture', 'register_architecture', 'resolve_hyperparameters']

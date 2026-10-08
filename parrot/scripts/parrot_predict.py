@@ -26,6 +26,7 @@ from parrot.encode_sequence import StandardizedEncoder, get_encoder
 from parrot.sequence_encoder import SequenceEncoder
 from parrot.architectures import ParrotArchitecture
 from parrot.scripts import arguments
+from parrot.scripts.examples import add_examples_argument
 from parrot.scripts.common import (COMMAND_LINE_DATATYPES, LEGACY_NOTE, add_device_arguments,
                                    add_embedding_cache_argument, check_probabilistic_classification,
                                    prepare_encoding, select_device)
@@ -44,6 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     argparse.ArgumentParser
     """
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME, description='Make predictions with a trained PARROT network.')
+    add_examples_argument(parser, PROGRAM_NAME)
 
     parser.add_argument('seq_file', help="the sequences to predict: '<ID> <sequence>' on each line (or just "
                                          "'<sequence>', with --exclude-seq-id)")
@@ -55,8 +57,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help='the sequence file has no sequence IDs, just one sequence per line')
     parser.add_argument('--probabilistic-classification', dest='probabilistic_classification',
                         action='store_true',
-                        help='sequence classification only: report the probability of each class, not just the '
-                             'most likely class')
+                        help='classification: report the probability of each class, not just the most likely '
+                             'class (for residue networks, each residue\'s probabilities are one comma-separated '
+                             'token)')
     add_embedding_cache_argument(parser, plm.PREDICT_CACHE_DIRECTORY)
     add_device_arguments(parser)
     parser.add_argument('--verbose', '-v', action='store_true', help='print every setting before predicting')
@@ -90,7 +93,7 @@ def main() -> None:
 def run() -> None:
     """Predict values for every sequence in a sequence file with a saved network, and write them to a file."""
     args = build_parser().parse_args()
-    arguments.print_startup(PROGRAM_NAME, args.silent)
+    arguments.print_header(PROGRAM_NAME, args.silent)
     if (args.hidden_size is not None or args.num_layers is not None) and not args.silent:
         print('Note: --hidden-size and --num-layers are ignored; the network size is read from the saved network')
 

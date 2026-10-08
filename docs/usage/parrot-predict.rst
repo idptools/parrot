@@ -15,15 +15,15 @@ Where `seq_file` specifies a file containing a list of sequences. Each line of `
 **Optional flags:**
 
 	*  ``--help`` / ``-h`` : Display a help message.
+	*  ``--show-examples`` : Print a longer guide to ``parrot-predict``: examples of how to use it, what it does and how it works.
 	*  ``--datatype`` / ``-d`` : 'sequence', 'residues' or 'matrix'. Required only for networks saved by earlier versions of PARROT (which are always 'sequence' or 'residues' networks); otherwise, if given, it is checked against the saved network.
 	*  ``--classes`` / ``-c`` : The number of classes (1 for regression). If given, it is checked against the saved network.
 	*  ``--encode`` : The encoding the network was trained with ('onehot', 'biophysics', the path to a user encoding file, or one of the NARDINI encodings such as 'nardini' or 'onehot+nardini'). Only needed for networks saved by earlier versions of PARROT that were not trained with one-hot encoding; otherwise, if given, it is checked against the saved network.
 	*  ``--num-layers`` / ``-nl`` and ``--hidden-size`` / ``-hs`` : No longer needed; accepted (and ignored) so that existing commands keep working.
 	*  ``--exclude-seq-id`` : Include this flag if the `seq_file` is formatted without sequence IDs as the first column in each row.
-	*  ``--probabilistic-classification`` : Include this flag to output class predictions as continuous values [0-1], based on the probability that the input sample belongs to each class. Currently only implemented for sequence classification. (NOTE: This is a new feature, let us know if you run into any issues!)
+	*  ``--probabilistic-classification`` : Include this flag to output class predictions as continuous values [0-1], based on the probability that the input sample belongs to each class. For sequence data, each sequence's probabilities are written as one value per class; for residue data, each residue's probabilities are written as one comma-separated token (e.g. ``0.91,0.06,0.03``), so there is still one token per residue.
 	*  ``--embedding-cache`` : For networks trained on a protein language model encoding or NARDINI features: directory in which to store the embeddings (or features) of the sequences being predicted (default: a ``parrot_predict_embeddings`` directory next to *output_file*). Encoding is the slow step of predicting with such a network, so reusing a cache (e.g. one created by ``parrot-train``) avoids encoding sequences again. See "Protein language model encodings" and "NARDINI features".
 	*  ``--device`` : Device to run on: ``auto`` (default), ``cpu``, ``cuda`` or ``mps``. ``auto`` uses an NVIDIA GPU (CUDA) if one is available, otherwise an Apple-silicon GPU (MPS) if available, otherwise the CPU. Requesting a device that is not available is an error.
-	*  ``--force-cpu`` : Same as ``--device cpu`` (kept so that older scripts keep working).
 	*  ``--gpu-id`` : Index of the CUDA device to use, for machines with more than one NVIDIA GPU (e.g. ``--gpu-id 1``).
 	*  ``--silent`` : Flag which, if provided, ensures no output is generated to the terminal.
 	*  ``--print-frequency`` : Value that defines how often status updates should be printed (in number of sequences predicted). Default=1000

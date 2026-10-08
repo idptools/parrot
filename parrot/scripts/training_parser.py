@@ -24,9 +24,13 @@ therefore never needs to know which subcommand was used. (For example, models
 fitted in one step have no training loop, so they do not offer --epochs; their
 arguments carry its default, which they never use.)
 
-Commands written before subcommands existed still work: with no subcommand,
-the architecture is the one given by --architecture, or the BRNN (see
-with_architecture_first()).
+Every command names its architecture, input and output, and task explicitly:
+
+    parrot-train <architecture> --input-file <datafile> --output-network <name>
+        [-d sequence|residues] (--regression | --classification --num-classes N)
+
+Options PARROT no longer has (-c/--classes, --force-cpu, --architecture) are
+recognized, and stop the command with a message saying what replaced them.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -41,14 +45,17 @@ Licensed under the MIT license.
 import argparse
 import os
 import sys
-from collections.abc import Collection, Sequence
+from collections.abc import Sequence
 from typing import Any
 
 from parrot import nardini, plm, train_network
 from parrot import process_input_data as pid
-from parrot.architectures import (DEFAULT_ARCHITECTURE, HyperParameter, HyperParameterValue, ParrotArchitecture,
-                                  available_architectures, get_architecture, resolve_hyperparameters)
+from parrot.architectures import (HyperParameter, HyperParameterValue, ParrotArchitecture, available_architectures,
+                                  get_architecture, resolve_hyperparameters)
+from parrot.scripts.arguments import EXAMPLES_FLAG, RetiredOption
 from parrot.scripts.common import DEFAULT_MAX_MATRIX_LENGTH, add_device_arguments, add_embedding_cache_argument
+from parrot.scripts.data_split import SPLIT_METHODS
+from parrot.scripts.examples import add_examples_argument
 
 # What each datatype means, for the help of -d
 DATATYPE_DESCRIPTIONS = {
@@ -61,11 +68,8 @@ DATATYPE_DESCRIPTIONS = {
 DEFAULT_BATCH_SIZE = 32
 DEFAULT_EPOCHS = 100
 
-# The flag that chose the architecture before each architecture had its own subcommand
-LEGACY_ARCHITECTURE_FLAG = '--architecture'
-
-# Flags asking for help, which may come before any subcommand
-HELP_FLAGS = ('-h', '--help')
+# Options asking for help or examples, which may come before any subcommand
+HELP_FLAGS = ('-h', '--help', EXAMPLES_FLAG)
 
 
 # .................................................................
@@ -98,13 +102,14 @@ def build_parser(program_name: str, description: str, training_loop_options: Seq
     argparse.ArgumentParser
     """
     parser = argparse.ArgumentParser(prog=program_name, description=description)
+    add_examples_argument(parser, program_name)
     commands = parser.add_subparsers(dest='architecture', required=True, metavar='architecture',
                                      title='architectures',
                                      description=f"Run '{parser.prog} <architecture> -h' to see an architecture's "
                                                  'options. In brackets: the data each one can learn.')
     for architecture in architectures_in_listing_order():
-        add_architecture_command(commands, architecture, description, training_loop_options, command_options,
-                                 describe_search)
+        add_architecture_command(commands, architecture, program_name, description, training_loop_options,
+                                 command_options, describe_search)
     return parser
 
 
@@ -130,7 +135,7 @@ def architectures_in_listing_order() -> list[type[ParrotArchitecture]]:
 
 
 def add_architecture_command(commands: 'argparse._SubParsersAction[argparse.ArgumentParser]',
-                             architecture: type[ParrotArchitecture], description: str,
+                             architecture: type[ParrotArchitecture], program_name: str, description: str,
                              training_loop_options: Sequence[argparse.ArgumentParser],
                              command_options: Sequence[argparse.ArgumentParser], describe_search: bool) -> None:
     """Add the subcommand of one architecture, inheriting the option sets that apply to it
@@ -140,6 +145,8 @@ def add_architecture_command(commands: 'argparse._SubParsersAction[argparse.Argu
     commands : argparse subparsers
         The command's subcommands (from add_subparsers())
     architecture : ParrotArchitecture subclass
+    program_name : str
+        The command's name, e.g. 'parrot-train'
     description : str
         What the command does
     training_loop_options, command_options : list of argparse.ArgumentParser
@@ -149,19 +156,20 @@ def add_architecture_command(commands: 'argparse._SubParsersAction[argparse.Argu
     """
     trained_by_gradient_descent = architecture.trained_by_gradient_descent
     learns_matrices = 'matrix' in architecture.supported_datatypes
-    learns_sequence_values = 'sequence' in architecture.supported_datatypes
+    learns_classes_of_sequences_or_residues = bool({'sequence', 'residues'} & set(architecture.supported_datatypes))
 
     # Every option set, in the order the help lists them, and whether this architecture offers it
     option_sets = [
-        (True, datatype_options(architecture)),
-        (True, data_options()),
+        (True, required_options(architecture)),
+        (True, data_options(architecture)),
         (trained_by_gradient_descent, shared_training_loop_options()),
         *[(trained_by_gradient_descent, options) for options in training_loop_options],
         (True, hyperparameter_options(architecture, describe_search)),
         (learns_matrices, matrix_options()),
         *[(True, options) for options in command_options],
-        (learns_sequence_values, class_probability_options()),
+        (learns_classes_of_sequences_or_residues, class_probability_options()),
         (True, output_options()),
+        (True, retired_options()),
     ]
 
     command = commands.add_parser(architecture.name, parents=[options for offered, options in option_sets if offered],
@@ -169,6 +177,7 @@ def add_architecture_command(commands: 'argparse._SubParsersAction[argparse.Argu
                                   description=f'{description.removesuffix(".")} ({architecture.name}: '
                                               f'{architecture.description}).',
                                   usage=command_usage(architecture))
+    add_examples_argument(command, program_name)
 
     # Options this architecture does not offer take their defaults, so every subcommand's arguments have the same names
     for offered, options in option_sets:
@@ -190,10 +199,10 @@ def command_usage(architecture: type[ParrotArchitecture]) -> str:
     -------
     str
     """
-    required = ['data_file', 'output_network']
+    required = ['--input-file file', '--output-network name', '--split {' + ','.join(SPLIT_METHODS) + ',file}']
     if len(architecture.supported_datatypes) > 1:
         required.append('-d {' + ','.join(architecture.supported_datatypes) + '}')
-    required.append('-c num_classes')
+    required.append('(--regression | --classification --num-classes N)')
     if 'matrix' in architecture.supported_datatypes:
         required.append('--matrix-file file.npz')
     return '%(prog)s ' + ' '.join(required) + ' [options]'
@@ -218,8 +227,52 @@ def option_defaults(options: argparse.ArgumentParser) -> dict[str, Any]:
 # .................................................................
 # The option sets
 
-def datatype_options(architecture: type[ParrotArchitecture]) -> argparse.ArgumentParser:
-    """-d and -c: the datatype (inferred when the architecture supports only one) and the number of classes
+def required_options(architecture: type[ParrotArchitecture]) -> argparse.ArgumentParser:
+    """The options every command must give: the datafile, the network, the split, the datatype (if there is a choice) and the task
+
+    Parameters
+    ----------
+    architecture : ParrotArchitecture subclass
+
+    Returns
+    -------
+    argparse.ArgumentParser
+    """
+    options = argparse.ArgumentParser(add_help=False)
+    group = options.add_argument_group('required')
+    group.add_argument('--input-file', dest='input_file', required=True, metavar='file',
+                       help="the datafile: '<ID> <sequence> <value(s)>' on each line (for matrix data, "
+                            "'<ID> <sequence>')")
+    group.add_argument('--output-network', dest='output_network', required=True, metavar='name',
+                       help="where to save the trained network ('.pt' is added if the name does not end with it); "
+                            'every other output is named after it, including <name>_info.txt, which describes how '
+                            'the network was trained')
+    group.add_argument('--split', dest='split', required=True, metavar='{' + ','.join(SPLIT_METHODS) + ',file}',
+                       help='how to divide the data into training, validation and test sets: a split-file (e.g. '
+                            'from parrot-preprocess --split; a file of this name is always read first, even one '
+                            "called 'random'), or a method, as parrot-preprocess --split does it: 'mmseqs' keeps "
+                            "homologous sequences (found by MMseqs2, installed separately) in the same set, 'kmer' "
+                            "keeps similar sequences (found by PARROT's k-mer search) in the same set, and "
+                            "'random' assigns sequences at random, keeping identical ones together. A method aims "
+                            'for the fractions given by --set-fractions')
+
+    datatypes = architecture.supported_datatypes
+    if len(datatypes) > 1:
+        meanings = [f"'{datatype}' ({DATATYPE_DESCRIPTIONS[datatype]})" for datatype in datatypes]
+        group.add_argument('-d', '--datatype', choices=datatypes, required=True,
+                           help=f'format of the datafile: {", ".join(meanings[:-1])} or {meanings[-1]}')
+
+    task = group.add_mutually_exclusive_group(required=True)
+    task.add_argument('--regression', action='store_true', help='the values to predict are numbers')
+    task.add_argument('--classification', action='store_true',
+                      help='the values to predict are classes, labelled 0, 1, ... (give --num-classes)')
+    group.add_argument('--num-classes', dest='num_classes', type=int, metavar='N',
+                       help='with --classification: the number of classes (at least 2)')
+    return options
+
+
+def data_options(architecture: type[ParrotArchitecture]) -> argparse.ArgumentParser:
+    """How the data are read and split, and how sequences are encoded (every architecture)
 
     Parameters
     ----------
@@ -232,45 +285,21 @@ def datatype_options(architecture: type[ParrotArchitecture]) -> argparse.Argumen
     options = argparse.ArgumentParser(add_help=False)
     group = options.add_argument_group('data')
 
+    # An architecture that supports a single datatype needs no -d (see required_options() for the others)
     datatypes = architecture.supported_datatypes
     if len(datatypes) == 1:
         only = datatypes[0]
         group.add_argument('-d', '--datatype', choices=datatypes, default=only,
                            help=f"'{only}' ({DATATYPE_DESCRIPTIONS[only]}), the only datatype {architecture.name} "
                                 'supports, so this can be left out')
-    else:
-        meanings = [f"'{datatype}' ({DATATYPE_DESCRIPTIONS[datatype]})" for datatype in datatypes]
-        group.add_argument('-d', '--datatype', choices=datatypes, required=True,
-                           help=f'REQUIRED. Format of the datafile: {", ".join(meanings[:-1])} or {meanings[-1]}')
-
-    group.add_argument('-c', '--classes', type=int, metavar='num_classes', required=True,
-                       help='REQUIRED. Number of output classes, for regression put 1')
-    return options
-
-
-def data_options() -> argparse.ArgumentParser:
-    """The datafile and output network, how the data are split, and how sequences are encoded (every architecture)
-
-    Returns
-    -------
-    argparse.ArgumentParser
-    """
-    options = argparse.ArgumentParser(add_help=False)
-    options.add_argument('data_file', help="the datafile: '<ID> <sequence> <value(s)>' on each line (for matrix "
-                                           "data, '<ID> <sequence>')")
-    options.add_argument('output_network', help='location to save the trained network')
-
-    group = options.add_argument_group('data')
     default_fractions = ' '.join(str(fraction) for fraction in pid.DEFAULT_SET_FRACTIONS)
-    group.add_argument('--split', dest='split_file', default=None, metavar='split_file',
-                       help='a split-file giving the training, validation and test sets (e.g. from parrot-preprocess '
-                            '--split); without one, the data are split at random')
-    group.add_argument('--set-fractions', nargs=3, default=pid.DEFAULT_SET_FRACTIONS, type=float,
-                       dest='set_fractions', metavar=('train', 'val', 'test'),
-                       help=f'fractions of the data in the training, validation and test sets of a random split '
-                            f'(default {default_fractions})')
+    group.add_argument('--set-fractions', nargs=3, default=None, type=float, dest='set_fractions',
+                       metavar=('train', 'val', 'test'),
+                       help=f'with --split {", ".join(SPLIT_METHODS)}: target fractions of the data in the '
+                            f'training, validation and test sets (default {default_fractions})')
     group.add_argument('--save-splits', dest='save_splits', action='store_true',
-                       help='save the random split as a split-file (<output>_split_file.txt), to reuse with --split')
+                       help=f'with --split {", ".join(SPLIT_METHODS)}: save the split as a split-file '
+                            '(<output>_split_file.txt), to reuse with --split')
     group.add_argument('--exclude-seq-id', dest='exclude_seq_id', action='store_true',
                        help='the datafile has no sequence IDs: each line starts with the sequence')
     group.add_argument('--ignore-warnings', '-w', dest='ignore_warnings', action='store_true',
@@ -428,7 +457,7 @@ def matrix_options() -> argparse.ArgumentParser:
 
 
 def class_probability_options() -> argparse.ArgumentParser:
-    """--probabilistic-classification (architectures for sequence data, the only data it applies to)
+    """--probabilistic-classification (architectures for sequence or residue data, the data it applies to)
 
     Returns
     -------
@@ -437,8 +466,8 @@ def class_probability_options() -> argparse.ArgumentParser:
     options = argparse.ArgumentParser(add_help=False)
     group = options.add_argument_group('output')
     group.add_argument('--probabilistic-classification', dest='probabilistic_classification', action='store_true',
-                       help='sequence classification only: report the probability of each class, not just the '
-                            'most likely class')
+                       help='classification: report the probability of each class, not just the most likely class '
+                            '(for residue data, each residue\'s probabilities are one comma-separated token)')
     return options
 
 
@@ -466,11 +495,26 @@ def output_options() -> argparse.ArgumentParser:
     return options
 
 
+def retired_options() -> argparse.ArgumentParser:
+    """Options PARROT no longer has, hidden from the help: each stops the command with what replaced it
+
+    Returns
+    -------
+    argparse.ArgumentParser
+    """
+    options = argparse.ArgumentParser(add_help=False)
+    options.add_argument('-c', '--classes', action=RetiredOption,
+                         replacement='use --regression, or --classification with --num-classes N')
+    options.add_argument('--architecture', action=RetiredOption,
+                         replacement='the architecture is the subcommand, e.g. parrot-train cnn --input-file ...')
+    return options
+
+
 # .................................................................
 # Parsing
 
 def parse_arguments(parser: argparse.ArgumentParser, argv: Sequence[str] | None = None) -> argparse.Namespace:
-    """Parse a training command's arguments, accepting commands written before subcommands existed
+    """Parse a training command's arguments, explaining what to do if they do not start with an architecture
 
     Parameters
     ----------
@@ -485,59 +529,45 @@ def parse_arguments(parser: argparse.ArgumentParser, argv: Sequence[str] | None 
         The arguments; `architecture` is the subcommand used
     """
     arguments = list(sys.argv[1:] if argv is None else argv)
-    architectures = available_architectures()
-
-    # A command with no subcommand starts with an option or its datafile, which must exist; anything else is most
-    # likely a misspelt architecture, which would otherwise be read as a datafile and give a confusing error
-    first = arguments[0] if arguments else ''
-    if first and not first.startswith('-') and first not in architectures and not os.path.exists(first):
-        parser.error(f"'{first}' is neither an architecture nor an existing datafile. The architectures are: "
-                     f"{', '.join(architectures)}")
-
-    return parser.parse_args(with_architecture_first(arguments, architectures))
+    problem = first_argument_problem(arguments, parser.prog)
+    if problem is not None:
+        parser.error(problem)
+    return parser.parse_args(arguments)
 
 
-def with_architecture_first(arguments: list[str], architectures: Collection[str]) -> list[str]:
-    """Rewrite a command written before subcommands existed so that it starts with its architecture
+def first_argument_problem(arguments: Sequence[str], program_name: str) -> str | None:
+    """What is wrong with a command that does not start with an architecture (None if nothing is)
 
-    Before each architecture had its own subcommand, commands looked like
-    `parrot-train data.tsv net.pt -d sequence -c 1`, trained a BRNN, and chose
-    another architecture with `--architecture cnn` anywhere in the command.
-    Such commands are rewritten as `parrot-train brnn data.tsv net.pt ...` (or
-    `cnn`). Commands that start with a subcommand, or that only ask for help,
-    are left as they are.
+    Commands must start with the architecture (or ask for help or examples).
+    Otherwise argparse's own message would be unhelpful, so this says what was
+    probably meant: an architecture name was misspelt, the architecture was
+    left out, or the command was written for an earlier version of PARROT,
+    which took the datafile and the network as its first two arguments.
 
     Parameters
     ----------
     arguments : list of str
         The arguments after the command's name
-    architectures : collection of str
-        The subcommands (registered architecture names)
+    program_name : str
+        The command, e.g. 'parrot-train'
 
     Returns
     -------
-    list of str
+    str or None
     """
-    if not arguments or arguments[0] in architectures or arguments[0] in HELP_FLAGS:
-        return arguments
+    architectures = available_architectures()
+    if not arguments or arguments[0] in architectures or any(argument in HELP_FLAGS for argument in arguments):
+        return None
 
-    architecture = DEFAULT_ARCHITECTURE
-    remaining = []
-    index = 0
-    while index < len(arguments):
-        argument = arguments[index]
-        # '--architecture cnn' (a trailing '--architecture' with no value is kept, for argparse to reject)
-        if argument == LEGACY_ARCHITECTURE_FLAG and index + 1 < len(arguments):
-            architecture = arguments[index + 1]
-            index += 2
-            continue
-        # '--architecture=cnn'
-        if argument.startswith(LEGACY_ARCHITECTURE_FLAG + '='):
-            architecture = argument.split('=', 1)[1]
-        else:
-            remaining.append(argument)
-        index += 1
-    return [architecture, *remaining]
+    first = arguments[0]
+    example = f'{program_name} brnn --input-file data.tsv --output-network network --split kmer -d sequence --regression'
+    if first.startswith('-'):
+        return (f'give the architecture first, e.g. {example} ({program_name} -h lists the architectures)')
+    if os.path.exists(first):
+        return (f'{program_name} now takes the architecture first, then the datafile as --input-file, the network '
+                f'as --output-network and how to split the data as --split, e.g. {example} (see {program_name} '
+                f'{EXAMPLES_FLAG})')
+    return f"'{first}' is not an architecture. The architectures are: {', '.join(architectures)}"
 
 
 def given_hyperparameters(args: argparse.Namespace) -> dict[str, HyperParameterValue]:

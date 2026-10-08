@@ -13,12 +13,25 @@ This flag determines the stop condition for network training. Currently, there a
 
 .. code-block:: bash
 
-    parrot-train brnn data/seq_regress_dataset.tsv stop_example.pt --datatype sequence -c 1 -nl 2 -hs 5 -lr 0.001 -e 10 -b 32 -v --stop auto
+    parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network stop_example.pt --split random --datatype sequence --regression -nl 2 -hs 5 -lr 0.001 -e 10 -b 32 -v --stop auto
 
 .. code-block:: bash
 
-    parrot-train (PARROT <version>)
+     ____      _     ____   ____    ___   _____
+    |  _ \    / \   |  _ \ |  _ \  / _ \ |_   _|
+    | |_) |  / _ \  | |_) || |_) || | | |  | |
+    |  __/  / ___ \ |  _ < |  _ < | |_| |  | |
+    |_|    /_/   \_\|_| \_\|_| \_\ \___/   |_|
+
+    ===========================================================================
+     parrot-train  |  PARROT <version>  |  <date> <time>
+     Documentation: https://idptools-parrot.readthedocs.io
+     For examples of how to use parrot-train, run: parrot-train --show-examples
+    ===========================================================================
+
     Running on: CPU
+    Splitting 300 sequences (random, as parrot-preprocess --split random does):
+      Assigned clusters to sets: training 210 (70.0%), validation 45 (15.0%), test 45 (15.0%)
 
     WARNING: The batch size (32) is large for 210 training sequences (7 batches per epoch).
       Few updates per epoch may make training less efficient; consider a smaller --batch.
@@ -46,28 +59,28 @@ This flag determines the stop condition for network training. Currently, there a
     batching              : length
 
     Validation set loss per epoch:
-    Epoch 1 Loss 4.4503
-    Epoch 2 Loss 4.3991
-    Epoch 3 Loss 4.3470
-    Epoch 4 Loss 4.2920
-    Epoch 5 Loss 4.2322
-    Epoch 6 Loss 4.1654
-    Epoch 7 Loss 4.0888
-    Epoch 8 Loss 3.9989
-    Epoch 9 Loss 3.8907
-    Epoch 10    Loss 3.7613
+    Epoch 1 Loss 4.5214
+    Epoch 2 Loss 4.4691
+    Epoch 3 Loss 4.4159
+    Epoch 4 Loss 4.3597
+    Epoch 5 Loss 4.2985
+    Epoch 6 Loss 4.2302
+    Epoch 7 Loss 4.1517
+    Epoch 8 Loss 4.0594
+    Epoch 9 Loss 3.9484
+    Epoch 10    Loss 3.8156
     ...
-    Epoch 238   Loss 0.1435
-    Epoch 239   Loss 0.1335
-    Epoch 240   Loss 0.1236
-    Epoch 241   Loss 0.1241
-    Epoch 242   Loss 0.1253
-    Stopped after 242 epochs, as the validation loss had stopped improving
-    Lowest validation loss 0.1230, at epoch 231 of 242: the network from that epoch is kept
+    Epoch 217   Loss 0.1360
+    Epoch 218   Loss 0.1347
+    Epoch 219   Loss 0.1357
+    Epoch 220   Loss 0.1489
+    Epoch 221   Loss 0.1344
+    Stopped after 221 epochs, as the validation loss had stopped improving
+    Lowest validation loss 0.1243, at epoch 210 of 221: the network from that epoch is kept
 
-    Test set: loss 0.0814, Pearson R 0.994, Spearman R 0.997
+    Test set: loss 0.1279, Pearson R 0.988, Spearman R 0.992
     Network saved to /home/user/parrot_examples/stop_example.pt
-    Also written there: stop_example_predictions.tsv, stop_example_performance_stats.txt
+    Also written there: stop_example_info.txt, stop_example_predictions.tsv, stop_example_performance_stats.txt
 
 Training stops here because performance has stopped improving, as the output says, and the network from the epoch with the lowest validation loss is kept. Worth mentioning: 'auto' can stop in a local minimum well before the network is fully trained. Be mindful of this when using 'auto' stop condition.
 
@@ -75,26 +88,29 @@ You might also notice that in this example, the validation loss is listed for ev
 
 **Splitting data into train/validation/test sets:**
 
+``--split``:
+Every ``parrot-train`` and ``parrot-optimize`` command says how to divide the data into training, validation and test sets. ``--split mmseqs`` and ``--split kmer`` keep similar sequences in the same set (found by MMseqs2, or by PARROT's own k-mer search), so that the test set measures how well the network does on sequences unlike any it was trained on; ``--split random`` assigns sequences at random, keeping only identical sequences together. These are the same methods as ``parrot-preprocess --split homology``, ``kmer`` and ``random``. The example datasets in the **/data** folder were generated at random, so a random split is fine for them; for real proteins, where relatives are common, prefer ``mmseqs`` or ``kmer``.
+
 ``--set-fractions``:
-This flag allows the user to set the proportions of data that will be a part of the training set, validation set, and test set. By default, the split is 70:15:15. This flag takes three input arguments, between 0 and 1, that must sum to 1.
+This flag allows the user to set the proportions of data that will be a part of the training set, validation set, and test set, when ``--split`` is a method. By default, the split is 70:15:15. This flag takes three input arguments, between 0 and 1, that must sum to 1. The similarity splits keep related sequences together, so their sets come close to these fractions rather than matching them exactly.
 
 .. code-block:: bash
 
-    parrot-train brnn data/seq_regress_dataset.tsv setfractions_network.pt --datatype sequence -c 1 -e 200 --set-fractions 0.5 0.45 0.05
+    parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network setfractions_network.pt --split random --datatype sequence --regression -e 200 --set-fractions 0.5 0.45 0.05
 
 Notice that the output predictions file from this command has fewer datapoints because of the reduced test set. Most likely, the accuracy will be a little worse then the default proportions because the training set is also smaller.
 
-``--split``:
-In some cases, users might want precise control over over the training, validation and test set splits of their input data. This flag allows the user to manually specify which subset each sample in their dataset will be assigned. This flag requires an argument that is a path to a *split_file*, which specifically allocates sequences in `datafile` to the different datasets. An example *split_file* is provided in the **/data** folder for reference.
+Split-files:
+In some cases, users might want precise control over over the training, validation and test set splits of their input data. Instead of a method, ``--split`` can be given the path to a *split_file*, which specifically allocates sequences in `datafile` to the different datasets. An example *split_file* is provided in the **/data** folder for reference. If a file exists with the name given to ``--split``, it is always read as a split-file, even if its name is also a method's.
 
 .. code-block:: bash
 
-    parrot-train brnn data/seq_regress_dataset.tsv manualsplit_network.pt --datatype sequence -c 1 -e 200 --split data/split_file.tsv 
+    parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network manualsplit_network.pt --split data/splitfile.txt --datatype sequence --regression -e 200
 
 This can especially be useful if you wish to perform k-fold cross-validation on your dataset, as you can prepare k different split_files that each specify a particular 1/kth of your dataset into the test set.
 
 ``--save-splits``:
-Sometimes, a random partition into training/val/test sets is acceptable, but it is helpful to know for replicability where each sample was assigned. For example, if you are comparing multiple types of machine learning networks, it is best practice to use the same training set for each network. Including this flag causes an additional text file (suffix: "_split_file.txt") to be saved to the output directory. This file is formatted in the same way as a *split_file* for using with the ``--split`` flag.
+When ``--split`` is a method, it is helpful to know for replicability where each sample was assigned. For example, if you are comparing multiple types of machine learning networks, it is best practice to use the same training set for each network. Including this flag causes an additional text file (suffix: "_split_file.txt") to be saved to the output directory. This file is formatted in the same way as a *split_file* for using with the ``--split`` flag.
 
 **Amino acid -> vector encoding:**
 
@@ -118,7 +134,7 @@ solvation free energy       (not recorded)                free energy of solvati
 
 .. code-block:: bash
 
-    parrot-train brnn data/seq_regress_dataset.tsv biophysics_network.pt -d sequence -c 1 -nl 2 -hs 10 -e 200 --encode biophysics
+    parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network biophysics_network.pt --split random -d sequence --regression -nl 2 -hs 10 -e 200 --encode biophysics
 
 The biophysical features are on very different scales (molecular weight is in the hundreds, while the aromatic flag is 0 or 1), so we recommend adding ``--standardize-encoding``, which rescales every feature to mean 0 and standard deviation 1 across the amino acids (see "Standardizing an encoding" on the ``parrot-train`` page).
 
@@ -126,13 +142,13 @@ More powerfully, PARROT also allows the user to manually specify their own encod
 
 .. code-block:: bash
 
-    parrot-train brnn data/seq_regress_dataset.tsv userencode_network.pt -d sequence -c 1 -nl 2 -hs 10 -e 200 --encode data/encoding_example.txt
+    parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network userencode_network.pt --split random -d sequence --regression -nl 2 -hs 10 -e 200 --encode data/encoding_example.txt
 
 With the ``--encode`` flag and a user-provided file, PARROT is even flexible enough to work on nucleotide sequences! To illustrate this, we've included the file "nucleotide_encoding.txt" which can be passed in via this flag to one-hot encode nucleotide sequences. We've also included an example sequence regression dataset (melting temperature prediction) with nucleotide sequences: "nucleotide_dataset.tsv".
 
 .. code-block:: bash
 
-    parrot-train brnn data/nucleotide_dataset.txt nucleotide_network.pt -d sequence -c 1 -nl 2 -hs 10 -e 200 --encode data/nucleotide_encoding.txt
+    parrot-train brnn --input-file data/nucleotide_dataset.txt --output-network nucleotide_network.pt --split random -d sequence --regression -nl 2 -hs 10 -e 200 --encode data/nucleotide_encoding.txt
 
 **Probabilistic classification with --probabilistic-classification:**
 
@@ -183,7 +199,7 @@ Usage is almost identical to ``parrot-train``. For example, on the residue class
 
 .. code-block:: bash
 
-    parrot-optimize brnn data/res_class_dataset.tsv optimize_example.pt -d residues -c 3 -e 30 --trials 20 --seed 1
+    parrot-optimize brnn --input-file data/res_class_dataset.tsv --output-network optimize_example.pt --split random -d residues --classification --num-classes 3 -e 30 --trials 20 --seed 1
 
 We do not specify the number of layers, the hidden size or the learning rate: these are searched. The most important choice is ``--epochs``, the number of epochs a configuration is trained for if it survives to the end (and so the final network's training): choose it as you would for ``parrot-train``, e.g. by looking at a training and validation loss curve. Here we use 20 trials to keep the example short; the default is 50.
 

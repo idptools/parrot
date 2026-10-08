@@ -17,9 +17,9 @@ NARDINI+ features describe a whole sequence, while PARROT's encodings give one v
 
 .. code-block:: bash
 
-    parrot-train svm data.tsv net.pt -c 1 --encode nardini
-    parrot-train composition data.tsv net.pt -d sequence -c 1 --encode nardini
-    parrot-train brnn data.tsv net.pt -d sequence -c 1 --encode onehot+nardini
+    parrot-train svm --input-file data.tsv --output-network net.pt --split kmer --regression --encode nardini
+    parrot-train composition --input-file data.tsv --output-network net.pt --split kmer -d sequence --regression --encode nardini
+    parrot-train brnn --input-file data.tsv --output-network net.pt --split kmer -d sequence --regression --encode onehot+nardini
     parrot-predict sequences.txt net.pt predictions.txt
 
 NARDINI features are for sequence-mapped data (``-d sequence``) only; PARROT stops with an error if they are used for residue or matrix data.

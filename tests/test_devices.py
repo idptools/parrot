@@ -1,7 +1,7 @@
 """
 Tests for running PARROT on different devices.
 
-- Device choice (parrot/devices.py and the --device/--force-cpu/--gpu-id flags),
+- Device choice (parrot/devices.py and the --device/--gpu-id flags),
   with CUDA and MPS availability faked so these run on any machine.
 - The BRNN's LSTM, which runs each direction on unpacked tensors and must give
   the same results as running the LSTM on a packed batch.
@@ -32,7 +32,7 @@ from parrot.prediction import predict_labeled, predict_sequences
 from parrot.train_network import evaluate_loss, train
 
 from tests.helpers import (BUILT_IN_ARCHITECTURES, EXAMPLE_TASKS, FITTING_SEQUENCES, architecture_class, data_path,
-                           make_network, ready_network, supports)
+                           make_network, ready_network, supports, training_command)
 
 requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason='no NVIDIA GPU (CUDA) on this machine')
 requires_mps = pytest.mark.skipif(not torch.backends.mps.is_available(),
@@ -122,27 +122,32 @@ def test_unknown_device_fails():
         devices.resolve_device('tpu')
 
 
-def device_arguments(device: str = 'auto', force_cpu: bool = False, gpu_id: int | None = None) -> argparse.Namespace:
+def device_arguments(device: str = 'auto', gpu_id: int | None = None) -> argparse.Namespace:
     """Parsed arguments as add_device_arguments() would produce them."""
-    return argparse.Namespace(device=device, force_cpu=force_cpu, gpu_id=gpu_id, silent=True)
+    return argparse.Namespace(device=device, gpu_id=gpu_id, silent=True)
 
 
-def test_force_cpu_overrides_auto(monkeypatch):
+def test_cpu_can_be_chosen_when_gpus_are_available(monkeypatch):
     fake_availability(monkeypatch, cuda=True, mps=True)
-    assert select_device(device_arguments(force_cpu=True)) == torch.device('cpu')
+    assert select_device(device_arguments(device='cpu')) == torch.device('cpu')
 
 
-def test_force_cpu_conflicts_with_gpu_device():
-    with pytest.raises(ValueError, match='--force-cpu'):
-        select_device(device_arguments(device='mps', force_cpu=True))
+@pytest.mark.parametrize('main_function, arguments', [
+    (parrot_train.main, ['parrot-train', 'brnn', '--force-cpu']),
+    (parrot_predict.main, ['parrot-predict', 'sequences.txt', 'net.pt', 'out.txt', '--force-cpu']),
+], ids=['train', 'predict'])
+def test_force_cpu_is_retired(run_cli, capsys, main_function, arguments):
+    with pytest.raises(SystemExit):
+        run_cli(main_function, arguments)
+    assert '--force-cpu is no longer an option: use --device cpu' in capsys.readouterr().err
 
 
 def test_train_on_unavailable_device_fails(run_cli, tmp_path):
     # GPUs are hidden from tests not marked real_devices (see conftest.py)
     filename, datatype, num_classes = EXAMPLE_TASKS['seq_regress']
     with pytest.raises(RuntimeError, match='MPS'):
-        run_cli(parrot_train.main, ['parrot-train', data_path(filename), tmp_path / 'net.pt', '-d', datatype,
-                                    '-c', num_classes, '-e', '1', '--device', 'mps', '--silent'])
+        run_cli(parrot_train.main, training_command('parrot-train', 'brnn', data_path(filename), tmp_path / 'net.pt',
+                                                    datatype, num_classes, '-e', '1', '--device', 'mps', '--silent'))
 
 
 # ..........................................................................................
@@ -303,8 +308,8 @@ def encoded_batch(encoder_name: str = 'onehot') -> tuple[torch.Tensor, torch.Ten
                                                  pytest.param('mps', 'Apple-silicon GPU (MPS)', marks=requires_mps)])
 def test_auto_trains_on_the_gpu(run_cli, tmp_path, capsys, device, description):
     filename, datatype, num_classes = EXAMPLE_TASKS['seq_regress']
-    run_cli(parrot_train.main, ['parrot-train', data_path(filename), tmp_path / 'net.pt', '-d', datatype,
-                                '-c', num_classes, '-e', '1', '--device', 'auto'])
+    run_cli(parrot_train.main, training_command('parrot-train', 'brnn', data_path(filename), tmp_path / 'net.pt',
+                                                datatype, num_classes, '-e', '1', '--device', 'auto'))
 
     assert f'Running on: {description}' in capsys.readouterr().out
 
@@ -361,9 +366,9 @@ def test_checkpoint_from_gpu_holds_cpu_tensors(tmp_path, device):
 def test_train_on_gpu_then_predict_anywhere(run_cli, tmp_path, architecture, device):
     filename, datatype, num_classes = EXAMPLE_TASKS['res_regress']
     network_file = tmp_path / 'net.pt'
-    run_cli(parrot_train.main, ['parrot-train', data_path(filename), network_file, '-d', datatype, '-c', num_classes,
-                                '-e', '2', '--architecture', architecture, '--device', device, '--seed', '1',
-                                '--silent'])
+    run_cli(parrot_train.main, training_command('parrot-train', architecture, data_path(filename), network_file,
+                                                datatype, num_classes, '-e', '2', '--device', device, '--seed', '1',
+                                                '--silent'))
 
     # The saved network gives the same predictions on the CPU and on the GPU, from the CLI and from Predictor
     predictions = {}
@@ -391,9 +396,9 @@ def test_seeded_training_on_gpu_is_reproducible(run_cli, tmp_path, architecture,
     outputs = []
     for run in range(2):
         network_file = tmp_path / f'net{run}.pt'
-        run_cli(parrot_train.main, ['parrot-train', data_path(filename), network_file, '-d', datatype,
-                                    '-c', num_classes, '-e', '2', '--architecture', architecture, '--device', device,
-                                    '--seed', '7', '--silent'])
+        run_cli(parrot_train.main, training_command('parrot-train', architecture, data_path(filename), network_file,
+                                                    datatype, num_classes, '-e', '2', '--device', device, '--seed',
+                                                    '7', '--silent'))
         outputs.append((tmp_path / f'net{run}_predictions.tsv').read_text())
 
     assert outputs[0] == outputs[1]
@@ -405,8 +410,9 @@ def test_optimize_on_gpu(run_cli, tmp_path, write_lines, device):
     lines = [' '.join(line) for line in pid.read_tsv_raw(data_path('res_regress_dataset.tsv'))[:60]]
     data_file = write_lines('subset.tsv', lines)
 
-    run_cli(parrot_optimize.main, ['parrot-optimize', data_file, tmp_path / 'net.pt', '-d', 'residues', '-c', '1',
-                                   '-e', '3', '--trials', '4', '--device', device, '--seed', '1', '--silent'])
+    run_cli(parrot_optimize.main, training_command('parrot-optimize', 'brnn', data_file, tmp_path / 'net.pt',
+                                                   'residues', 1, '-e', '3', '--trials', '4', '--device', device,
+                                                   '--seed', '1', '--silent'))
 
     assert Path(tmp_path / 'net_predictions.tsv').is_file()
     network, _ = load_network(str(tmp_path / 'net.pt'))

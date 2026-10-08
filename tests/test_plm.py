@@ -21,7 +21,7 @@ from parrot.py_predictor import Predictor
 from parrot.scripts import parrot_predict, parrot_train
 from parrot.tasks import Task
 
-from tests.helpers import EXAMPLE_TASKS, data_path
+from tests.helpers import EXAMPLE_TASKS, data_path, training_command
 
 MODEL = 'esm2_t6_8M_UR50D'
 EMBEDDING_SIZE = plm.PLM_MODELS[MODEL].embedding_size
@@ -277,8 +277,9 @@ def test_dipeptide_features_need_a_small_encoding():
 def train(run_cli, network_file, *extra):
     """Train briefly on the residue-regression example data with the PLM encoding."""
     filename, datatype, num_classes = EXAMPLE_TASKS['res_regress']
-    run_cli(parrot_train.main, ['parrot-train', data_path(filename), network_file, '-d', datatype,
-                                '-c', num_classes, '-e', '2', '--encode', MODEL, '--seed', '1', '--silent', *extra])
+    run_cli(parrot_train.main, training_command('parrot-train', 'brnn', data_path(filename), network_file, datatype,
+                                                num_classes, '-e', '2', '--encode', MODEL, '--seed', '1', '--silent',
+                                                *extra))
 
 
 def test_train_and_predict_with_a_plm(fake_plm, run_cli, tmp_path):
@@ -323,13 +324,14 @@ def test_embedding_cache_can_be_shared(fake_plm, run_cli, tmp_path):
 
 def test_no_cache_for_other_encodings(run_cli, tmp_path):
     filename, datatype, num_classes = EXAMPLE_TASKS['res_regress']
-    run_cli(parrot_train.main, ['parrot-train', data_path(filename), tmp_path / 'net.pt', '-d', datatype,
-                                '-c', num_classes, '-e', '1', '--silent'])
+    run_cli(parrot_train.main, training_command('parrot-train', 'brnn', data_path(filename), tmp_path / 'net.pt',
+                                                datatype, num_classes, '-e', '1', '--silent'))
     assert not (tmp_path / plm.TRAIN_CACHE_DIRECTORY).exists()
 
     with pytest.raises(ValueError, match='only applies to protein language model'):
-        run_cli(parrot_train.main, ['parrot-train', data_path(filename), tmp_path / 'net2.pt', '-d', datatype,
-                                    '-c', num_classes, '-e', '1', '--silent', '--embedding-cache', tmp_path / 'c'])
+        run_cli(parrot_train.main, training_command('parrot-train', 'brnn', data_path(filename), tmp_path / 'net2.pt',
+                                                    datatype, num_classes, '-e', '1', '--silent', '--embedding-cache',
+                                                    tmp_path / 'c'))
     with pytest.raises(ValueError, match='only applies to protein language model'):
         run_cli(parrot_predict.main, ['parrot-predict', data_path('seqfile.txt'), tmp_path / 'net.pt',
                                       tmp_path / 'out.txt', '--silent', '--embedding-cache', tmp_path / 'c'])

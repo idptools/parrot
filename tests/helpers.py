@@ -39,6 +39,22 @@ EXAMPLE_TASKS: dict[str, tuple[str, str, int]] = {
 }
 
 
+def task_flags(num_classes: int | str) -> list[str]:
+    """The task options of parrot-train and parrot-optimize: --regression for 1 class, else --classification --num-classes N."""
+    if int(num_classes) == 1:
+        return ['--regression']
+    return ['--classification', '--num-classes', str(num_classes)]
+
+
+def training_command(program: str, architecture: str, data_file: Any, network: Any, datatype: str | None,
+                     num_classes: int | str, *extra_arguments: Any) -> list[Any]:
+    """The command line of parrot-train or parrot-optimize (datatype None leaves out -d; --split random unless given)."""
+    datatype_flags = ['-d', datatype] if datatype is not None else []
+    split_flags = [] if '--split' in extra_arguments else ['--split', 'random']
+    return [program, architecture, '--input-file', data_file, '--output-network', network, *datatype_flags,
+            *task_flags(num_classes), *split_flags, *extra_arguments]
+
+
 def data_path(filename: str) -> str:
     """Return the absolute path to a file in the /data folder."""
     return os.path.join(DATA_DIR, filename)

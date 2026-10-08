@@ -52,6 +52,14 @@ Example datasets
 
 Example data that can be used with PARROT can be found in the **/data** folder on GitHub. Examples of usage with these datasets can be found in the documentation.
 
+Using the commands
+------------------
+
+Every PARROT command (``parrot-train``, ``parrot-optimize``, ``parrot-predict``, ``parrot-preprocess`` and ``parrot-cvsplit``) starts by printing a header with PARROT's version and the date and time, which records in any saved output which version produced it. Each command has two options for finding your way around it:
+
+* ``-h`` / ``--help`` lists the command's options (for ``parrot-train`` and ``parrot-optimize``, ``-h`` lists the architectures, and ``parrot-train <architecture> -h`` an architecture's options).
+* ``--show-examples`` prints a longer guide: what the command does, worked examples of how to use it, and how it works, step by step.
+
 When something goes wrong
 -------------------------
 
@@ -65,6 +73,6 @@ To also see the full Python traceback (for example, to report a problem), run th
 
 .. code-block:: bash
 
-    PARROT_TRACEBACK=1 parrot-train brnn data.tsv network.pt -d sequence -c 1
+    PARROT_TRACEBACK=1 parrot-train brnn --input-file data.tsv --output-network network.pt --split kmer -d sequence --regression
 
 Errors that are not a problem with the input are bugs in PARROT; they always show their traceback, and we would be grateful if you reported them on GitHub.

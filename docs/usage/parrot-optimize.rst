@@ -17,37 +17,47 @@ As a rough guide, the default 50 trials cost about as much as 15-20 ``parrot-tra
 
 .. code-block:: bash
 
-	$ parrot-optimize <architecture> data_file output_network <flags>
+	$ parrot-optimize <architecture> --input-file <datafile> --output-network <name> --split <method or split-file> [-d <datatype>] (--regression | --classification --num-classes <N>) <flags>
 
-Where *architecture* is the network whose hyperparameters are searched (see the "Architectures" page), `data_file` specifies the path to the whitespace-separated datafile and `output_network` is the path to where the final trained network will be saved. It is recommended, but not required, that networks are saved using a ".pt" file extension, following the PyTorch convention.
+Where *architecture* is the network whose hyperparameters are searched (see the "Architectures" page), ``--input-file`` gives the path to the whitespace-separated datafile, ``--output-network`` is where the final trained network will be saved (``.pt`` is added if the name does not end with it), and ``--split`` says how to divide the data into training, validation and test sets (with ``--cv-folds``, the folds are made from the training and validation sets).
 
-As for ``parrot-train``, each architecture is a subcommand offering only the options that apply to it. ``parrot-optimize <architecture> -h`` lists its hyperparameters with their defaults and the values the search tries, and a command with no architecture searches a ``brnn``, as earlier versions of PARROT did (``--architecture cnn`` anywhere in such a command searches that architecture instead).
+As for ``parrot-train``, each architecture is a subcommand offering only the options that apply to it. ``parrot-optimize <architecture> -h`` lists its hyperparameters with their defaults and the values the search tries. The required flags are the same as ``parrot-train``'s, and commands in the form of earlier versions of PARROT stop with a message saying what to use instead.
 
 **Required flags:**
 
-	*  ``--datatype`` / ``-d`` : Describes how values are formatted in `datafile`. Should be 'sequence' if there is a single value per sequence, or 'residues' if there are values for every residue in each sequence. See the example datasets in the **data** folder for more information. Architectures that support only one datatype (the simple models and ``unet2d``) do not need it.
-	*  ``--classes`` / ``-c`` : The number of classes for the machine learning task. If the task is regression, then specify '1'.
+	*  ``--input-file`` : The datafile: ``<ID> <sequence> <value(s)>`` on each line.
+	*  ``--output-network`` : Where to save the final network (``.pt`` is added if the name does not end with it); every other output file is named after it.
+	*  ``--split`` : How to divide the data into training, validation and test sets: one of ``mmseqs``, ``kmer`` or ``random``, or the path to a split-file. The three methods are those of ``parrot-preprocess --split`` (``homology``, ``kmer`` and ``random``), with ``parrot-preprocess``'s default criteria:
+
+		*  ``mmseqs`` : homologous sequences, found by MMseqs2 (which must be installed separately; see "parrot-preprocess"), are kept in the same set, and any sequence still homologous to one in another set is then removed, so that no test sequence has a homologue in the training set. The most thorough choice.
+		*  ``kmer`` : the same, with similar sequences found by PARROT's own k-mer search, which needs nothing extra but finds only closer relatives.
+		*  ``random`` : sequences are assigned at random, keeping identical sequences in the same set. Close relatives can end up on both sides of the split, which can flatter the test results.
+		*  a split-file : three lines, giving the training, validation and test sets, each a whitespace-separated list of 0-indexed line numbers of the datafile (see the **/data** folder for examples, or make one with ``parrot-preprocess --split`` or ``parrot-cvsplit``). Lines in no set are left out, and how many is reported.
+
+	   If a file exists with the name given to ``--split``, it is always read as a split-file, even if the name is also a method's (so a split-file called ``random`` is still read). For other similarity criteria, or to keep groups of records together, make a split-file with ``parrot-preprocess``. The split, and how many sequences it removed, are recorded in ``<network>_info.txt``.
+	*  ``--datatype`` / ``-d`` : 'sequence' if there is a single value per sequence, or 'residues' if there are values for every residue in each sequence. Architectures that support only one datatype (the simple models and ``unet2d``) do not need it.
+	*  ``--regression`` or ``--classification`` : Whether the values are numbers to predict, or classes labelled 0, 1, 2, ... (one of the two must be given).
+	*  ``--num-classes`` : With ``--classification``, the number of classes (at least 2).
 
 **Optional flags, for every architecture:**
 
 	*  ``--help`` / ``-h`` : Display a help message.
+	*  ``--show-examples`` : Print a longer guide to ``parrot-optimize``: examples of how to use it, what it does and how it works.
 	*  Architecture hyperparameter flags (e.g. ``--hidden-size``, ``--kernel-size``, ``--attention-pooling-off``) : Fix these hyperparameters instead of searching them.
 	*  ``--trials`` : Number of hyperparameter configurations to try (default is 50). More trials explore the space more thoroughly; the cost grows roughly in proportion.
 	*  ``--max-iter`` : Same as ``--trials`` (kept so that older scripts keep working).
 	*  ``--cv-folds`` : Score each configuration by k-fold cross-validation over the training and validation data instead of on the validation set. Slower (about k times), but more reliable for small datasets.
-	*  ``--split`` : Path to a "split-file" for manually dividing dataset into training, validation and test sets. The file should contain three lines, corresponding to training, validation and test sets respectively. Each line should have integers separated by whitespace, with the integers specify which sequences/lines in the `datafile` (0-indexed) will belong to which dataset. See **/data** folder for examples. If a split-file is not provided, default behavior is for PARROT to randomly divide data into training, validation and test sets. The cross-validation folds will be divided from the training and validation data.
-	*  ``--set-fractions`` : Include this flag to manually set the proportions of the data belonging to the training, validation and test sets. This option must be followed by three floats (representing train, validation, and test) between 0 and 1 that cumulatively sum to 1. By default, PARROT uses splits of 70:15:15. Note that the ``--split`` flag overrides these values.
-	*  ``--save-splits`` : Include this flag if you would like PARROT to produce a split-file based on its random partitioning of data into training/validation/test sets, which can be useful for replication and/or testing multiple networks on the same data. Output split-file will be saved in the same folder as *output_network* using the same name followed by "_split_file.txt". This flag is overridden if a split-file is manually provided. (NOTE: This is a new feature, let us know if you run into any issues!)
+	*  ``--set-fractions`` : With ``--split mmseqs``, ``kmer`` or ``random``, the target fractions of the data in the training, validation and test sets: three numbers between 0 and 1 that sum to 1 (default 0.7 0.15 0.15). The similarity splits keep related sequences together, so their sets come close to these fractions rather than matching them exactly. A split-file already gives the sets, so the two cannot be combined.
+	*  ``--save-splits`` : With ``--split mmseqs``, ``kmer`` or ``random``, save the split as a split-file (``<network>_split_file.txt``, next to the network), to train other networks on exactly the same sets with ``--split``.
 	*  ``--encode`` : Include this flag to specify the numeric encoding scheme for each amino acid. Available options are 'onehot' (default), 'biophysics', a protein language model (e.g. 'esm2_t12_35M_UR50D'; see "Protein language model encodings"), or user-specified; and, for sequence data, 'nardini', the NARDINI+ features of the whole sequence, alone or after another encoding (e.g. 'onehot+nardini'; see "NARDINI features"). If you wish to manually specify an encoding scheme, provide a path to a text file describing the amino acid to vector mapping. Example encoding files are provided in the **/data** folder.
-	*  ``--embedding-cache`` : Protein language model and NARDINI encodings only. Directory in which to store the embedding (or NARDINI features) of every sequence, so each is computed only once (default: a ``parrot_train_embeddings`` directory next to *output_network*). Point several runs at the same directory to share embeddings. See "Protein language model encodings".
+	*  ``--embedding-cache`` : Protein language model and NARDINI encodings only. Directory in which to store the embedding (or NARDINI features) of every sequence, so each is computed only once (default: a ``parrot_train_embeddings`` directory next to the network). Point several runs at the same directory to share embeddings. See "Protein language model encodings".
 	*  ``--nardini-scrambles`` : NARDINI encodings only. Scrambles of each sequence used for its patterning z-scores (default 1,000; the cost grows in proportion). See "NARDINI features".
 	*  ``--standardize-encoding`` : Standardize every feature of the encoding to mean 0 and standard deviation 1 across the amino acids (or other characters) the encoding defines, so that features measured on very different scales contribute equally. Recommended for ``biophysics`` and most user encodings; see "Standardizing an encoding" on the ``parrot-train`` page. The standardization is saved with the network and applied automatically by ``parrot-predict`` and ``Predictor``.
-	*  ``--exclude-seq-id`` : Include this flag if the `data_file` is formatted without sequence IDs as the first column in each row.
-	*  ``--include-figs`` : Include this flag to generate images based on network training and performance on test set. Figures will be saved to same directory as specified by *output_network* using same naming convention.
+	*  ``--exclude-seq-id`` : Include this flag if the datafile is formatted without sequence IDs as the first column in each row.
+	*  ``--include-figs`` : Include this flag to generate images based on network training and performance on test set. Figures will be saved to same directory as the network using same naming convention.
 	*  ``--no-stats`` : Include this flag to prevent a "_performance_stats.txt" file from being output.
 	*  ``--ignore-warnings`` : By default, PARROT checks your data for a few criteria and prints warnings if it doesn't meet some basic heuristics. Use this flag to silence these warnings (network training occurs unimpeded in either case).
 	*  ``--device`` : Device to run on: ``auto`` (default), ``cpu``, ``cuda`` or ``mps``. ``auto`` uses an NVIDIA GPU (CUDA) if one is available, otherwise an Apple-silicon GPU (MPS) if available, otherwise the CPU. Requesting a device that is not available is an error.
-	*  ``--force-cpu`` : Same as ``--device cpu`` (kept so that older scripts keep working).
 	*  ``--gpu-id`` : Index of the CUDA device to use, for machines with more than one NVIDIA GPU (e.g. ``--gpu-id 1``).
 	*  ``--seed`` : Integer random seed. Providing a seed makes the data splits, cross-validation folds and network training reproducible: re-running on the same machine and device (CPU, CUDA or MPS) gives the same results. By default no seed is set.
 	*  ``--verbose`` / ``-v`` : Include this flag to produce more descriptive output to terminal.
@@ -61,9 +71,9 @@ As for ``parrot-train``, each architecture is a subcommand offering only the opt
 	*  ``--min-epochs`` : Number of epochs every configuration is first trained for (default: ``--epochs`` divided by the reduction factor squared, i.e. one ninth, at least 1). The stages run from here up to ``--epochs``, each ``--reduction-factor`` times longer than the one before. Raise it if your networks need more epochs before their validation loss says anything about how they will end up.
 	*  ``--reduction-factor`` : At each stage the best 1/reduction-factor of the configurations continue, for reduction-factor times as many epochs (default 3).
 
-**Sequence data (every architecture except unet2d):**
+**Classification of sequences or residues (every architecture except unet2d):**
 
-	*  ``--probabilistic-classification`` : Include this flag to output class predictions as continuous values [0-1], based on the probability that the input sample belongs to each class. Currently only implemented for sequence classification. This flag also modifies the output figures and output performance stats. (NOTE: This is a new feature, let us know if you run into any issues!)
+	*  ``--probabilistic-classification`` : Include this flag to output class predictions as continuous values [0-1], based on the probability that the input sample belongs to each class. For sequence data, each sequence's probabilities are written as one value per class; for residue data, each residue's probabilities are written as one comma-separated token (e.g. ``0.91,0.06,0.03``), so there is still one token per residue. This flag also modifies the output figures and output performance stats.
 
 **Matrix data (unet2d):**
 
@@ -71,7 +81,7 @@ As for ``parrot-train``, each architecture is a subcommand offering only the opt
 
 **Output:**
 
-``parrot-optimize`` produces the same output as ``parrot-train`` (the network, test-set predictions, performance statistics and, with ``--include-figs``, figures) for the best configuration, plus:
+``parrot-optimize`` produces the same output as ``parrot-train`` (the network, its "_info.txt" description, which here also describes the search, test-set predictions, performance statistics and, with ``--include-figs``, figures) for the best configuration, plus:
 
 * ``<output>_optimal_hyperparams.txt``: the architecture and the hyperparameters of the final network, one "name: value" pair per line (including the learning rate).
 * ``<output>_hyperparameter_trials.tsv``: one row per configuration tried, written as the search goes: the trial number, how it was chosen (``default``, ``initial``, ``model`` or ``random``), whether it was ``completed`` (trained for the full number of epochs), ``stopped`` early or ``failed`` (e.g. a configuration that does not suit the data), the epochs it was trained for, its validation loss at the end of each stage, and its hyperparameters.

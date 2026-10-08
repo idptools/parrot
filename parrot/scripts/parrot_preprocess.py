@@ -36,6 +36,7 @@ from parrot.matrices.data import read_matrix_file
 from parrot.package_version import PARROT_VERSION
 from parrot.reproducibility import random_generator, set_random_seed
 from parrot.scripts import arguments
+from parrot.scripts.examples import add_examples_argument
 from parrot.scripts.common import COMMAND_LINE_DATATYPES, LEGACY_NOTE
 from parrot.tasks import Task
 from parrot.tools import class_balancing, kmer_similarity, mmseqs_search, preproc, splitting
@@ -70,6 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=PROGRAM_NAME, description='parrot-preprocess cleans, deduplicates, splits (without leakage between sets) and class-balances '
                     'a PARROT datafile, writing a processed datafile, a matching split-file and a report.')
+    add_examples_argument(parser, PROGRAM_NAME)
     add_input_arguments(parser)
     add_cleaning_arguments(parser)
     add_duplicate_arguments(parser)
@@ -347,9 +349,7 @@ def main() -> None:
 def run() -> None:
     """Process a datafile, step by step, and write the result, a split-file (if split) and a report."""
     args = build_parser().parse_args()
-
-    # With --verbose the report, which is printed as it is written, starts with the same line
-    arguments.print_startup(PROGRAM_NAME, silent=args.verbose)
+    arguments.print_header(PROGRAM_NAME, silent=False)
     check_arguments(args)
     set_random_seed(args.seed)
     rng = random_generator()

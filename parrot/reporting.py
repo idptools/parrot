@@ -100,6 +100,10 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
 def format_values(values: np.ndarray, decimals: int | None = None) -> str:
     """Format a value, or an array of values, as whitespace-separated text
 
+    A 2D array (several values for each residue, e.g. each residue's class
+    probabilities) is written as one token per residue, its values joined by
+    commas, so the tokens still line up with the residues of the sequence.
+
     Parameters
     ----------
     values : numpy array or scalar
@@ -117,6 +121,8 @@ def format_values(values: np.ndarray, decimals: int | None = None) -> str:
         values = np.around(values, decimals=decimals)
     if values.ndim == 0:
         return str(values)
+    if values.ndim == 2:
+        return ' '.join(','.join(row.astype(str)) for row in values)
     return ' '.join(values.astype(str))
 
 

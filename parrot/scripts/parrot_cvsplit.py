@@ -28,6 +28,7 @@ import numpy as np
 from parrot import process_input_data as pid
 from parrot.reproducibility import set_random_seed
 from parrot.scripts import arguments
+from parrot.scripts.examples import add_examples_argument
 
 PROGRAM_NAME = 'parrot-cvsplit'
 
@@ -47,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
                                      description='Write one split-file per fold for k-fold cross-validation.')
+    add_examples_argument(parser, PROGRAM_NAME)
     parser.add_argument('data_file', help="the datafile: '<ID> <sequence> <value(s)>' on each line")
     parser.add_argument('output_splitfiles',
                         help="path and name prefix of the split-files, written as '<output_splitfiles>_cv<fold>.txt'")
@@ -69,7 +71,7 @@ def main() -> None:
 def run() -> None:
     """Write one split-file per cross-validation fold."""
     args = build_parser().parse_args()
-    arguments.print_startup(PROGRAM_NAME, silent=False)
+    arguments.print_header(PROGRAM_NAME, silent=False)
     set_random_seed(args.seed)
 
     data_file = arguments.check_file_exists(args.data_file, 'Datafile')

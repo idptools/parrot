@@ -22,6 +22,8 @@ from parrot.scripts import parrot_optimize, parrot_predict, parrot_preprocess, p
 from parrot.tasks import IGNORED_CLASS_LABEL, Task
 from parrot.tools import dataset_warnings
 
+from tests.helpers import training_command
+
 SQUARE = Task('matrix', 1)
 SQUARE_CLASSES = Task('matrix', 3)
 BINNED = Task('matrix', 1, width=5)
@@ -335,15 +337,16 @@ def write_command_data(directory: Path, kind: str = 'square', num_sequences: int
     return write_matrix_data(directory, matrices, sequences)
 
 
-def train_matrix(run_cli, datafile, matrix_file, network, *arguments):
+def train_matrix(run_cli, datafile, matrix_file, network, num_classes, *arguments):
     """Run parrot-train unet2d on matrix data for 2 epochs on the CPU."""
-    run_cli(parrot_train.main, ['parrot-train', 'unet2d', datafile, network, '--matrix-file', matrix_file,
-                                '-e', 2, '--device', 'cpu', '--silent', *arguments])
+    run_cli(parrot_train.main, training_command('parrot-train', 'unet2d', datafile, network, None, num_classes,
+                                                '--matrix-file', matrix_file, '-e', 2, '--device', 'cpu', '--silent',
+                                                *arguments))
 
 
 def test_train_square_maps_writes_every_output(run_cli, tmp_path):
     datafile, matrix_file = write_command_data(tmp_path)
-    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'net.pt', '-c', 1, '--symmetric', '--include-figs')
+    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'net.pt', 1, '--symmetric', '--include-figs')
 
     network, _ = load_network(str(tmp_path / 'net.pt'))
     assert network.name == 'unet2d' and network.task == Task('matrix', 1, symmetric=True)
@@ -359,47 +362,48 @@ def test_train_square_maps_writes_every_output(run_cli, tmp_path):
 
 def test_train_classes_and_fixed_width(run_cli, tmp_path):
     datafile, matrix_file = write_command_data(tmp_path, 'classes')
-    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'classes.pt', '-c', 2, '--include-figs')
+    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'classes.pt', 2, '--include-figs')
     assert (tmp_path / 'classes_matrix_CM.png').is_file()
 
     datafile, matrix_file = write_command_data(tmp_path, 'width5')
-    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'width5.pt', '-c', 1, '--matrix-width', 5)
+    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'width5.pt', 1, '--matrix-width', 5)
     network, _ = load_network(str(tmp_path / 'width5.pt'))
     assert network.task == Task('matrix', 1, width=5)
 
 
 @pytest.mark.parametrize('arguments, message', [
-    (['unet2d', '-c', 1], 'needs --matrix-file'),
-    (['unet2d', '-c', 1, '--matrix-file', 'MATRICES', '--symmetric', '--matrix-width', 5], 'Only square matrix tasks'),
-    (['unet2d', '-c', 1, '--matrix-file', 'MATRICES', '--max-matrix-length', 10], 'longer than --max-matrix-length'),
-    (['unet2d', '-c', 1, '--matrix-file', 'MATRICES', '--exclude-seq-id'], 'needs sequence IDs'),
+    ([], 'needs --matrix-file'),
+    (['--matrix-file', 'MATRICES', '--symmetric', '--matrix-width', 5], 'Only square matrix tasks'),
+    (['--matrix-file', 'MATRICES', '--max-matrix-length', 10], 'longer than --max-matrix-length'),
+    (['--matrix-file', 'MATRICES', '--exclude-seq-id'], 'needs sequence IDs'),
 ])
 def test_train_rejects_invalid_matrix_options(run_cli, tmp_path, arguments, message):
     datafile, matrix_file = write_command_data(tmp_path)
-    architecture, *options = [matrix_file if argument == 'MATRICES' else argument for argument in arguments]
+    options = [matrix_file if argument == 'MATRICES' else argument for argument in arguments]
     with pytest.raises(ValueError, match=message):
-        run_cli(parrot_train.main, ['parrot-train', architecture, datafile, tmp_path / 'net.pt', '-e', 1,
-                                    '--device', 'cpu', '--silent', *options])
+        run_cli(parrot_train.main, training_command('parrot-train', 'unet2d', datafile, tmp_path / 'net.pt', None, 1,
+                                                    '-e', 1, '--device', 'cpu', '--silent', *options))
 
 
-@pytest.mark.parametrize('arguments', [
-    ['brnn', '-d', 'sequence', '-c', 1, '--matrix-file', 'MATRICES'],   # only matrix architectures read matrices
-    ['brnn', '-d', 'matrix', '-c', 1],                                  # 1D networks cannot learn matrices
-    ['unet2d', '-d', 'sequence', '-c', 1],                              # unet2d only learns matrices
-    ['unet2d', '-c', 1, '--probabilistic-classification'],             # class probabilities are for sequences
+@pytest.mark.parametrize('architecture, datatype, options', [
+    ('brnn', 'sequence', ['--matrix-file', 'MATRICES']),   # only matrix architectures read matrices
+    ('brnn', 'matrix', []),                                # 1D networks cannot learn matrices
+    ('unet2d', 'sequence', []),                            # unet2d only learns matrices
+    ('unet2d', None, ['--probabilistic-classification']),  # class probabilities are for sequences
 ])
-def test_train_offers_matrix_options_only_to_matrix_architectures(run_cli, tmp_path, arguments):
+def test_train_offers_matrix_options_only_to_matrix_architectures(run_cli, tmp_path, architecture, datatype, options):
     datafile, matrix_file = write_command_data(tmp_path)
-    architecture, *options = [matrix_file if argument == 'MATRICES' else argument for argument in arguments]
+    options = [matrix_file if option == 'MATRICES' else option for option in options]
     with pytest.raises(SystemExit):
-        run_cli(parrot_train.main, ['parrot-train', architecture, datafile, tmp_path / 'net.pt', *options])
+        run_cli(parrot_train.main, training_command('parrot-train', architecture, datafile, tmp_path / 'net.pt',
+                                                    datatype, 1, *options))
 
 
 def test_optimize_matrix_data(run_cli, tmp_path):
     datafile, matrix_file = write_command_data(tmp_path)
-    run_cli(parrot_optimize.main, ['parrot-optimize', 'unet2d', datafile, tmp_path / 'opt.pt', '-c', 1,
-                                   '--matrix-file', matrix_file, '-e', 2, '--trials', 2, '--device', 'cpu',
-                                   '--silent'])
+    run_cli(parrot_optimize.main, training_command('parrot-optimize', 'unet2d', datafile, tmp_path / 'opt.pt', None, 1,
+                                                   '--matrix-file', matrix_file, '-e', 2, '--trials', 2, '--device',
+                                                   'cpu', '--silent'))
     assert 'architecture: unet2d' in (tmp_path / 'opt_optimal_hyperparams.txt').read_text()
     assert (tmp_path / 'opt_predictions.npz').is_file()
 
@@ -407,7 +411,7 @@ def test_optimize_matrix_data(run_cli, tmp_path):
 @pytest.mark.parametrize('exclude_ids', [False, True])
 def test_predict_writes_one_matrix_per_sequence(run_cli, tmp_path, exclude_ids):
     datafile, matrix_file = write_command_data(tmp_path)
-    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'net.pt', '-c', 1)
+    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'net.pt', 1)
     lines = Path(datafile).read_text().splitlines()[:3]
     sequence_file = tmp_path / 'new.txt'
     sequence_file.write_text('\n'.join(line.split()[1] if exclude_ids else line for line in lines) + '\n')
@@ -423,7 +427,7 @@ def test_predict_writes_one_matrix_per_sequence(run_cli, tmp_path, exclude_ids):
 
 def test_predictor_returns_a_matrix(run_cli, tmp_path):
     datafile, matrix_file = write_command_data(tmp_path)
-    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'net.pt', '-c', 1, '--symmetric')
+    train_matrix(run_cli, datafile, matrix_file, tmp_path / 'net.pt', 1, '--symmetric')
     predicted = Predictor(tmp_path / 'net.pt').predict('ACDEFG')
     assert predicted.shape == (6, 6) and np.allclose(predicted, predicted.T)
 
@@ -439,7 +443,7 @@ def test_preprocess_splits_matrix_data(run_cli, tmp_path):
     assert 'Checked: every sequence has a matrix' in report
     assert all(len(line.split()) == 2 and len(line.split()[1]) <= 12 for line in output.read_text().splitlines())
     # The original matrix file works with the processed datafile and its split-file
-    train_matrix(run_cli, str(output), matrix_file, tmp_path / 'net.pt', '-c', 1, '--split',
+    train_matrix(run_cli, str(output), matrix_file, tmp_path / 'net.pt', 1, '--split',
                  tmp_path / 'processed_split_file.txt')
 
 

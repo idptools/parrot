@@ -19,6 +19,7 @@ Licensed under the MIT license.
 """
 
 import argparse
+from collections import Counter
 from typing import Any
 
 from torch.utils.data import DataLoader
@@ -92,13 +93,13 @@ def main() -> None:
 def run() -> None:
     """Search for good hyperparameters, then save and report on a network trained with the best ones."""
     args = training_parser.parse_arguments(build_parser())
-    arguments.print_startup(PROGRAM_NAME, args.silent)
+    arguments.print_header(PROGRAM_NAME, args.silent)
     n_trials = check_search_arguments(args)
 
     # Any architecture hyperparameter given on the command line is fixed rather than searched
     fixed_hyperparameters = training_parser.given_hyperparameters(args)
 
-    run = common.prepare_training_run(args, n_folds=args.cv_folds)
+    run = common.prepare_training_run(args, PROGRAM_NAME, n_folds=args.cv_folds)
     settings: dict[str, Any] = dict(architecture=args.architecture, **fixed_hyperparameters)
     if get_architecture(args.architecture).trained_by_gradient_descent:
         settings.update(batch_size=args.batch, batching=args.batching, epochs=args.epochs)
@@ -110,7 +111,8 @@ def run() -> None:
     trainer = hyperparameter_search.TrialTrainer(space, search_loaders(run), len(run.encoder), run.task, run.device)
     searcher, best_trial = run_search(args, run, space, trainer, n_trials)
     best = searcher.best_values(best_trial)
-    write_hyperparameters(run.output_prefix + '_optimal_hyperparams.txt', args.architecture, best)
+    hyperparameters_file = run.output_prefix + '_optimal_hyperparams.txt'
+    write_hyperparameters(hyperparameters_file, args.architecture, best)
 
     if run.cv_sets is None:
         # The best trial already is a full training run on the training set, keeping its best epoch
@@ -118,7 +120,11 @@ def run() -> None:
     else:
         network, train_losses, val_losses = train_with_best_values(args, run, best)
 
-    common.finish_training_run(run, network, train_losses, val_losses)
+    training = dict(learning_rate=best.get(train_network.LEARNING_RATE.name, train_network.LEARNING_RATE.default),
+                    epochs=args.epochs, stop='iter')
+    common.finish_training_run(run, network, train_losses, val_losses, training,
+                               search=describe_search(args, searcher, best_trial),
+                               other_files=[hyperparameters_file, trials_file(run)])
 
 
 def search_loaders(run: common.TrainingRun) -> list[tuple[DataLoader, DataLoader]]:
@@ -160,11 +166,53 @@ def run_search(args: argparse.Namespace, run: common.TrainingRun, space: hyperpa
     Trial
         Its best trial
     """
-    trials_file = run.output_prefix + '_hyperparameter_trials.tsv'
     searcher = hyperparameter_search.HyperparameterSearch(
         space, trainer, n_trials, args.epochs, min_epochs=args.min_epochs, reduction_factor=args.reduction_factor,
-        rng=random_generator(), silent=run.silent, on_progress=lambda progress: progress.write_trials(trials_file))
+        rng=random_generator(), silent=run.silent, on_progress=lambda progress: progress.write_trials(trials_file(run)))
     return searcher, searcher.run()
+
+
+def trials_file(run: common.TrainingRun) -> str:
+    """The file every trial is recorded in, as the search goes."""
+    return run.output_prefix + '_hyperparameter_trials.tsv'
+
+
+def describe_search(args: argparse.Namespace, searcher: hyperparameter_search.HyperparameterSearch,
+                    best_trial: hyperparameter_search.Trial) -> list[tuple[str, str]]:
+    """The hyperparameter search, for the network's info file: how it worked, what it searched, and what it chose
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed arguments
+    searcher : HyperparameterSearch
+        The finished search
+    best_trial : Trial
+        The configuration chosen
+
+    Returns
+    -------
+    list of (str, str)
+        'name : value' entries
+    """
+    outcomes = Counter(trial.status for trial in searcher.trials)
+    entries = [('method', 'successive halving, with new configurations proposed by a tree-structured Parzen '
+                          'estimator (TPE) and a third drawn at random'),
+               ('configurations', f'{len(searcher.trials)} ({outcomes[hyperparameter_search.COMPLETED]} trained for '
+                                  f'every epoch, {outcomes[hyperparameter_search.STOPPED]} stopped early, '
+                                  f'{outcomes[hyperparameter_search.FAILED]} failed)')]
+    if len(searcher.stages) > 1:
+        entries.append(('stages', f'{" -> ".join(str(epochs) for epochs in searcher.stages)} epochs; the best '
+                                  f'1/{searcher.reduction_factor} of each stage continued to the next'))
+    entries.append(('scored by', f'average lowest validation loss over {args.cv_folds}-fold cross-validation'
+                                 if args.cv_folds else 'lowest validation loss'))
+    for hyperparameter in searcher.space.dimensions:
+        entries.append((f'searched {hyperparameter.name}', training_parser.search_description(hyperparameter)
+                        .removeprefix('searched over ')))
+    for name, value in searcher.space.fixed.items():
+        entries.append((f'fixed {name}', hyperparameter_search.format_value(value)))
+    entries.append(('chosen', f'trial {best_trial.number}: {hyperparameter_search.format_hyperparameters(best_trial.values)}'))
+    return entries
 
 
 def train_with_best_values(args: argparse.Namespace, run: common.TrainingRun,

@@ -17,6 +17,8 @@ https://github.com/idptools/parrot
 Licensed under the MIT license.
 """
 
+import argparse
+import datetime
 import math
 import os
 import sys
@@ -27,6 +29,23 @@ from parrot.package_version import PARROT_VERSION
 
 # Separator line printed under headings
 RULE = '...................................'
+
+# The logo at the top of every command's header ('PARROT' in figlet's standard font)
+LOGO = (
+    r' ____      _     ____   ____    ___   _____',
+    r'|  _ \    / \   |  _ \ |  _ \  / _ \ |_   _|',
+    r'| |_) |  / _ \  | |_) || |_) || | | |  | |',
+    r'|  __/  / ___ \ |  _ < |  _ < | |_| |  | |',
+    r'|_|    /_/   \_\|_| \_\|_| \_\ \___/   |_|',
+)
+
+DOCUMENTATION_URL = 'https://idptools-parrot.readthedocs.io'
+
+# The option every command has for printing examples of its use
+EXAMPLES_FLAG = '--show-examples'
+
+# How the time a command started is shown in its header
+HEADER_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 # Errors that mean something about a command's input is wrong: a file that does not exist, an invalid option or
 # datafile, a package an option needs, a device that is not available. They are reported as a message, not a
@@ -75,8 +94,59 @@ def run_command(program_name: str, command: Callable[[], None]) -> None:
         sys.exit(INTERRUPTED_EXIT_CODE)
 
 
-def print_startup(program_name: str, silent: bool) -> None:
-    """Print the name of the command being run and PARROT's version (unless `silent`)
+class RetiredOption(argparse.Action):
+    """An option PARROT no longer has: giving it stops the command with a message saying what replaced it
+
+    The option is hidden from the help, and takes an optional value (so that,
+    e.g., '-c 3' is caught whole).
+    """
+
+    def __init__(self, option_strings: Sequence[str], dest: str, replacement: str, **kwargs: Any) -> None:
+        """
+        Parameters
+        ----------
+        option_strings, dest
+            Passed on by argparse
+        replacement : str
+            What to use instead, e.g. 'use --device cpu'
+        """
+        super().__init__(option_strings, dest, nargs='?', default=argparse.SUPPRESS, help=argparse.SUPPRESS, **kwargs)
+        self.replacement = replacement
+
+    def __call__(self, parser: argparse.ArgumentParser, namespace: argparse.Namespace, values: Any,
+                 option_string: str | None = None) -> None:
+        """Stop the command with a usage error naming the replacement."""
+        parser.error(f'{option_string} is no longer an option: {self.replacement}')
+
+
+def header(program_name: str, started: datetime.datetime, examples_hint: bool = True) -> str:
+    """The header a command prints when it starts: PARROT's logo, the command, PARROT's version and the time
+
+    Parameters
+    ----------
+    program_name : str
+        Name of the command, e.g. 'parrot-train'
+    started : datetime.datetime
+        When the command started
+    examples_hint : bool, optional
+        Also say how to see the command's examples (not needed when they are being shown)
+
+    Returns
+    -------
+    str
+        The header, ending in a newline
+    """
+    details = [f'{program_name}  |  PARROT {PARROT_VERSION}  |  {started.strftime(HEADER_TIME_FORMAT)}',
+               f'Documentation: {DOCUMENTATION_URL}']
+    if examples_hint:
+        details.append(f'For examples of how to use {program_name}, run: {program_name} {EXAMPLES_FLAG}')
+
+    rule = '=' * (max(len(line) for line in (*LOGO, *details)) + 1)
+    return '\n'.join(['', *LOGO, '', rule, *(f' {line}' for line in details), rule]) + '\n'
+
+
+def print_header(program_name: str, silent: bool) -> None:
+    """Print a command's header (see header()), unless `silent`
 
     Parameters
     ----------
@@ -86,7 +156,7 @@ def print_startup(program_name: str, silent: bool) -> None:
         If True, print nothing
     """
     if not silent:
-        print(f'{program_name} (PARROT {PARROT_VERSION})')
+        print(header(program_name, datetime.datetime.now()))
 
 
 def print_settings(silent: bool, **settings: Any) -> None:

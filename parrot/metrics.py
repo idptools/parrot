@@ -77,19 +77,25 @@ def labelled_values(true_values: Sequence[np.ndarray], predictions: Sequence[np.
     task : Task
         The task the network was trained for
     probabilistic : bool, optional
-        True if `predictions` are class probabilities (sequence classification only)
+        True if `predictions` are class probabilities (sequence or residue classification)
 
     Returns
     -------
     numpy array
         The labelled true values, pooled into one 1D array
     numpy array
-        The matching predictions: a 1D array, or [num_sequences X num_classes]
-        class probabilities if `probabilistic`
+        The matching predictions: a 1D array, or class probabilities if
+        `probabilistic` ([num_labelled X num_classes], one row per sequence or
+        labelled residue)
     """
 
     if probabilistic:
-        return flatten(true_values), np.vstack(predictions)
+        # One row of class probabilities per sequence (sequence data) or per residue (residue data), in the same
+        # order as the pooled true labels, so residues with a missing label are left out of both
+        true_flat = flatten(true_values)
+        probabilities = np.vstack(predictions)
+        labelled = ~missing_label_mask(true_flat, task)
+        return true_flat[labelled], probabilities[labelled]
 
     # A symmetric map holds each pair of residues twice: count it once, as training does
     if task.symmetric:

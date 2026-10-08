@@ -22,9 +22,20 @@ If you like, you can also use the ``--include-figs`` flag to assess how each of 
 
 .. code-block:: bash
 
-    parrot-train brnn data/seq_regress_dataset.tsv cv_test/network0.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv0.txt 
+    parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network cv_test/network0.pt -d sequence --regression -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv0.txt 
 
-    parrot-train (PARROT <version>)
+     ____      _     ____   ____    ___   _____
+    |  _ \    / \   |  _ \ |  _ \  / _ \ |_   _|
+    | |_) |  / _ \  | |_) || |_) || | | |  | |
+    |  __/  / ___ \ |  _ < |  _ < | |_| |  | |
+    |_|    /_/   \_\|_| \_\|_| \_\ \___/   |_|
+
+    ===========================================================================
+     parrot-train  |  PARROT <version>  |  <date> <time>
+     Documentation: https://idptools-parrot.readthedocs.io
+     For examples of how to use parrot-train, run: parrot-train --show-examples
+    ===========================================================================
+
     Running on: CPU
 
     Training brnn: bidirectional LSTM (the original PARROT network)
@@ -45,18 +56,18 @@ If you like, you can also use the ``--include-figs`` flag to assess how each of 
 
     Test set: loss 0.0431, Pearson R 0.997, Spearman R 0.997
     Network saved to /home/user/parrot_examples/cv_test/network0.pt
-    Also written there: network0_predictions.tsv, network0_performance_stats.txt   
+    Also written there: network0_info.txt, network0_predictions.tsv, network0_performance_stats.txt   
 
 Now repeat this command 9 more times, for each of the cross-validation folds. I used the ``--silent`` flag to prevent additional output to terminal, but this is totally optional.
 
 .. code-block:: bash
 
-    parrot-train brnn data/seq_regress_dataset.tsv cv_test/network1.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv1.txt --silent
-    parrot-train brnn data/seq_regress_dataset.tsv cv_test/network2.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv2.txt --silent
+    parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network cv_test/network1.pt -d sequence --regression -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv1.txt --silent
+    parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network cv_test/network2.pt -d sequence --regression -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv2.txt --silent
     .
     .
     .
-    parrot-train brnn data/seq_regress_dataset.tsv cv_test/network9.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv9.txt --silent
+    parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network cv_test/network9.pt -d sequence --regression -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv9.txt --silent
 
 All of this could also be accomplished using a wrapper shell script. In fact, for larger datasets this is recommended so that you don't have sit around and wait for the network to train each fold.
     
@@ -80,6 +91,6 @@ Finally, now that we have a good estimate of how reliable our networks' predicti
 
 .. code-block:: bash
 
-    parrot-train brnn data/seq_regress_dataset.tsv cv_test/final_cvnetwork.pt -d sequence -c 1 -nl 2 -hs 15 -lr 0.001 -b 16 -e 350 --set-fractions 0.79 0.2 0.01
+    parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network cv_test/final_cvnetwork.pt --split random -d sequence --regression -nl 2 -hs 15 -lr 0.001 -b 16 -e 350 --set-fractions 0.79 0.2 0.01
 
 Now if we want, we can use final_cvnetwork.pt to predict unlabeled sequences with ``parrot-predict``.
