@@ -408,7 +408,7 @@ def describe_split(data_split: DataSplit, n_folds: int | None) -> str:
     description = data_split.description()
     if n_folds is not None:
         description += (f'; hyperparameter configurations scored by {n_folds}-fold cross-validation over the training '
-                        'and validation sequences')
+                        f'and validation sequences, {data_split.fold_description()}')
     return description
 
 
@@ -468,7 +468,9 @@ def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: i
     if n_folds is None:
         train_set, val_set, test_set = pid.split_data(data_file, task, **split_arguments)
     else:
-        cv_sets, train_set, val_set, test_set = pid.split_data_cv(data_file, task, n_folds=n_folds, **split_arguments)
+        cv_sets, train_set, val_set, test_set = pid.split_data_cv(data_file, task, n_folds=n_folds,
+                                                                  assign_folds=data_split.cross_validation_folds,
+                                                                  **split_arguments)
 
     # Models fitted in one step see the whole training set at once, so only networks have a batch size to warn about
     if not ignore_warnings and get_architecture(args.architecture).trained_by_gradient_descent:

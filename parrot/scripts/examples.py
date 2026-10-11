@@ -168,12 +168,15 @@ How it works
    Parzen estimator, TPE), with a third drawn at random so the whole space
    keeps being explored.
 3. Successive halving keeps the search cheap: every configuration is first
-   trained for a few epochs, and only the best third of each stage continue,
-   for three times as many epochs, up to --epochs (with -e 30, the stages are
-   3, 10 and 30 epochs). Poor configurations are dropped early.
+   trained for a few epochs (--min-epochs, by default a ninth of --epochs), and
+   only the best third of each stage continue, for three times as many epochs,
+   up to --epochs (with -e 30, the stages are 3, 10 and 30 epochs). Poor
+   configurations are dropped early. Hyperparameters that have no effect on
+   your data (e.g. the composition window for sequence data) are not searched.
 4. Each configuration is scored by its lowest validation loss, exactly as
    parrot-train chooses its best epoch (with --cv-folds, by its average over
-   the folds).
+   the folds, which keep identical sequences together, and with --split kmer
+   or mmseqs similar ones too).
 5. The best configuration's network is saved and tested on the test set.
    <network>_optimal_hyperparams.txt gives its hyperparameters,
    <network>_hyperparameter_trials.tsv records every trial as it finishes, and
@@ -322,14 +325,16 @@ Five folds, training on 90% of each fold's non-test sequences:
 How it works
 ------------
 The sequences are shuffled (repeatably, with --seed) and divided into k folds
-of near-equal size. Fold i is the test set of split-file i, and the other
-sequences are divided between its training set (-t, 0.8 by default) and its
-validation set. Each split-file has three lines, giving the training,
+of near-equal size, keeping identical sequences in the same fold. Fold i is
+the test set of split-file i, and the other sequences are divided between its
+training set (-t, 0.8 by default) and its validation set, again keeping
+identical sequences together. Each split-file has three lines, giving the training,
 validation and test sets as line numbers of the datafile (counting from 0, and
 skipping blank and comment lines), as parrot-train --split expects.
 
-Folds are drawn at random, so close relatives can end up in different sets;
-parrot-preprocess --split makes splits that keep them together. To score
+Apart from identical sequences, folds are drawn at random, so close relatives
+can end up in different sets; parrot-preprocess --split makes splits that keep
+them together. To score
 hyperparameters by cross-validation, use parrot-optimize --cv-folds.
 '''
 

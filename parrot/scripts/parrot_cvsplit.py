@@ -8,7 +8,9 @@ For more information on usage, use the '-h' flag.
 
 Each fold's test set is one Kth of the data (every sequence is in exactly one
 test set), and the rest of the data is divided at random between that fold's
-training and validation sets.
+training and validation sets. Identical sequences are always in the same set
+of every fold. To keep similar sequences apart as well, make the split with
+parrot-preprocess --split homology or kmer instead.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -82,8 +84,8 @@ def run() -> None:
 
     # Blank and comment lines are skipped exactly as they are when the datafile is read for training,
     # so the indices line up
-    num_sequences = len(pid.read_tsv_raw(data_file))
-    splits = cross_validation_splits(num_sequences, args.num_folds, args.training_fraction)
+    sequences = [line[1] if len(line) > 1 else '' for line in pid.read_tsv_raw(data_file)]
+    splits = cross_validation_splits(sequences, args.num_folds, args.training_fraction)
 
     print('Creating split-files:')
     print('----------------------')
@@ -93,14 +95,14 @@ def run() -> None:
         pid.write_split_file(split_file, training, validation, test)
 
 
-def cross_validation_splits(num_sequences: int, num_folds: int,
+def cross_validation_splits(sequences: list[str], num_folds: int,
                             training_fraction: float) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
-    """The training, validation and test sets of each cross-validation fold
+    """The training, validation and test sets of each cross-validation fold, keeping identical sequences together
 
     Parameters
     ----------
-    num_sequences : int
-        Number of sequences in the datafile
+    sequences : list of str
+        The sequence on each line of the datafile
     num_folds : int
         Number of folds
     training_fraction : float
@@ -116,9 +118,12 @@ def cross_validation_splits(num_sequences: int, num_folds: int,
     ValueError
         If any set of any fold would be empty (checked before anything is written)
     """
+    num_sequences = len(sequences)
+    groups = np.array(sequences, dtype=object)
     splits = []
-    for fold, (non_test, test) in enumerate(pid.cross_validation_folds(np.arange(num_sequences), num_folds)):
-        training, validation = pid.vector_split(non_test, training_fraction)
+    for fold, (non_test, test) in enumerate(pid.cross_validation_folds(np.arange(num_sequences), num_folds, groups)):
+        part = pid.share_out_groups(groups[non_test], [training_fraction, 1 - training_fraction])
+        training, validation = non_test[part == 0], non_test[part == 1]
         pid.check_sets_not_empty(training, validation, test,
                                  f'in fold {fold} when {num_sequences} sequences are divided into {num_folds} folds '
                                  f'with a training fraction of {training_fraction}. Use fewer folds or more data.')

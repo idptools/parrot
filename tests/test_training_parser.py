@@ -83,9 +83,11 @@ def test_given_hyperparameters_are_collected_and_the_rest_take_defaults():
                                                                'loglength_feedforward': True}
 
 
-def test_out_of_range_hyperparameters_are_rejected():
-    args = parse(parrot_train, [*required_arguments('cnn'), '--dropout', '1.5'])
-    with pytest.raises(ValueError, match='at most 1.0'):
+@pytest.mark.parametrize('dropout', ['1.5', '1'])
+def test_out_of_range_hyperparameters_are_rejected(dropout):
+    # A dropout of 1 would zero every activation in training, so the network could not learn anything
+    args = parse(parrot_train, [*required_arguments('cnn'), '--dropout', dropout])
+    with pytest.raises(ValueError, match='less than 1.0'):
         training_parser.given_hyperparameters(args)
 
 

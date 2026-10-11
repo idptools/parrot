@@ -20,6 +20,12 @@ homology (see tools/splitting.py), with parrot-preprocess's default criteria;
 for other criteria, or for groups of records to keep together, make a
 split-file with parrot-preprocess.
 
+Cross-validation folds (parrot-optimize --cv-folds) are made from the training
+and validation sequences in the same spirit: identical sequences are always in
+the same fold, and with 'kmer' or 'mmseqs' so are clusters of similar
+sequences, and each fold is scored only on its held-out sequences that are not
+similar to any of its training sequences.
+
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
      Original release ---- 2020
@@ -157,6 +163,75 @@ class DataSplit:
         training, validation, test = (np.array(sorted(item.index for item in kept if item.split == name), dtype=int)
                                       for name in splitting.SET_NAMES)
         return training, validation, test
+
+    def cross_validation_folds(self, data: list[pid.Sample], samples: np.ndarray,
+                               n_folds: int) -> list[tuple[np.ndarray, np.ndarray]]:
+        """Divide the training and validation sequences into cross-validation folds (see the module documentation)
+
+        Passed to process_input_data.split_data_cv() as `assign_folds`.
+
+        Parameters
+        ----------
+        data : list
+            Every parsed line of the datafile
+        samples : numpy int array
+            The training and validation sequences' indices
+        n_folds : int
+
+        Returns
+        -------
+        list of (numpy int array, numpy int array)
+            For each fold, (training indices, held-out indices to score it on)
+
+        Raises
+        ------
+        ValueError
+            If a fold would have no held-out sequence to score
+        """
+        if self.method not in ('kmer', 'mmseqs'):
+            return pid.identical_sequence_folds(data, samples, n_folds)
+
+        def report(line: str) -> None:
+            if not self.silent:
+                print(f'  {line}')
+
+        if not self.silent:
+            print(f'Dividing the {len(samples):,} training and validation sequences into {n_folds} '
+                  'cross-validation folds, keeping similar sequences in the same fold:')
+        items = [splitting.SplitItem(int(index), data[index][1], f'sequence {index}') for index in samples]
+        splitting.merge_groups(items, splitting.identical_sequence_links(items))
+        search = similarity_search(str(self.method))
+        clusters = splitting.similarity_clusters(items, search, report)
+        names = [f'fold {fold}' for fold in range(1, n_folds + 1)]
+        splitting.assign_clusters(items, clusters, {name: 1 / n_folds for name in names}, random_generator(), report)
+
+        folds = []
+        for name in names:
+            held_out = [item for item in items if item.split == name]
+            training = [item for item in items if item.split != name]
+            similar = {item.index for item in splitting.similar_to(held_out, training, search)}
+            scored = [item.index for item in held_out if item.index not in similar]
+            report(f'{name}: {len(similar):,} of its {len(held_out):,} held-out sequences are similar to one of its '
+                   'training sequences, so it is not scored on them')
+            if not scored:
+                raise ValueError(f'Cross-validation {name} has no held-out sequence that is not similar to one of '
+                                 'its training sequences; use fewer --cv-folds, or score on the validation set '
+                                 '(leave out --cv-folds)')
+            folds.append((np.array(sorted(item.index for item in training), dtype=int),
+                          np.array(sorted(scored), dtype=int)))
+        return folds
+
+    def fold_description(self) -> str:
+        """How cross-validation folds are made, in words (see cross_validation_folds)
+
+        Returns
+        -------
+        str
+        """
+        if self.method in ('kmer', 'mmseqs'):
+            return ('keeping similar sequences in the same fold, and scoring each fold only on held-out sequences '
+                    'not similar to its training sequences')
+        return 'keeping identical sequences in the same fold'
 
     @property
     def num_unassigned(self) -> int:

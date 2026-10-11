@@ -40,6 +40,7 @@ import torch.nn as nn
 from parrot.architectures.base import ParrotArchitecture
 from parrot.architectures.hyperparameters import HyperParameter
 from parrot.matrices.layers import cell_mask, separation_feature, symmetrise
+from parrot.tasks import Task
 
 # Ways of combining the features of two residues into the features of their cell of a square map
 PAIR_FEATURE_METHODS = ('concatenate', 'outer')
@@ -76,6 +77,14 @@ class MatrixArchitecture(ParrotArchitecture):
     """
 
     supported_datatypes: ClassVar[tuple[str, ...]] = ('matrix',)
+
+    @classmethod
+    def unused_hyperparameters(cls, task: Task, input_size: int) -> dict[str, str]:
+        """How pairs of residues are combined only matters for square maps (see
+        ParrotArchitecture.unused_hyperparameters)."""
+        if task.is_square:
+            return {}
+        return {'pair_features': 'matrices with a fixed number of columns do not combine pairs of residues'}
 
     # ..... the input grid
 

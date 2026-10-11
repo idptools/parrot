@@ -143,6 +143,41 @@ class ParrotArchitecture(nn.Module):
 
         return {name: hyperparameter.validate(values[name]) for name, hyperparameter in declared.items()}
 
+    @classmethod
+    def unused_hyperparameters(cls, task: Task, input_size: int) -> dict[str, str]:
+        """Hyperparameters that have no effect, or cannot be used, for a task and encoding (parrot-optimize does not
+        search them). An architecture overrides this if it has any; by default there are none.
+
+        Parameters
+        ----------
+        task : Task
+        input_size : int
+            Length of the per-residue encoding vectors
+
+        Returns
+        -------
+        dict
+            Why each one is not used, by name
+        """
+        return {}
+
+    @classmethod
+    def inactive_hyperparameters(cls, values: Mapping[str, HyperParameterValue]) -> set[str]:
+        """Hyperparameters that have no effect given the values of the others (e.g. a setting of one kernel when
+        another kernel is chosen). parrot-optimize gives them their default value, so configurations that differ
+        only in them count as the same. By default there are none.
+
+        Parameters
+        ----------
+        values : dict
+            Hyperparameter values, by name (not necessarily all of them)
+
+        Returns
+        -------
+        set of str
+        """
+        return set()
+
     @property
     def num_classes(self) -> int:
         """Number of output values per sequence (or per residue)."""

@@ -4,6 +4,9 @@ registry, shared layers, the behaviour every architecture must have, the
 individual architectures, and the backwards-compatible BRNN_MtO / BRNN_MtM classes.
 """
 
+import math
+
+import numpy as np
 import pytest
 import torch
 
@@ -12,6 +15,7 @@ from parrot import process_input_data as pid
 from parrot.architectures import (HyperParameter, ParrotArchitecture, available_architectures, build_network,
                                   get_architecture, register_architecture, registry, resolve_hyperparameters)
 from parrot.architectures.brnn import BRNN, run_lstm
+from parrot.architectures.hyperparameters import DROPOUT
 from parrot.architectures.cnn import DILATION_CYCLE
 from parrot.architectures.layers import (AttentionPool, ChannelLayerNorm, GlobalContext, append_log_length,
                                          masked_pool, multilayer_perceptron, padding_mask, resolve_lengths)
@@ -110,6 +114,25 @@ def test_hyperparameter_exclusive_minimum():
         penalty.validate(0)
 
 
+def test_hyperparameter_exclusive_maximum():
+    assert DROPOUT.validate(0.99) == 0.99
+    with pytest.raises(ValueError, match='less than 1.0'):
+        DROPOUT.validate(1.0)
+
+
+@pytest.mark.parametrize('value', [math.inf, -math.inf, math.nan, True, False, '0.5', None])
+def test_numeric_hyperparameters_must_be_finite_numbers(value):
+    with pytest.raises(ValueError, match='must be a finite number'):
+        HyperParameter('alpha', float, 1.0, 'help').validate(value)
+    with pytest.raises(ValueError, match='must be a finite number'):
+        HyperParameter('channels', int, 16, 'help', minimum=1).validate(value)
+
+
+def test_numeric_hyperparameters_accept_numpy_numbers():
+    assert HyperParameter('channels', int, 16, 'help').validate(np.int64(24)) == 24
+    assert HyperParameter('alpha', float, 1.0, 'help').validate(np.float32(0.5)) == 0.5
+
+
 def test_text_hyperparameter():
     pooling = HyperParameter('pooling', str, 'mean', 'help', choices=('mean', 'max'))
 
@@ -138,6 +161,7 @@ def test_searchable():
     {'value_type': bool, 'default': True, 'search_range': (0, 1)},
     {'value_type': bool, 'default': True, 'legacy_value': 'no'},
     {'exclusive_minimum': True},                                            # exclusive minimum without a minimum
+    {'exclusive_maximum': True},                                            # exclusive maximum without a maximum
 ])
 def test_hyperparameter_rejects_invalid_declarations(kwargs):
     arguments = dict(name='hidden_size', value_type=int, default=10, help='help')

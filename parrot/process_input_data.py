@@ -60,8 +60,16 @@ PAD_STEPS_PER_DOUBLING = 8
 # A parsed datafile line: [sequence ID, sequence, value(s)]
 Sample = list[Any]
 
+# Text files are read as UTF-8, ignoring a byte-order mark at the start (which some editors write, and which would
+# otherwise become part of the first field)
+TEXT_ENCODING = 'utf-8-sig'
+
 # Decides which samples go in each set: given the parsed data, returns the (training, validation, test) indices
 SetAssigner = Callable[[list[Sample]], tuple[np.ndarray, np.ndarray, np.ndarray]]
+
+# Divides samples into cross-validation folds: given the parsed data, the sample indices and the number of folds,
+# returns (training indices, held-out indices) for each fold
+FoldAssigner = Callable[[list[Sample], np.ndarray, int], list[tuple[np.ndarray, np.ndarray]]]
 
 
 # .................................................................
@@ -71,7 +79,8 @@ def read_tsv_raw(tsvfile: str, delimiter: str | None = None) -> list[list[str]]:
     """Split a whitespace-separated datafile into lines of fields
 
     Empty lines and comment lines (lines that start with a # symbol) are
-    skipped. No other checking is done.
+    skipped, and a byte-order mark at the start of the file (as some editors
+    write) is ignored. No other checking is done.
 
     Parameters
     ----------
@@ -79,6 +88,8 @@ def read_tsv_raw(tsvfile: str, delimiter: str | None = None) -> list[list[str]]:
         Path to a whitespace-separated datafile
     delimiter : str or None
         String used to split columns. Default (None) splits on any whitespace.
+        With a delimiter, spaces around each field are removed, and empty
+        fields are kept (an empty first column stays the first column).
 
     Returns
     -------
@@ -86,7 +97,7 @@ def read_tsv_raw(tsvfile: str, delimiter: str | None = None) -> list[list[str]]:
         One list of fields for each non-empty, non-comment line
     """
 
-    with open(tsvfile) as fh:
+    with open(tsvfile, encoding=TEXT_ENCODING) as fh:
         content = fh.readlines()
 
     lines = []
@@ -100,7 +111,11 @@ def read_tsv_raw(tsvfile: str, delimiter: str | None = None) -> list[list[str]]:
         if line.strip()[0] == '#':
             continue
 
-        lines.append(line.strip().split(delimiter))
+        if delimiter is None:
+            lines.append(line.split())
+        else:
+            # Only the line ending goes before splitting, so a delimiter at the start or end still marks a column
+            lines.append([field.strip() for field in line.rstrip('\r\n').split(delimiter)])
 
     return lines
 
@@ -954,39 +969,106 @@ def split_data(data_file: str, task: Task, encoder: SequenceEncoder | None = Non
             SequenceDataset(data, test_samples, encoder))
 
 
-def cross_validation_folds(samples: np.ndarray, n_folds: int) -> list[tuple[np.ndarray, np.ndarray]]:
-    """Randomly divide sample indices into cross-validation folds
+def share_out_groups(groups: Sequence[Any] | np.ndarray, fractions: Sequence[float]) -> np.ndarray:
+    """Divide samples at random into parts of the given fractions, keeping each group's samples in one part
+
+    Groups are shared out largest first (in random order among groups of the
+    same size), each to the part furthest below its target size, so the parts
+    are as close to their fractions as the groups allow.
+
+    Parameters
+    ----------
+    groups : sequence
+        The group of each sample (any values that can be compared, e.g. sequences)
+    fractions : sequence of float
+        Target fraction of the samples in each part
+
+    Returns
+    -------
+    numpy int array
+        The part (0, 1, ...) of each sample
+    """
+    labels = np.unique(np.asarray(groups), return_inverse=True)[1].reshape(-1)
+    sizes = np.bincount(labels)
+    order = np.random.permutation(len(sizes))
+    order = order[np.argsort(-sizes[order], kind='stable')]
+
+    targets = np.asarray(fractions, dtype=float) * len(labels)
+    filled = np.zeros(len(targets))
+    part_of_group = np.empty(len(sizes), dtype=int)
+    for group in order:
+        part = int(np.argmax(targets - filled))
+        part_of_group[group] = part
+        filled[part] += sizes[group]
+    parts: np.ndarray = part_of_group[labels]
+    return parts
+
+
+def cross_validation_folds(samples: np.ndarray, n_folds: int,
+                           groups: Sequence[Any] | np.ndarray | None = None) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Randomly divide sample indices into cross-validation folds, keeping each group in one fold
 
     Parameters
     ----------
     samples : numpy int array
         The sample indices to divide
     n_folds : int
-        Number of folds
+        Number of folds, at least 2
+    groups : sequence, optional
+        The group of each sample: samples of a group are always held out
+        together (e.g. their sequences, so identical sequences are never on
+        both sides of a fold). By default every sample is its own group.
 
     Returns
     -------
     list of tuples of numpy int arrays
         For each fold, (training indices, held-out indices). Every sample is
         held out in exactly one fold.
+
+    Raises
+    ------
+    ValueError
+        If there are fewer than two folds, or fewer groups than folds
     """
+    samples = np.asarray(samples)
+    if n_folds < 2:
+        raise ValueError(f'Cross-validation needs at least 2 folds, got {n_folds}')
+    if groups is None:
+        groups = np.arange(len(samples))
+    n_groups = len(np.unique(np.asarray(groups)))
+    if n_folds > n_groups:
+        raise ValueError(f'Cannot make {n_folds} cross-validation folds from {n_groups} distinct sequences')
 
-    shuffled = np.array(samples, copy=True)
-    np.random.shuffle(shuffled)
-    held_out_sets = np.array_split(shuffled, n_folds)
+    fold_of_sample = share_out_groups(groups, [1 / n_folds] * n_folds)
+    return [(np.sort(samples[fold_of_sample != fold]), np.sort(samples[fold_of_sample == fold]))
+            for fold in range(n_folds)]
 
-    folds = []
-    for i, held_out in enumerate(held_out_sets):
-        training = np.concatenate([held_out_sets[j] for j in range(n_folds) if j != i])
-        folds.append((np.sort(training), np.sort(held_out)))
-    return folds
+
+def identical_sequence_folds(data: list[Sample], samples: np.ndarray,
+                             n_folds: int) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Cross-validation folds that keep identical sequences in the same fold (see cross_validation_folds)
+
+    Parameters
+    ----------
+    data : list
+        Every parsed line of the datafile
+    samples : numpy int array
+        The sample indices to divide
+    n_folds : int
+
+    Returns
+    -------
+    list of tuples of numpy int arrays
+        For each fold, (training indices, held-out indices)
+    """
+    return cross_validation_folds(samples, n_folds, groups=[data[index][1] for index in samples])
 
 
 def split_data_cv(data_file: str, task: Task, encoder: SequenceEncoder | None = None, exclude_seq_id: bool = False,
                   split_file: str | None = None, percent_val: float = DEFAULT_SET_FRACTIONS[1],
                   percent_test: float = DEFAULT_SET_FRACTIONS[2], n_folds: int = 5, ignore_warnings: bool = False,
                   save_splits_output: str | None = None, matrix_file: str | None = None,
-                  assign_sets: SetAssigner | None = None
+                  assign_sets: SetAssigner | None = None, assign_folds: FoldAssigner | None = None
                   ) -> tuple[list[tuple[SequenceDataset, SequenceDataset]], SequenceDataset, SequenceDataset,
                              SequenceDataset]:
     """Divide a datafile into training, validation and test sets plus cross-validation folds
@@ -1001,6 +1083,10 @@ def split_data_cv(data_file: str, task: Task, encoder: SequenceEncoder | None = 
         See split_data()
     n_folds : int, optional
         Number of cross-validation folds (default 5)
+    assign_folds : callable, optional
+        Divides the training and validation samples into folds (see
+        FoldAssigner); by default identical_sequence_folds(), which keeps
+        identical sequences in the same fold
 
     Returns
     -------
@@ -1019,8 +1105,9 @@ def split_data_cv(data_file: str, task: Task, encoder: SequenceEncoder | None = 
         raise ValueError(f'Cannot make {n_folds} cross-validation folds from {len(cv_samples)} training and '
                          'validation sequences')
 
+    folds = (assign_folds or identical_sequence_folds)(data, cv_samples, n_folds)
     cv_sets = []
-    for fold_training, fold_held_out in cross_validation_folds(cv_samples, n_folds):
+    for fold_training, fold_held_out in folds:
         cv_sets.append((SequenceDataset(data, fold_training, encoder), SequenceDataset(data, fold_held_out, encoder)))
 
     return (cv_sets, SequenceDataset(data, training_samples, encoder), SequenceDataset(data, val_samples, encoder),

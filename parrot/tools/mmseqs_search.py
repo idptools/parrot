@@ -5,7 +5,9 @@ without leakage (see splitting.py). MMseqs2 must be installed separately.
 
 Two sequences are homologous if any MMseqs2 alignment between them has an
 E-value of at most HomologyCriteria.max_evalue (1e-3) and covers at least
-HomologyCriteria.min_coverage (30%) of the shorter sequence. No
+HomologyCriteria.min_coverage (30%) of the shorter sequence (the stretch of
+the shorter sequence between the alignment's ends, so gaps opposite insertions
+in the longer sequence do not count). No
 sequence-identity threshold is used, so any statistically significant alignment
 counts, and searches use MMseqs2's most sensitive setting.
 
@@ -38,6 +40,12 @@ INSTALL_HELP = ('MMseqs2 is needed for --split homology but the `mmseqs` command
 # How much of MMseqs2's error output is shown when it fails
 MAX_ERROR_CHARACTERS = 2000
 
+# MMseqs2's --dbtype for amino-acid sequences
+PROTEIN_DATABASE = 1
+
+# The columns MMseqs2 writes for each alignment (see parse_alignment)
+OUTPUT_COLUMNS = ('query', 'target', 'fident', 'alnlen', 'qstart', 'qend', 'qlen', 'tstart', 'tend', 'tlen', 'evalue')
+
 
 @dataclass(frozen=True)
 class HomologyCriteria:
@@ -56,7 +64,8 @@ class HomologyCriteria:
         in MMseqs2), raised so large families are not truncated
     report_max_evalue : float
         The separation check also reports every weaker alignment up to this
-        E-value, so any remaining similarity between sets is visible
+        E-value (or up to max_evalue, if that is larger), so any remaining
+        similarity between sets is visible
     mask_low_complexity : bool
         Whether MMseqs2 masks low-complexity regions (its default). Masking
         avoids alignments driven only by compositional bias; without it,
@@ -71,6 +80,12 @@ class HomologyCriteria:
     report_max_evalue: float = 1e-2
     mask_low_complexity: bool = True
 
+    @property
+    def reported_evalue(self) -> float:
+        """Largest E-value of the alignments the separation check reports: every one that meets the criteria, and
+        weaker ones up to report_max_evalue."""
+        return max(self.report_max_evalue, self.max_evalue)
+
     def describe(self) -> str:
         """The criteria in words, for reports."""
         return (f'identical, or an MMseqs2 alignment with E <= {self.max_evalue:g} covering >= '
@@ -83,22 +98,30 @@ class HomologyCriteria:
 class Alignment:
     """One MMseqs2 alignment between two sequences (indices refer to the query and target lists).
 
-    linked is True if the alignment meets the homology criteria of the search that found it.
+    Positions are MMseqs2's: from 1, with the end included. linked is True if
+    the alignment meets the homology criteria of the search that found it.
     """
 
     query: int
     target: int
     identity: float
     alignment_length: int
+    query_start: int
+    query_end: int
     query_length: int
+    target_start: int
+    target_end: int
     target_length: int
     evalue: float
     linked: bool = False
 
     @property
     def shorter_coverage(self) -> float:
-        """Fraction of the shorter of the two sequences covered by the alignment."""
-        return self.alignment_length / min(self.query_length, self.target_length)
+        """Fraction of the shorter of the two sequences (the query, if they are equally long) between the
+        alignment's ends."""
+        if self.query_length <= self.target_length:
+            return (self.query_end - self.query_start + 1) / self.query_length
+        return (self.target_end - self.target_start + 1) / self.target_length
 
     def homologous(self, criteria: HomologyCriteria) -> bool:
         """True if the alignment meets the homology criteria."""
@@ -186,7 +209,7 @@ class MMseqsSearch:
 
     def summarise(self, matches: Sequence[Match]) -> str:
         """A short description of the strength of the alignments found (for the report)."""
-        return f'at E <= {self.criteria.report_max_evalue:g}; {identity_summary(m.identity for m in matches)}'
+        return f'at E <= {self.criteria.reported_evalue:g}; {identity_summary(m.identity for m in matches)}'
 
     def __call__(self, queries: Sequence[str], targets: Sequence[str] | None = None,
                  weaker: bool = False) -> list[Alignment]:
@@ -198,7 +221,7 @@ class MMseqsSearch:
         targets : list of str, optional
         weaker : bool, optional
             Also return alignments up to report_max_evalue that do not meet the
-            criteria (linked=False), for the report
+            criteria (linked=False), for the report (see HomologyCriteria.reported_evalue)
 
         Returns
         -------
@@ -209,7 +232,7 @@ class MMseqsSearch:
         RuntimeError
             If MMseqs2 fails
         """
-        max_evalue = self.criteria.report_max_evalue if weaker else self.criteria.max_evalue
+        max_evalue = self.criteria.reported_evalue if weaker else self.criteria.max_evalue
         with tempfile.TemporaryDirectory(prefix='parrot_mmseqs_', dir=self.workdir) as directory:
             workdir = Path(directory)
             query_fasta = workdir / 'queries.fasta'
@@ -219,12 +242,15 @@ class MMseqsSearch:
                 target_fasta = workdir / 'targets.fasta'
                 write_fasta(targets, target_fasta)
 
+            # --dbtype 1: the sequences are proteins (MMseqs2 would otherwise read a file of peptides made only of
+            # A, C, G, T and N as nucleotides)
             results = workdir / 'results.m8'
             command = [self.executable, 'easy-search', str(query_fasta), str(target_fasta), str(results),
-                       str(workdir / 'tmp'), '-s', str(self.criteria.sensitivity), '-e', str(max_evalue),
+                       str(workdir / 'tmp'), '--dbtype', str(PROTEIN_DATABASE),
+                       '-s', str(self.criteria.sensitivity), '-e', str(max_evalue),
                        '--max-seqs', str(self.criteria.max_target_sequences),
                        '--mask', '1' if self.criteria.mask_low_complexity else '0',
-                       '--format-output', 'query,target,fident,alnlen,qlen,tlen,evalue',
+                       '--format-output', ','.join(OUTPUT_COLUMNS),
                        '--threads', str(self.threads), '-v', '1']
             completed = subprocess.run(command, capture_output=True, text=True)
             if completed.returncode != 0:
@@ -234,13 +260,31 @@ class MMseqsSearch:
             alignments = []
             with open(results) as handle:
                 for line in handle:
-                    query, target, identity, length, query_length, target_length, evalue = line.split()
-                    if targets is None and query == target:
+                    alignment = parse_alignment(line)
+                    if targets is None and alignment.query == alignment.target:
                         continue
-                    alignment = Alignment(int(query), int(target), float(identity), int(length), int(query_length),
-                                          int(target_length), float(evalue))
                     alignments.append(replace(alignment, linked=alignment.homologous(self.criteria)))
         return alignments
+
+
+def parse_alignment(line: str) -> Alignment:
+    """Read one line of MMseqs2's output (the columns in OUTPUT_COLUMNS)
+
+    Parameters
+    ----------
+    line : str
+
+    Returns
+    -------
+    Alignment
+        Not yet checked against the criteria (linked=False)
+    """
+    values = dict(zip(OUTPUT_COLUMNS, line.split(), strict=True))
+    return Alignment(query=int(values['query']), target=int(values['target']), identity=float(values['fident']),
+                     alignment_length=int(values['alnlen']), query_start=int(values['qstart']),
+                     query_end=int(values['qend']), query_length=int(values['qlen']),
+                     target_start=int(values['tstart']), target_end=int(values['tend']),
+                     target_length=int(values['tlen']), evalue=float(values['evalue']))
 
 
 def write_fasta(sequences: Sequence[str], path: Path) -> None:

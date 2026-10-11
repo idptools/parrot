@@ -33,6 +33,7 @@ Licensed under the MIT license.
 """
 
 import pickle
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -119,6 +120,14 @@ class ClassicalModel(ParrotArchitecture):
                              f'residue ({input_size}x{input_size} pairwise products would be too many); use '
                              "--features composition")
         self.estimator: Any = None
+
+    @classmethod
+    def unused_hyperparameters(cls, task: Task, input_size: int) -> dict[str, str]:
+        """With a wide encoding only 'composition' features can be used (see ParrotArchitecture.unused_hyperparameters)."""
+        if input_size <= MAX_DIPEPTIDE_ENCODING_SIZE:
+            return {}
+        return {'features': f"'dipeptides' needs an encoding of at most {MAX_DIPEPTIDE_ENCODING_SIZE} values per "
+                            f'residue, and this one has {input_size}'}
 
     def make_estimator(self, num_samples: int, num_features: int) -> Any:
         """Build the (unfitted) scikit-learn estimator for this model and task
@@ -326,6 +335,11 @@ class SupportVectorMachine(ClassicalModel):
         self.svm_c = svm_c
         self.kernel = kernel
         self.relative_gamma = relative_gamma
+
+    @classmethod
+    def inactive_hyperparameters(cls, values: Mapping[str, HyperParameterValue]) -> set[str]:
+        """The linear kernel has no coefficient (see ParrotArchitecture.inactive_hyperparameters)."""
+        return {'relative_gamma'} if values.get('kernel') == 'linear' else set()
 
     def make_estimator(self, num_samples: int, num_features: int) -> Any:
         """SVR, or SVC with class probabilities for classification (see ClassicalModel.make_estimator)."""

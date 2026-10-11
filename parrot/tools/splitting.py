@@ -58,7 +58,8 @@ SET_LABELS = {'train': 'training', 'val': 'validation', 'test': 'test'}
 
 # The sets have a priority, test > validation > training: when records in two sets are similar, the record in
 # the lower-priority set is removed. These are the pairs of sets searched against each other, as
-# (higher-priority set, lower-priority set).
+# (higher-priority set, lower-priority set), in the order searched: the validation records to be removed are
+# known before the validation set is searched against the training set (see cross_set_matches).
 SEPARATED_SET_PAIRS = (('test', 'train'), ('test', 'val'), ('val', 'train'))
 
 # Search the sets against each other at most this many times (see enforce_separation)
@@ -235,7 +236,10 @@ def similarity_clusters(items: Sequence[SplitItem], search: SimilaritySearch,
         Maps each group to a cluster number
     """
     matches = search([item.sequence for item in items])
-    links = [(items[match.query].group, items[match.target].group) for match in matches if match.linked]
+    # A search may find a pair both ways round (MMseqs2 does); each pair counts once
+    similar_pairs = {(min(match.query, match.target), max(match.query, match.target))
+                     for match in matches if match.linked}
+    links = [(items[first].group, items[second].group) for first, second in sorted(similar_pairs)]
 
     records_per_group = Counter(item.group for item in items)
     clusters = representative_clusters(sorted(records_per_group), links, records_per_group)
@@ -262,7 +266,8 @@ def assign_clusters(items: Sequence[SplitItem], clusters: dict[str, int], fracti
     clusters : dict
         Cluster of each group
     fractions : dict
-        Target fraction of the records for each set, e.g. {'train': 0.7, 'val': 0.15, 'test': 0.15}
+        Target fraction of the records for each set, e.g. {'train': 0.7, 'val': 0.15, 'test': 0.15} (any names
+        can be used, e.g. for cross-validation folds)
     rng : numpy.random.Generator
         Decides the order in which clusters of the same size are assigned
     report : callable
@@ -287,7 +292,7 @@ def assign_clusters(items: Sequence[SplitItem], clusters: dict[str, int], fracti
             item.split = name
         counts[name] += len(cluster)
 
-    report('Assigned clusters to sets: ' + ', '.join(f'{SET_LABELS[name]} {counts[name]:,} '
+    report('Assigned clusters to sets: ' + ', '.join(f'{SET_LABELS.get(name, name)} {counts[name]:,} '
                                                      f'({100 * counts[name] / total:.1f}%)' for name in fractions))
 
 
@@ -336,16 +341,44 @@ def enforce_separation(items: Sequence[SplitItem], search: SimilaritySearch,
     raise RuntimeError(f'The sets were still not separated after {MAX_SEPARATION_ROUNDS} rounds')
 
 
+def similar_to(items: Sequence[SplitItem], others: Sequence[SplitItem],
+               search: SimilaritySearch) -> list[SplitItem]:
+    """The items similar (by the search's criterion) or identical to any of the others
+
+    Parameters
+    ----------
+    items, others : list of SplitItem
+    search : SimilaritySearch
+
+    Returns
+    -------
+    list of SplitItem
+        In the order of items
+    """
+    if not items or not others:
+        return []
+    matches = search([item.sequence for item in items], [other.sequence for other in others])
+    linked = {match.query for match in matches if match.linked}
+    other_sequences = {other.sequence for other in others}
+    return [item for position, item in enumerate(items) if position in linked or item.sequence in other_sequences]
+
+
 def cross_set_matches(items: Sequence[SplitItem], search: SimilaritySearch,
                       report: Callable[[str], None]) -> set[str]:
-    """Groups in a lower-priority set that are similar (or identical) to a higher-priority set."""
+    """Groups in a lower-priority set that are similar (or identical) to a higher-priority set
+
+    The pairs of sets are searched with the test set first, so validation
+    records already to be removed (similar to the test set) are not searched
+    against the training set: training records similar only to them can stay.
+    """
     by_set: dict[str, list[SplitItem]] = defaultdict(list)
     for item in items:
         by_set[str(item.split)].append(item)
 
     offending: set[str] = set()
     for query_set, target_set in SEPARATED_SET_PAIRS:
-        queries, targets = by_set.get(query_set, []), by_set.get(target_set, [])
+        queries = [item for item in by_set.get(query_set, []) if item.group not in offending]
+        targets = by_set.get(target_set, [])
         if not queries or not targets:
             continue
 

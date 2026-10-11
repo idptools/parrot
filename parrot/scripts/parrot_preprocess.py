@@ -26,6 +26,7 @@ Licensed under the MIT license.
 
 import argparse
 import os
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -364,8 +365,9 @@ def run() -> None:
     lines = read_lines(args, report)
     lines = clean(lines, args, report)
     lines = recode(lines, args, output_prefix, report)
+    before_deduplication = lines
     lines = remove_duplicates(lines, args, classification, report)
-    lines, splits = split(lines, args, rng, report)
+    lines, splits = split(lines, before_deduplication, args, rng, report)
     lines, splits = balance_classes(lines, splits, args, output_prefix, report)
     write_outputs(lines, splits, args, output, output_prefix, classification, report)
 
@@ -382,8 +384,15 @@ def read_lines(args: argparse.Namespace, report: ProcessingReport) -> list[Line]
     -------
     list
         The lines, split into fields (on --delimiter if given, otherwise on any whitespace)
+
+    Raises
+    ------
+    ValueError
+        If the datafile has no data lines, or a line is not usable (see check_lines)
     """
     lines = process_input_data.read_tsv_raw(args.input_data_file, delimiter=args.delimiter)
+    if not lines:
+        raise ValueError(f'Datafile {args.input_data_file} has no data lines')
     check_lines(lines, args.datatype)
     report.add(f'Read {len(lines):,} lines')
     return lines
@@ -402,9 +411,18 @@ def check_lines(lines: list[Line], datatype: str) -> None:
     Raises
     ------
     ValueError
-        For the first line that does not
+        For the first line that does not, or that has an empty field or a field containing whitespace (possible
+        with --delimiter; PARROT datafiles separate fields by whitespace, so the output could not be read)
     """
     for number, line in enumerate(lines, start=1):
+        if any(field == '' for field in line):
+            raise ValueError(f'Data line {number} has an empty column (a delimiter at the start or end of the line, '
+                             f'or two in a row): {line}')
+        spaced = [field for field in line if len(field.split()) > 1]
+        if spaced:
+            raise ValueError(f"Data line {number} has a field containing whitespace ('{spaced[0]}'), which a PARROT "
+                             'datafile cannot hold (its columns are separated by whitespace); change it, e.g. '
+                             'replace the spaces in IDs with underscores')
         if datatype == 'matrix':
             if len(line) != 2:
                 raise ValueError(f"Data line {number} has {len(line)} column(s); matrix data has '<ID> <sequence>' "
@@ -434,13 +452,42 @@ def clean(lines: list[Line], args: argparse.Namespace, report: ProcessingReport)
     -------
     list
         The kept lines
+
+    Raises
+    ------
+    ValueError
+        If cleaning removes every line
     """
     if not (args.uppercase or args.remove_nonstandard or args.min_length is not None or args.max_length is not None):
         return lines
 
     report.section('Cleaning sequences')
-    return preproc.clean_sequences(lines, report, uppercase=args.uppercase, remove_nonstandard=args.remove_nonstandard,
+    first_report_line = len(report.lines)
+    kept = preproc.clean_sequences(lines, report, uppercase=args.uppercase, remove_nonstandard=args.remove_nonstandard,
                                    min_length=args.min_length, max_length=args.max_length)
+    check_lines_remain(kept, 'Cleaning', report.lines[first_report_line:])
+    return kept
+
+
+def check_lines_remain(lines: list[Line], step: str, what_was_done: list[str]) -> None:
+    """Stop if a step removed every line, saying what it did (there would be nothing to split or write)
+
+    Parameters
+    ----------
+    lines : list
+        The lines kept by the step
+    step : str
+        The step, to start the message (e.g. 'Cleaning')
+    what_was_done : list of str
+        The step's report lines
+
+    Raises
+    ------
+    ValueError
+        If no lines remain
+    """
+    if not lines:
+        raise ValueError(f'{step} removed every line, so nothing was written: ' + '; '.join(what_was_done))
 
 
 def recode(lines: list[Line], args: argparse.Namespace, output_prefix: str, report: ProcessingReport) -> list[Line]:
@@ -506,17 +553,22 @@ def remove_duplicates(lines: list[Line], args: argparse.Namespace, classificatio
     deduplication = 'drop' if args.remove_sequence_duplicates else args.deduplicate
     if deduplication is not None:
         report.section(f'Duplicate sequences ({deduplication})')
+        first_report_line = len(report.lines)
         lines = preproc.deduplicate(lines, deduplication, args.datatype, classification, report)
+        check_lines_remain(lines, 'Removing duplicates', report.lines[first_report_line:])
     return lines
 
 
-def split(lines: list[Line], args: argparse.Namespace, rng: np.random.Generator,
+def split(lines: list[Line], before_deduplication: list[Line], args: argparse.Namespace, rng: np.random.Generator,
           report: ProcessingReport) -> tuple[list[Line], list[str] | None]:
     """Assign every line to the training, validation or test set (--split), keeping similar sequences together
 
     Parameters
     ----------
     lines : list
+    before_deduplication : list
+        The lines before duplicated sequences were removed: a removed copy's group (--groups) still holds the
+        line that replaced it
     args : argparse.Namespace
     rng : numpy.random.Generator
     report : ProcessingReport
@@ -538,6 +590,11 @@ def split(lines: list[Line], args: argparse.Namespace, rng: np.random.Generator,
     if groups:
         report.add(f'{sum(line[0] in groups for line in lines):,} of {len(lines):,} lines belong to a group from '
                    f'{args.groups}; records in a group are kept together')
+        links = removed_copy_links(items, before_deduplication, groups)
+        if links:
+            splitting.merge_groups(items, links)
+            report.add(f'{len(links):,} lines also belong to the group of a copy of their sequence that '
+                       'deduplication removed')
     fractions = dict(zip(splitting.SET_NAMES, args.set_fractions))
     report.add('Target fractions: ' + ', '.join(f'{splitting.SET_LABELS[name]} {fraction:g}'
                                                 for name, fraction in fractions.items()))
@@ -550,6 +607,38 @@ def split(lines: list[Line], args: argparse.Namespace, rng: np.random.Generator,
     kept.sort(key=lambda item: item.index)
     report_final_sets(kept, len(lines), report)
     return [lines[item.index] for item in kept], [str(item.split) for item in kept]
+
+
+def removed_copy_links(items: list[splitting.SplitItem], before_deduplication: list[Line],
+                       groups: dict[str, str]) -> list[tuple[str, str]]:
+    """Links between each record's group and the groups of the copies of its sequence that deduplication removed
+
+    Deduplication keeps one line per sequence; the copies it removed may have
+    belonged to other groups, whose other records must still stay in the same
+    set as the line that replaced them.
+
+    Parameters
+    ----------
+    items : list of SplitItem
+        The records to split
+    before_deduplication : list
+        Every line before deduplication
+    groups : dict
+        Sequence ID -> group (see read_groups)
+
+    Returns
+    -------
+    list of (str, str)
+        Pairs of groups to join (only groups some record still has)
+    """
+    groups_of_sequence: dict[str, set[str]] = defaultdict(set)
+    for line in before_deduplication:
+        if line[0] in groups:
+            groups_of_sequence[line[1]].add(groups[line[0]])
+
+    present = {item.group for item in items}
+    return [(item.group, group) for item in items for group in sorted(groups_of_sequence.get(item.sequence, ()))
+            if group != item.group and group in present]
 
 
 def similarity_search(args: argparse.Namespace) -> splitting.SimilaritySearch:
@@ -786,8 +875,9 @@ def check_output(datafile: str, split_file: str | None, datatype: str, classific
         if split_file is not None:
             process_input_data.read_split_file(split_file, num_samples=len(data))
     except ValueError as error:
+        hint = classification and preproc.labels_need_recoding(lines)
         report.add(f'WARNING: PARROT cannot train on the output as it is: {error}' +
-                   (' (use --recode-classes to turn class labels into 0, 1, 2, ...)' if classification else ''))
+                   (' (use --recode-classes to turn class labels into 0, 1, 2, ...)' if hint else ''))
         print(report.lines[-1])
         return
     report.add(f'Checked: PARROT reads the output as {datatype}-mapped '

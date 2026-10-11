@@ -14,17 +14,24 @@ tolerated) and chained into runs along the sequences (a run breaks where two
 shared k-mers are more than KmerCriteria.max_gap residues apart). Each pair is
 then scored in the same terms as the MMseqs2 criterion:
 
-* E-value, from the run with the most shared k-mers (counted as distinct
-  positions, so a repeat cannot count one k-mer many times). If the two
-  sequences were unrelated, a k-mer at one position would match a k-mer at
-  another with probability p^k, where p is the chance that two residues drawn
+* E-value, from the run whose shared k-mers cover the most residues (counted
+  at distinct positions, so a repeat cannot count one k-mer many times).
+  Overlapping shared k-mers are parts of one longer stretch of shared sequence,
+  not separate chances: a shared 6-residue stretch holds three 4-mers, but by
+  chance it is as likely as one 4-mer followed by two more identical residues.
+  If the two sequences were unrelated, each residue would be identical to the
+  one it is aligned with with probability p, the chance that two residues drawn
   from the two sequences' amino-acid compositions are identical (so
   compositionally biased sequences, such as many disordered regions, need more
-  shared k-mers to count). The number of chance matches in a band is then
-  Poisson distributed, and the E-value is the probability of at least as many,
-  multiplied by the number of bands compared and the number of target sequences:
-  as with MMseqs2 or BLAST, the number of matches this strong one query would
-  be expected to find by chance in the database searched.
+  shared sequence to count). Each pair of k-mer positions would then start a
+  stretch of shared sequence with probability at most p^k, each stretch would
+  extend beyond k residues while the next residue is also identical, and a run
+  would continue while another chance stretch follows in its bands within
+  KmerCriteria.max_gap residues (see chance_of_run). The E-value is the
+  expected number of chance runs covering at least as many residues, over every
+  pair of k-mer positions in the two sequences, multiplied by the number of
+  target sequences: as with MMseqs2 or BLAST, the number of matches this strong
+  one query would be expected to find by chance in the database searched.
 * Coverage: the stretch spanned by the best run together with every other run
   near its diagonal (within KmerCriteria.max_drift) that is itself unlikely by
   chance, as a fraction of the shorter sequence. This approximates the length
@@ -42,8 +49,9 @@ k-mers with at most k // 2 distinct amino acids (QQQQ, SGSG, ...).
 
 The search is exact (every shared k-mer is counted, nothing is sampled) and is
 written with NumPy, working through the queries in batches so memory stays
-bounded. Exact k-mer matches find close relatives reliably (at least 50%
-identity, and most at 40-50%), but not the distant homologues that MMseqs2 finds
+bounded. Exact k-mer matches find close relatives reliably (in the yeast
+proteome, nearly all the pairs MMseqs2 links at 50% identity or more, and three
+quarters of those at 40-50%), but not the distant homologues that MMseqs2 finds
 with substitution-aware alignments.
 
 .............................................................................
@@ -60,7 +68,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, fields
 
 import numpy as np
-from scipy.special import pdtrc
+from scipy.special import gammaln, nbdtrc, xlogy
 
 from parrot.sequence_encoder import STANDARD_AMINO_ACIDS
 from parrot.tools.splitting import Match, identity_summary
@@ -86,6 +94,14 @@ LOW_COMPLEXITY_ENTROPY = 1.8
 # Largest number of k-mer matches (pairs of positions sharing a k-mer) handled at once.
 # Each needs about 80 bytes of working memory, so this keeps a batch to about 0.8 GB.
 BATCH_MATCHES = 10_000_000
+
+# The chance that a run covers many residues sums over the number of chance stretches of shared sequence in it
+# (see chance_of_run). Runs of more stretches than it takes to cover the residues without extending any of them
+# grow less likely with every further stretch, so beyond this many more, they are bounded together...
+LONGER_RUNS_SUMMED = 4
+
+# ...as are runs of more than this many stretches
+MAX_STRETCHES_SUMMED = 64
 
 # A run of shared k-mers counts towards the extent of a similarity only if runs at least as strong would arise
 # by chance, anywhere near the best run's diagonal, with at most this probability
@@ -126,7 +142,8 @@ class KmerCriteria:
         Ignore low-complexity sequence (see the module documentation)
     report_max_evalue : float
         The separation check also reports every weaker similarity up to this
-        E-value, so any remaining similarity between sets is visible
+        E-value (or up to max_evalue, if that is larger), so any remaining
+        similarity between sets is visible
     """
 
     kmer_size: int = 4
@@ -152,6 +169,12 @@ class KmerCriteria:
         if self.band_width < 2 or self.max_gap < 1 or self.max_drift < 0:
             raise ValueError('band_width must be at least 2, max_gap at least 1 and max_drift at least 0')
 
+    @property
+    def reported_evalue(self) -> float:
+        """Largest E-value of the similarities the separation check reports: every one that meets the criterion,
+        and weaker ones up to report_max_evalue."""
+        return max(self.report_max_evalue, self.max_evalue)
+
     def describe(self) -> str:
         """The criterion in words, for reports."""
         return (f'identical, or sharing {self.kmer_size}-mers along nearby alignment diagonals with E <= '
@@ -166,8 +189,11 @@ class KmerMatch:
     Attributes
     ----------
     query, target : int
+    covered : int
+        Residues covered by the shared k-mers of the best run (the fewer of
+        those in the query and those in the target)
     shared : int
-        Shared k-mers (distinct positions) in the best run
+        Shared k-mers (distinct positions, overlapping or not) in the best run
     coverage : float
         Fraction of the shorter sequence spanned by the similarity
     evalue : float
@@ -175,13 +201,15 @@ class KmerMatch:
     identity : float
         Rough identity estimate from how densely the best run's shared k-mers
         cover its span (if a fraction f of positions start a shared k-mer,
-        f ~ identity^k)
+        f ~ identity^k). A short run is all shared k-mers, so this
+        overestimates the identity of short similarities.
     linked : bool
         True if the pair meets the criterion
     """
 
     query: int
     target: int
+    covered: int
     shared: int
     coverage: float
     evalue: float
@@ -341,7 +369,7 @@ class KmerSearch:
 
     def summarise(self, matches: Sequence[Match]) -> str:
         """A short description of the strength of the matches found (for the report)."""
-        return (f'at E <= {self.criteria.report_max_evalue:g}; estimated '
+        return (f'at E <= {self.criteria.reported_evalue:g}; estimated '
                 + identity_summary(match.identity for match in matches))
 
     def __call__(self, queries: Sequence[str], targets: Sequence[str] | None = None,
@@ -355,7 +383,7 @@ class KmerSearch:
             None to search the queries against themselves, without self-hits
         weaker : bool, optional
             Also return matches up to report_max_evalue that do not meet the
-            criterion (linked=False), for the report
+            criterion (linked=False), for the report (see KmerCriteria.reported_evalue)
 
         Returns
         -------
@@ -371,7 +399,7 @@ class KmerSearch:
         else:
             target_table = kmer_table(targets, criteria.kmer_size, criteria.mask_low_complexity)
             n_targets, database_size = len(targets), len(targets)
-        max_evalue = criteria.report_max_evalue if weaker else criteria.max_evalue
+        max_evalue = criteria.reported_evalue if weaker else criteria.max_evalue
 
         index = TargetIndex.build(target_table, n_targets)
         first, last = index.match_ranges(query_table, self_search)
@@ -383,7 +411,7 @@ class KmerSearch:
             if hits is None:
                 continue
             lowest_query = int(query_table.sequence[batch.start])
-            runs = find_runs(hits, criteria.band_width, target_table.longest, criteria.max_gap)
+            runs = find_runs(hits, criteria.band_width, target_table.longest, criteria.max_gap, criteria.kmer_size)
             del hits
             scores = score_pairs(runs, query_table, target_table, n_targets, lowest_query, criteria, database_size)
             matches += scores.matches(max_evalue, criteria)
@@ -527,6 +555,9 @@ class Runs:
     size : numpy.ndarray of int64
         Shared k-mers in the run, counted as distinct positions (the smaller of
         the number of distinct query and distinct target positions)
+    covered : numpy.ndarray of int64
+        Residues covered by the run's shared k-mers (the smaller of the number
+        covered in the query and in the target)
     query_first, query_last : numpy.ndarray of int64
         Query positions of the first and last of them
     target_low, target_high : numpy.ndarray of int64
@@ -537,6 +568,7 @@ class Runs:
 
     pair: np.ndarray
     size: np.ndarray
+    covered: np.ndarray
     query_first: np.ndarray
     query_last: np.ndarray
     target_low: np.ndarray
@@ -549,7 +581,7 @@ class Runs:
         return np.maximum(self.query_last - self.query_first, self.target_high - self.target_low)
 
 
-def find_runs(hits: Hits, band_width: int, longest_target: int, max_gap: int) -> Runs:
+def find_runs(hits: Hits, band_width: int, longest_target: int, max_gap: int, kmer_size: int) -> Runs:
     """Every run of at least two shared k-mers (distinct positions) along a diagonal band
 
     Bands are band_width diagonals wide, and are laid out twice, the second time
@@ -569,6 +601,8 @@ def find_runs(hits: Hits, band_width: int, longest_target: int, max_gap: int) ->
         Length of the longest target (used to keep diagonal numbers positive)
     max_gap : int
         Largest gap, in query residues, between consecutive k-mers of a run
+    kmer_size : int
+        Length of the k-mers (to count the residues they cover)
 
     Returns
     -------
@@ -597,14 +631,19 @@ def find_runs(hits: Hits, band_width: int, longest_target: int, max_gap: int) ->
         run_target = np.sort(run * (longest_target + 1) + target_position)
         new_target = np.ones(len(key), dtype=bool)
         new_target[1:] = run_target[1:] != run_target[:-1]
+        target_run = run_target[new_target] // (longest_target + 1)
         size = np.minimum(np.bincount(run[new_query], minlength=len(starts)),
-                          np.bincount(run_target[new_target] // (longest_target + 1), minlength=len(starts)))
+                          np.bincount(target_run, minlength=len(starts)))
+        covered = np.minimum(
+            covered_residues(run[new_query], query_position[new_query], kmer_size, len(starts)),
+            covered_residues(target_run, run_target[new_target] % (longest_target + 1), kmer_size, len(starts)))
 
         keep = size >= 2
         if not keep.any():
             continue
         starts, ends = starts[keep], ends[keep]
-        found.append(Runs(pair=key[starts] // n_bands, size=size[keep], query_first=query_position[starts],
+        found.append(Runs(pair=key[starts] // n_bands, size=size[keep], covered=covered[keep],
+                          query_first=query_position[starts],
                           query_last=query_position[ends],
                           target_low=reduce_runs(np.minimum, target_position, starts, ends),
                           target_high=reduce_runs(np.maximum, target_position, starts, ends),
@@ -613,6 +652,40 @@ def find_runs(hits: Hits, band_width: int, longest_target: int, max_gap: int) ->
     if not found:
         return Runs(*(np.zeros(0, dtype=np.int64) for _ in names))
     return Runs(*(np.concatenate([getattr(runs, name) for runs in found]) for name in names))
+
+
+def covered_residues(run: np.ndarray, position: np.ndarray, kmer_size: int, n_runs: int) -> np.ndarray:
+    """Residues covered by each run's shared k-mers
+
+    Shared k-mers starting fewer than k residues apart overlap, and together
+    form one stretch of shared sequence, from the first one's start to the end
+    of the last one.
+
+    Parameters
+    ----------
+    run : numpy.ndarray of int64
+        The run each shared k-mer belongs to, in order of run
+    position : numpy.ndarray of int64
+        Where each shared k-mer starts (distinct and increasing within a run)
+    kmer_size : int
+    n_runs : int
+        Number of runs
+
+    Returns
+    -------
+    numpy.ndarray of int64
+        One count per run
+    """
+    if len(run) == 0:
+        return np.zeros(n_runs, dtype=np.int64)
+    # A new stretch starts at the first k-mer of each run and wherever a k-mer does not overlap the one before
+    new_stretch = np.ones(len(run), dtype=bool)
+    new_stretch[1:] = (run[1:] != run[:-1]) | (position[1:] - position[:-1] >= kmer_size)
+    first = np.flatnonzero(new_stretch)
+    last = np.append(first[1:], len(run)) - 1
+    stretch_length = position[last] - position[first] + kmer_size
+    covered: np.ndarray = np.bincount(run[first], weights=stretch_length, minlength=n_runs).astype(np.int64)
+    return covered
 
 
 def reduce_runs(function: np.ufunc, values: np.ndarray, starts: np.ndarray, ends: np.ndarray) -> np.ndarray:
@@ -648,6 +721,8 @@ class PairScores:
     ----------
     query_index, target_index : numpy.ndarray of int64
         The two sequences
+    covered : numpy.ndarray of int64
+        Residues covered by the shared k-mers of the best run
     shared : numpy.ndarray of int64
         Shared k-mers in the best run
     evalue : numpy.ndarray of float
@@ -660,6 +735,7 @@ class PairScores:
 
     query_index: np.ndarray
     target_index: np.ndarray
+    covered: np.ndarray
     shared: np.ndarray
     evalue: np.ndarray
     coverage: np.ndarray
@@ -681,7 +757,8 @@ class PairScores:
         """
         reported = self.evalue <= max_evalue
         linked = (self.evalue <= criteria.max_evalue) & (self.coverage >= criteria.min_coverage)
-        columns = [self.query_index, self.target_index, self.shared, self.coverage, self.evalue, self.identity, linked]
+        columns = [self.query_index, self.target_index, self.covered, self.shared, self.coverage, self.evalue,
+                   self.identity, linked]
         return [KmerMatch(*values) for values in zip(*(column[reported].tolist() for column in columns))]
 
 
@@ -708,32 +785,32 @@ def score_pairs(runs: Runs, query_table: KmerTable, target_table: KmerTable, n_t
     """
     if len(runs.pair) == 0:
         no_pairs = np.zeros(0)
-        return PairScores(no_pairs.astype(np.int64), no_pairs.astype(np.int64), no_pairs.astype(np.int64), no_pairs,
-                          no_pairs, no_pairs)
+        no_counts = no_pairs.astype(np.int64)
+        return PairScores(no_counts, no_counts, no_counts, no_counts, no_pairs, no_pairs, no_pairs)
 
     query_of = runs.pair // n_targets + lowest_query
     target_of = runs.pair % n_targets
-    # Chance that a k-mer in one sequence matches a k-mer in the other, if they were unrelated: the chance
-    # that two residues drawn from the two compositions are identical (the dot product), to the power k
-    kmer_match = np.einsum('ij,ij->i', query_table.composition[query_of],
-                           target_table.composition[target_of]) ** criteria.kmer_size
+    # Chance that two residues are identical if the sequences were unrelated: the chance that two residues drawn
+    # from the two compositions are identical (the dot product)
+    residue_match = np.einsum('ij,ij->i', query_table.composition[query_of], target_table.composition[target_of])
 
     best = best_runs(runs)
     query_index, target_index = query_of[best], target_of[best]
-    shared = runs.size[best]
-    evalue = pair_evalues(shared, kmer_match[best], query_index, target_index, query_table, target_table, criteria,
-                          database_size)
+    covered, shared = runs.covered[best], runs.size[best]
+    evalue = pair_evalues(covered, residue_match[best], query_index, target_index, query_table, target_table,
+                          criteria, database_size)
     shorter = np.minimum(query_table.lengths[query_of], target_table.lengths[target_of])
-    coverage = pair_coverage(runs, best, kmer_match, shorter, criteria)
+    coverage = pair_coverage(runs, best, residue_match, shorter, criteria)
 
     # If a fraction f of a run's positions start a shared k-mer, f ~ identity^k
     density = shared / (runs.query_last[best] - runs.query_first[best] + 1)
     identity = np.minimum(density, 1.0) ** (1 / criteria.kmer_size)
-    return PairScores(query_index, target_index, shared, evalue, coverage, identity)
+    return PairScores(query_index, target_index, covered, shared, evalue, coverage, identity)
 
 
 def best_runs(runs: Runs) -> np.ndarray:
-    """Each pair's best run: the one with the most shared k-mers, then the longest span
+    """Each pair's best run: the one whose shared k-mers cover the most residues, then the one with the most shared
+    k-mers, then the longest span
 
     Parameters
     ----------
@@ -744,24 +821,24 @@ def best_runs(runs: Runs) -> np.ndarray:
     numpy.ndarray of int64
         Index of each pair's best run, in order of pair number
     """
-    order = np.lexsort((-runs.span, -runs.size, runs.pair))
+    order = np.lexsort((-runs.span, -runs.size, -runs.covered, runs.pair))
     first_of_pair = np.concatenate(([True], runs.pair[order][1:] != runs.pair[order][:-1]))
     best: np.ndarray = order[first_of_pair]
     return best
 
 
-def pair_evalues(shared: np.ndarray, kmer_match: np.ndarray, query_index: np.ndarray, target_index: np.ndarray,
+def pair_evalues(covered: np.ndarray, residue_match: np.ndarray, query_index: np.ndarray, target_index: np.ndarray,
                  query_table: KmerTable, target_table: KmerTable, criteria: KmerCriteria,
                  database_size: int) -> np.ndarray:
-    """E-value of each pair's best run: the chance of at least that many shared k-mers in one band, times the
-    number of bands and of targets searched
+    """E-value of each pair's best run: the expected number of chance runs covering at least as many residues,
+    over every pair of k-mer positions in the two sequences, times the number of targets searched
 
     Parameters
     ----------
-    shared : numpy.ndarray
-        Shared k-mers in each pair's best run
-    kmer_match : numpy.ndarray
-        Chance that two k-mers of the pair match by chance
+    covered : numpy.ndarray
+        Residues covered by the shared k-mers of each pair's best run
+    residue_match : numpy.ndarray
+        Chance that two residues of the pair are identical by chance
     query_index, target_index : numpy.ndarray
         The pair's sequences
     query_table, target_table : KmerTable
@@ -773,31 +850,102 @@ def pair_evalues(shared: np.ndarray, kmer_match: np.ndarray, query_index: np.nda
     -------
     numpy.ndarray of float
     """
-    # Chance matches in a band are Poisson distributed; the expected number is the number of k-mer positions
-    # that fall in one band times the chance each matches
-    positions_in_band = criteria.band_width * np.minimum(query_table.counts[query_index],
-                                                         target_table.counts[target_index])
-    # Two layouts of bands (see find_runs), each covering every diagonal of the pair
-    bands_per_pair = 2 * (query_table.lengths[query_index] + target_table.lengths[target_index]) / criteria.band_width
-    evalue: np.ndarray = pdtrc(shared - 1, positions_in_band * kmer_match) * bands_per_pair * database_size
+    # Every pair of k-mer positions could start a chance stretch of shared sequence, and so a chance run
+    position_pairs = query_table.counts[query_index] * target_table.counts[target_index]
+    expected_runs = position_pairs * residue_match ** criteria.kmer_size
+    shorter = np.minimum(query_table.lengths[query_index], target_table.lengths[target_index])
+    evalue: np.ndarray = expected_runs * chance_of_run(covered, residue_match, shorter, criteria) * database_size
     return evalue
 
 
-def pair_coverage(runs: Runs, best: np.ndarray, kmer_match: np.ndarray, shorter: np.ndarray,
+def chance_of_run(covered: np.ndarray, residue_match: np.ndarray, shorter: np.ndarray,
+                  criteria: KmerCriteria) -> np.ndarray:
+    """Chance that a run of shared k-mers starting with a chance stretch of shared sequence covers at least
+    `covered` residues
+
+    If two sequences were unrelated, a stretch of k identical residues would
+    extend while the next residue is also identical (probability p, the
+    residue_match), and the run would continue while another chance stretch
+    starts in one of the stretch's bands within max_gap residues of the query.
+    The two layouts of bands (see find_runs) hold a stretch's diagonal in two
+    bands that together span 1.5 band_width diagonals, so r = 1.5 band_width p^k
+    chance stretches start per query residue, and a run found in either layout
+    continues with probability at most q = 1 - exp(-r max_gap). A run of n
+    stretches covers n k residues plus a negative binomial number of extra
+    residues (the identical residues before n differing ones), so
+
+        P(covered >= c) = sum over n of P(n stretches) P(n k + extra >= c)
+
+    where P(n stretches) is at most q^(n - 1) (1 - q), and also at most the
+    expected number of ways the n - 1 further stretches could be placed:
+    r^(n - 1) times the number of ways to share out the residues the shorter
+    sequence has to spare (n stretches covering c residues, with a differing
+    residue between each two, span at least max(c, n k) + n - 1 residues). The
+    second bound matters for short sequences, where few runs fit. Runs of more
+    than ceil(c / k) + LONGER_RUNS_SUMMED stretches, or of more than
+    MAX_STRETCHES_SUMMED, are bounded together: the chance of more than m
+    stretches is at most q^m. Every shortcut here (counting k-mer positions
+    rather than stretch starts, the smaller of the query's and the target's
+    covered residues, and extra residues that would not fit) can only overstate
+    the chance.
+
+    Parameters
+    ----------
+    covered : numpy.ndarray of int64
+        Residues covered (at least k)
+    residue_match : numpy.ndarray of float
+        Chance that two aligned residues are identical, below 1
+    shorter : numpy.ndarray of int64
+        Length of the shorter of the two sequences
+    criteria : KmerCriteria
+
+    Returns
+    -------
+    numpy.ndarray of float
+        One probability per entry
+    """
+    kmer_size = criteria.kmer_size
+    stretch_rate = (criteria.band_width + criteria.band_width // 2) * residue_match ** kmer_size
+    continues = -np.expm1(-stretch_rate * criteria.max_gap)
+
+    # Most stretches a run can hold and still fit in the shorter sequence (at least the one it starts with)
+    most_stretches = np.maximum(np.minimum(shorter - covered + 1, (shorter + 1) // (kmer_size + 1)), 1)
+    # Runs of up to this many stretches are summed one by one, and longer ones that fit are bounded together
+    enough_stretches = -(-covered // kmer_size)
+    summed_stretches = np.minimum(np.minimum(most_stretches, enough_stretches + LONGER_RUNS_SUMMED),
+                                  MAX_STRETCHES_SUMMED)
+    chance = np.where(most_stretches > summed_stretches, continues ** summed_stretches, 0.0)
+    for stretches in range(1, int(summed_stretches.max(initial=0)) + 1):
+        fits = np.flatnonzero(stretches <= summed_stretches)
+        enough = covered[fits]
+        spare = shorter[fits] - (np.maximum(enough, stretches * kmer_size) + stretches - 1)
+        chain = continues[fits] ** (stretches - 1) * (1 - continues[fits])
+        # r^(n - 1) x (spare + n - 1 choose n - 1), the ways to place the further stretches
+        placements = np.exp(xlogy(stretches - 1, stretch_rate[fits]) + gammaln(spare + stretches)
+                            - gammaln(stretches) - gammaln(spare + 1))
+        # nbdtrc(m, n, q): chance of more than m identical residues before n differing ones (each with chance q)
+        extra_needed = enough - stretches * kmer_size
+        enough_extra = np.where(extra_needed > 0,
+                                nbdtrc(np.maximum(extra_needed - 1, 0), stretches, 1 - residue_match[fits]), 1.0)
+        chance[fits] += np.minimum(chain, placements) * enough_extra
+    return chance
+
+
+def pair_coverage(runs: Runs, best: np.ndarray, residue_match: np.ndarray, shorter: np.ndarray,
                   criteria: KmerCriteria) -> np.ndarray:
     """Fraction of the shorter sequence spanned by each pair's best run and the runs near its diagonal
 
-    A run near the best one's diagonal (within max_drift) counts only if a run
+    A run near the best one's diagonal (within max_drift) counts only if runs
     at least as strong would arise by chance anywhere near that diagonal with a
-    probability of at most RUN_CHANCE.
+    probability of at most RUN_CHANCE (see chance_of_run).
 
     Parameters
     ----------
     runs : Runs
     best : numpy.ndarray
         Index of each pair's best run (see best_runs)
-    kmer_match : numpy.ndarray
-        For each run, the chance that two k-mers of its pair match by chance
+    residue_match : numpy.ndarray
+        For each run, the chance that two residues of its pair are identical by chance
     shorter : numpy.ndarray
         For each run, the length of the shorter sequence of its pair
     criteria : KmerCriteria
@@ -811,9 +959,13 @@ def pair_coverage(runs: Runs, best: np.ndarray, kmer_match: np.ndarray, shorter:
     pair_number = np.searchsorted(runs.pair[best], runs.pair)
 
     near = np.abs(runs.diagonal - runs.diagonal[best][pair_number]) <= criteria.max_drift
-    positions_in_stretch = criteria.band_width * (runs.query_last - runs.query_first + criteria.max_gap)
-    stretches_near = 2 * (2 * criteria.max_drift / criteria.band_width + 1) * (shorter / criteria.max_gap + 1)
-    near &= pdtrc(runs.size - 1, positions_in_stretch * kmer_match) * stretches_near <= RUN_CHANCE
+    # Chance runs could start at any pair of positions on the diagonals near the best run (and on those just
+    # beyond, which share its bands)
+    candidates = np.flatnonzero(near)
+    diagonals_near = 2 * criteria.max_drift + criteria.band_width
+    expected_runs = diagonals_near * shorter[candidates] * residue_match[candidates] ** criteria.kmer_size
+    chance = chance_of_run(runs.covered[candidates], residue_match[candidates], shorter[candidates], criteria)
+    near[candidates] = expected_runs * chance <= RUN_CHANCE
     near[best] = True
 
     # The extent of every counted run of each pair, in the query and in the target

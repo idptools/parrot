@@ -29,6 +29,22 @@ def test_read_tsv_raw_skips_blank_and_comment_lines(write_lines):
     assert pid.read_tsv_raw(path) == [['id1', 'ACD', '1.0'], ['id2', 'EFG', '2.0']]
 
 
+def test_read_tsv_raw_ignores_a_byte_order_mark(tmp_path):
+    datafile = tmp_path / 'data.tsv'
+    datafile.write_text('# made by a spreadsheet\na ACDE 1\n', encoding='utf-8-sig')
+    assert pid.read_tsv_raw(str(datafile)) == [['a', 'ACDE', '1']]
+    datafile.write_text('a ACDE 1\n', encoding='utf-8-sig')
+    assert pid.read_tsv_raw(str(datafile)) == [['a', 'ACDE', '1']]
+
+
+@pytest.mark.parametrize('line, fields', [('a, ACDE, 1.0', ['a', 'ACDE', '1.0']),
+                                          ('\tACDF\t2.0', ['', 'ACDF', '2.0']),
+                                          ('a\tACDF\t2.0\t', ['a', 'ACDF', '2.0', ''])])
+def test_read_tsv_raw_with_a_delimiter_keeps_columns_in_place(write_lines, line, fields):
+    delimiter = ',' if ',' in line else '\t'
+    assert pid.read_tsv_raw(write_lines('data.tsv', [line]), delimiter=delimiter) == [fields]
+
+
 def test_read_tsv_raw_custom_delimiter(write_lines):
     path = write_lines('data.csv', ['id1,ACD,1.0', 'id2,EFG,2.0'])
     assert pid.read_tsv_raw(path, delimiter=',') == [['id1', 'ACD', '1.0'], ['id2', 'EFG', '2.0']]
@@ -490,6 +506,39 @@ def test_cross_validation_folds():
     for training, fold_held_out in folds:
         assert len(np.intersect1d(training, fold_held_out)) == 0
         np.testing.assert_array_equal(np.sort(np.concatenate([training, fold_held_out])), np.arange(10, 20))
+
+
+def test_cross_validation_folds_keep_each_group_in_one_fold():
+    groups = np.repeat(np.arange(20), 3)  # 20 groups of 3 samples
+    np.random.seed(0)
+    folds = pid.cross_validation_folds(np.arange(60), 4, groups)
+
+    assert [len(held_out) for _, held_out in folds] == [15, 15, 15, 15]
+    for training, held_out in folds:
+        assert not set(groups[training]) & set(groups[held_out])
+
+
+def test_cross_validation_folds_need_as_many_groups_as_folds():
+    with pytest.raises(ValueError, match='Cannot make 4 cross-validation folds from 3 distinct sequences'):
+        pid.cross_validation_folds(np.arange(6), 4, groups=[0, 0, 1, 1, 2, 2])
+    with pytest.raises(ValueError, match='at least 2 folds'):
+        pid.cross_validation_folds(np.arange(6), 1)
+
+
+@pytest.mark.parametrize('fractions', [[0.5, 0.5], [0.8, 0.2], [0.7, 0.15, 0.15]])
+def test_share_out_groups_comes_as_close_to_the_fractions_as_the_groups_allow(fractions):
+    np.random.seed(1)
+    parts = pid.share_out_groups(np.arange(200), fractions)
+    assert np.allclose(np.bincount(parts, minlength=len(fractions)), np.array(fractions) * 200, atol=1)
+
+
+def test_split_data_cv_keeps_identical_sequences_in_one_fold(write_lines):
+    rng = np.random.default_rng(0)
+    sequences = [''.join(rng.choice(list('ACDEFGHIKLMNPQRSTVWY'), 10)) for _ in range(20)]
+    data_file = write_lines('data.tsv', [f's{i} {sequences[i % 20]} {i % 3}' for i in range(80)])
+    cv_sets, _, _, _ = pid.split_data_cv(data_file, Task('sequence', 1), n_folds=4, ignore_warnings=True)
+    for fold_training, fold_held_out in cv_sets:
+        assert not set(fold_training.sequences) & set(fold_held_out.sequences)
 
 
 def test_read_split_file_example():

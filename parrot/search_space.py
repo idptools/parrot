@@ -25,6 +25,7 @@ import numpy as np
 
 from parrot import train_network
 from parrot.architectures import HyperParameter, HyperParameterValue, get_architecture, resolve_hyperparameters
+from parrot.tasks import Task
 
 
 class SearchSpace:
@@ -41,6 +42,9 @@ class SearchSpace:
         Name of the architecture
     fixed : dict
         Architecture hyperparameter values fixed by the user (not searched)
+    unused : dict
+        Searchable hyperparameters that have no effect for the task and
+        encoding (not searched; they keep their defaults), with the reason
     dimensions : list of HyperParameter
         The searched hyperparameters, learning rate first (for networks trained
         by gradient descent)
@@ -48,7 +52,8 @@ class SearchSpace:
         Whether the architecture is trained epoch by epoch
     """
 
-    def __init__(self, architecture: str, fixed: Mapping[str, HyperParameterValue] | None = None) -> None:
+    def __init__(self, architecture: str, fixed: Mapping[str, HyperParameterValue] | None = None,
+                 task: Task | None = None, input_size: int | None = None) -> None:
         """
         Parameters
         ----------
@@ -56,13 +61,24 @@ class SearchSpace:
             Name of a registered architecture
         fixed : dict, optional
             Architecture hyperparameters fixed at these values instead of searched
+        task : Task, optional
+        input_size : int, optional
+            The task and the length of the per-residue encoding vectors: if both
+            are given, hyperparameters that have no effect for them are not
+            searched (see ParrotArchitecture.unused_hyperparameters)
         """
         architecture_class = get_architecture(architecture)
         self.architecture = architecture
         self.fixed = dict(fixed or {})
         self.trained_by_gradient_descent = architecture_class.trained_by_gradient_descent
+        self.unused: dict[str, str] = {}
+        if task is not None and input_size is not None:
+            self.unused = {name: reason for name, reason in
+                           architecture_class.unused_hyperparameters(task, input_size).items()
+                           if name not in self.fixed}
         searched = [hyperparameter for hyperparameter in architecture_class.hyperparameters
-                    if hyperparameter.searchable and hyperparameter.name not in self.fixed]
+                    if hyperparameter.searchable and hyperparameter.name not in self.fixed
+                    and hyperparameter.name not in self.unused]
         learning_rate = [train_network.LEARNING_RATE] if self.trained_by_gradient_descent else []
         self.dimensions: list[HyperParameter] = learning_rate + searched
 
@@ -183,7 +199,27 @@ class SearchSpace:
             else:
                 assert hyperparameter.search_choices is not None
                 values[hyperparameter.name] = hyperparameter.search_choices[int(coordinate)]
-        return values
+        return self.normalized(values)
+
+    def normalized(self, values: Mapping[str, HyperParameterValue]) -> dict[str, HyperParameterValue]:
+        """A configuration with every hyperparameter that has no effect, given the others, at its default value
+
+        Configurations that differ only in such hyperparameters are the same
+        network, so they are tried only once (see
+        ParrotArchitecture.inactive_hyperparameters).
+
+        Parameters
+        ----------
+        values : dict
+            Value of every searched hyperparameter, by name
+
+        Returns
+        -------
+        dict
+        """
+        defaults = self.default_point_values()
+        inactive = get_architecture(self.architecture).inactive_hyperparameters({**self.fixed, **values})
+        return {name: defaults[name] if name in inactive else value for name, value in values.items()}
 
     def default_values(self) -> dict[str, HyperParameterValue]:
         """PARROT's default value of every searched hyperparameter (moved into its search range if outside it).
@@ -193,18 +229,29 @@ class SearchSpace:
         dict
             Value of every searched hyperparameter, by name
         """
-        point = []
+        return self.normalized(self.default_point_values())
+
+    def default_point_values(self) -> dict[str, HyperParameterValue]:
+        """PARROT's default value of every searched hyperparameter, moved into its search range if outside it, as it
+        would be at a point (see default_values)
+
+        Returns
+        -------
+        dict
+        """
+        values: dict[str, HyperParameterValue] = {}
         for hyperparameter in self.dimensions:
             if self.is_numeric(hyperparameter):
                 assert hyperparameter.search_range is not None
                 low, high = hyperparameter.search_range
                 default = float(np.clip(float(hyperparameter.default), low, high))
-                point.append(self._to_unit(hyperparameter, default))
+                values[hyperparameter.name] = self._from_unit(hyperparameter, self._to_unit(hyperparameter, default))
             else:
                 assert hyperparameter.search_choices is not None
                 choices = hyperparameter.search_choices
-                point.append(float(choices.index(hyperparameter.default) if hyperparameter.default in choices else 0))
-        return self.from_point(point)
+                values[hyperparameter.name] = (hyperparameter.default if hyperparameter.default in choices
+                                               else choices[0])
+        return values
 
     def random_point(self, rng: np.random.Generator) -> np.ndarray:
         """A point drawn uniformly at random.

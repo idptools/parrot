@@ -204,12 +204,15 @@ class MergeSummary:
         Sequence classification: sequences whose copies had different labels (removed)
     disagreeing_residues : int
         Residue classification: residues whose labelled copies disagreed (made missing)
+    unlabelled_sequences : int
+        Residue classification: sequences left with no labelled residue (removed)
     spreads : list of float
         Sequence regression: the range of each sequence's copies' values
     """
 
     conflicting_sequences: int = 0
     disagreeing_residues: int = 0
+    unlabelled_sequences: int = 0
     spreads: list[float] = field(default_factory=list)
 
 
@@ -224,9 +227,11 @@ def deduplicate(lines: list[Line], mode: str, datatype: str, classification: boo
     mode : str
         'merge': combine the copies' values. Regression values are averaged
         (residue by residue for residue data, ignoring missing labels).
-        Classification copies are kept (once) only if their labels agree; for
+        Classification copies are kept (once) only if their labels agree
+        (labels that are the same number, such as '1' and '1.0', agree); for
         residue data each residue keeps its label if every labelled copy
-        agrees, and otherwise becomes missing.
+        agrees, and otherwise becomes missing, and a sequence left with no
+        labelled residue is removed.
         'first': keep the first copy as it is.
         'drop': remove every copy (we cannot know which is right).
     datatype : str
@@ -316,7 +321,7 @@ def merge_sequence_labels(copies: list[Line], summary: MergeSummary) -> Line | N
     -------
     list or None
     """
-    if len({copy[2] for copy in copies}) > 1:
+    if len({label_value(copy[2]) for copy in copies}) > 1:
         summary.conflicting_sequences += 1
         return None
     return copies[0]
@@ -343,7 +348,7 @@ def merge_sequence_values(copies: list[Line], summary: MergeSummary) -> Line:
     return [copies[0][0], copies[0][1], format_number(mean)]
 
 
-def merge_residue_labels(copies: list[Line], summary: MergeSummary) -> Line:
+def merge_residue_labels(copies: list[Line], summary: MergeSummary) -> Line | None:
     """Residue classification: each residue keeps its label if every labelled copy agrees, otherwise it becomes missing
 
     Parameters
@@ -351,21 +356,31 @@ def merge_residue_labels(copies: list[Line], summary: MergeSummary) -> Line:
     copies : list
         Every line with this sequence (all with the same number of values)
     summary : MergeSummary
-        Counts the residues whose labelled copies disagree
+        Counts the residues whose labelled copies disagree, and the sequences left with no label
 
     Returns
     -------
-    list
+    list or None
+        None if no residue keeps a label (a line with no labels cannot be trained on), unless no copy had any
     """
     first = copies[0]
     labels = []
     for position in range(2, len(first)):
-        present = {copy[position] for copy in copies if not is_missing_label(copy[position])}
+        # The first copy's text of each distinct label (labels that are the same number agree)
+        present: dict[float | str, str] = {}
+        for copy in copies:
+            if not is_missing_label(copy[position]):
+                present.setdefault(label_value(copy[position]), copy[position])
         if len(present) > 1:
             summary.disagreeing_residues += 1
             labels.append(pid.MISSING_LABEL_TEXT)
         else:
-            labels.append(present.pop() if present else pid.MISSING_LABEL_TEXT)
+            labels.append(next(iter(present.values())) if present else pid.MISSING_LABEL_TEXT)
+
+    labelled_before = any(not is_missing_label(label) for copy in copies for label in copy[2:])
+    if labelled_before and all(is_missing_label(label) for label in labels):
+        summary.unlabelled_sequences += 1
+        return None
     return [first[0], first[1]] + labels
 
 
@@ -413,7 +428,8 @@ def describe_merge(mode: str, datatype: str, classification: bool, summary: Merg
                 f'{np.median(summary.spreads):.3g}, largest {np.max(summary.spreads):.3g})')
     if classification:
         return (f'Merged the copies of each residue by residue; {summary.disagreeing_residues:,} residues whose '
-                'labelled copies disagreed became missing (nan)')
+                'labelled copies disagreed became missing (nan), and '
+                f'{summary.unlabelled_sequences:,} sequences left with no labelled residue were removed')
     return 'Merged the copies of each residue by residue, averaging their labelled values'
 
 
@@ -438,6 +454,44 @@ def is_missing_label(label: str) -> bool:
         return math.isnan(float(label))
     except ValueError:
         return False
+
+
+def label_value(label: str) -> float | str:
+    """What a class label stands for, for comparing labels: its number if it is one ('1' and '1.0' are the same
+    class), otherwise its text
+
+    Parameters
+    ----------
+    label : str
+
+    Returns
+    -------
+    float or str
+    """
+    try:
+        return float(label)
+    except ValueError:
+        return label
+
+
+def labels_need_recoding(lines: list[Line]) -> bool:
+    """True if any class label is not a whole number from 0 (as PARROT needs; see recode_classes())
+
+    Parameters
+    ----------
+    lines : list
+        Parsed datafile lines ([id, sequence, label(s)...])
+
+    Returns
+    -------
+    bool
+    """
+    for line in lines:
+        for label in line[2:]:
+            value = label_value(label)
+            if isinstance(value, str) or (not math.isnan(value) and not (value >= 0 and value.is_integer())):
+                return True
+    return False
 
 
 def format_number(value: float) -> str:

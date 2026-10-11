@@ -63,7 +63,8 @@ def search_options() -> argparse.ArgumentParser:
                        help=f'same as --trials {common.LEGACY_NOTE}')
     group.add_argument('--cv-folds', dest='cv_folds', type=int, default=None, metavar='folds',
                        help='score each configuration by k-fold cross-validation over the training and validation '
-                            'data, instead of on the validation set (about k times slower; for small datasets)')
+                            'data, instead of on the validation set (about k times slower; for small datasets). '
+                            'Folds keep identical sequences together, and with --split kmer or mmseqs similar ones too')
     return options
 
 
@@ -77,8 +78,8 @@ def successive_halving_options() -> argparse.ArgumentParser:
     options = argparse.ArgumentParser(add_help=False)
     group = options.add_argument_group('hyperparameter search')
     group.add_argument('--min-epochs', dest='min_epochs', type=int, default=None, metavar='epochs',
-                       help='epochs every configuration is first trained for; the best ones continue for longer, up '
-                            'to --epochs (default: --epochs / reduction-factor^2, at least 1)')
+                       help='epochs every configuration is first trained for (the first stage); the best ones continue '
+                            'for longer, up to --epochs (default: --epochs / reduction-factor^2, at least 1)')
     group.add_argument('--reduction-factor', dest='reduction_factor', type=int, metavar='factor',
                        default=hyperparameter_search.REDUCTION_FACTOR,
                        help='at each stage the best 1/reduction-factor of the configurations continue, for '
@@ -108,7 +109,11 @@ def run() -> None:
     description = get_architecture(args.architecture).description
     common.print_run_header(f'Searching hyperparameters for {args.architecture}: {description}', run, settings)
 
-    space = hyperparameter_search.SearchSpace(args.architecture, fixed_hyperparameters)
+    space = hyperparameter_search.SearchSpace(args.architecture, fixed_hyperparameters, task=run.task,
+                                              input_size=len(run.encoder))
+    if space.unused and not run.silent:
+        for name, reason in space.unused.items():
+            print(f'Note: {name} is not searched ({reason})')
     trainer = hyperparameter_search.TrialTrainer(space, search_loaders(run), len(run.encoder), run.task, run.device)
     searching = time.perf_counter()
     searcher, best_trial = run_search(args, run, space, trainer, n_trials)
@@ -218,6 +223,8 @@ def describe_search(args: argparse.Namespace, searcher: hyperparameter_search.Hy
                         .removeprefix('searched over ')))
     for name, value in searcher.space.fixed.items():
         entries.append((f'fixed {name}', hyperparameter_search.format_value(value)))
+    for name, reason in searcher.space.unused.items():
+        entries.append((f'not searched {name}', reason))
     entries.append(('chosen', f'trial {best_trial.number}: {hyperparameter_search.format_hyperparameters(best_trial.values)}'))
     return entries
 

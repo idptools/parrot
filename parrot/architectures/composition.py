@@ -113,6 +113,13 @@ class Composition(ParrotArchitecture):
         output = self.mlp(composition_and_log_length(x, lengths))
         return output
 
+    @classmethod
+    def unused_hyperparameters(cls, task: Task, input_size: int) -> dict[str, str]:
+        """The composition window is only used for residue tasks (see ParrotArchitecture.unused_hyperparameters)."""
+        if task.per_residue:
+            return {}
+        return {'window_radius': 'sequence tasks use the whole sequence\'s composition, not a window'}
+
     def window_composition(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """Average encoded residues over a window centred on each residue
 

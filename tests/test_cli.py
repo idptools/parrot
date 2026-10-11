@@ -742,11 +742,25 @@ def test_cvsplit_is_reproducible_with_seed(run_cli, tmp_path):
 
 
 def test_cvsplit_rejects_too_few_sequences(run_cli, tmp_path, write_lines):
-    # 5 sequences in 5 folds leave 4 per fold for training and validation, and -t 0.8 gives all 4 to training
-    data_file = write_lines('data.tsv', [f's{i} ACDEF {i}.0' for i in range(5)])
+    # 3 sequences in 3 folds leave 2 per fold for training and validation, and -t 0.8 gives both to training
+    data_file = write_lines('data.tsv', [f's{i} {sequence} {i}.0' for i, sequence in enumerate(['ACD', 'EFG', 'HIK'])])
     with pytest.raises(ValueError, match='The validation set is empty'):
-        run_cli(parrot_cvsplit.main, ['parrot-cvsplit', data_file, tmp_path / 'splits', '-k', '5'])
+        run_cli(parrot_cvsplit.main, ['parrot-cvsplit', data_file, tmp_path / 'splits', '-k', '3'])
     assert not list(tmp_path.glob('splits_cv*.txt'))
+
+
+def test_cvsplit_keeps_identical_sequences_in_the_same_set(run_cli, tmp_path, write_lines):
+    rng = np.random.default_rng(0)
+    sequences = [''.join(rng.choice(list('ACDEFGHIKLMNPQRSTVWY'), 12)) for _ in range(30)]
+    data_file = write_lines('data.tsv', [f's{i} {sequences[i % 30]} {i % 2}' for i in range(90)])
+    run_cli(parrot_cvsplit.main, ['parrot-cvsplit', data_file, tmp_path / 'splits', '-k', '5', '--seed', '1'])
+
+    for split in read_split_files(str(tmp_path / 'splits'), 5):
+        sets_of_sequence = {}
+        for name, indices in zip(('train', 'val', 'test'), split):
+            for index in indices:
+                sets_of_sequence.setdefault(index % 30, set()).add(name)
+        assert all(len(sets) == 1 for sets in sets_of_sequence.values())
 
 
 @pytest.mark.parametrize('extra_arguments', [['-k', '1'], ['-t', '1.0'], ['-t', '0']])

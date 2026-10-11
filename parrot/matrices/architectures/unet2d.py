@@ -46,6 +46,11 @@ from parrot.matrices.base import PAIR_CHANNELS, PAIR_FEATURES, MatrixArchitectur
 from parrot.matrices.layers import ChannelLayerNorm2d, cell_mask, grid_channel_mask
 from parrot.tasks import Task
 
+# Kernel widths parrot-optimize tries. A 2D convolution's weights grow with the square of its width, so the widest
+# 1D widths are left out: with the largest searched base_channels and depth (32 and 4) the network then has at most
+# about 41 million parameters (the default has half a million), rather than 1.5 billion.
+SEARCHED_KERNEL_SIZES = (3, 5, 7)
+
 
 class DoubleConv2d(nn.Module):
     """Two (convolution -> layer norm -> ReLU) steps followed by dropout, on a channels-first grid
@@ -179,12 +184,12 @@ class UNet2D(MatrixArchitecture):
     hyperparameters = (
         PAIR_CHANNELS,
         PAIR_FEATURES,
-        HyperParameter('base_channels', int, default=16, minimum=1, search_range=(8, 64),
+        HyperParameter('base_channels', int, default=16, minimum=1, search_range=(8, 32),
                        help='channels at full resolution (doubled at each level down)'),
-        HyperParameter('depth', int, default=3, minimum=1, search_range=(1, 5),
+        HyperParameter('depth', int, default=3, minimum=1, search_range=(1, 4),
                        help='number of times the sequence length (or the grid) is halved'),
         HyperParameter('kernel_size', int, default=3, help='width of each convolution', choices=KERNEL_SIZES,
-                       search_choices=KERNEL_SIZES),
+                       search_choices=SEARCHED_KERNEL_SIZES),
         DROPOUT,
         HyperParameter('upsampling', str, default='transposed', choices=UPSAMPLING_METHODS,
                        search_choices=UPSAMPLING_METHODS, help='how the decoder doubles the sequence length (or grid)'),

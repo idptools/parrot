@@ -43,7 +43,7 @@ Order-independent baseline. For sequence data, the encoded residues are averaged
 
 	*  ``--hidden-size`` / ``-hs`` : width of each hidden layer (default 32; searched over 8-128).
 	*  ``--num-hidden-layers`` : number of hidden layers; 0 gives a linear model (default 1; searched over 0-3).
-	*  ``--dropout`` : dropout probability, between 0 and 1 (default 0.0; searched over 0.0-0.5).
+	*  ``--dropout`` : dropout probability, at least 0 and below 1 (default 0.0; searched over 0.0-0.5).
 	*  ``--window-radius`` : residue data only; number of residues either side of each residue included in its window (default 7, i.e. 15-residue windows; searched over 1-25).
 
 brnn
@@ -64,7 +64,7 @@ Dilated residual 1D convolutional network, following the ByteNet design (Kalchbr
 	*  ``--channels`` : number of convolutional channels (default 64; searched over 16-128).
 	*  ``--num-blocks`` : number of residual convolution blocks (default 4; searched over 1-8).
 	*  ``--kernel-size`` : width of each convolution; one of 3, 5, 7, 9, 11 (default 5; searched over all five).
-	*  ``--dropout`` : dropout probability, between 0 and 1 (default 0.0; searched over 0.0-0.5).
+	*  ``--dropout`` : dropout probability, at least 0 and below 1 (default 0.0; searched over 0.0-0.5).
 	*  ``--pooling`` : sequence data with attention pooling off; how per-residue features are combined, ``mean`` or ``max`` (default mean).
 	*  ``--global-context-off``, ``--attention-pooling-off``, ``--loglength-feedforward-off`` : see above.
 
@@ -76,7 +76,7 @@ unet
 	*  ``--base-channels`` : channels at full resolution, doubled at each level down (default 16; searched over 8-64).
 	*  ``--depth`` : number of times the sequence length is halved (default 3; searched over 1-5).
 	*  ``--kernel-size`` : width of each convolution; one of 3, 5, 7, 9, 11 (default 3; searched over all five).
-	*  ``--dropout`` : dropout probability, between 0 and 1 (default 0.0; searched over 0.0-0.5).
+	*  ``--dropout`` : dropout probability, at least 0 and below 1 (default 0.0; searched over 0.0-0.5).
 	*  ``--upsampling`` : how the decoder doubles the length, ``transposed`` (a learned transposed convolution) or ``nearest`` (repeating each position) (default transposed; both are searched).
 	*  ``--pooling`` : sequence data with attention pooling off; ``mean`` or ``max`` (default mean).
 	*  ``--global-context-off``, ``--attention-pooling-off``, ``--loglength-feedforward-off`` : see above.
@@ -100,7 +100,7 @@ Neither encoding has a maximum sequence length. On a GPU, attention uses PyTorch
 	*  ``--num-heads`` : number of attention heads (default 4; searched over 1-8).
 	*  ``--head-size`` : width of each attention head; the model width is ``num-heads`` x ``head-size`` (default 16; searched over 8-64).
 	*  ``--feedforward-multiplier`` : width of the feed-forward layer in each block, as a multiple of the model width (default 4; searched over 1-4).
-	*  ``--dropout`` : dropout probability, between 0 and 1 (default 0.0; searched over 0.0-0.5).
+	*  ``--dropout`` : dropout probability, at least 0 and below 1 (default 0.0; searched over 0.0-0.5).
 	*  ``--positional-encoding`` : ``rotary`` (default), ``sinusoidal`` or ``none`` (``rotary`` and ``sinusoidal`` are searched).
 	*  ``--pooling`` : sequence data with attention pooling off; ``mean`` or ``max`` (default mean).
 	*  ``--attention-pooling-off``, ``--loglength-feedforward-off`` : see above.

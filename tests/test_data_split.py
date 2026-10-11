@@ -158,6 +158,40 @@ def test_mmseqs_split_keeps_homologous_sequences_together():
     assert 'MMseqs2' in split.description()
 
 
+# ..........................................................................................
+# Cross-validation folds (parrot-optimize --cv-folds)
+
+def test_kmer_folds_keep_families_together_and_never_score_a_relative_of_their_training():
+    data, families = family_data()
+    # Chimeras of two families' sequences: each joins one family's cluster but is similar to the other family
+    # too, so a fold that holds out one of them, or that family, must not be scored on what it holds out
+    for family in range(NUM_FAMILIES):
+        other = (family + 1) % NUM_FAMILIES
+        data.append([f'chimera{family}', data[family][1][:30] + data[other][1][30:], 0.0])
+        families.append(NUM_FAMILIES + family)
+    split = data_split.DataSplit(split_file=None, method='kmer', fractions=(0.6, 0.2, 0.2), silent=True)
+    np.random.seed(0)
+
+    folds = split.cross_validation_folds(data, np.arange(len(data)), 3)
+
+    search = data_split.similarity_search('kmer')
+    for training, held_out in folds:
+        assert not {families[index] for index in training if families[index] < NUM_FAMILIES} & set(families[index]
+                                                                                                  for index in held_out)
+        matches = search([data[index][1] for index in held_out], [data[index][1] for index in training])
+        assert not any(match.linked for match in matches)
+    assert sum(len(held_out) for _, held_out in folds) < len(data)  # some were not scored
+    assert 'similar' in split.fold_description()
+
+
+def test_random_and_split_file_folds_keep_identical_sequences_together():
+    data = [[f'seq{index}', 'ACDEFGHIKL' + 'W' * (index % 10), 0.0] for index in range(100)]
+    split = data_split.DataSplit(split_file=None, method='random', fractions=(0.6, 0.2, 0.2), silent=True)
+    for training, held_out in split.cross_validation_folds(data, np.arange(100), 5):
+        assert not {data[index][1] for index in training} & {data[index][1] for index in held_out}
+    assert split.fold_description() == 'keeping identical sequences in the same fold'
+
+
 def test_the_same_seed_gives_the_same_split():
     splits = []
     for _ in range(2):

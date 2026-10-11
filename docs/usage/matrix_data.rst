@@ -66,11 +66,11 @@ The unet2d architecture
 Its hyperparameters are:
 
 	*  ``--pair-channels`` : features each residue is projected to before they are combined into the grid (default 16; searched over 4-32).
-	*  ``--pair-features`` : square maps only; ``concatenate`` or ``outer`` (default concatenate; both are searched).
-	*  ``--base-channels`` : channels at full resolution, doubled at each level down (default 16; searched over 8-64).
-	*  ``--depth`` : number of times the grid is halved (default 3; searched over 1-5).
-	*  ``--kernel-size`` : width of each convolution; one of 3, 5, 7, 9, 11 (default 3; searched over all five).
-	*  ``--dropout`` : dropout probability, between 0 and 1 (default 0.0; searched over 0.0-0.5).
+	*  ``--pair-features`` : square maps only; ``concatenate`` or ``outer`` (default concatenate; both are searched for square maps).
+	*  ``--base-channels`` : channels at full resolution, doubled at each level down (default 16; searched over 8-32).
+	*  ``--depth`` : number of times the grid is halved (default 3; searched over 1-4).
+	*  ``--kernel-size`` : width of each convolution; one of 3, 5, 7, 9, 11 (default 3; searched over 3, 5 and 7, since a 2D convolution's weights grow with the square of its width: the largest network searched has about 41 million parameters).
+	*  ``--dropout`` : dropout probability, at least 0 and below 1 (default 0.0; searched over 0.0-0.5).
 	*  ``--upsampling`` : how the decoder doubles the grid, ``transposed`` (a learned transposed convolution) or ``nearest`` (repeating each cell) (default transposed; both are searched).
 
 Compared with Nick's original, the input grid is built from the per-residue encoding (so any PARROT encoding can be used) rather than from a one-hot code of residue pairs, layer normalization replaces batch normalization, padded cells are re-zeroed after every layer, and the number of levels is a hyperparameter. Together these make a sequence's prediction independent of how much padding it is given when batched with longer sequences, and let sequences of any length be used.

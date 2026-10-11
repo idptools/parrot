@@ -95,6 +95,32 @@ def test_deduplicate_merges_residue_labels():
     assert preproc.deduplicate(regression, 'merge', 'residues', False, report) == [['a', 'ACD', '2', '2', 'nan']]
 
 
+def test_deduplicate_treats_labels_with_the_same_value_as_one_class():
+    report, _ = report_lines()
+    sequences = [['a', 'ACDEFGHIK', '1'], ['b', 'ACDEFGHIK', '1.0']]
+    assert preproc.deduplicate(sequences, 'merge', 'sequence', True, report) == [['a', 'ACDEFGHIK', '1']]
+    residues = [['a', 'ACD', 'nan', '0', '1'], ['b', 'ACD', '2.0', '0.0', '1.0']]
+    assert preproc.deduplicate(residues, 'merge', 'residues', True, report) == [['a', 'ACD', '2.0', '0', '1']]
+
+
+def test_deduplicate_removes_residue_sequences_left_with_no_label():
+    report, lines = report_lines()
+    data = [['a', 'ACDE', '0', '0', '1', '1'], ['b', 'ACDE', '1', '1', '0', '0'], ['c', 'EF', '1', '1']]
+    assert preproc.deduplicate(data, 'merge', 'residues', True, report) == [['c', 'EF', '1', '1']]
+    assert any('1 sequences left with no labelled residue were removed' in line for line in lines)
+
+
+@pytest.mark.parametrize('lines, needed', [
+    ([['a', 'AC', '0', '1'], ['b', 'D', 'nan']], False),
+    ([['a', 'AC', '0', '1.0']], False),
+    ([['a', 'AC', '0', '-1']], True),
+    ([['a', 'AC', '0', '0.5']], True),
+    ([['a', 'AC', 'yes', 'no']], True),
+])
+def test_labels_need_recoding(lines, needed):
+    assert preproc.labels_need_recoding(lines) == needed
+
+
 @pytest.mark.parametrize('mode, expected', [
     ('first', [['a', 'ACD', '1'], ['b', 'EFG', '0']]),
     ('drop', [['b', 'EFG', '0']]),
@@ -130,6 +156,17 @@ def test_write_dataset_orders_sets_and_writes_a_matching_split_file(tmp_path):
 # ..........................................................................................
 # The homology protocol, with a fake search
 
+def make_alignment(query: int, target: int, query_span: tuple[int, int], query_length: int,
+                   target_span: tuple[int, int], target_length: int, evalue: float, alignment_length: int = 0,
+                   linked: bool = False) -> mmseqs_search.Alignment:
+    """An MMseqs2 alignment between the spans given (from 1, ends included); by default without gaps."""
+    return mmseqs_search.Alignment(query=query, target=target, identity=0.5,
+                                   alignment_length=alignment_length or query_span[1] - query_span[0] + 1,
+                                   query_start=query_span[0], query_end=query_span[1], query_length=query_length,
+                                   target_start=target_span[0], target_end=target_span[1],
+                                   target_length=target_length, evalue=evalue, linked=linked)
+
+
 class FamilySearch:
     """A stand-in for MMseqs2: sequences of the same family (looked up by sequence) align strongly."""
 
@@ -150,8 +187,8 @@ class FamilySearch:
                 if targets is None and q == t:
                     continue
                 if self.families.get(query) is not None and self.families.get(query) == self.families.get(target):
-                    alignments.append(mmseqs_search.Alignment(q, t, 0.8, min(len(query), len(target)), len(query),
-                                                         len(target), 1e-20, linked=True))
+                    alignments.append(make_alignment(q, t, (1, len(query)), len(query), (1, len(target)),
+                                                     len(target), 1e-20, linked=True))
         return alignments
 
 
@@ -163,6 +200,19 @@ class FixedSearch(FamilySearch):
 
     def __call__(self, queries, targets=None, weaker=False):
         return self.alignments
+
+
+class PairSearch(FamilySearch):
+    """Only the pairs of sequences given align (both ways round, as with MMseqs2)."""
+
+    def __init__(self, pairs: set[tuple[str, str]]) -> None:
+        self.pairs = pairs | {(second, first) for first, second in pairs}
+
+    def __call__(self, queries, targets=None, weaker=False):
+        target_list = queries if targets is None else targets
+        return [make_alignment(q, t, (1, len(query)), len(query), (1, len(target)), len(target), 1e-20, linked=True)
+                for q, query in enumerate(queries) for t, target in enumerate(target_list)
+                if (query, target) in self.pairs]
 
 
 def make_family_items(n_families: int, members: int) -> tuple[list[splitting.SplitItem], dict[str, str]]:
@@ -209,6 +259,21 @@ def test_enforce_separation_removes_lower_priority_homologues():
     assert lines[-1].startswith('PASSED')
 
 
+def test_enforce_separation_keeps_records_similar_only_to_removed_ones():
+    # V (validation) is similar to T (test) and is removed; R (training) is similar only to V, so it stays
+    items = [splitting.SplitItem(0, 'T', 'g0', 'test'), splitting.SplitItem(1, 'V', 'g1', 'val'),
+             splitting.SplitItem(2, 'R', 'g2', 'train')]
+    kept = splitting.enforce_separation(items, PairSearch({('T', 'V'), ('V', 'R')}), lambda line: None)
+    assert [item.sequence for item in kept] == ['T', 'R']
+
+
+def test_similarity_clusters_count_each_similar_pair_once():
+    items = [splitting.SplitItem(i, sequence, f'g{i}') for i, sequence in enumerate('ABCDEF')]
+    lines = []
+    splitting.similarity_clusters(items, PairSearch({('A', 'B'), ('C', 'D'), ('E', 'F')}), lines.append)
+    assert lines[0].endswith('3 similar pairs, of which 3 link two groups')
+
+
 def test_enforce_separation_removes_identical_sequences_even_without_alignments():
     items = [splitting.SplitItem(0, 'SAME', 'g0', 'test'), splitting.SplitItem(1, 'SAME', 'g1', 'train'),
              splitting.SplitItem(2, 'OTHER', 'g2', 'train')]
@@ -218,7 +283,7 @@ def test_enforce_separation_removes_identical_sequences_even_without_alignments(
 
 def test_enforce_separation_gives_up_after_too_many_rounds():
     items = [splitting.SplitItem(0, 'A', 'g0', 'test'), splitting.SplitItem(1, 'B', 'g1', 'train')]
-    always = mmseqs_search.Alignment(0, 0, 0.5, 10, 10, 10, 1e-10, linked=True)
+    always = make_alignment(0, 0, (1, 10), 10, (1, 10), 10, 1e-10, linked=True)
     items += [splitting.SplitItem(i, f'C{i}', f'g{i}', 'train') for i in range(2, 2 + splitting.MAX_SEPARATION_ROUNDS)]
     with pytest.raises(RuntimeError, match='still not separated'):
         splitting.enforce_separation(items, FixedSearch([always]), lambda line: None)
@@ -226,9 +291,31 @@ def test_enforce_separation_gives_up_after_too_many_rounds():
 
 def test_alignment_homology_criteria():
     criteria = mmseqs_search.HomologyCriteria()
-    assert mmseqs_search.Alignment(0, 1, 0.2, 30, 100, 200, 1e-4).homologous(criteria)
-    assert not mmseqs_search.Alignment(0, 1, 0.9, 29, 100, 200, 1e-10).homologous(criteria)  # covers < 30%
-    assert not mmseqs_search.Alignment(0, 1, 0.9, 100, 100, 200, 2e-3).homologous(criteria)  # E too large
+    assert make_alignment(0, 1, (1, 30), 100, (51, 80), 200, 1e-4).homologous(criteria)
+    assert make_alignment(0, 1, (51, 80), 200, (1, 30), 100, 1e-4).homologous(criteria)  # the target is shorter
+    assert not make_alignment(0, 1, (1, 29), 100, (1, 29), 200, 1e-10).homologous(criteria)  # covers < 30%
+    assert not make_alignment(0, 1, (1, 100), 100, (1, 100), 200, 2e-3).homologous(criteria)  # E too large
+
+
+def test_alignment_coverage_leaves_out_gaps_opposite_insertions():
+    # 25 residues of the shorter sequence align across an 80-residue insertion in the longer one: 105 columns,
+    # but only 25% of the shorter sequence
+    alignment = make_alignment(0, 1, (1, 25), 100, (1, 105), 300, 1e-10, alignment_length=105)
+    assert alignment.shorter_coverage == 0.25
+    assert not alignment.homologous(mmseqs_search.HomologyCriteria())
+
+
+def test_parse_alignment_reads_every_column():
+    alignment = mmseqs_search.parse_alignment('3\t7\t0.512\t120\t5\t118\t130\t11\t126\t140\t2.5E-20\n')
+    assert alignment == mmseqs_search.Alignment(query=3, target=7, identity=0.512, alignment_length=120,
+                                                query_start=5, query_end=118, query_length=130, target_start=11,
+                                                target_end=126, target_length=140, evalue=2.5e-20)
+
+
+@pytest.mark.parametrize('criteria_class', [mmseqs_search.HomologyCriteria, kmer_similarity.KmerCriteria])
+def test_the_separation_check_reports_every_linked_pair_however_loose_the_criterion(criteria_class):
+    assert criteria_class().reported_evalue == criteria_class().report_max_evalue
+    assert criteria_class(max_evalue=1.0).reported_evalue == 1.0
 
 
 def test_merge_groups_joins_linked_groups():
@@ -294,6 +381,31 @@ def test_preprocess_groups_stay_in_one_set(run_cli, tmp_path, write_lines):
         for line in lines:
             sets_of_protein.setdefault(protein_of[line[0]], set()).add(name)
     assert all(len(sets) == 1 for sets in sets_of_protein.values())
+
+
+@pytest.mark.parametrize('deduplication', [[], ['--deduplicate', 'merge'], ['--deduplicate', 'first']])
+def test_preprocess_groups_stay_in_one_set_when_deduplication_removes_a_member(run_cli, tmp_path, write_lines,
+                                                                                deduplication):
+    # Proteins p and q share an identical first tile; deduplication keeps p's copy, so q's other tile must
+    # follow it into p's set
+    rng = np.random.default_rng(2)
+    lines, groups = [], []
+    for i in range(40):
+        shared, p_tile, q_tile = (random_sequence(rng, 40) for _ in range(3))
+        for tile_id, tile, protein in ((f'p{i}_1', shared, f'P{i}'), (f'p{i}_2', p_tile, f'P{i}'),
+                                       (f'q{i}_1', shared, f'Q{i}'), (f'q{i}_2', q_tile, f'Q{i}')):
+            lines.append(f'{tile_id} {tile} {rng.normal():.3f}')
+            groups.append(f'{tile_id} {protein}')
+    output_file = tmp_path / 'out.tsv'
+
+    run_preprocess(run_cli, write_lines('in.tsv', lines), output_file, 'sequence', 'regression', '--split',
+                   'random', '--groups', write_lines('groups.tsv', groups), '--seed', '1', *deduplication)
+
+    set_of_tile = {line[0]: name for name, set_lines in read_split_output(output_file).items() for line in set_lines}
+    assert all(set_of_tile[f'p{i}_2'] == set_of_tile[f'q{i}_2'] for i in range(40))
+    if deduplication:
+        report = (tmp_path / 'out_preprocess_report.txt').read_text()
+        assert '40 lines also belong to the group of a copy of their sequence' in report
 
 
 def test_preprocess_balances_only_the_training_set(run_cli, tmp_path, write_lines):
@@ -370,6 +482,37 @@ def test_preprocess_checks_the_input_lines(run_cli, tmp_path, write_lines, lines
         run_preprocess(run_cli, write_lines('in.tsv', lines), tmp_path / 'out.tsv', datatype, 'regression')
 
 
+@pytest.mark.parametrize('lines, arguments, message', [
+    ([], ['--split', 'random'], 'has no data lines'),
+    (['a ACD 1', 'b EFG 2'], ['--min-length', '500', '--split', 'random'],
+     'Cleaning removed every line.*shorter than 500 residues'),
+    (['a ACD 1', 'b ACD 2'], ['--deduplicate', 'drop', '--class-balance'], 'Removing duplicates removed every line'),
+])
+def test_preprocess_stops_when_no_lines_remain(run_cli, tmp_path, write_lines, lines, arguments, message):
+    mode = 'classification' if '--class-balance' in arguments else 'regression'
+    with pytest.raises(ValueError, match=message):
+        run_preprocess(run_cli, write_lines('in.tsv', lines), tmp_path / 'out.tsv', 'sequence', mode, *arguments)
+
+
+def test_preprocess_reads_delimited_fields_without_the_spaces_around_them(run_cli, tmp_path, write_lines):
+    input_file = write_lines('in.csv', ['a, ACDE, 1.0', 'b ,EFGH ,2', 'c,KLMN,3'])
+    output_file = tmp_path / 'out.tsv'
+    run_preprocess(run_cli, input_file, output_file, 'sequence', 'regression', '--delimiter', ',',
+                   '--remove-nonstandard')
+    assert pid.read_tsv_raw(str(output_file)) == [['a', 'ACDE', '1.0'], ['b', 'EFGH', '2'], ['c', 'KLMN', '3']]
+
+
+@pytest.mark.parametrize('lines, message', [
+    (['sp|P1|A protein one\tACDE\t1.0'], "field containing whitespace \\('sp\\|P1\\|A protein one'\\)"),
+    (['\tACDE\t1.0'], 'empty column'),
+    (['a\tACDE\t1.0\t'], 'empty column'),
+])
+def test_preprocess_rejects_delimited_fields_a_datafile_cannot_hold(run_cli, tmp_path, write_lines, lines, message):
+    with pytest.raises(ValueError, match=message):
+        run_preprocess(run_cli, write_lines('in.tsv', lines), tmp_path / 'out.tsv', 'sequence', 'regression',
+                       '--delimiter', '\t')
+
+
 def test_preprocess_warns_when_split_sets_would_be_empty(run_cli, tmp_path, write_lines):
     input_file = write_lines('in.tsv', ['a ACD 1', 'b EFG 2'])
     with pytest.raises(ValueError, match='after splitting'):
@@ -393,9 +536,15 @@ def kmer_families(rng: np.random.Generator, n_families: int, members: int, ident
     return sequences, family_of
 
 
+def covered_by(starts: set[int], k: int) -> int:
+    """Residues covered by k-mers starting at these positions."""
+    return len({start + offset for start in starts for offset in range(k)})
+
+
 def brute_force_best_runs(queries: list[str], criteria: kmer_similarity.KmerCriteria,
-                          targets: list[str] | None = None) -> dict[tuple[int, int], int]:
-    """Shared k-mers (distinct positions) in each pair's best run, by brute force (see find_runs)."""
+                          targets: list[str] | None = None) -> dict[tuple[int, int], tuple[int, int]]:
+    """Residues covered and shared k-mers (distinct positions) in each pair's best run, by brute force (see
+    find_runs and best_runs)."""
     k, width, gap = criteria.kmer_size, criteria.band_width, criteria.max_gap
     query_table = kmer_similarity.kmer_table(queries, k, criteria.mask_low_complexity)
     target_list = queries if targets is None else targets
@@ -424,9 +573,11 @@ def brute_force_best_runs(queries: list[str], criteria: kmer_similarity.KmerCrit
                         else:
                             run.append(hit)
                     runs.append(run)
-            sizes = [min(len({i for i, _ in run}), len({j for _, j in run})) for run in runs]
-            if sizes and max(sizes) >= 2:
-                best[(q, t)] = max(sizes)
+            scores = [(min(covered_by({i for i, _ in run}, k), covered_by({j for _, j in run}, k)),
+                       min(len({i for i, _ in run}), len({j for _, j in run}))) for run in runs]
+            scores = [score for score in scores if score[1] >= 2]
+            if scores:
+                best[(q, t)] = max(scores)
     return best
 
 
@@ -443,7 +594,8 @@ def test_kmer_search_matches_brute_force(monkeypatch, criteria, batch_matches):
     search = kmer_similarity.KmerSearch(everything)
 
     for queries, targets in ((sequences, None), (sequences[:9], sequences[9:])):
-        found = {(match.query, match.target): match.shared for match in search(queries, targets, weaker=True)}
+        found = {(match.query, match.target): (match.covered, match.shared)
+                 for match in search(queries, targets, weaker=True)}
         assert found == brute_force_best_runs(queries, criteria, targets)
 
 
@@ -459,6 +611,32 @@ def test_kmer_search_links_close_relatives_and_nothing_else(identity):
     relatives = {(i, j) for i in range(len(sequences)) for j in range(i + 1, len(sequences))
                  if family_of[i] == family_of[j]}
     assert linked == relatives
+
+
+def test_kmer_search_evalues_are_not_too_significant_for_unrelated_sequences():
+    # All against all, about 600 x 0.01 / 2 = 3 pairs of unrelated sequences would reach E <= 0.01 by chance if
+    # the E-values were exact (fewer, as they are slightly conservative). Counting overlapping shared k-mers as
+    # independent chances made it about 23, with single shared words reported as nearly identical.
+    rng = np.random.default_rng(4)
+    sequences = [random_sequence(rng, 150) for _ in range(600)]
+    criteria = kmer_similarity.KmerCriteria(report_max_evalue=1e-2)
+
+    reported = kmer_similarity.KmerSearch(criteria)(sequences, weaker=True)
+
+    assert len(reported) <= 6
+    assert all(match.identity < 0.9 for match in reported)
+
+
+def test_kmer_search_with_a_loose_criterion_reports_every_linked_pair():
+    rng = np.random.default_rng(6)
+    sequences, _ = kmer_families(rng, n_families=20, members=2, identity=0.45)
+    search = kmer_similarity.KmerSearch(kmer_similarity.KmerCriteria(max_evalue=10.0, min_coverage=0.0))
+    queries, targets = sequences[::2], sequences[1::2]
+
+    linked = {(match.query, match.target) for match in search(queries, targets) if match.linked}
+    reported = {(match.query, match.target) for match in search(queries, targets, weaker=True) if match.linked}
+
+    assert linked and reported == linked
 
 
 def test_kmer_search_measures_coverage_across_an_insertion():
@@ -571,3 +749,28 @@ def test_mmseqs_search_finds_homologues(tmp_path):
 
     assert {(a.query, a.target) for a in alignments if a.linked} == {(0, 1), (1, 0)}
     assert list(tmp_path.iterdir()) == []  # temporary files are removed
+
+
+@needs_mmseqs
+def test_mmseqs_search_with_a_loose_criterion_reports_every_linked_pair(tmp_path):
+    rng = np.random.default_rng(7)
+    sequences, _ = kmer_families(rng, n_families=10, members=2, identity=0.3)
+    sequences += [random_sequence(rng, 150) for _ in range(20)]
+    criteria = mmseqs_search.HomologyCriteria(max_evalue=1.0)
+    search = mmseqs_search.MMseqsSearch(criteria, threads=2, workdir=tmp_path)
+    queries, targets = sequences[::2], sequences[1::2]
+
+    linked = {(a.query, a.target) for a in search(queries, targets) if a.linked}
+    reported = {(a.query, a.target) for a in search(queries, targets, weaker=True) if a.linked}
+
+    assert any(a.evalue > criteria.report_max_evalue for a in search(queries, targets) if a.linked)
+    assert reported == linked
+
+
+@needs_mmseqs
+def test_mmseqs_search_reads_peptides_of_nucleotide_letters_as_proteins(tmp_path):
+    rng = np.random.default_rng(8)
+    peptides = [''.join(rng.choice(list('ACGTN'), 80)) for _ in range(10)]
+    sequences = peptides + [random_sequence(rng, 80) for _ in range(10)]
+    search = mmseqs_search.MMseqsSearch(mmseqs_search.HomologyCriteria(), threads=2, workdir=tmp_path)
+    search(sequences)  # without --dbtype 1, MMseqs2 reads the database as nucleotides and fails

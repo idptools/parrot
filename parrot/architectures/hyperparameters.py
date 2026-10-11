@@ -21,6 +21,8 @@ https://github.com/idptools/parrot
 Licensed under the MIT license.
 """
 
+import math
+import numbers
 from dataclasses import dataclass
 from typing import Any
 
@@ -56,10 +58,14 @@ class HyperParameter:
         Smallest allowed value (inclusive, unless `exclusive_minimum`). None
         means no lower bound.
     maximum : int or float, optional
-        Largest allowed value (inclusive). None means no upper bound.
+        Largest allowed value (inclusive, unless `exclusive_maximum`). None
+        means no upper bound.
     exclusive_minimum : bool, optional
         If True the value must be strictly greater than `minimum` (e.g. a
         penalty strength that must be positive: minimum=0, exclusive_minimum=True).
+    exclusive_maximum : bool, optional
+        If True the value must be strictly less than `maximum` (e.g. a dropout
+        probability, which at 1 would drop everything).
     choices : tuple, optional
         The only values allowed. Required for str hyperparameters.
     search_range : tuple of (int or float), optional
@@ -87,6 +93,7 @@ class HyperParameter:
     minimum: int | float | None = None
     maximum: int | float | None = None
     exclusive_minimum: bool = False
+    exclusive_maximum: bool = False
     choices: tuple[HyperParameterValue, ...] | None = None
     search_range: tuple[int | float, int | float] | None = None
     log_scale: bool = False
@@ -119,6 +126,8 @@ class HyperParameter:
 
         if self.exclusive_minimum and self.minimum is None:
             raise ValueError(f"Hyperparameter '{self.name}' has an exclusive minimum but no minimum")
+        if self.exclusive_maximum and self.maximum is None:
+            raise ValueError(f"Hyperparameter '{self.name}' has an exclusive maximum but no maximum")
 
         if self.search_range is not None:
             if self.value_type is str:
@@ -204,10 +213,18 @@ class HyperParameter:
         Raises
         ------
         ValueError
-            If the value cannot be represented exactly as `value_type` or is
-            outside the allowed range
+            If the value is not a finite number (True and False are not numbers
+            here), cannot be represented exactly as `value_type`, or is outside
+            the allowed range
         """
-        number: int | float = int(value) if self.value_type is int else float(value)
+        if isinstance(value, bool) or not isinstance(value, numbers.Real) or not math.isfinite(value):
+            raise ValueError(f"Hyperparameter '{self.name}' must be a finite number, got {value!r}")
+        # NumPy's numbers are converted too; a float that is a whole number is accepted for an int hyperparameter
+        number: int | float
+        if self.value_type is int:
+            number = int(value) if isinstance(value, numbers.Integral) else int(float(value))
+        else:
+            number = float(value)
         if number != value:
             raise ValueError(f"Hyperparameter '{self.name}' must be of type {self.value_type.__name__}, got {value}")
 
@@ -217,8 +234,11 @@ class HyperParameter:
             if number < self.minimum:
                 raise ValueError(f"Hyperparameter '{self.name}' must be at least {self.minimum}, got {value}")
 
-        if self.maximum is not None and number > self.maximum:
-            raise ValueError(f"Hyperparameter '{self.name}' must be at most {self.maximum}, got {value}")
+        if self.maximum is not None:
+            if self.exclusive_maximum and number >= self.maximum:
+                raise ValueError(f"Hyperparameter '{self.name}' must be less than {self.maximum}, got {value}")
+            if number > self.maximum:
+                raise ValueError(f"Hyperparameter '{self.name}' must be at most {self.maximum}, got {value}")
 
         return number
 
@@ -228,8 +248,8 @@ class HyperParameter:
 # (Each architecture has its own parrot-train subcommand, so an architecture that needs a different default can
 # declare its own.)
 
-DROPOUT = HyperParameter('dropout', float, default=0.0, help='dropout probability', minimum=0.0, maximum=1.0,
-                         search_range=(0.0, 0.5))
+DROPOUT = HyperParameter('dropout', float, default=0.0, help='dropout probability (at least 0, below 1)', minimum=0.0,
+                         maximum=1.0, exclusive_maximum=True, search_range=(0.0, 0.5))
 
 # Allowed convolution widths. Widths must be odd so convolutions are centred on each residue.
 KERNEL_SIZES = (3, 5, 7, 9, 11)

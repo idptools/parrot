@@ -35,7 +35,7 @@ Steps are always carried out in the order below, and each is optional.
 
     *  ``--help`` / ``-h`` : Display a help message.
     *  ``--show-examples`` : Print a longer guide to ``parrot-preprocess``: examples of how to use it, what it does and how it works.
-    *  ``--delimiter`` : The character separating columns, if not whitespace.
+    *  ``--delimiter`` : The character separating columns, if not whitespace. Spaces around each field are ignored. The output is a whitespace-separated PARROT datafile, so no field may contain whitespace (an ID such as ``sp|P1|A protein`` is refused, with a message saying which).
     *  ``--seed`` : Integer random seed, which makes the split and class balancing reproducible. By default no seed is set.
     *  ``--verbose`` / ``-v`` : Print the report as it is written.
 
@@ -56,7 +56,7 @@ Duplicate sequences
 
 Identical sequences in different sets are the most blatant form of leakage, and contradictory copies confuse training. ``--deduplicate`` keeps one line per unique sequence (named after the first copy):
 
-    *  ``merge`` : For regression, the copies' values are averaged (residue by residue for residue data, ignoring ``nan``). For classification, a sequence is kept once if all copies have the same label, and removed if they disagree; for residue data, each residue keeps its label if every labelled copy agrees and otherwise becomes ``nan``.
+    *  ``merge`` : For regression, the copies' values are averaged (residue by residue for residue data, ignoring ``nan``). For classification, a sequence is kept once if all copies have the same label, and removed if they disagree (labels that are the same number, such as ``1`` and ``1.0``, agree); for residue data, each residue keeps its label if every labelled copy agrees and otherwise becomes ``nan``, and a sequence left with no labelled residue is removed.
     *  ``first`` : Keep the first copy as it is.
     *  ``drop`` : Remove every copy, since there is no way to know which is right.
 
@@ -67,24 +67,24 @@ Even without ``--deduplicate``, every ``--split`` method always puts identical s
 Splitting into training, validation and test sets
 -------------------------------------------------
 
-A test set only measures how well a network generalises if none of its sequences has a close relative in the training set. Otherwise a network can score well by recognising relatives rather than by having learnt anything transferable (see the FAQ "What considerations should I take into account with my dataset?"). ``parrot-train`` splits data at random, so homologous sequences routinely end up on both sides: in a random 70/15/15 split of the yeast proteome, 45% of the test proteins have a homologue in the training set.
+A test set only measures how well a network generalises if none of its sequences has a close relative in the training set. Otherwise a network can score well by recognising relatives rather than by having learnt anything transferable (see the FAQ "What considerations should I take into account with my dataset?"). ``parrot-train`` splits data at random, so homologous sequences routinely end up on both sides: in a random 70/15/15 split of the yeast proteome, 42% of the test proteins have a homologue in the training set.
 
     *  ``--split homology`` : Keep homologous sequences in the same set, using `MMseqs2 <https://github.com/soedinglab/MMseqs2>`_ (see below). The most thorough option; MMseqs2 must be installed.
     *  ``--split kmer`` : Keep similar sequences in the same set, using PARROT's own k-mer search. Needs nothing extra, but only finds closer relatives (see below).
     *  ``--split random`` : Split at random, keeping only identical sequences (and ``--groups``) together.
     *  ``--set-fractions`` : Target proportions of the training, validation and test sets (default ``0.7 0.15 0.15``).
-    *  ``--groups`` : A file of ``<sequence ID> <group>`` lines. Records in the same group are always put in the same set, for example overlapping tiles or fragments of one protein, or measurements of one protein under different conditions.
+    *  ``--groups`` : A file of ``<sequence ID> <group>`` lines. Records in the same group are always put in the same set, for example overlapping tiles or fragments of one protein, or measurements of one protein under different conditions. If deduplication removed a copy that belonged to a group, the line that replaced it joins that group too.
 
 The output datafile lists the training lines, then the validation lines, then the test lines, and ``<output>_split_file.txt`` gives the line numbers of each set.
 
 **How the split works.** ``--split homology`` and ``--split kmer`` follow the same protocol and differ only in how similar sequences are found. The criteria are deliberately stringent, so that the test set measures generalisation to genuinely new sequences.
 
-1. *Similarity criterion.* With ``--split homology``, two sequences are homologous if they are identical, or if any MMseqs2 alignment between them has an E-value of at most 10\ :sup:`-3` and covers at least 30% of the shorter sequence. No sequence-identity threshold is used, so any statistically significant alignment counts, however low its identity. MMseqs2 searches at its most sensitive setting (``-s 7.5``) and considers up to 2,000 targets per query. ``--split kmer`` applies the same E-value and coverage thresholds to its own estimates (see below).
+1. *Similarity criterion.* With ``--split homology``, two sequences are homologous if they are identical, or if any MMseqs2 alignment between them has an E-value of at most 10\ :sup:`-3` and covers at least 30% of the shorter sequence (the stretch of the shorter sequence between the alignment's ends, so gaps opposite an insertion in the longer sequence do not count). No sequence-identity threshold is used, so any statistically significant alignment counts, however low its identity. MMseqs2 searches at its most sensitive setting (``-s 7.5``) and considers up to 2,000 targets per query. ``--split kmer`` applies the same E-value and coverage thresholds to its own estimates (see below).
 2. *Clustering.* An all-against-all search links similar sequences, which are then clustered around representatives (largest first, as in CD-HIT), so that a chain of weak links cannot merge unrelated families. Groups and identical sequences are always in the same cluster.
 3. *Assignment.* Clusters are shared out among the sets, largest first, each to the set furthest below its target fraction.
 4. *Separation check.* Each set is searched against the others (test against training, test against validation, validation against training). Any sequence in the lower-priority set (training < validation < test) that is similar to the higher-priority set is removed, together with its group. E-values depend on the size of the database searched, so this is repeated until a round finds nothing, and the report ends with ``PASSED``. Typically only a few percent of the data are removed.
 
-The report also lists every weaker similarity between sets, up to E = 10\ :sup:`-2`, grouped by sequence identity, so any remaining similarity is visible.
+The report also lists every weaker similarity between sets, up to E = 10\ :sup:`-2` (or up to ``--homology-evalue``, if that is larger), grouped by sequence identity, so any remaining similarity is visible.
 
 Options for both ``--split homology`` and ``--split kmer``:
 
@@ -106,25 +106,25 @@ Options for ``--split kmer`` only:
 
 **The k-mer split (no MMseqs2).** ``--split kmer`` finds similar sequences with a search written in Python and NumPy, so it works wherever PARROT does. It works like the seeding step of BLAST or MMseqs2. Related sequences share short identical words (k-mers, 4 residues by default), and the shared words line up along one alignment diagonal; chance matches between unrelated sequences scatter over many diagonals. For each pair of sequences, shared k-mers are chained into runs along bands of nearby diagonals, which tolerates short insertions and deletions. Each pair is then scored like an MMseqs2 alignment:
 
-    *  *E-value*, from the run with the most shared k-mers. The chance of a k-mer matching by chance comes from the two sequences' own amino-acid compositions, so compositionally biased sequences (such as many disordered regions) need more shared k-mers to count. As with MMseqs2, it is the number of equally strong matches a query would be expected to find by chance in the database searched.
+    *  *E-value*, from the run whose shared k-mers cover the most residues. Overlapping shared k-mers are one longer stretch of shared sequence, not separate chances (a shared 6-residue stretch holds three 4-mers, but is no likelier to arise by chance than one 4-mer followed by two more identical residues), so a run is scored by the residues its shared k-mers cover. The chance of two residues being identical comes from the two sequences' own amino-acid compositions, so compositionally biased sequences (such as many disordered regions) need more shared sequence to count, and the chance of a run covering as many residues allows for every way chance stretches could make one up. As with MMseqs2, the E-value is the number of equally strong matches a query would be expected to find by chance in the database searched; on random sequences, matches reach a given E-value somewhat less often than it implies, never more.
     *  *Coverage*, from the stretch spanned by the best run and every other run near its diagonal that is itself unlikely by chance, as a fraction of the shorter sequence.
 
 Masking ignores residues in 12-residue windows with less than 1.8 bits of sequence entropy, and k-mers of at most two distinct amino acids (for k = 4). Shared k-mers are counted as distinct positions, so a repeat cannot count one word many times.
 
-Exact shared words cannot detect distant homologues, which share few identical stretches. Compared with the pairs MMseqs2 links in the yeast proteome, ``--split kmer`` links all pairs at 70% identity or more, 97% at 50-70% and 82% at 40-50%, but only 18% at 30-40%. When the yeast proteome is split each way and the sets are then searched against each other with MMseqs2:
+Exact shared words cannot detect distant homologues, which share few identical stretches. Compared with the pairs MMseqs2 links in the yeast proteome, ``--split kmer`` links nearly all pairs at 70% identity or more (3,323 of 3,334), 96% at 50-70% and 76% at 40-50%, but only 9% at 30-40%. When the yeast proteome is split each way and the sets are then searched against each other with MMseqs2:
 
 ======================  =====================================  ===================================================  ==============
 Split                   Test proteins with a homologue         Test-training alignments at >= 90% / 50-90% /        Data removed
                         in the training set                    < 50% identity
 ======================  =====================================  ===================================================  ==============
-``--split random``      45%                                    383 / 547 / 2,104                                    0%
-``--split kmer``        26%                                    0 / 9 / 1,225                                        1.4%
-``--split homology``    0%                                     0 / 0 / 0                                            4.6%
+``--split random``      42%                                    234 / 335 / 2,129                                    0%
+``--split kmer``        26%                                    0 / 10 / 1,209                                       0.7%
+``--split homology``    0%                                     0 / 0 / 0                                            4.5%
 ======================  =====================================  ===================================================  ==============
 
-For the 46,067 disordered regions of the ALBATROSS dataset, the share of test sequences with an MMseqs2 homologue in the training set falls from 5.3% with a random split (137 alignments at >= 90% identity) to 1.5% with ``--split kmer`` (none at >= 90%), and to 0 with ``--split homology``.
+For the 46,067 disordered regions of the ALBATROSS dataset, the share of test sequences with an MMseqs2 homologue in the training set falls from 5.3% with a random split (137 alignments at >= 90% identity) to 2.3% with ``--split kmer`` (7 at >= 90%, between nearly identical regions, mostly of 14 to 46 residues, too short for the words they share to be significant), and to 0 with ``--split homology``.
 
-So ``--split kmer`` removes essentially all leakage between close relatives, which is the strongest leakage, but not between distant homologues. Use ``--split homology`` whenever MMseqs2 is available. A k-mer split takes about a minute for the yeast proteome and about three minutes for ALBATROSS (MMseqs2: about a minute and 25 seconds).
+So ``--split kmer`` removes nearly all leakage between close relatives, which is the strongest leakage, but not between distant homologues. Use ``--split homology`` whenever MMseqs2 is available. A k-mer split takes about 40 seconds for the yeast proteome and about two minutes for ALBATROSS (MMseqs2: about a minute and 25 seconds).
 
 Class balancing
 ---------------

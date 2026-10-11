@@ -82,6 +82,9 @@ MIN_INITIAL_DESIGN = 8
 # How much of an error message is kept as a failed trial's reason (so the trials table stays readable)
 MAX_FAILURE_MESSAGE_LENGTH = 200
 
+# The reason given for a trial whose validation loss was never finite
+DIVERGED = 'diverged (no epoch had a finite validation loss)'
+
 # The status of a trial
 WAITING = 'waiting'        # trained to the end of a stage, waiting to be promoted to the next one
 STOPPED = 'stopped'        # not promoted (the search is over, or it can never be in the best 1/REDUCTION_FACTOR)
@@ -123,29 +126,39 @@ def format_hyperparameters(values: Mapping[str, HyperParameterValue]) -> str:
 def stage_epochs(max_epochs: int, min_epochs: int, reduction_factor: int = REDUCTION_FACTOR) -> list[int]:
     """The number of epochs a configuration has been trained for at the end of each stage of successive halving
 
+    The first stage ends after min_epochs and the last after max_epochs.
+    Counting back from max_epochs, each stage is reduction_factor times shorter
+    than the next, with as many stages as fit between the two (the nearest
+    whole number on a log scale, and at least two if min_epochs is less than
+    max_epochs, so configurations are always compared after min_epochs).
+
     Parameters
     ----------
     max_epochs : int
         Epochs at the final stage (a full training run)
     min_epochs : int
-        Smallest number of epochs a configuration is trained for
+        Epochs at the first stage
     reduction_factor : int, optional
-        Each stage trains reduction_factor times as long as the one before
+        Each stage trains about reduction_factor times as long as the one before
 
     Returns
     -------
     list of int
-        Increasing epoch counts ending with max_epochs, e.g. [3, 10, 30] for 30 and 3
+        Increasing epoch counts from min_epochs to max_epochs, e.g. [3, 10, 30] for 30 and 3, or [6, 17, 50]
+        for 50 and 6
     """
     if not 1 <= min_epochs <= max_epochs:
         raise ValueError(f'The minimum number of epochs must be between 1 and {max_epochs}, got {min_epochs}')
     if reduction_factor < 2:
         raise ValueError(f'The reduction factor must be at least 2, got {reduction_factor}')
+    if min_epochs == max_epochs:
+        return [max_epochs]
 
-    epochs = [float(max_epochs)]
-    while epochs[0] / reduction_factor >= min_epochs:
-        epochs.insert(0, epochs[0] / reduction_factor)
-    return sorted({max(1, round(value)) for value in epochs})
+    n_stages = max(2, 1 + round(math.log(max_epochs / min_epochs) / math.log(reduction_factor)))
+    # The stages between the first and the last; each is longer than min_epochs, as n_stages - 2 is at most
+    # log(max_epochs / min_epochs) / log(reduction_factor) - 1/2
+    middle = [max_epochs / reduction_factor ** steps_back for steps_back in range(n_stages - 2, 0, -1)]
+    return sorted({min_epochs, *(round(value) for value in middle), max_epochs})
 
 
 # .................................................................
@@ -347,10 +360,10 @@ class TrialTrainer:
             The fold's training and validation data
         """
         network = self._build(trial)
-        _, val_losses = train_network.fit_in_one_step(network, train_loader, val_loader, self.task, self.device,
-                                                      silent=True)
-        progress.best_loss = val_losses[0]
-        progress.network_state = progress.best_weights = cpu_copy(network.state_dict())
+        train_losses, val_losses = train_network.fit_in_one_step(network, train_loader, val_loader, self.task,
+                                                                 self.device, silent=True)
+        progress.record_epoch(train_losses[0], val_losses[0], network)
+        progress.network_state = cpu_copy(network.state_dict())
 
     def trained_network(self, trial: Trial) -> tuple[ParrotArchitecture, list[float], list[float]]:
         """The trial's network with the weights of its best epoch, and its loss curves (validation split only).
@@ -412,8 +425,8 @@ class HyperparameterSearch:
         max_epochs : int
             Epochs of a full training run (the final stage)
         min_epochs : int, optional
-            Epochs of the first stage (default max_epochs / reduction_factor**2, so
-            there are three stages, but at least 1)
+            Epochs of the first stage (default max_epochs / reduction_factor**2,
+            rounded and at least 1, so there are usually three stages; see stage_epochs())
         reduction_factor : int, optional
             Each stage keeps the best 1/reduction_factor of its configurations and
             trains them reduction_factor times as long
@@ -574,6 +587,11 @@ class HyperparameterSearch:
             self._record_failure(trial, error)
 
         trial.stage_losses.append(loss)
+        if trial.status != FAILED and not math.isfinite(loss):
+            # No epoch had a finite validation loss, so there is no network worth keeping or training further
+            trial.status = FAILED
+            trial.failure_reason = DIVERGED
+            trial.folds = []
         if trial.status != FAILED:
             trial.status = COMPLETED if stage == len(self.stages) - 1 else WAITING
 
@@ -750,11 +768,14 @@ class HyperparameterSearch:
         if options is None or math.prod(len(values) for values in options) > MAX_LISTED_CONFIGURATIONS:
             return None
 
-        untried = [combination for combination in itertools.product(*options) if combination not in self._tried]
+        names = [hyperparameter.name for hyperparameter in self.space.dimensions]
+        configurations = {self._key(values): values for values in
+                          (self.space.normalized(dict(zip(names, combination)))
+                           for combination in itertools.product(*options))}
+        untried = [values for key, values in configurations.items() if key not in self._tried]
         if not untried:
             return None
-        names = [hyperparameter.name for hyperparameter in self.space.dimensions]
-        return dict(zip(names, untried[self.rng.integers(len(untried))]))
+        return untried[self.rng.integers(len(untried))]
 
     def _model_data(self) -> tuple[np.ndarray, np.ndarray] | None:
         """Points and losses at the furthest stage with enough scored configurations to fit TPE, if any.

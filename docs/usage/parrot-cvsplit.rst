@@ -2,7 +2,7 @@
  parrot-cvsplit
 ================
 
-``parrot-cvsplit`` is a command for generating PARROT-usable *split-files* for conducting K-fold cross validation on a dataset (where K is specified by the user). This function does not extensively validate the data it's passed and assumes that it a PARROT-usable datafile.
+``parrot-cvsplit`` is a command for generating PARROT-usable *split-files* for conducting K-fold cross validation on a dataset (where K is specified by the user). This function does not extensively validate the data it's passed and assumes that it a PARROT-usable datafile. Identical sequences are always put in the same set of every fold (so no test sequence also appears in that fold's training data). Similar but not identical sequences can still end up in different sets; to keep them apart, make the split with ``parrot-preprocess --split homology`` or ``--split kmer``.
 
 Once PARROT is installed, the user can run ``parrot-cvsplit`` from the command line:
 

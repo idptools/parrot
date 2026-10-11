@@ -13,7 +13,7 @@ import torch
 from parrot import hyperparameter_search as hs
 from parrot import tpe_sampler
 from parrot import train_network
-from parrot.architectures import HyperParameter
+from parrot.architectures import HyperParameter, build_network
 from parrot.tasks import Task
 
 from tests.helpers import FakeTrainer, make_loaders, make_search
@@ -25,10 +25,20 @@ TASK = Task('sequence', 1)
 # Stages and the search space
 
 @pytest.mark.parametrize('max_epochs, min_epochs, expected', [(30, 3, [3, 10, 30]), (100, 11, [11, 33, 100]),
-                                                              (27, 1, [1, 3, 9, 27]), (5, 1, [2, 5]), (1, 1, [1]),
-                                                              (30, 30, [30])])
+                                                              (27, 1, [1, 3, 9, 27]), (5, 1, [1, 5]), (1, 1, [1]),
+                                                              (30, 30, [30]), (50, 6, [6, 17, 50]),
+                                                              (14, 2, [2, 5, 14]), (500, 56, [56, 167, 500]),
+                                                              (9, 2, [2, 9]), (10, 4, [4, 10]), (10, 9, [9, 10])])
 def test_stage_epochs(max_epochs, min_epochs, expected):
     assert hs.stage_epochs(max_epochs, min_epochs) == expected
+
+
+@pytest.mark.parametrize('max_epochs', range(9, 301))
+def test_default_stages_are_three_from_nine_epochs(max_epochs):
+    # The default first stage is a ninth of the epochs, so there are three stages, each about three times longer
+    search = make_search(n_trials=3, max_epochs=max_epochs)
+    assert len(search.stages) == 3 and search.stages[-1] == max_epochs
+    assert search.stages[0] == max(1, round(max_epochs / 9))
 
 
 @pytest.mark.parametrize('min_epochs, reduction_factor', [(0, 3), (31, 3), (3, 1)])
@@ -46,6 +56,41 @@ def test_search_space_dimensions():
     # Models fitted in one step have no learning rate
     assert [hyperparameter.name for hyperparameter in hs.SearchSpace('knn').dimensions] == [
         'num_neighbors', 'neighbor_weights', 'features']
+
+
+@pytest.mark.parametrize('architecture, task, input_size, unused', [
+    ('composition', Task('sequence', 1), 20, ['window_radius']),
+    ('composition', Task('residues', 1), 20, []),
+    ('unet2d', Task('matrix', 1, width=4), 20, ['pair_features']),
+    ('unet2d', Task('matrix', 1), 20, []),
+    ('svm', Task('sequence', 1), 20, []),
+    ('svm', Task('sequence', 1), 1280, ['features']),          # e.g. ESM-2 embeddings: no dipeptide features
+])
+def test_hyperparameters_without_effect_are_not_searched(architecture, task, input_size, unused):
+    space = hs.SearchSpace(architecture, task=task, input_size=input_size)
+    assert list(space.unused) == unused
+    assert not {hyperparameter.name for hyperparameter in space.dimensions} & set(unused)
+
+
+def test_hyperparameters_a_configuration_does_not_use_take_their_default():
+    space = hs.SearchSpace('svm')
+    gamma = [index for index, hyperparameter in enumerate(space.dimensions) if hyperparameter.name == 'relative_gamma']
+    linear = space.from_point([0.5, space.dimensions[1].search_choices.index('linear'), 0.9, 0])
+    rbf = space.from_point([0.5, space.dimensions[1].search_choices.index('rbf'), 0.9, 0])
+    assert gamma and linear['relative_gamma'] == 1.0 and rbf['relative_gamma'] != 1.0
+
+
+def test_unet2d_search_range_stays_a_sensible_size():
+    # The largest network the search can build (it once reached 1.5 billion parameters)
+    space = hs.SearchSpace('unet2d')
+    largest = {hyperparameter.name: hyperparameter.search_range[1] for hyperparameter in space.dimensions
+               if space.is_numeric(hyperparameter)}
+    largest.update(kernel_size=max(next(hyperparameter.search_choices for hyperparameter in space.dimensions
+                                        if hyperparameter.name == 'kernel_size')),
+                   pair_features='outer', upsampling='transposed')
+    with torch.device('meta'):
+        network = build_network('unet2d', 20, Task('matrix', 1), space.architecture_values(largest))
+    assert sum(parameter.numel() for parameter in network.parameters()) < 50e6
 
 
 @pytest.mark.parametrize('hyperparameter', [
@@ -227,6 +272,24 @@ def test_every_configuration_failing_is_an_error():
     assert 'does not suit the data' in str(raised.value.__cause__)
 
 
+class DivergingTrainer(FakeTrainer):
+    """Every configuration diverges: no epoch has a finite validation loss."""
+
+    def train_to(self, trial, epochs):
+        super().train_to(trial, epochs)
+        return math.inf
+
+
+@pytest.mark.parametrize('min_epochs', [10, 1])
+def test_every_configuration_diverging_is_an_error(min_epochs):
+    # With one stage, the diverged trials used to be marked completed, and the search returned one of them
+    space = hs.SearchSpace('brnn')
+    search = make_search(trainer=DivergingTrainer(space), n_trials=5, max_epochs=10, min_epochs=min_epochs)
+    with pytest.raises(RuntimeError, match='Every configuration failed'):
+        search.run()
+    assert all(trial.status == hs.FAILED and trial.failure_reason == hs.DIVERGED for trial in search.trials)
+
+
 def test_too_few_trials_still_train_one_configuration_fully():
     search = make_search(n_trials=2, max_epochs=27, min_epochs=3)
     best = search.run()
@@ -326,8 +389,10 @@ def test_models_fitted_in_one_step_are_fitted_once():
     trial = hs.Trial(1, space.default_values(), 'default')
     loss = trainer.train_to(trial, 1)
 
-    network, _, _ = trainer.trained_network(trial)
+    network, train_losses, val_losses = trainer.trained_network(trial)
     assert network.name == 'linear' and math.isfinite(loss)
+    # The fit's losses are kept, so parrot-optimize can report them as parrot-train does
+    assert len(train_losses) == 1 and val_losses == [loss]
 
 
 def test_unsuitable_configuration_fails_without_stopping_the_search():
