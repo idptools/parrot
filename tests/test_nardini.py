@@ -142,13 +142,26 @@ def test_nardini_is_for_sequence_data_only():
 # ..........................................................................................
 # The cache
 
+def test_features_from_another_sparrow_version_are_not_reused(tmp_path, monkeypatch):
+    encoder = nardini_encoder()
+    encoder.use_cache(tmp_path)
+    encoder.prepare(SEQUENCES[:1], 'test', silent=True)
+
+    # After an upgrade, the cache holds no features for the new version, so they are computed again
+    monkeypatch.setattr(nardini, 'sparrow_version', lambda: '9.9.9+g1234')
+    upgraded = nardini_encoder()
+    upgraded.use_cache(tmp_path)
+    assert upgraded.cache_name.endswith('_sparrow9.9.9_g1234')
+    assert upgraded.cache.missing(SEQUENCES[:1]) == SEQUENCES[:1]
+
 def test_features_are_computed_once_into_the_cache(tmp_path, monkeypatch):
     encoder = nardini_encoder()
     encoder.use_cache(tmp_path)
     encoder.prepare(SEQUENCES, 'test', silent=True)
     computed = [encoder.features(sequence) for sequence in SEQUENCES]
 
-    cache_file = tmp_path / f'nardini_human_{QUICK_SCRAMBLES}scrambles_seed{nardini.NARDINI_SEED}.h5'
+    version = nardini.sparrow_version().replace('+', '_')
+    cache_file = tmp_path / f'nardini_human_{QUICK_SCRAMBLES}scrambles_seed{nardini.NARDINI_SEED}_sparrow{version}.h5'
     assert cache_file.is_file() and (tmp_path / 'README.md').is_file()
 
     # A new encoder on the same cache reads every sequence rather than computing it

@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 import numpy as np
 import torch
 
-from parrot import devices, nardini, plm
+from parrot import devices, nardini, plm, train_network
 from parrot.architectures import ParrotArchitecture
 from parrot.metrics import METRIC_DECIMALS
 from parrot.package_version import PARROT_VERSION
@@ -361,7 +361,8 @@ def training_section(network: ParrotArchitecture, run: 'TrainingRun', training: 
     best = best_epoch(val_losses)
     epochs = training['epochs']
     stop = (f'after {epochs} epochs' if training['stop'] == 'iter' else
-            f'once the validation loss had not improved for {epochs} epochs (--stop auto)')
+            f'once the validation loss had not improved by at least '
+            f'{100 * train_network.AUTO_STOP_RELATIVE_IMPROVEMENT:g}% for {epochs} epochs in a row (--stop auto)')
     entries = [('loss', describe_loss(run.task)),
                ('optimizer', describe_optimizer(training['learning_rate'])),
                ('batch size', f'{run.batch_size} sequences'),

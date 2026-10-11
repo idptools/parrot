@@ -165,6 +165,7 @@ def prepare_encoding(encoder: SequenceEncoder, sequences: list[str], cache_direc
         If --embedding-cache was given for an encoding that does not use the cache
     """
     directory = cache_directory if cache_directory is not None else default_directory
+    check_embedding_cache_applies(encoder, cache_directory)
 
     if isinstance(encoder, nardini.NardiniEncoder):
         encoder.use_cache(directory)
@@ -172,9 +173,6 @@ def prepare_encoding(encoder: SequenceEncoder, sequences: list[str], cache_direc
         return
 
     if not isinstance(encoder, plm.PLMEncoder):
-        if cache_directory is not None:
-            raise ValueError('--embedding-cache only applies to protein language model and NARDINI encodings, not '
-                             f"'{encoder.name}'")
         return
 
     encoder.use_device(device)
@@ -341,11 +339,49 @@ def warn_about_batch_size(batch_size: int, num_training_sequences: int) -> None:
                                        ['This may lower accuracy; consider a smaller --batch.'])
 
     batches_per_epoch = math.ceil(num_training_sequences / batch_size)
-    if num_training_sequences // batch_size <= MIN_BATCHES_PER_EPOCH:
+    if batches_per_epoch < MIN_BATCHES_PER_EPOCH:
         dataset_warnings.print_warning(
             f'WARNING: The batch size ({batch_size}) is large for {num_training_sequences:,} training sequences '
             f'({batches_per_epoch} batches per epoch).',
             ['Few updates per epoch may make training less efficient; consider a smaller --batch.'])
+
+
+def check_embedding_cache_applies(encoder: SequenceEncoder, cache_directory: str | None) -> None:
+    """Check --embedding-cache is only given for an encoding that uses the cache (checked before any work is done)
+
+    Parameters
+    ----------
+    encoder : SequenceEncoder
+        The encoding in use
+    cache_directory : str or None
+        The --embedding-cache argument
+
+    Raises
+    ------
+    ValueError
+        If --embedding-cache was given for an encoding that does not use the cache
+    """
+    if cache_directory is not None and not isinstance(encoder, plm.PLMEncoder | nardini.NardiniEncoder):
+        raise ValueError('--embedding-cache only applies to protein language model and NARDINI encodings, not '
+                         f"'{encoder.name}'")
+
+
+def check_network_name(name: str) -> None:
+    """Check --output-network names a file, not just a directory (checked before any work is done)
+
+    Parameters
+    ----------
+    name : str
+        The --output-network argument
+
+    Raises
+    ------
+    ValueError
+        If it ends with a path separator, or is only the network extension
+    """
+    if os.path.basename(name) in ('', NETWORK_EXTENSION):
+        raise ValueError(f"--output-network {name} names a directory, not a file; give the network's name too, "
+                         f'e.g. {os.path.join(name.removesuffix(NETWORK_EXTENSION), "network" + NETWORK_EXTENSION)}')
 
 
 def network_path(name: str) -> str:
@@ -440,6 +476,7 @@ def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: i
     set_random_seed(args.seed)
 
     data_file = arguments.check_file_exists(args.input_file, 'Input file')
+    check_network_name(args.output_network)
     network_file = os.path.abspath(network_path(args.output_network))
     output_prefix, _ = arguments.output_prefix_and_directory(network_file)
 
@@ -449,6 +486,7 @@ def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: i
         save_splits_output = output_prefix + '_split_file.txt'
 
     encoder = get_encoder(args.encode, standardize=args.standardize_encoding, nardini_scrambles=args.nardini_scrambles)
+    check_embedding_cache_applies(encoder, args.embedding_cache)
     check_matrix_arguments(args)
     task = Task(args.datatype, number_of_classes(args), width=args.matrix_width, symmetric=args.symmetric)
     nardini.check_task(encoder, task)
@@ -588,7 +626,7 @@ def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_los
         figures.plot_training_loss(train_losses, val_losses, written[-1])
 
     predicting = time.perf_counter()
-    labeled = prediction.predict_labeled(network, run.test_set, run.task, run.device)
+    labeled = prediction.predict_labeled(network, run.test_set, run.task, run.device, batch_size=run.batch_size)
     prediction_seconds = time.perf_counter() - predicting
     metrics, test_files = reporting.report_test_results(labeled, run.task, run.output_prefix,
                                                         probabilistic=run.probabilistic,

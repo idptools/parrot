@@ -465,6 +465,18 @@ def test_global_context_starts_at_zero():
         torch.testing.assert_close(with_context(batch, lengths), without_context(batch, lengths))
 
 
+@pytest.mark.parametrize('architecture', ['cnn', 'unet'])
+def test_global_context_leaves_the_other_initial_weights_as_they_would_be_without_it(architecture):
+    # Its layer used to draw random numbers before being zeroed, so every later layer started differently
+    outputs = []
+    for global_context in (True, False):
+        torch.manual_seed(1)
+        network = build_network(architecture, 20, Task('residues', 1), {'global_context': global_context})
+        with torch.no_grad():
+            outputs.append(network(encode_single('ACDEFGHIKLMNPQRSTVWY' * 3)))
+    torch.testing.assert_close(outputs[0], outputs[1], rtol=0, atol=0)
+
+
 def test_global_context_averages_real_positions_only():
     layer = GlobalContext(2)
     with torch.no_grad():
@@ -599,10 +611,18 @@ def test_transformer_without_positions_ignores_residue_order():
 
 
 @pytest.mark.parametrize('positional_encoding', ['rotary', 'sinusoidal'])
-def test_transformer_positions_make_residue_order_matter(positional_encoding):
-    network = build_network('transformer', 20, Task('sequence', 1), {'positional_encoding': positional_encoding})
+@pytest.mark.parametrize('sizes', [{}, {'head_size': 2, 'num_heads': 2}])
+def test_transformer_positions_make_residue_order_matter(positional_encoding, sizes):
+    network = build_network('transformer', 20, Task('sequence', 1),
+                            {'positional_encoding': positional_encoding, **sizes})
     with torch.no_grad():
         assert not torch.allclose(network(encode_single('AAKKDDEE')), network(encode_single('KDAEKADE')))
+
+
+def test_transformer_heads_must_be_wide_enough_to_encode_positions():
+    # A head 1 wide has no pair of features to rotate, so rotary positions did nothing
+    with pytest.raises(ValueError, match="'head_size' must be at least 2"):
+        build_network('transformer', 20, Task('sequence', 1), {'head_size': 1})
 
 
 def test_transformer_sees_the_whole_sequence():

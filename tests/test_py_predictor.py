@@ -136,6 +136,13 @@ def test_predictor_rejects_invalid_residue(tmp_path):
         py_predictor.Predictor(path).predict('ACDXF')
 
 
+def test_predictor_accepts_the_matrix_dtype(tmp_path):
+    # 'matrix' is a datatype a saved network can have, so it is checked against the network like the others
+    _, _, path = save_checkpoint(tmp_path, Task('sequence', 1))
+    with pytest.raises(ValueError, match="does not match the saved network"):
+        py_predictor.Predictor(path, dtype='matrix')
+
+
 def test_predictor_rejects_invalid_dtype(tmp_path):
     _, _, path = save_checkpoint(tmp_path, Task('sequence', 1))
     with pytest.raises(ValueError, match='dtype'):

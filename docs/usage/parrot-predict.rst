@@ -25,8 +25,9 @@ Where `seq_file` specifies a file containing a list of sequences. Each line of `
 	*  ``--embedding-cache`` : For networks trained on a protein language model encoding or NARDINI features: directory in which to store the embeddings (or features) of the sequences being predicted (default: a ``parrot_predict_embeddings`` directory next to *output_file*). Encoding is the slow step of predicting with such a network, so reusing a cache (e.g. one created by ``parrot-train``) avoids encoding sequences again. See "Protein language model encodings" and "NARDINI features".
 	*  ``--device`` : Device to run on: ``auto`` (default), ``cpu``, ``cuda`` or ``mps``. ``auto`` uses an NVIDIA GPU (CUDA) if one is available, otherwise an Apple-silicon GPU (MPS) if available, otherwise the CPU. Requesting a device that is not available is an error.
 	*  ``--gpu-id`` : Index of the CUDA device to use, for machines with more than one NVIDIA GPU (e.g. ``--gpu-id 1``).
-	*  ``--silent`` : Flag which, if provided, ensures no output is generated to the terminal.
-	*  ``--print-frequency`` : Value that defines how often status updates should be printed (in number of sequences predicted). Default=1000
+	*  ``--silent`` : Flag which, if provided, ensures no output is generated to the terminal (even with ``--verbose``).
+	*  ``--print-frequency`` : Value that defines how often status updates should be printed (in number of sequences predicted; at least 1). Default=1000
+	*  ``--batch`` / ``-b`` : Number of sequences predicted at once (default 64). Batching does not change the predictions, only speed and memory: a network that only fitted in memory with a small ``--batch`` when it was trained (e.g. a large ``unet2d``) may need a small one here too.
 
 **Output:**
 

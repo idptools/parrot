@@ -43,6 +43,9 @@ DEFAULT_BALANCE_THRESHOLD = BALANCED_CLASS_RATIO
 DEFAULT_MAX_FRACTION_REMOVED = 0.25
 DEFAULT_BLOCK_SIZE = 100
 
+# A block must offer at least two lines to choose between
+MIN_BLOCK_SIZE = 2
+
 # Balancing to an imbalance above this makes little sense, so it is refused
 MAX_BALANCE_THRESHOLD = 5.0
 
@@ -213,8 +216,8 @@ def run_class_balance_residues(lines: list[Line], balance_threshold: float = DEF
         If a setting is out of range or no line has a class label
     """
 
-    if block_size < 2:
-        raise ParrotException('Error during class balancing. Block size must be greater than 1')
+    if block_size < MIN_BLOCK_SIZE:
+        raise ParrotException(f'Error during class balancing. Block size must be at least {MIN_BLOCK_SIZE}')
     check_balance_settings(balance_threshold, max_fraction_removed)
     if rng is None:
         rng = random_generator()

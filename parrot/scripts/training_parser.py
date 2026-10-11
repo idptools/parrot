@@ -487,7 +487,9 @@ def output_options() -> argparse.ArgumentParser:
     group.add_argument('--no-stats', dest='no_stats', action='store_true',
                        help='do not write the test-set performance statistics file')
     group.add_argument('--verbose', '-v', action='store_true',
-                       help='print every setting, and the validation loss after every epoch')
+                       help='print every setting, and the validation loss after every epoch whenever one network is '
+                            'trained epoch by epoch (parrot-train, or parrot-optimize --cv-folds once the best '
+                            'configuration is retrained; not the configurations of the search itself)')
     group.add_argument('--silent', action='store_true', help='print nothing')
 
     group = options.add_argument_group('device and reproducibility')

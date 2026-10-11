@@ -3,6 +3,7 @@ Tests for parrot.train_network: loss construction and masking, the training loop
 evaluation on labeled data and prediction on unlabeled data.
 """
 
+import math
 import numpy as np
 import pytest
 import torch
@@ -202,15 +203,29 @@ def test_one_step_models_record_their_fitting_time():
 
 
 def test_train_auto_stops_when_validation_loss_plateaus():
-    """With a learning rate of zero the loss never changes, so 'auto' stops after min_epochs + 2 epochs"""
+    """With a learning rate of zero the loss never changes, so 'auto' stops once 3 epochs after the first have not
+    improved it: after 4 epochs"""
     train_set, val_set, _, task = load_task('seq_class')
-    min_epochs = 3
+    patience = 3
 
     _, val_losses = train_network.train(make_network('sequence', 3), loader(train_set, task), loader(val_set, task),
-                                        task, 'cpu', learning_rate=0.0, n_epochs=min_epochs, stop_condition='auto',
+                                        task, 'cpu', learning_rate=0.0, n_epochs=patience, stop_condition='auto',
                                         silent=True)
 
-    assert len(val_losses) == min_epochs + 2
+    assert len(val_losses) == patience + 1
+
+
+def test_train_auto_stops_a_slow_decline(monkeypatch):
+    """A loss that falls by 0.1% every epoch makes a new best every epoch, but never a meaningful one"""
+    losses = iter(0.999 ** epoch for epoch in range(1000))
+    monkeypatch.setattr(train_network, 'evaluate_loss', lambda *args: next(losses))
+    train_set, val_set, _, task = load_task('seq_class')
+
+    _, val_losses = train_network.train(make_network('sequence', 3), loader(train_set, task), loader(val_set, task),
+                                        task, 'cpu', learning_rate=0.0, n_epochs=3, stop_condition='auto',
+                                        silent=True)
+
+    assert len(val_losses) == 4
 
 
 def test_train_rejects_unknown_stop_condition():
@@ -220,10 +235,11 @@ def test_train_rejects_unknown_stop_condition():
                             learning_rate=0.01, n_epochs=1, stop_condition='never')
 
 
-def test_plateau_reached():
-    assert train_network.plateau_reached(1.0, [1.0, 1.0], epochs_since_best=3, patience=2)
-    assert not train_network.plateau_reached(1.0, [1.0, 1.0], epochs_since_best=2, patience=2)
-    assert not train_network.plateau_reached(0.5, [1.0, 1.0], epochs_since_best=3, patience=2)
+def test_meaningfully_better():
+    assert train_network.meaningfully_better(0.99, 1.0)
+    assert not train_network.meaningfully_better(0.999, 1.0)       # below the 0.5% threshold
+    assert train_network.meaningfully_better(5.0, math.inf)          # the first epoch always counts
+    assert not train_network.meaningfully_better(math.nan, math.inf)
 
 
 def test_train_prints_progress(capsys):

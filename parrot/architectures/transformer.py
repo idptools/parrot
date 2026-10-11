@@ -51,6 +51,10 @@ POSITIONAL_ENCODINGS = ('rotary', 'sinusoidal', 'none')
 # Base of the geometric series of wavelengths used by both positional encodings (Vaswani et al. 2017)
 POSITION_BASE = 10000.0
 
+# Narrowest attention head: positions are encoded by rotating (rotary) or filling (sinusoidal) pairs of features,
+# so a head 1 wide (rotary), or a model 1 wide (sinusoidal), could not tell where any residue is
+MIN_HEAD_SIZE = 2
+
 
 def position_frequencies(dimensions: int, device: torch.device) -> torch.Tensor:
     """The angular frequency of each of dimensions // 2 sine/cosine pairs, highest first."""
@@ -247,8 +251,8 @@ class Transformer(ParrotArchitecture):
                        cli_aliases=('-nl',), search_range=(1, 6)),
         HyperParameter('num_heads', int, default=4, help='number of attention heads', minimum=1,
                        search_range=(1, 8)),
-        HyperParameter('head_size', int, default=16, minimum=1, search_range=(8, 64),
-                       help='width of each attention head; the model width is num_heads x head_size'),
+        HyperParameter('head_size', int, default=16, minimum=MIN_HEAD_SIZE, search_range=(8, 64),
+                       help='width of each attention head (at least 2); the model width is num_heads x head_size'),
         HyperParameter('feedforward_multiplier', int, default=4, minimum=1, search_range=(1, 4),
                        help='width of the feed-forward layer in each block, as a multiple of the model width'),
         DROPOUT,

@@ -361,6 +361,38 @@ def test_metrics_regression(datatype):
     assert scores['Spearman R'] == 1.0
 
 
+@pytest.mark.parametrize('true_values, predictions', [
+    ([np.asarray(0.5)], [np.asarray(0.4)]),                                   # a single value
+    ([np.asarray(value) for value in [1.0, 2.0, 3.0]], [np.asarray(1.0)] * 3),  # a constant prediction
+    ([np.asarray(value) for value in [1.0, 2.0, 3.0]],
+     [np.asarray(value) for value in [1.0, np.nan, 3.0]]),                     # a diverged network
+])
+def test_regression_correlations_are_nan_where_undefined(true_values, predictions):
+    scores = metrics.performance_metrics(true_values, predictions, Task('sequence', 1))
+    assert np.isnan(scores['Pearson R']) and np.isnan(scores['Spearman R'])
+
+
+def test_probabilistic_metrics_of_a_diverged_network_are_nan():
+    labels = [np.asarray(label) for label in [0, 1, 1, 0]]
+    probabilities = [np.array([np.nan, np.nan])] * 4
+    scores = metrics.performance_metrics(labels, probabilities, Task('sequence', 2), probabilistic=True)
+    assert np.isnan(scores['Area under ROC']) and np.isnan(scores['Area under Precision-Recall curve'])
+
+
+def test_binary_roc_area_is_the_one_the_figure_shows(tmp_path, captured_figures):
+    rng = np.random.default_rng(3)
+    labels = rng.integers(0, 2, 200)
+    class_one = np.clip(0.3 * labels + rng.random(200) * 0.7, 0, 1)
+    probabilities = [np.array([1 - p, p]) for p in class_one]
+    true_values = [np.asarray(label) for label in labels]
+
+    score = metrics.performance_metrics(true_values, probabilities, Task('sequence', 2), probabilistic=True)
+    figures.plot_roc_curve(labels, np.vstack(probabilities), str(tmp_path / 'roc.png'))
+
+    legend = captured_figures[-1].axes[0].get_legend().get_texts()[0].get_text()
+    assert legend == f"Class 1 (area {score['Area under ROC']:.2f})"
+
+
 def test_write_performance_metrics(tmp_path):
     path = str(tmp_path / 'stats.txt')
     reporting.write_performance_metrics({'Pearson R': 0.5, 'Spearman R': 0.25}, path)

@@ -243,6 +243,12 @@ def check_arguments(args: argparse.Namespace) -> None:
     if args.split_method is not None:
         check_split_settings(args)
     check_matrix_options(args)
+    if args.class_balance:
+        # Checked now rather than when balancing, which comes after the (possibly long) split
+        class_balancing.check_balance_settings(args.cb_balance_threshold, args.cb_max_fraction_removed)
+        if args.cb_block_size is not None and args.cb_block_size < class_balancing.MIN_BLOCK_SIZE:
+            raise ValueError(f'--cb-block-size must be at least {class_balancing.MIN_BLOCK_SIZE}, '
+                             f'got {args.cb_block_size}')
 
 
 def check_matrix_options(args: argparse.Namespace) -> None:

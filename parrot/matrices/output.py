@@ -85,10 +85,29 @@ def name_matrices(names: list[str], matrices: list[np.ndarray]) -> dict[str, np.
     Raises
     ------
     ValueError
+        If a name is empty or appears more than once (see check_matrix_names)
+    """
+    check_matrix_names(names)
+    return dict(zip(names, matrices))
+
+
+def check_matrix_names(names: list[str]) -> None:
+    """Check that the names predicted matrices will be saved under are unique and not empty
+
+    parrot-predict calls this before predicting, so a repeated ID is reported
+    before the work rather than after it.
+
+    Parameters
+    ----------
+    names : list of str
+        Sequence IDs
+
+    Raises
+    ------
+    ValueError
         If a name is empty or appears more than once (each names an array of the archive)
     """
     repeated = sorted(name for name, count in Counter(names).items() if count > 1)
     if repeated or '' in names:
         raise ValueError('Each predicted matrix is saved under its sequence ID, so the IDs must be unique and not '
                          f'empty{"; repeated: " + ", ".join(repeated[:5]) if repeated else ""}')
-    return dict(zip(names, matrices))

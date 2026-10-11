@@ -18,6 +18,7 @@ import numpy as np
 from scipy.special import softmax  # noqa: F401  (kept importable as py_predictor.softmax)
 
 from parrot import checkpoint, devices, nardini, plm, prediction
+from parrot.tasks import VALID_DATATYPES
 
 
 class Predictor():
@@ -68,9 +69,10 @@ class Predictor():
         saved_weights : str or Path
             Location of the saved network
         dtype : str, optional
-            "sequence" or "residues". Required for networks saved by earlier
-            versions of PARROT; for newer networks, if given, it must match the
-            saved network.
+            "sequence", "residues" or "matrix". Required for networks saved by
+            earlier versions of PARROT (which are "sequence" or "residues"
+            networks); for newer networks, if given, it must match the saved
+            network.
         device : str, optional
             'cpu' (default), 'cuda', 'mps', or 'auto' (CUDA if available, else
             MPS if available, else the CPU). For networks trained on protein
@@ -83,8 +85,9 @@ class Predictor():
             when predicted.
         """
 
-        if dtype is not None and dtype not in ['sequence', 'residues']:
-            raise ValueError("dtype must equal 'residues' or 'sequence'")
+        if dtype is not None and dtype not in VALID_DATATYPES:
+            raise ValueError(f"dtype must be one of {', '.join(repr(datatype) for datatype in VALID_DATATYPES)}, "
+                             f'got {dtype!r}')
 
         self.device = devices.resolve_device(device)
         self.network, self.encoder = checkpoint.load_network(str(saved_weights), device=self.device,

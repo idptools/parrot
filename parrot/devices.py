@@ -30,6 +30,10 @@ import torch
 # Values accepted wherever a device is chosen (the --device flag and Predictor)
 DEVICE_CHOICES = ('auto', 'cpu', 'cuda', 'mps')
 
+# PyTorch's fp32_precision value (PyTorch 2.9 and later) for float32 computed in full precision, rather than in
+# TF32 ('tf32') or as PyTorch decides ('none')
+FULL_FLOAT32_PRECISION = 'ieee'
+
 
 def mps_available() -> bool:
     """True if PyTorch can use an Apple-silicon GPU (MPS) on this machine."""
@@ -122,8 +126,27 @@ def full_float32_precision() -> Iterator[None]:
     this context. The previous settings are restored afterwards, so other code
     running in the same process is unaffected. Has no effect on other devices.
 
+    PyTorch 2.9 replaced the allow_tf32 flags with fp32_precision settings, and
+    raises if a process mixes the two, so the newer settings are used wherever
+    they exist (including when torch.set_float32_matmul_precision has been
+    called, which sets them).
+
     Can also be used as a decorator.
     """
+    if hasattr(torch.backends.cuda.matmul, 'fp32_precision'):
+        # Typed as Any: PyTorch's type hints do not describe these settings yet
+        cudnn: Any = torch.backends.cudnn
+        settings: list[Any] = [torch.backends.cuda.matmul, cudnn.conv, cudnn.rnn]
+        previous = [setting.fp32_precision for setting in settings]
+        for setting in settings:
+            setting.fp32_precision = FULL_FLOAT32_PRECISION
+        try:
+            yield
+        finally:
+            for setting, value in zip(settings, previous):
+                setting.fp32_precision = value
+        return
+
     cudnn_tf32 = torch.backends.cudnn.allow_tf32
     matmul_tf32 = torch.backends.cuda.matmul.allow_tf32
     torch.backends.cudnn.allow_tf32 = False

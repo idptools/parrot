@@ -8,6 +8,9 @@ downloaded (tests never download anything).
 """
 
 import importlib.util
+import subprocess
+import sys
+import threading
 from collections import namedtuple
 
 import numpy as np
@@ -21,7 +24,7 @@ from parrot.py_predictor import Predictor
 from parrot.scripts import parrot_predict, parrot_train
 from parrot.tasks import Task
 
-from tests.helpers import EXAMPLE_TASKS, data_path, training_command
+from tests.helpers import EXAMPLE_TASKS, FULL_PRECISION, TF32_EVERYWHERE, data_path, tf32_settings, training_command
 
 MODEL = 'esm2_t6_8M_UR50D'
 EMBEDDING_SIZE = plm.PLM_MODELS[MODEL].embedding_size
@@ -159,10 +162,51 @@ def test_cache_rejects_a_different_model(tmp_path):
         plm.EmbeddingCache(tmp_path, 'esm2_t12_35M_UR50D', 480).write({'EF': np.zeros((2, 480))})
 
 
-def test_cache_refuses_a_second_writer(tmp_path):
+def test_cache_writer_waits_for_another_writer(tmp_path, capsys):
+    lock = tmp_path / f'{MODEL}.h5.lock'
+    lock.write_text('pid 1\n')
+    threading.Timer(0.5, lock.unlink).start()  # the other writer finishes after half a second
+
+    plm.EmbeddingCache(tmp_path, MODEL, EMBEDDING_SIZE).write({'ACD': fake_embedding('ACD')})
+
+    assert 'Waiting for another PARROT process' in capsys.readouterr().out
+    assert plm.EmbeddingCache(tmp_path, MODEL, EMBEDDING_SIZE).missing(['ACD']) == []
+
+
+def test_cache_gives_up_on_a_lock_left_behind(tmp_path, monkeypatch):
+    monkeypatch.setattr(plm, 'CACHE_WAIT_SECONDS', 0.3)
     (tmp_path / f'{MODEL}.h5.lock').write_text('pid 1\n')
-    with pytest.raises(RuntimeError, match='Another PARROT process'):
+    with pytest.raises(RuntimeError, match='delete that lock file'):
         plm.EmbeddingCache(tmp_path, MODEL, EMBEDDING_SIZE).write({'ACD': fake_embedding('ACD')})
+
+
+# Run in another process: hold the cache open for reading (as a training run does), say so, then wait to be told
+# that the main process has written a new embedding, and read it
+CACHE_READER_SCRIPT = """
+import sys
+from parrot import plm
+cache = plm.EmbeddingCache(sys.argv[1], sys.argv[2], int(sys.argv[3]))
+cache.get('ACD')
+print('reading', flush=True)
+sys.stdin.readline()
+print(cache.get('EF').shape, flush=True)
+"""
+
+
+def test_cache_can_be_written_while_another_process_reads_it(tmp_path):
+    # A training run holds the cache open for as long as it trains; another run must still be able to add to it
+    cache = plm.EmbeddingCache(tmp_path, MODEL, EMBEDDING_SIZE)
+    cache.write({'ACD': fake_embedding('ACD')})
+    reader = subprocess.Popen([sys.executable, '-c', CACHE_READER_SCRIPT, str(tmp_path), MODEL, str(EMBEDDING_SIZE)],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    try:
+        assert reader.stdout.readline().strip() == 'reading'
+        cache.write({'EF': fake_embedding('EF')})
+        output, _ = reader.communicate('written\n', timeout=60)
+    finally:
+        reader.kill()
+    assert reader.returncode == 0 and output.strip() == f'(2, {EMBEDDING_SIZE})'
+
 
 
 def test_prepare_reports_size_and_embeds_each_sequence_once(fake_plm, tmp_path, capsys):
@@ -224,14 +268,13 @@ def test_prepare_checks_every_sequence_before_embedding(fake_plm, tmp_path):
     assert not (tmp_path / f'{MODEL}.h5').exists()
 
 
-def test_embedding_runs_in_full_precision(fake_plm, monkeypatch):
-    monkeypatch.setattr(torch.backends.cudnn, 'allow_tf32', True)
+def test_embedding_runs_in_full_precision(fake_plm, tf32_allowed, monkeypatch):
     seen = []
     monkeypatch.setattr(plm.PLMEncoder, '_run_model',
-                        lambda self, chunks: seen.append(torch.backends.cudnn.allow_tf32) or fake_run_model(self, chunks))
+                        lambda self, chunks: seen.append(tf32_settings()) or fake_run_model(self, chunks))
     plm.PLMEncoder(MODEL).embed(['ACDEF', 'GHIKLMN'])
-    assert seen and not any(seen)
-    assert torch.backends.cudnn.allow_tf32
+    assert seen and all(settings == FULL_PRECISION for settings in seen)
+    assert tf32_settings() == TF32_EVERYWHERE
 
 
 def test_get_encoder_recognises_plm_names():

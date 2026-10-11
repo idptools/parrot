@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from parrot import encode_sequence
+from parrot import devices, encode_sequence
 from parrot import hyperparameter_search as hs
 from parrot import process_input_data as pid
 from parrot.architectures import (HyperParameter, ParrotArchitecture, available_architectures, build_network,
@@ -318,3 +318,32 @@ def make_search(n_trials: int = 30, max_epochs: int = 27, seed: int = 0, **kwarg
     space = hs.SearchSpace('brnn')
     return hs.HyperparameterSearch(space, kwargs.pop('trainer', FakeTrainer(space)), n_trials, max_epochs,
                                    rng=np.random.default_rng(seed), silent=True, **kwargs)
+
+
+# ..........................................................................................
+# TF32 and full float32 precision (see devices.full_float32_precision)
+
+# PyTorch 2.9 replaced the allow_tf32 flags with fp32_precision settings (and refuses a mix of the two)
+NEW_PRECISION_API = hasattr(torch.backends.cuda.matmul, 'fp32_precision')
+
+# What tf32_settings() gives when TF32 is allowed everywhere, and in full precision
+TF32_EVERYWHERE = ('tf32', 'tf32', 'tf32') if NEW_PRECISION_API else (True, True)
+FULL_PRECISION = (devices.FULL_FLOAT32_PRECISION,) * 3 if NEW_PRECISION_API else (False, False)
+
+
+def tf32_settings() -> tuple[bool | str, ...]:
+    """PyTorch's TF32 settings, through whichever API it has."""
+    if NEW_PRECISION_API:
+        return (torch.backends.cuda.matmul.fp32_precision, torch.backends.cudnn.conv.fp32_precision,
+                torch.backends.cudnn.rnn.fp32_precision)
+    return torch.backends.cudnn.allow_tf32, torch.backends.cuda.matmul.allow_tf32
+
+
+def allow_tf32_everywhere(monkeypatch: Any) -> None:
+    """Allow TF32 everywhere for one test (PyTorch's own default allows it for cuDNN only)."""
+    if NEW_PRECISION_API:
+        for setting in (torch.backends.cuda.matmul, torch.backends.cudnn.conv, torch.backends.cudnn.rnn):
+            monkeypatch.setattr(setting, 'fp32_precision', 'tf32')
+    else:
+        monkeypatch.setattr(torch.backends.cudnn, 'allow_tf32', True)
+        monkeypatch.setattr(torch.backends.cuda.matmul, 'allow_tf32', True)

@@ -40,6 +40,9 @@ DEFAULT_FOLDS = 10
 # Fraction of each fold's non-test data used for training by default (the rest is the validation set)
 DEFAULT_TRAINING_FRACTION = 0.8
 
+# The split-files' extension (a prefix given with it has it removed, so 'splits.txt' does not give 'splits.txt_cv0.txt')
+SPLIT_FILE_EXTENSION = '.txt'
+
 
 def build_parser() -> argparse.ArgumentParser:
     """The command-line arguments of parrot-cvsplit
@@ -80,7 +83,7 @@ def run() -> None:
     arguments.check_fraction(args.training_fraction, 'Training fraction')
     if args.num_folds <= 1:
         raise ValueError(f'--k-folds must be at least 2, got {args.num_folds}')
-    prefix, _ = arguments.output_prefix_and_directory(os.path.abspath(args.output_splitfiles))
+    prefix = split_file_prefix(args.output_splitfiles)
 
     # Blank and comment lines are skipped exactly as they are when the datafile is read for training,
     # so the indices line up
@@ -90,9 +93,32 @@ def run() -> None:
     print('Creating split-files:')
     print('----------------------')
     for fold, (training, validation, test) in enumerate(splits):
-        split_file = f'{prefix}_cv{fold}.txt'
+        split_file = f'{prefix}_cv{fold}{SPLIT_FILE_EXTENSION}'
         print(split_file)
         pid.write_split_file(split_file, training, validation, test)
+
+
+def split_file_prefix(output_splitfiles: str) -> str:
+    """The prefix of the split-files' names: the argument as given (dots and all), less a final '.txt'
+
+    Parameters
+    ----------
+    output_splitfiles : str
+        The output_splitfiles argument
+
+    Returns
+    -------
+    str
+        An absolute path prefix; the split-files are '<prefix>_cv<fold>.txt'
+
+    Raises
+    ------
+    FileNotFoundError
+        If the directory it is in does not exist
+    """
+    prefix = os.path.abspath(output_splitfiles).removesuffix(SPLIT_FILE_EXTENSION)
+    arguments.output_prefix_and_directory(prefix)  # checks the directory exists
+    return prefix
 
 
 def cross_validation_splits(sequences: list[str], num_folds: int,

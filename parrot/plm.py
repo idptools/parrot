@@ -42,7 +42,7 @@ import hashlib
 import os
 import shutil
 import time
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -140,6 +140,14 @@ DISK_SPACE_SAFETY_FACTOR = 1.25
 # How often (in seconds) to print progress while embedding
 PROGRESS_INTERVAL_SECONDS = 30
 
+# Several processes may share a cache (see EmbeddingCache): one waiting for another to finish writing checks again
+# this often...
+CACHE_POLL_SECONDS = 0.2
+
+# ...for at most this long, since a write of RESIDUES_PER_CACHE_WRITE residues takes seconds, so a lock file older
+# than this is almost certainly left by a process that stopped while writing
+CACHE_WAIT_SECONDS = 600
+
 # Default cache directories, created next to the command's output
 TRAIN_CACHE_DIRECTORY = 'parrot_train_embeddings'
 PREDICT_CACHE_DIRECTORY = 'parrot_predict_embeddings'
@@ -202,8 +210,13 @@ class EmbeddingCache:
     stores the sequence itself, which is checked on reading. A README.md in the
     directory describes what is there.
 
-    Only one process may write to a cache at a time; a <model>.h5.lock file
-    marks a cache that is being written.
+    Several processes can use one cache at once (e.g. training runs pointed at
+    the same --embedding-cache). Only one writes at a time: a <model>.h5.lock
+    file marks a cache that is being written, and another process that wants to
+    write waits for it to go. Readers do not lock the file, so a long training
+    run reading the cache never stops another process adding to it; instead they
+    wait while a write is going on, reopen the file once it has changed, and
+    read again anything they were reading while a write began.
 
     Attributes
     ----------
@@ -230,6 +243,8 @@ class EmbeddingCache:
         self.storage_dtype = np.dtype(storage_dtype)
         self.path = self.directory / f'{model_name}.h5'
         self._reader: Any = None
+        # The file's (modification time, size) when the reader opened it
+        self._reader_state: tuple[int, int] | None = None
 
     @staticmethod
     def key(sequence: str) -> str:
@@ -242,8 +257,8 @@ class EmbeddingCache:
         unique = list(dict.fromkeys(sequences))
         if not self.path.exists():
             return unique
-        reader = self._open_reader()
-        return [sequence for sequence in unique if self.key(sequence) not in reader]
+        return self._consistent_read(lambda reader: [sequence for sequence in unique
+                                                     if self.key(sequence) not in reader])
 
     def get(self, sequence: str) -> np.ndarray:
         """The cached embedding of a sequence, at the precision it is stored
@@ -253,14 +268,38 @@ class EmbeddingCache:
         KeyError
             If the sequence is not in the cache
         """
-        reader = self._open_reader()
-        key = self.key(sequence)
-        if key not in reader:
+        def read(reader: Any) -> np.ndarray | None:
+            key = self.key(sequence)
+            if key not in reader:
+                return None
+            dataset = reader[key]
+            if dataset.attrs['sequence'] != sequence:
+                raise ValueError(f'Embedding cache {self.path} holds a different sequence under the same hash')
+            return np.asarray(dataset[()])
+
+        embedding = self._consistent_read(read)
+        if embedding is None:
             raise KeyError(f'Sequence is not in the embedding cache {self.path}')
-        dataset = reader[key]
-        if dataset.attrs['sequence'] != sequence:
-            raise ValueError(f'Embedding cache {self.path} holds a different sequence under the same hash')
-        return np.asarray(dataset[()])
+        return embedding
+
+    def _consistent_read(self, read: Callable[[Any], Any]) -> Any:
+        """Read from the file, again if another process began writing to it during the read
+
+        Parameters
+        ----------
+        read : callable
+            Reads what is needed from an open h5py.File
+
+        Returns
+        -------
+        Whatever `read` returns
+        """
+        while True:
+            reader = self._open_reader()
+            state = self._reader_state
+            result = read(reader)
+            if not self._lock_path.exists() and self._file_state() == state:
+                return result
 
     def write(self, embeddings: dict[str, np.ndarray]) -> None:
         """Add embeddings (sequence -> [length X embedding size] array, or [embedding size] vector) to the cache
@@ -303,49 +342,102 @@ class EmbeddingCache:
 
     def stored_layout(self) -> tuple[int, bool, str]:
         """(values per embedding, whether embeddings are per residue, storage dtype), as recorded in the file."""
-        reader = self._open_reader()
-        first = next((group[name] for group in reader.values() for name in group), None)
-        storage_dtype = first.dtype.name if first is not None else self.storage_dtype.name
-        return int(reader.attrs.get('embedding_size', 0)), bool(reader.attrs.get('per_residue', True)), storage_dtype
+        def read(reader: Any) -> tuple[int, bool, str]:
+            first = next((group[name] for group in reader.values() for name in group), None)
+            storage_dtype = first.dtype.name if first is not None else self.storage_dtype.name
+            return (int(reader.attrs.get('embedding_size', 0)), bool(reader.attrs.get('per_residue', True)),
+                    storage_dtype)
+
+        layout: tuple[int, bool, str] = self._consistent_read(read)
+        return layout
 
     def summary(self) -> tuple[int, int, int]:
         """(number of sequences, number of residues, file size in bytes) of the cache."""
         if not self.path.exists():
             return 0, 0, 0
-        reader = self._open_reader()
-        return (int(reader.attrs.get('num_sequences', 0)), int(reader.attrs.get('num_residues', 0)),
-                self.path.stat().st_size)
+        counts: tuple[int, int] = self._consistent_read(lambda reader: (int(reader.attrs.get('num_sequences', 0)),
+                                                                        int(reader.attrs.get('num_residues', 0))))
+        return counts[0], counts[1], self.path.stat().st_size
 
     def _open_reader(self) -> Any:
-        """A read-only handle on the HDF5 file, kept open for repeated reads."""
+        """A read-only handle on the HDF5 file, kept open for repeated reads
+
+        Waits while another process writes to the file, and reopens it if it
+        has changed since it was opened (so the handle sees what was added).
+        The file is opened without HDF5's own file locking, which would stop
+        any other process writing to it for as long as the handle is open.
+        """
         import h5py
 
+        wait_for_lock_file(self._lock_path)
+        state = self._file_state()
+        if self._reader is not None and state != self._reader_state:
+            self.close()
         if self._reader is None:
-            self._reader = h5py.File(self.path, 'r')
+            self._reader = h5py.File(self.path, 'r', locking=False)
+            self._reader_state = state
         return self._reader
+
+    def _file_state(self) -> tuple[int, int]:
+        """The file's modification time (ns) and size, which change whenever it is written."""
+        status = self.path.stat()
+        return status.st_mtime_ns, status.st_size
 
     def close(self) -> None:
         """Close the file handle kept open for reading (it is reopened when next needed)."""
         if self._reader is not None:
             self._reader.close()
             self._reader = None
+            self._reader_state = None
+
+    @property
+    def _lock_path(self) -> Path:
+        return self.path.with_suffix('.h5.lock')
 
     def _lock(self) -> '_CacheLock':
-        return _CacheLock(self.path.with_suffix('.h5.lock'))
+        return _CacheLock(self._lock_path)
+
+
+def wait_for_lock_file(path: Path) -> None:
+    """Wait while another process holds a cache's lock file (it is writing to the cache)
+
+    Parameters
+    ----------
+    path : Path
+        The lock file
+
+    Raises
+    ------
+    RuntimeError
+        If the lock file is still there after CACHE_WAIT_SECONDS
+    """
+    waited = 0.0
+    while path.exists():
+        if waited == 0:
+            print(f'Waiting for another PARROT process to finish writing to the embedding cache ({path} exists)')
+        if waited >= CACHE_WAIT_SECONDS:
+            raise RuntimeError(f'Another PARROT process has been writing to this embedding cache for over '
+                               f'{CACHE_WAIT_SECONDS} seconds ({path} exists). If no other process is running, '
+                               'delete that lock file and try again.')
+        time.sleep(CACHE_POLL_SECONDS)
+        waited += CACHE_POLL_SECONDS
 
 
 class _CacheLock:
-    """Exclusive lock file held while a process writes to a cache."""
+    """Exclusive lock file held while a process writes to a cache (another writer waits for it; see
+    wait_for_lock_file)."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
 
     def __enter__(self) -> None:
-        try:
-            descriptor = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            raise RuntimeError(f'Another PARROT process is writing to this embedding cache ({self.path} exists). '
-                               'If no other process is running, delete that lock file and try again.') from None
+        while True:
+            wait_for_lock_file(self.path)
+            try:
+                descriptor = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                break
+            except FileExistsError:
+                continue  # another writer took it first: wait for that one too
         os.write(descriptor, f'pid {os.getpid()}\n'.encode())
         os.close(descriptor)
 

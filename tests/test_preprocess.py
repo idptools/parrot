@@ -513,6 +513,17 @@ def test_preprocess_rejects_delimited_fields_a_datafile_cannot_hold(run_cli, tmp
                        '--delimiter', '\t')
 
 
+@pytest.mark.parametrize('arguments, message', [(['--cb-max-fraction-removed', '1.5'], 'max_fraction_removed'),
+                                                (['--cb-balance-threshold', '0.5'], 'balance threshold'),
+                                                (['--cb-block-size', '1'], '--cb-block-size must be at least 2')])
+def test_preprocess_checks_class_balancing_options_before_splitting(run_cli, tmp_path, monkeypatch, arguments,
+                                                                     message):
+    monkeypatch.setattr(splitting, 'random_split', lambda *args: pytest.fail('split anyway'))
+    with pytest.raises(Exception, match=message):
+        run_preprocess(run_cli, data_path('seq_class_dataset.tsv'), tmp_path / 'out.tsv', 'sequence',
+                       'classification', '--split', 'random', '--class-balance', *arguments)
+
+
 def test_preprocess_warns_when_split_sets_would_be_empty(run_cli, tmp_path, write_lines):
     input_file = write_lines('in.tsv', ['a ACD 1', 'b EFG 2'])
     with pytest.raises(ValueError, match='after splitting'):

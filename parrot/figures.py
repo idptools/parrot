@@ -192,6 +192,10 @@ def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[n
         return [scatterplot_path, density_path]
 
     if probabilistic:
+        if not np.all(np.isfinite(predicted_flat)):
+            warnings.warn('Some test-set class probabilities are not finite (NaN or infinite), so the ROC and '
+                          'precision-recall curves are not drawn')
+            return []
         roc_path, precision_recall_path = output_prefix + '_ROC_curve.png', output_prefix + '_PR_curve.png'
         plot_roc_curve(true_flat, predicted_flat, roc_path)
         plot_precision_recall_curve(true_flat, predicted_flat, precision_recall_path)

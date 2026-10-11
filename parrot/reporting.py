@@ -17,6 +17,7 @@ https://github.com/idptools/parrot
 Licensed under the MIT license.
 """
 
+import warnings
 from collections.abc import Mapping, Sequence
 
 import numpy as np
@@ -69,6 +70,7 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
         The files written
     """
 
+    warn_about_non_finite_outputs(labeled.outputs)
     predictions = [output_to_prediction(output, task, probabilistic) for output in labeled.outputs]
     decimals = PROBABILITY_DECIMALS if probabilistic else None
     written = []
@@ -192,6 +194,40 @@ def write_predictions(names: Sequence[str], sequences: Sequence[str], true_value
             fh.write(f'{name}_PRED {sequence} {format_values(prediction, decimals)}\n')
 
 
+def warn_about_non_finite_outputs(outputs: Sequence[np.ndarray]) -> None:
+    """Warn if the network's output for any test sequence is not finite (NaN or infinite), e.g. after diverging
+
+    Such outputs are written out as they are, but the class predicted for them
+    means nothing, and regression metrics involving them are NaN.
+
+    Parameters
+    ----------
+    outputs : list of numpy arrays
+        The network's raw output for each test sequence
+    """
+    affected = sum(not np.all(np.isfinite(output)) for output in outputs)
+    if affected:
+        warnings.warn(f"The network's outputs for {affected:,} of {len(outputs):,} test sequences are not finite (NaN "
+                      'or infinite), probably because training diverged; predictions and metrics involving them are '
+                      'not meaningful')
+
+
+def matrix_prediction_names(names: Sequence[str] | None, num_sequences: int) -> list[str]:
+    """The names predicted matrices are saved under: the sequence IDs, or 1, 2, ... without them
+
+    Parameters
+    ----------
+    names : sequence of str or None
+        Sequence IDs, or None if the sequences have none
+    num_sequences : int
+
+    Returns
+    -------
+    list of str
+    """
+    return list(names) if names is not None else [str(number) for number in range(1, num_sequences + 1)]
+
+
 def write_unlabeled_predictions(names: Sequence[str] | None, sequences: Sequence[str],
                                 outputs: Mapping[str, np.ndarray], task: Task, output_path: str,
                                 probabilistic: bool = False) -> str:
@@ -230,7 +266,7 @@ def write_unlabeled_predictions(names: Sequence[str] | None, sequences: Sequence
     """
 
     if task.is_matrix:
-        matrix_names = list(names) if names is not None else [str(number) for number in range(1, len(sequences) + 1)]
+        matrix_names = matrix_prediction_names(names, len(sequences))
         matrices = [output_to_prediction(outputs[sequence], task, probabilistic) for sequence in sequences]
         return write_matrix_predictions(output_path, name_matrices(matrix_names, matrices))
 

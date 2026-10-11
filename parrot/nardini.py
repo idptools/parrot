@@ -56,6 +56,7 @@ Licensed under the MIT license.
 """
 
 import os
+import re
 import time
 import warnings
 from collections.abc import Iterable, Sequence
@@ -272,8 +273,10 @@ class NardiniEncoder(SequenceEncoder):
 
     @property
     def cache_name(self) -> str:
-        """The name of this encoder's file in the embedding cache, which records every setting the features depend on"""
-        return f'{NARDINI_ENCODING}_{BACKGROUND}_{self.num_scrambles}scrambles_seed{self.seed}'
+        """The name of this encoder's file in the embedding cache, which records every setting the features depend
+        on, including the version of SPARROW that computes them (features from another version are never reused)"""
+        version = re.sub(r'[^A-Za-z0-9._-]', '_', sparrow_version())
+        return f'{NARDINI_ENCODING}_{BACKGROUND}_{self.num_scrambles}scrambles_seed{self.seed}_sparrow{version}'
 
     def to_config(self) -> dict[str, Any]:
         """Everything needed to compute the features of new sequences exactly as the training sequences' were"""

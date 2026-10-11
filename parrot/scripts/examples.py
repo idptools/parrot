@@ -106,8 +106,8 @@ How it works
 4. The network is trained for -e epochs (100 by default). After every epoch
    its loss on the validation set is measured, and the network from the epoch
    with the lowest validation loss is the one kept, so training for too long
-   does no harm. With --stop auto, training instead ends once the validation
-   loss stops improving. The simple models (linear, svm, random_forest, knn)
+   does no harm. With --stop auto, training instead ends once -e epochs in a
+   row have not lowered the validation loss by at least 0.5%. The simple models (linear, svm, random_forest, knn)
    are fitted in one step instead.
 5. The kept network is saved as --output-network (with '.pt' added if the
    name does not end with it); the file records its architecture,
@@ -311,8 +311,10 @@ of that fold is divided into training and validation sets.
 
 Examples
 --------
-Ten folds, then train a network on each of them:
+Ten folds, then train a network on each of them (in a directory cv, which must
+exist):
 
+    mkdir cv
     parrot-cvsplit data.tsv cv/splits -k 10 --seed 1
     parrot-train brnn --input-file data.tsv --output-network cv/network0.pt --split cv/splits_cv0.txt -d sequence --regression
     ...

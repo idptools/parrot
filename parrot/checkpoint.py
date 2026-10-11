@@ -18,6 +18,7 @@ https://github.com/idptools/parrot
 Licensed under the MIT license.
 """
 
+import pickle
 from typing import Any
 
 import torch
@@ -38,6 +39,9 @@ FORMAT_VERSION_KEY = 'parrot_checkpoint_format'
 
 # The datatypes of networks saved as weights only, by versions of PARROT before checkpoints (all were BRNNs)
 LEGACY_DATATYPES = ('sequence', 'residues')
+
+# Weights every BRNN saved by an earlier version of PARROT has (see infer_legacy_brnn_shape)
+LEGACY_BRNN_KEYS = ('lstm.weight_ih_l0', 'fc.bias')
 
 
 def save_network(path: str, network: ParrotArchitecture, encoder: SequenceEncoder) -> None:
@@ -114,13 +118,21 @@ def load_network(path: str, device: str | torch.device = 'cpu', legacy_datatype:
     Raises
     ------
     ValueError
-        If a weights-only file is loaded without `legacy_datatype`, or its
-        encoding does not match the network's input size
+        If the file is not a saved PARROT network, a weights-only file is
+        loaded without `legacy_datatype`, or its encoding does not match the
+        network's input size
     """
 
     # Load onto the CPU first, so files saved from any device can be read, then move
-    saved = torch.load(path, map_location='cpu')
+    try:
+        saved = torch.load(path, map_location='cpu')
+    except (pickle.UnpicklingError, RuntimeError, EOFError) as error:
+        raise ValueError(f'{path} is not a saved PARROT network (it cannot be read as one; is it the right file?)'
+                         ) from error
 
+    if not is_checkpoint(saved) and not is_legacy_weights(saved):
+        raise ValueError(f'{path} is not a saved PARROT network: it holds neither a network saved by parrot-train or '
+                         'parrot-optimize nor the weights of a BRNN saved by an earlier version of PARROT')
     if is_checkpoint(saved):
         # Hyperparameters added since the network was saved take the value that reproduces it
         hyperparameters = fill_legacy_values(get_architecture(saved['architecture']), saved['hyperparameters'])
@@ -139,6 +151,11 @@ def load_network(path: str, device: str | torch.device = 'cpu', legacy_datatype:
 def is_checkpoint(saved: Any) -> bool:
     """True if a loaded file is a self-describing checkpoint rather than bare weights."""
     return isinstance(saved, dict) and FORMAT_VERSION_KEY in saved
+
+
+def is_legacy_weights(saved: Any) -> bool:
+    """True if a loaded file looks like the weights of a BRNN saved by an earlier version of PARROT."""
+    return isinstance(saved, dict) and all(key in saved for key in LEGACY_BRNN_KEYS)
 
 
 def infer_legacy_brnn_shape(state_dict: dict[str, torch.Tensor]) -> dict[str, int]:

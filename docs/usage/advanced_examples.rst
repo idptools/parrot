@@ -9,7 +9,7 @@ Advanced ``parrot-train`` options:
 
 **Automatic determination of number of training epochs with --stop:**
 
-This flag determines the stop condition for network training. Currently, there are two options implemented: either 'iter' or 'auto'. In all of the previous examples we used the default behavior, 'iter', which means that the number we specify for the ``-e`` flag will be the number of iterations that we train the network. Alternatively, using 'auto' means that training will stop automatically once performance on the validation set has plateaued for ``-e`` epochs. Thus, with 'auto' it is recommended to use a smaller number of epochs (10-20) for ``-e`` so training does not extend for a significantly long period of time.
+This flag determines the stop condition for network training. Currently, there are two options implemented: either 'iter' or 'auto'. In all of the previous examples we used the default behavior, 'iter', which means that the number we specify for the ``-e`` flag will be the number of iterations that we train the network. Alternatively, using 'auto' means that training will stop automatically once ``-e`` epochs in a row have not lowered the validation loss by at least 0.5% (relative to the last epoch that did). Thus, with 'auto' it is recommended to use a smaller number of epochs (10-20) for ``-e`` so training does not extend for a significantly long period of time.
 
 .. code-block:: bash
 

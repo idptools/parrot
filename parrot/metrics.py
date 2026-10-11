@@ -17,7 +17,8 @@ https://github.com/idptools/parrot
 Licensed under the MIT license.
 """
 
-from collections.abc import Sequence
+import math
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import numpy as np
@@ -29,6 +30,9 @@ from parrot.tasks import Task
 
 # Number of decimal places performance metrics are rounded to
 METRIC_DECIMALS = 3
+
+# A correlation needs at least this many pairs of values (with fewer, it is reported as NaN)
+MIN_CORRELATION_VALUES = 2
 
 
 def flatten(values: Sequence[np.ndarray]) -> np.ndarray:
@@ -146,6 +150,56 @@ def confusion_counts(true_classes: np.ndarray, predicted_classes: np.ndarray, nu
     return counts
 
 
+def correlation(statistic: Callable[[np.ndarray, np.ndarray], Any], true_values: np.ndarray,
+                predicted_values: np.ndarray) -> float:
+    """A correlation coefficient (scipy's pearsonr or spearmanr), or NaN where it is undefined
+
+    It is undefined for fewer than MIN_CORRELATION_VALUES pairs, for a set of
+    values that are all the same, and for values that are not finite (e.g. the
+    predictions of a network that diverged).
+
+    Parameters
+    ----------
+    statistic : callable
+        scipy.stats.pearsonr or scipy.stats.spearmanr
+    true_values, predicted_values : numpy arrays
+        Paired values
+
+    Returns
+    -------
+    float
+    """
+    if len(true_values) < MIN_CORRELATION_VALUES:
+        return math.nan
+    if not (np.all(np.isfinite(true_values)) and np.all(np.isfinite(predicted_values))):
+        return math.nan
+    if np.ptp(true_values) == 0 or np.ptp(predicted_values) == 0:
+        return math.nan
+    return float(statistic(true_values, predicted_values).statistic)
+
+
+def roc_area(true_one_hot: np.ndarray, probabilities: np.ndarray) -> float:
+    """Area under the ROC curve: class 1's for two classes (the usual binary ROC, which class 0's equals), otherwise
+    the micro-average over every class, as the ROC figure draws (see figures.plot_roc_curve)
+
+    Parameters
+    ----------
+    true_one_hot : numpy int array
+        [num_samples X num_classes] one-hot true classes
+    probabilities : numpy array
+        [num_samples X num_classes] predicted probabilities
+
+    Returns
+    -------
+    float
+    """
+    if probabilities.shape[1] == 2:
+        false_positive_rate, true_positive_rate, _ = roc_curve(true_one_hot[:, 1], probabilities[:, 1])
+    else:
+        false_positive_rate, true_positive_rate, _ = roc_curve(true_one_hot.ravel(), probabilities.ravel())
+    return float(auc(false_positive_rate, true_positive_rate))
+
+
 def performance_metrics(true_values: Sequence[np.ndarray], predictions: Sequence[np.ndarray], task: Task,
                         probabilistic: bool = False) -> dict[str, float]:
     """Compute summary statistics of performance
@@ -165,27 +219,31 @@ def performance_metrics(true_values: Sequence[np.ndarray], predictions: Sequence
     Returns
     -------
     dict
-        Regression: Pearson R and Spearman R. Classification: Matthews
-        correlation coefficient, weighted F1 score and accuracy, plus (if
-        probabilistic) the micro-averaged areas under the ROC and
-        precision-recall curves. Values are rounded to METRIC_DECIMALS places.
+        Regression: Pearson R and Spearman R (NaN where undefined; see
+        correlation()). Classification: Matthews correlation coefficient,
+        weighted F1 score and accuracy, plus (if probabilistic) the areas under
+        the ROC curve (see roc_area()) and the micro-averaged precision-recall
+        curve (NaN if any probability is not a finite number). Values are
+        rounded to METRIC_DECIMALS places.
     """
 
     true_flat, predicted_flat = labelled_values(true_values, predictions, task, probabilistic)
     metrics: dict[str, Any] = {}
 
     if not task.is_classification:
-        metrics['Pearson R'] = pearsonr(true_flat, predicted_flat)[0]
-        metrics['Spearman R'] = spearmanr(true_flat, predicted_flat)[0]
+        metrics['Pearson R'] = correlation(pearsonr, true_flat, predicted_flat)
+        metrics['Spearman R'] = correlation(spearmanr, true_flat, predicted_flat)
 
     else:
         if probabilistic:
             probabilities = predicted_flat
             true_one_hot = one_hot_classes(true_flat, task.num_classes)
-            metrics['Area under Precision-Recall curve'] = average_precision_score(true_one_hot, probabilities,
-                                                                                   average='micro')
-            false_positive_rate, true_positive_rate, _ = roc_curve(true_one_hot.ravel(), probabilities.ravel())
-            metrics['Area under ROC'] = auc(false_positive_rate, true_positive_rate)
+            if np.all(np.isfinite(probabilities)):
+                metrics['Area under Precision-Recall curve'] = average_precision_score(true_one_hot, probabilities,
+                                                                                       average='micro')
+                metrics['Area under ROC'] = roc_area(true_one_hot, probabilities)
+            else:
+                metrics['Area under Precision-Recall curve'] = metrics['Area under ROC'] = math.nan
             predicted_flat = np.argmax(probabilities, axis=1)
 
         metrics['Matthews Correlation Coef'] = matthews_corrcoef(true_flat, predicted_flat)

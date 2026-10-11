@@ -31,8 +31,9 @@ from parrot.tasks import Task
 from parrot.prediction import predict_labeled, predict_sequences
 from parrot.train_network import evaluate_loss, train
 
-from tests.helpers import (BUILT_IN_ARCHITECTURES, EXAMPLE_TASKS, FITTING_SEQUENCES, architecture_class, data_path,
-                           make_network, ready_network, supports, training_command)
+from tests.helpers import (BUILT_IN_ARCHITECTURES, EXAMPLE_TASKS, FITTING_SEQUENCES, FULL_PRECISION, NEW_PRECISION_API,
+                           TF32_EVERYWHERE, architecture_class, data_path, make_network, ready_network, supports,
+                           tf32_settings, training_command)
 
 requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason='no NVIDIA GPU (CUDA) on this machine')
 requires_mps = pytest.mark.skipif(not torch.backends.mps.is_available(),
@@ -153,25 +154,26 @@ def test_train_on_unavailable_device_fails(run_cli, tmp_path):
 # ..........................................................................................
 # Full float32 precision (no TF32)
 
-def tf32_settings() -> tuple[bool, bool]:
-    return torch.backends.cudnn.allow_tf32, torch.backends.cuda.matmul.allow_tf32
-
-
-@pytest.fixture
-def tf32_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Allow TF32 everywhere (PyTorch's own default allows it for cuDNN only)."""
-    monkeypatch.setattr(torch.backends.cudnn, 'allow_tf32', True)
-    monkeypatch.setattr(torch.backends.cuda.matmul, 'allow_tf32', True)
-
-
 def test_full_float32_precision_turns_tf32_off_and_restores_it(tf32_allowed):
     with devices.full_float32_precision():
-        assert tf32_settings() == (False, False)
-    assert tf32_settings() == (True, True)
+        assert tf32_settings() == FULL_PRECISION
+    assert tf32_settings() == TF32_EVERYWHERE
 
     with pytest.raises(RuntimeError), devices.full_float32_precision():
         raise RuntimeError('failed inside')
-    assert tf32_settings() == (True, True)
+    assert tf32_settings() == TF32_EVERYWHERE
+
+
+@pytest.mark.skipif(not NEW_PRECISION_API, reason='PyTorch before 2.9 has only the allow_tf32 flags')
+def test_full_float32_precision_keeps_a_lowered_matmul_precision():
+    # Reading or writing the allow_tf32 flags after this used to make PyTorch refuse to report the precision
+    torch.set_float32_matmul_precision('medium')
+    try:
+        with devices.full_float32_precision():
+            pass
+        assert torch.get_float32_matmul_precision() == 'medium'
+    finally:
+        torch.set_float32_matmul_precision('highest')
 
 
 def test_parrot_runs_networks_in_full_precision(tf32_allowed):
@@ -188,8 +190,8 @@ def test_parrot_runs_networks_in_full_precision(tf32_allowed):
     predict_labeled(network, dataset, task, 'cpu')
     predict_sequences(network, dataset.sequences, get_encoder('onehot'), 'cpu')
 
-    assert seen and all(settings == (False, False) for settings in seen)
-    assert tf32_settings() == (True, True)
+    assert seen and all(settings == FULL_PRECISION for settings in seen)
+    assert tf32_settings() == TF32_EVERYWHERE
 
 
 # ..........................................................................................

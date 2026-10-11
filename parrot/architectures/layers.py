@@ -293,7 +293,9 @@ class GlobalContext(nn.Module):
     squeeze-and-excitation networks: Hu et al. 2018, CVPR; Cao et al. 2019,
     ICCV Workshops). Added to every position, it lets a convolutional network
     see the whole sequence however long it is. The linear layer starts at zero,
-    so a new network starts out exactly as it would without the summary.
+    without drawing any random numbers, so a new network starts out exactly as
+    the same network without the summary would from the same seed (its other
+    layers get the same initial weights).
 
     Attributes
     ----------
@@ -308,7 +310,9 @@ class GlobalContext(nn.Module):
             Number of channels
         """
         super().__init__()
-        self.linear = nn.Linear(channels, channels)
+        # skip_init leaves the weights uninitialised rather than drawing them at random, which would shift every
+        # random number later layers draw
+        self.linear = nn.utils.skip_init(nn.Linear, channels, channels)
         nn.init.zeros_(self.linear.weight)
         nn.init.zeros_(self.linear.bias)
 

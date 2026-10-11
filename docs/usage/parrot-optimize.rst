@@ -60,7 +60,7 @@ As for ``parrot-train``, each architecture is a subcommand offering only the opt
 	*  ``--device`` : Device to run on: ``auto`` (default), ``cpu``, ``cuda`` or ``mps``. ``auto`` uses an NVIDIA GPU (CUDA) if one is available, otherwise an Apple-silicon GPU (MPS) if available, otherwise the CPU. Requesting a device that is not available is an error.
 	*  ``--gpu-id`` : Index of the CUDA device to use, for machines with more than one NVIDIA GPU (e.g. ``--gpu-id 1``).
 	*  ``--seed`` : Integer random seed. Providing a seed makes the data splits, cross-validation folds and network training reproducible: re-running on the same machine and device (CPU, CUDA or MPS) gives the same results. By default no seed is set.
-	*  ``--verbose`` / ``-v`` : Include this flag to produce more descriptive output to terminal.
+	*  ``--verbose`` / ``-v`` : Include this flag to print every setting (and, with ``--cv-folds``, the validation loss after every epoch of the final training; the search itself prints one line per configuration and stage either way).
 	*  ``--silent`` : Include this flag to produce no output to terminal.
 
 **Training flags, for networks trained epoch by epoch (every architecture except the simple models):**

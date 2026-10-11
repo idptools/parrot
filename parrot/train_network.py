@@ -40,8 +40,8 @@ LEARNING_RATE = HyperParameter('learning_rate', float, default=0.001, help='init
 # When training stops: after a fixed number of epochs ('iter'), or once the validation loss stops improving ('auto')
 STOP_CONDITIONS = ('iter', 'auto')
 
-# With --stop auto, the validation loss must fall by at least this fraction relative
-# to every recent epoch to count as still improving
+# With --stop auto, the validation loss must fall by at least this fraction below the loss of the last epoch that
+# improved this much, for training to count as still improving (so a tiny new best does not keep training going)
 AUTO_STOP_RELATIVE_IMPROVEMENT = 0.005
 
 # How often (in epochs) the validation loss is printed when not in verbose mode
@@ -306,33 +306,22 @@ class TrainingTiming:
         return sum(self.train_sequences) / seconds if seconds > 0 else math.nan
 
 
-def plateau_reached(val_loss: float, recent_val_losses: list[float], epochs_since_best: int, patience: int) -> bool:
-    """Decide whether training with --stop auto should end
-
-    Training ends when the current validation loss is not meaningfully lower
-    than every one of the last `patience` epochs, and the best validation loss
-    is more than `patience` epochs old.
+def meaningfully_better(val_loss: float, reference_loss: float) -> bool:
+    """True if a validation loss improves on a reference by at least AUTO_STOP_RELATIVE_IMPROVEMENT (--stop auto)
 
     Parameters
     ----------
     val_loss : float
         Validation loss of the current epoch
-    recent_val_losses : list of float
-        Validation losses of the previous `patience` epochs
-    epochs_since_best : int
-        Number of epochs since the best validation loss so far was reached
-    patience : int
-        The number of epochs over which performance must have stagnated
+    reference_loss : float
+        Validation loss of the last epoch that improved meaningfully (inf before the first)
 
     Returns
     -------
     bool
-        True if training should stop
+        False for a NaN loss
     """
-
-    still_improving = all(val_loss < previous * (1 - AUTO_STOP_RELATIVE_IMPROVEMENT)
-                          for previous in recent_val_losses)
-    return not still_improving and epochs_since_best > patience
+    return val_loss < reference_loss * (1 - AUTO_STOP_RELATIVE_IMPROVEMENT)
 
 
 @full_float32_precision()
@@ -366,8 +355,10 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
         Initial learning rate for the Adam optimiser
     n_epochs : int
         With stop_condition='iter', the number of epochs to train for. With
-        stop_condition='auto', train for at least this many epochs and stop once
-        performance has stagnated for this many epochs.
+        stop_condition='auto', stop once this many epochs in a row have not
+        lowered the validation loss by at least AUTO_STOP_RELATIVE_IMPROVEMENT
+        (relative to the last epoch that did), so training lasts at least
+        n_epochs + 1 epochs.
     stop_condition : str, optional
         'iter' (default) or 'auto'
     on_improvement : callable, optional
@@ -399,9 +390,10 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
     criterion = build_loss_criterion(task)
     history = TrainingHistory()
 
-    # With 'auto', n_epochs is both the minimum number of epochs and how many epochs performance must stagnate
-    # for; there is no fixed number of epochs, as training ends once performance plateaus
+    # With 'auto', training ends once n_epochs epochs in a row have not improved the validation loss meaningfully
+    # (see meaningfully_better), so there is no fixed number of epochs
     patience_epochs = n_epochs
+    reference_loss, last_meaningful_epoch = math.inf, 0
     epochs = range(n_epochs) if stop_condition == 'iter' else itertools.count()
 
     for epoch in epochs:
@@ -412,10 +404,9 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
         if timing is not None:
             timing.record_epoch(trained - start, train_sequences, time.perf_counter() - trained)
 
-        # Decided before this epoch is recorded, by comparing it with the epochs before it
-        stop_now = (stop_condition == 'auto' and epoch >= patience_epochs
-                    and plateau_reached(val_loss, history.val_losses[-patience_epochs:], epoch - history.best_epoch,
-                                        patience_epochs))
+        if meaningfully_better(val_loss, reference_loss):
+            reference_loss, last_meaningful_epoch = val_loss, epoch
+        stop_now = stop_condition == 'auto' and epoch - last_meaningful_epoch >= patience_epochs
 
         improved = history.record_epoch(train_loss, val_loss, network)
         if improved and on_improvement is not None:

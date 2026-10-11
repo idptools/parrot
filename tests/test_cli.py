@@ -189,6 +189,12 @@ def test_batch_size_warnings(capsys):
     common.warn_about_batch_size(32, 200)
     assert 'The batch size (32) is large for 200 training sequences (7 batches per epoch)' in capsys.readouterr().out
 
+    # Fewer than 10 batches per epoch, as documented: 10 batches is not warned about, 9 is
+    common.warn_about_batch_size(32, 300)
+    assert capsys.readouterr().out == ''
+    common.warn_about_batch_size(32, 288)
+    assert '(9 batches per epoch)' in capsys.readouterr().out
+
 
 @pytest.mark.parametrize('architecture, flags', [('cnn', ['--dropout', '1.5']),
                                                  ('composition', ['--num-hidden-layers', '-1']),
@@ -732,6 +738,15 @@ def test_cvsplit_ignores_blank_and_comment_lines(run_cli, tmp_path, write_lines)
         assert sorted(np.concatenate([train, val, test]).tolist()) == [0, 1, 2, 3]
 
 
+def test_cvsplit_keeps_every_dot_of_its_prefix(run_cli, tmp_path):
+    # Prefixes used to lose everything after their last dot, so these two wrote the same files
+    for prefix in ('splits_t0.8', 'splits_t0.9.txt'):
+        run_cli(parrot_cvsplit.main, ['parrot-cvsplit', data_path('seq_class_dataset.tsv'), tmp_path / prefix,
+                                      '-k', '2'])
+    assert sorted(path.name for path in tmp_path.iterdir()) == ['splits_t0.8_cv0.txt', 'splits_t0.8_cv1.txt',
+                                                                 'splits_t0.9_cv0.txt', 'splits_t0.9_cv1.txt']
+
+
 def test_cvsplit_is_reproducible_with_seed(run_cli, tmp_path):
     for name in ['first', 'second']:
         run_cli(parrot_cvsplit.main, ['parrot-cvsplit', data_path('seq_class_dataset.tsv'), tmp_path / name,
@@ -1051,3 +1066,81 @@ def test_predict_prints_settings_only_when_verbose(run_cli, tmp_path, capsys):
         assert ' parrot-predict  |  PARROT ' in output
         assert 'Predicting 6 sequences with a brnn network (sequence-mapped regression; onehot encoding)' in output
         assert ('Settings:' in output) == verbose
+
+
+# ..........................................................................................
+# Batch sizes, early checks and unusual inputs
+
+def test_the_test_set_is_predicted_in_training_batches(run_cli, tmp_path, monkeypatch):
+    # A network that only fits in memory at a small --batch must be tested at that batch size too
+    batch_sizes = []
+    predict_labeled = prediction.predict_labeled
+
+    def recording(*args, batch_size, **kwargs):
+        batch_sizes.append(batch_size)
+        return predict_labeled(*args, batch_size=batch_size, **kwargs)
+
+    monkeypatch.setattr(prediction, 'predict_labeled', recording)
+    run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1, '-b', '4', '--silent')
+    assert batch_sizes == [4]
+
+
+def test_predict_batch_size(run_cli, tmp_path, monkeypatch):
+    _, network_file = save_test_network(tmp_path, 'sequence', 1)
+    batch_sizes = []
+    predict_sequences = prediction.predict_sequences
+
+    def recording(*args, batch_size, **kwargs):
+        batch_sizes.append(batch_size)
+        return predict_sequences(*args, batch_size=batch_size, **kwargs)
+
+    monkeypatch.setattr(prediction, 'predict_sequences', recording)
+    run_predict(run_cli, data_path('seqfile.txt'), network_file, tmp_path / 'out.txt', '--batch', '2')
+    assert batch_sizes == [2]
+
+
+@pytest.mark.parametrize('extra_arguments, message', [(['--print-frequency', '0'], '--print-frequency must be at least 1'),
+                                                      (['--batch', '0'], 'Batch size must be at least 1')])
+def test_predict_checks_its_counts(run_cli, tmp_path, extra_arguments, message):
+    _, network_file = save_test_network(tmp_path, 'sequence', 1)
+    with pytest.raises(ValueError, match=message):
+        run_predict(run_cli, data_path('seqfile.txt'), network_file, tmp_path / 'out.txt', *extra_arguments)
+
+
+def test_predict_silent_overrides_verbose(run_cli, tmp_path, capsys):
+    _, network_file = save_test_network(tmp_path, 'sequence', 1)
+    run_predict(run_cli, data_path('seqfile.txt'), network_file, tmp_path / 'out.txt', '--verbose')
+    assert capsys.readouterr().out == ''
+
+
+def test_predict_refuses_a_file_that_is_not_a_network(run_cli, tmp_path):
+    with pytest.raises(ValueError, match='is not a saved PARROT network'):
+        run_predict(run_cli, data_path('seqfile.txt'), data_path('seq_regress_dataset.tsv'), tmp_path / 'out.txt')
+    not_weights = tmp_path / 'other.pt'
+    torch.save({'weights': torch.zeros(3)}, not_weights)
+    with pytest.raises(ValueError, match='neither a network saved by parrot-train'):
+        run_predict(run_cli, data_path('seqfile.txt'), not_weights, tmp_path / 'out.txt')
+
+
+def test_a_test_set_of_one_sequence_still_gets_stats_and_an_info_file(run_cli, tmp_path, write_lines):
+    # Pearson's r needs two values: it is now NaN rather than a crash after the network is saved
+    split_file = write_lines('split.txt', [' '.join(str(i) for i in range(200)),
+                                           ' '.join(str(i) for i in range(200, 299)), '299'])
+    run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1, '--split', split_file,
+              '--silent')
+    stats = (tmp_path / 'net_performance_stats.txt').read_text()
+    assert 'Pearson R' in stats and 'nan' in stats
+    assert (tmp_path / 'net_info.txt').is_file()
+
+
+def test_output_network_must_name_a_file(run_cli, tmp_path, monkeypatch):
+    monkeypatch.setattr(prediction, 'predict_labeled', lambda *args, **kwargs: pytest.fail('trained anyway'))
+    with pytest.raises(ValueError, match='names a directory, not a file'):
+        run_train(run_cli, data_path('seq_regress_dataset.tsv'), str(tmp_path) + os.sep, 'sequence', 1)
+
+
+def test_embedding_cache_is_refused_for_other_encodings_before_splitting(run_cli, tmp_path):
+    with pytest.raises(ValueError, match='--embedding-cache only applies'):
+        run_train(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'net.pt', 'sequence', 1,
+                  '--split', 'kmer', '--save-splits', '--embedding-cache', tmp_path / 'cache')
+    assert not (tmp_path / 'net_split_file.txt').exists()

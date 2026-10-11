@@ -98,7 +98,7 @@ Neither encoding has a maximum sequence length. On a GPU, attention uses PyTorch
 
 	*  ``--num-layers`` / ``-nl`` : number of transformer blocks (default 2; searched over 1-6).
 	*  ``--num-heads`` : number of attention heads (default 4; searched over 1-8).
-	*  ``--head-size`` : width of each attention head; the model width is ``num-heads`` x ``head-size`` (default 16; searched over 8-64).
+	*  ``--head-size`` : width of each attention head, at least 2 (positions are encoded in pairs of features); the model width is ``num-heads`` x ``head-size`` (default 16; searched over 8-64).
 	*  ``--feedforward-multiplier`` : width of the feed-forward layer in each block, as a multiple of the model width (default 4; searched over 1-4).
 	*  ``--dropout`` : dropout probability, at least 0 and below 1 (default 0.0; searched over 0.0-0.5).
 	*  ``--positional-encoding`` : ``rotary`` (default), ``sinusoidal`` or ``none`` (``rotary`` and ``sinusoidal`` are searched).

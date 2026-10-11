@@ -25,6 +25,7 @@ from parrot.checkpoint import load_network
 from parrot.encode_sequence import StandardizedEncoder, get_encoder
 from parrot.sequence_encoder import SequenceEncoder
 from parrot.architectures import ParrotArchitecture
+from parrot.matrices.output import check_matrix_names
 from parrot.scripts import arguments
 from parrot.scripts.examples import add_examples_argument
 from parrot.scripts.common import (COMMAND_LINE_DATATYPES, LEGACY_NOTE, add_device_arguments,
@@ -35,6 +36,10 @@ PROGRAM_NAME = 'parrot-predict'
 
 # By default, progress is printed every this many sequences
 DEFAULT_PRINT_FREQUENCY = 1000
+
+# Sequences predicted at once by default. Batching only affects speed and memory (padding is masked), so a network
+# that only fit in memory with a smaller --batch when it was trained may need a smaller --batch here too.
+DEFAULT_PREDICTION_BATCH = 64
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -66,6 +71,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--silent', action='store_true', help='print nothing')
     parser.add_argument('--print-frequency', default=DEFAULT_PRINT_FREQUENCY, type=int, metavar='num_sequences',
                         help=f'print progress every this many sequences (default {DEFAULT_PRINT_FREQUENCY})')
+    parser.add_argument('-b', '--batch', default=DEFAULT_PREDICTION_BATCH, type=int, metavar='batch_size',
+                        help=f'sequences predicted at once (default {DEFAULT_PREDICTION_BATCH}); a smaller batch uses '
+                             'less memory, which large matrix networks may need, and does not change the predictions')
 
     # Everything below is read from networks saved by this version of PARROT
     saved = parser.add_argument_group(
@@ -101,6 +109,8 @@ def run() -> None:
     saved_network = arguments.check_file_exists(args.saved_network, 'Saved network')
     output_file = os.path.abspath(args.output_file)
     arguments.output_prefix_and_directory(output_file)
+    arguments.check_positive(args.print_frequency, '--print-frequency')
+    arguments.check_positive(args.batch, 'Batch size')
 
     device = select_device(args)
     network, encoder = load_network(saved_network, device, legacy_datatype=args.datatype,
@@ -110,7 +120,9 @@ def run() -> None:
 
     seq_ids, sequences = read_sequence_file(seq_file, args.exclude_seq_id)
     encoder.check_sequences(sequences)
-    if args.verbose:
+    if network.task.is_matrix:
+        check_matrix_names(reporting.matrix_prediction_names(seq_ids, len(sequences)))
+    if args.verbose and not args.silent:
         print_prediction_settings(args, seq_file, saved_network, output_file, network, encoder)
 
     # Protein language model and NARDINI encodings: encode every sequence once, into a cache next to the output
@@ -122,7 +134,8 @@ def run() -> None:
         print(f'Predicting {len(sequences):,} sequences with a {network.name} network '
               f'({network.task.datatype}-mapped {network.task.problem_type}; {encoder.name} encoding)')
     print_frequency = None if args.silent else args.print_frequency
-    outputs = prediction.predict_sequences(network, sequences, encoder, device, print_frequency=print_frequency)
+    outputs = prediction.predict_sequences(network, sequences, encoder, device, batch_size=args.batch,
+                                           print_frequency=print_frequency)
 
     written = reporting.write_unlabeled_predictions(seq_ids, sequences, outputs, network.task, output_file,
                                                     args.probabilistic_classification)
@@ -149,7 +162,7 @@ def print_prediction_settings(args: argparse.Namespace, seq_file: str, saved_net
     arguments.print_settings(False, sequence_file=seq_file, network_file=saved_network, output_file=output_file,
                              datatype=task.datatype, task=task.problem_type, classes=task.num_classes,
                              encoding=encoder.name, architecture=network.name, **network.hyperparameter_values,
-                             exclude_seq_id=args.exclude_seq_id,
+                             exclude_seq_id=args.exclude_seq_id, batch_size=args.batch,
                              probabilistic_classification=args.probabilistic_classification)
 
 

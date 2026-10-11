@@ -56,7 +56,8 @@ def learning_options() -> argparse.ArgumentParser:
                        help=f'learning rate of the optimizer (default {train_network.LEARNING_RATE.default})')
     group.add_argument('--stop', default='iter', choices=train_network.STOP_CONDITIONS,
                        help="training stop condition: 'iter' trains for --epochs epochs (default); 'auto' trains "
-                            "until the validation loss has not improved for --epochs epochs")
+                            "until --epochs epochs in a row have not lowered the validation loss by at least "
+                            f"{100 * train_network.AUTO_STOP_RELATIVE_IMPROVEMENT:g}%%")
     return options
 
 

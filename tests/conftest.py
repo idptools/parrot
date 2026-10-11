@@ -29,7 +29,7 @@ from parrot.architectures import registry
 from parrot.reproducibility import set_random_seed
 from parrot.scripts import arguments as arguments_module
 
-from tests.helpers import TEST_SEED, LinearTestArchitecture
+from tests.helpers import TEST_SEED, LinearTestArchitecture, allow_tf32_everywhere
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -83,3 +83,9 @@ def test_architecture(monkeypatch: pytest.MonkeyPatch) -> type[LinearTestArchite
     """Register the test-only LinearTestArchitecture for the duration of one test."""
     monkeypatch.setitem(registry._ARCHITECTURES, LinearTestArchitecture.name, LinearTestArchitecture)
     return LinearTestArchitecture
+
+
+@pytest.fixture
+def tf32_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Allow TF32 everywhere for the test (see helpers.allow_tf32_everywhere)."""
+    allow_tf32_everywhere(monkeypatch)
