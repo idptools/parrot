@@ -24,12 +24,16 @@ from collections.abc import Iterator, Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 from cycler import cycler
+from matplotlib.axes import Axes
+from matplotlib.colors import LogNorm, Normalize
 from matplotlib.figure import Figure
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import MaxNLocator, NullFormatter
+from scipy.stats import pearsonr
 from sklearn.metrics import auc, average_precision_score, precision_recall_curve, roc_curve
 
 from parrot.metrics import confusion_counts, labelled_values, one_hot_classes
-from parrot.tasks import Task
+from parrot.process_input_data import missing_label_mask
+from parrot.tasks import IGNORED_CLASS_LABEL, Task
 
 # Line colours in order: the xmgrace order for the first five, then more distinct colours for figures
 # with more lines (e.g. ROC curves of many classes)
@@ -52,6 +56,34 @@ SCATTER_POINT_SIZE = 6
 # show a random sample of this many, drawn with a fixed seed so the same results always give the same figure
 MAX_SCATTER_POINTS = 100_000
 SCATTER_SAMPLE_SEED = 0
+
+# Margin around the values on each axis of a scatter or density plot, as a fraction of their range (as matplotlib
+# pads axes by default), and, in the units of the data, when every value is the same, so the axes still have a range
+PLOT_MARGIN = 0.05
+EQUAL_VALUES_MARGIN = 0.5
+
+# Colour map for regression values: density plots here, and matrix heatmaps (see matrices/figures.py)
+REGRESSION_COLOUR_MAP = 'viridis'
+
+# Density plots: bins along each axis of the 2D histogram. Counts are coloured on a log scale, because a few bins near
+# y = x usually hold most of the values, unless no bin holds LOG_SCALE_MIN_COUNT values (a small test set), when a
+# log scale has no whole decade to label
+DENSITY_BINS = 100
+LOG_SCALE_MIN_COUNT = 10
+
+# What each value of a test-set plot is, for each kind of data (for the density plot's colour bar)
+VALUE_NAMES = {'seq': 'Sequences', 'res': 'Residues', 'matrix': 'Cells'}
+
+# Where in-plot labels (such as Pearson r) go, as a fraction of the axes from the bottom left: the top left
+ANNOTATION_POSITION = (0.04, 0.96)
+
+# Residue profiles: how many test sequences to show; the fewest labelled residues each should have (if enough test
+# sequences have that many), so that each profile shows something; the size of each panel, in inches; and the size of
+# the points marking labelled residues with no labelled neighbour (which a line cannot show), in points
+NUM_PROFILE_EXAMPLES = 6
+MIN_PROFILE_RESIDUES = 30
+PROFILE_PANEL_SIZE = (7.0, 1.6)
+ISOLATED_RESIDUE_MARKER_SIZE = 3.0
 
 # matplotlib settings applied to every figure. Arial is used if it is installed, and otherwise the closest
 # sans-serif font matplotlib has. Font type 42 (TrueType) keeps text as editable text in PDF and PostScript
@@ -100,15 +132,20 @@ def save_figure(fig: Figure, output_path: str) -> None:
 
 
 def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[np.ndarray], task: Task,
-                      output_prefix: str, probabilistic: bool = False) -> list[str]:
+                      output_prefix: str, probabilistic: bool = False, pearson: float | None = None) -> list[str]:
     """Save the figure(s) appropriate to the task
 
-    Regression gives a scatterplot ("_seq_scatterplot.png", "_res_scatterplot.png"
-    or "_matrix_scatterplot.png"), classification a confusion matrix
-    ("_seq_CM.png", "_res_CM.png" or "_matrix_CM.png"), and probabilistic
-    classification ROC and precision-recall curves ("_ROC_curve.png" and
-    "_PR_curve.png"). Residue and matrix values are pooled over every sequence
-    (matrix scatterplots show at most MAX_SCATTER_POINTS cells; see scatter_sample).
+    Regression gives a scatterplot and a density plot of predicted against
+    true values, both labelled with Pearson's r over every value
+    ("_seq_scatterplot.png" and "_seq_density.png", and likewise "_res_" and
+    "_matrix_"); classification a confusion matrix ("_seq_CM.png", "_res_CM.png"
+    or "_matrix_CM.png"); and probabilistic classification ROC and
+    precision-recall curves ("_ROC_curve.png" and "_PR_curve.png"). Residue and
+    matrix values are pooled over every sequence (matrix scatterplots show at
+    most MAX_SCATTER_POINTS cells, see scatter_sample(); the density plot
+    always shows every value). Predictions that are not finite (NaN or
+    infinite, e.g. from a network whose training diverged) cannot be plotted,
+    so they are left out of the regression figures, with a warning.
 
     Parameters
     ----------
@@ -122,22 +159,37 @@ def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[n
         Path and filename prefix for the figures
     probabilistic : bool, optional
         True if `predictions` are class probabilities
+    pearson : float, optional
+        Regression: Pearson's r to write on the plots, e.g. the one in the
+        performance metrics, so that the figures and statistics agree
+        (default: computed from the plotted values)
 
     Returns
     -------
     list of str
-        The files written
+        The files written (none for regression, with a warning, if no
+        prediction is finite)
     """
 
     data_label = 'matrix' if task.is_matrix else 'res' if task.per_residue else 'seq'
     true_flat, predicted_flat = labelled_values(true_values, predictions, task, probabilistic)
 
     if not task.is_classification:
-        if task.is_matrix:
-            true_flat, predicted_flat = scatter_sample(true_flat, predicted_flat)
+        true_flat, predicted_flat = finite_pairs(true_flat, predicted_flat)
+        if len(true_flat) == 0:
+            warnings.warn('No test-set prediction is finite, so the regression figures are not drawn')
+            return []
+        # Both plots share axes and r, which covers every value (the scatterplot may show a sample)
+        if pearson is None:
+            pearson = pearson_r(true_flat, predicted_flat)
+        limits = square_limits(true_flat, predicted_flat)
+        scatter_true, scatter_predicted = (scatter_sample(true_flat, predicted_flat) if task.is_matrix
+                                           else (true_flat, predicted_flat))
         scatterplot_path = f'{output_prefix}_{data_label}_scatterplot.png'
-        regression_scatterplot(true_flat, predicted_flat, scatterplot_path)
-        return [scatterplot_path]
+        density_path = f'{output_prefix}_{data_label}_density.png'
+        regression_scatterplot(scatter_true, scatter_predicted, scatterplot_path, limits, pearson)
+        regression_density_plot(true_flat, predicted_flat, density_path, VALUE_NAMES[data_label], limits, pearson)
+        return [scatterplot_path, density_path]
 
     if probabilistic:
         roc_path, precision_recall_path = output_prefix + '_ROC_curve.png', output_prefix + '_PR_curve.png'
@@ -171,6 +223,127 @@ def scatter_sample(true_values: np.ndarray, predicted_values: np.ndarray) -> tup
     return true_values[chosen], predicted_values[chosen]
 
 
+def finite_pairs(true_values: np.ndarray, predicted_values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """The pairs of values that can be plotted (both finite), warning how many are left out if any are
+
+    Parameters
+    ----------
+    true_values, predicted_values : numpy arrays
+        Paired values
+
+    Returns
+    -------
+    (numpy array, numpy array)
+        The pairs in which neither value is NaN or infinite
+    """
+    finite = np.isfinite(true_values) & np.isfinite(predicted_values)
+    if not finite.all():
+        warnings.warn(f'{int((~finite).sum()):,} of {len(finite):,} test-set predictions are not finite (NaN or '
+                      'infinite), so the regression figures leave them out; the performance metrics include them')
+    return true_values[finite], predicted_values[finite]
+
+
+def pearson_r(true_values: np.ndarray, predicted_values: np.ndarray) -> float:
+    """Pearson's correlation coefficient r between paired values, NaN where it is undefined (as in the metrics)
+
+    Parameters
+    ----------
+    true_values, predicted_values : numpy arrays
+        Paired values
+
+    Returns
+    -------
+    float
+        NaN if there are fewer than two values or either set is constant
+    """
+    if len(true_values) < 2 or np.ptp(true_values) == 0 or np.ptp(predicted_values) == 0:
+        return np.nan
+    return float(pearsonr(true_values, predicted_values).statistic)
+
+
+def square_limits(true_values: np.ndarray, predicted_values: np.ndarray) -> tuple[float, float]:
+    """Axis limits that hold every true and predicted value, the same for both axes so y = x is the diagonal
+
+    Parameters
+    ----------
+    true_values, predicted_values : numpy arrays
+        Finite values (see finite_pairs()), at least one between them
+
+    Returns
+    -------
+    (float, float)
+        The lowest and highest value, each padded by PLOT_MARGIN of the range
+        (by EQUAL_VALUES_MARGIN if all the values are equal)
+
+    Raises
+    ------
+    ValueError
+        If there are no values, or any is NaN or infinite
+    """
+    values = np.concatenate([np.ravel(true_values), np.ravel(predicted_values)])
+    if len(values) == 0 or not np.isfinite(values).all():
+        raise ValueError('Axis limits need at least one value, and only finite ones')
+    low, high = float(values.min()), float(values.max())
+    margin = PLOT_MARGIN * (high - low) if high > low else EQUAL_VALUES_MARGIN
+    return low - margin, high + margin
+
+
+def annotate(ax: Axes, label: str) -> None:
+    """Write a label in the top left of a plot, on a white background so it can be read over the data
+
+    Parameters
+    ----------
+    ax : matplotlib Axes
+        The plot to label
+    label : str
+        The text to write, e.g. 'Pearson r = 0.735'
+    """
+    ax.text(*ANNOTATION_POSITION, label, transform=ax.transAxes, ha='left', va='top',
+            bbox={'facecolor': 'white', 'edgecolor': 'none', 'pad': 2.0})
+
+
+def square_axes(ax: Axes, limits: tuple[float, float], pearson: float | None, line_on_top: bool) -> None:
+    """Finish a plot of predicted against true values: the line y = x, the same limits on both axes, labels and r
+
+    Parameters
+    ----------
+    ax : matplotlib Axes
+    limits : (float, float)
+        Axis limits, the same for both axes
+    pearson : float or None
+        Pearson's r, written on the plot if given ('nan' if undefined, as in the performance metrics)
+    line_on_top : bool
+        Draw y = x over the data (over a density plot) rather than behind it (behind a scatterplot's points)
+    """
+    ax.plot(limits, limits, color=LINE_COLOURS[0], linewidth=REFERENCE_LINE_WIDTH, zorder=3 if line_on_top else 0)
+    ax.set_xlim(limits)
+    ax.set_ylim(limits)
+    ax.set_aspect('equal')
+    ax.set_xlabel('True value')
+    ax.set_ylabel('Predicted value')
+    if pearson is not None:
+        annotate(ax, f'Pearson r = {pearson:.3f}')
+
+
+def displayable(values: np.ndarray, task: Task) -> np.ndarray:
+    """Values ready to plot: missing labels (NaN, or IGNORED_CLASS_LABEL for classes) become NaN, drawn as gaps
+
+    Parameters
+    ----------
+    values : numpy array
+        True values or classes, of any shape (a residue profile or a matrix)
+    task : Task
+
+    Returns
+    -------
+    numpy float array
+    """
+    values = np.asarray(values, dtype=float)
+    if task.is_classification:
+        values = np.where(values == IGNORED_CLASS_LABEL, np.nan, values)
+    return values
+
+
 # .................................................................
 # The figures
 
@@ -197,7 +370,8 @@ def plot_training_loss(train_losses: Sequence[float], val_losses: Sequence[float
         save_figure(fig, output_path)
 
 
-def regression_scatterplot(true_values: np.ndarray, predicted_values: np.ndarray, output_path: str) -> None:
+def regression_scatterplot(true_values: np.ndarray, predicted_values: np.ndarray, output_path: str,
+                           limits: tuple[float, float] | None = None, pearson: float | None = None) -> None:
     """Scatterplot of predicted against true values, on square axes with the line y = x
 
     Parameters
@@ -207,24 +381,62 @@ def regression_scatterplot(true_values: np.ndarray, predicted_values: np.ndarray
         in the units of the data
     output_path : str
         File to save the figure to
+    limits : (float, float), optional
+        Axis limits, the same for both axes (default: square_limits() of the values)
+    pearson : float, optional
+        Pearson's r, written on the plot if given
     """
 
+    if limits is None:
+        limits = square_limits(true_values, predicted_values)
     with figure_style():
         fig, ax = plt.subplots(figsize=FIGURE_SIZE)
         ax.scatter(true_values, predicted_values, s=SCATTER_POINT_SIZE, color=LINE_COLOURS[0], linewidths=0)
+        square_axes(ax, limits, pearson, line_on_top=False)
+        save_figure(fig, output_path)
 
-        # Use matplotlib's autoscaled limits (which pad around the data correctly for both positive and
-        # negative values) and make the axes square, so y = x is the diagonal
-        left, right = ax.get_xlim()
-        bottom, top = ax.get_ylim()
-        limits = (min(left, bottom), max(right, top))
-        ax.set_xlim(limits)
-        ax.set_ylim(limits)
-        ax.set_aspect('equal')
-        ax.plot(limits, limits, color=LINE_COLOURS[0], linewidth=REFERENCE_LINE_WIDTH, zorder=0)
 
-        ax.set_xlabel('True value')
-        ax.set_ylabel('Predicted value')
+def regression_density_plot(true_values: np.ndarray, predicted_values: np.ndarray, output_path: str,
+                            value_name: str = 'Values', limits: tuple[float, float] | None = None,
+                            pearson: float | None = None) -> None:
+    """Density of predicted against true values: a 2D histogram on square axes, with the line y = x
+
+    Where a scatterplot of many values is a solid block, this shows where
+    they lie. Each bin is coloured by how many values it holds, on a log scale
+    (or, if no bin holds LOG_SCALE_MIN_COUNT values, a linear one); empty bins
+    are left white.
+
+    Parameters
+    ----------
+    true_values, predicted_values : numpy arrays
+        Paired true and predicted values, in the units of the data
+    output_path : str
+        File to save the figure to
+    value_name : str, optional
+        What each value is (e.g. 'Residues'), for the colour bar's label
+    limits : (float, float), optional
+        Axis limits, the same for both axes (default: square_limits() of the values)
+    pearson : float, optional
+        Pearson's r, written on the plot if given
+    """
+
+    if limits is None:
+        limits = square_limits(true_values, predicted_values)
+    counts, true_edges, predicted_edges = np.histogram2d(true_values, predicted_values, bins=DENSITY_BINS,
+                                                         range=(limits, limits))
+    log_scale = counts.max() >= LOG_SCALE_MIN_COUNT
+    norm = LogNorm(vmin=1, vmax=counts.max()) if log_scale else Normalize(vmin=1, vmax=max(counts.max(), 2))
+    with figure_style():
+        fig, ax = plt.subplots(figsize=FIGURE_SIZE)
+        # histogram2d counts true values along the first axis, so transpose to put them along x
+        image = ax.pcolormesh(true_edges, predicted_edges, np.ma.masked_equal(counts.T, 0),
+                              cmap=REGRESSION_COLOUR_MAP, norm=norm, rasterized=True)
+        square_axes(ax, limits, pearson, line_on_top=True)
+        colour_bar = fig.colorbar(image, ax=ax, shrink=0.8, label=f'{value_name} per bin')
+        if log_scale:
+            colour_bar.ax.yaxis.set_minor_formatter(NullFormatter())    # label powers of ten only
+        else:
+            colour_bar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         save_figure(fig, output_path)
 
 
@@ -339,3 +551,202 @@ def plot_confusion_matrix(true_classes: np.ndarray, predicted_classes: np.ndarra
         ax.set_xlabel('True class')
         ax.set_ylabel('Predicted class')
         save_figure(fig, output_path)
+
+
+# .................................................................
+# Residue profiles
+
+def predicted_labels(prediction: np.ndarray, task: Task) -> np.ndarray:
+    """A residue prediction as one value per residue: for class probabilities, the most likely class
+
+    Parameters
+    ----------
+    prediction : numpy array
+        One sequence's prediction: a value (or class) per residue, or
+        [sequence_length X num_classes] class probabilities
+    task : Task
+
+    Returns
+    -------
+    numpy array
+        One value (or class) per residue
+    """
+    if task.is_classification and prediction.ndim == 2:
+        return np.argmax(prediction, axis=-1)
+    return prediction
+
+
+def sequence_error(true: np.ndarray, predicted: np.ndarray, task: Task) -> float:
+    """How wrong a prediction is over the labelled residues of one sequence
+
+    Parameters
+    ----------
+    true : numpy array
+        The true value (or class) of each residue
+    predicted : numpy array
+        The predicted value (or class) of each residue
+    task : Task
+
+    Returns
+    -------
+    float
+        Mean absolute error (regression) or the fraction of residues wrongly
+        classified (classification); inf if no residue has a label, and NaN
+        if a prediction is NaN
+    """
+    labelled = ~missing_label_mask(true, task)
+    if not labelled.any():
+        return np.inf
+    if task.is_classification:
+        return float(np.mean(predicted[labelled] != true[labelled]))
+    return float(np.mean(np.abs(predicted[labelled] - true[labelled])))
+
+
+def profile_examples(true_values: Sequence[np.ndarray], predictions: Sequence[np.ndarray], task: Task,
+                     num_examples: int | None = None) -> list[int]:
+    """Which test sequences to show as profiles: a spread from the most to the least accurately predicted
+
+    The sequences are ranked by sequence_error(), and those at evenly spaced
+    quantiles (the middle of each of `num_examples` equal parts) are chosen, so
+    the examples are typical of the range of accuracy rather than picked for
+    being good or bad. Sequences with at least MIN_PROFILE_RESIDUES labelled
+    residues are chosen from if there are enough of them, so that a sequence
+    is never shown, and ranked, on the strength of a few residues; sequences
+    with no labelled residue, or a prediction that is NaN, never are.
+
+    Parameters
+    ----------
+    true_values, predictions : list of numpy arrays
+        True and predicted value (or class) of each residue of each sequence
+    task : Task
+    num_examples : int, optional
+        How many to choose (default NUM_PROFILE_EXAMPLES)
+
+    Returns
+    -------
+    list of int
+        Indices of the chosen sequences, from the most to the least accurately
+        predicted (empty if no sequence can be shown)
+    """
+    if num_examples is None:
+        num_examples = NUM_PROFILE_EXAMPLES
+    errors = [sequence_error(true, predicted, task) for true, predicted in zip(true_values, predictions)]
+    labelled = [index for index, error in enumerate(errors) if np.isfinite(error)]
+    long_enough = [index for index in labelled
+                   if np.count_nonzero(~missing_label_mask(true_values[index], task)) >= MIN_PROFILE_RESIDUES]
+    candidates = sorted(long_enough if len(long_enough) >= num_examples else labelled, key=lambda i: errors[i])
+    if len(candidates) <= num_examples:
+        return candidates
+    positions = ((np.arange(num_examples) + 0.5) / num_examples * len(candidates)).astype(int)
+    return [candidates[position] for position in positions]
+
+
+def plot_residue_profiles(names: Sequence[str], true_values: Sequence[np.ndarray], predictions: Sequence[np.ndarray],
+                          task: Task, output_path: str) -> list[str]:
+    """True (black) and predicted (red) values along a few test sequences, one panel each
+
+    The sequences are chosen by profile_examples(), and shown from the most to
+    the least accurately predicted. Each panel's x-axis label names the
+    sequence and gives, for regression, Pearson's r between the true and
+    predicted values of its residues and their mean absolute error (MAE, in
+    the units of the data), or, for classification, its accuracy (labels go
+    outside the panels, which the profiles fill). Residues without a label are
+    left as gaps in the true values, and a labelled residue with no labelled
+    neighbour, which a line cannot show, is drawn as a point.
+
+    Parameters
+    ----------
+    names : list of str
+        Sequence IDs
+    true_values : list of numpy arrays
+        True value (or class) of each residue of each test sequence
+    predictions : list of numpy arrays
+        Predicted value of each residue, or class (or class probabilities) for classification
+    task : Task
+        A residue task
+    output_path : str
+        File to save the figure to
+
+    Returns
+    -------
+    list of str
+        The file written (none, with a warning, if no sequence can be shown)
+    """
+    predicted_values = [predicted_labels(prediction, task) for prediction in predictions]
+    chosen = profile_examples(true_values, predicted_values, task)
+    if not chosen:
+        warnings.warn('No test sequence has a labelled residue and a finite prediction, so no profiles are drawn')
+        return []
+
+    with figure_style():
+        fig, axes = plt.subplots(len(chosen), 1, squeeze=False, sharey=True,
+                                 figsize=(PROFILE_PANEL_SIZE[0], PROFILE_PANEL_SIZE[1] * len(chosen)))
+        for row, index in enumerate(chosen):
+            ax = axes[row, 0]
+            true = displayable(true_values[index], task)
+            predicted = np.asarray(predicted_values[index], dtype=float)
+            positions = np.arange(1, len(true) + 1)
+            drawstyle = 'steps-mid' if task.is_classification else 'default'
+            ax.plot(positions, true, color=LINE_COLOURS[0], drawstyle=drawstyle, label='True')
+            ax.plot(positions, predicted, color=LINE_COLOURS[1], drawstyle=drawstyle, label='Predicted')
+            isolated = isolated_residues(true)
+            if isolated.any():
+                ax.plot(positions[isolated], true[isolated], color=LINE_COLOURS[0], linestyle='none', marker='o',
+                        markersize=ISOLATED_RESIDUE_MARKER_SIZE)
+
+            ax.set_xlim(0.5, len(true) + 0.5)
+            ax.set_xlabel(f'Residue of {names[index] or f"test{index}"}{profile_score(true, predicted, task)}')
+            ax.set_ylabel('Class' if task.is_classification else 'Value')
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+            if task.is_classification:
+                ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+            if row == 0:
+                ax.legend(loc='lower right', bbox_to_anchor=(1.0, 1.0), ncol=2, borderaxespad=0.2)
+        save_figure(fig, output_path)
+    return [output_path]
+
+
+def isolated_residues(values: np.ndarray) -> np.ndarray:
+    """Which residues have a value but no neighbour with one, so a line through the values cannot show them
+
+    Parameters
+    ----------
+    values : numpy float array
+        One value per residue, NaN where there is none
+
+    Returns
+    -------
+    numpy bool array
+    """
+    present = ~np.isnan(values)
+    left = np.concatenate([[False], present[:-1]])
+    right = np.concatenate([present[1:], [False]])
+    isolated: np.ndarray = present & ~left & ~right
+    return isolated
+
+
+def profile_score(true: np.ndarray, predicted: np.ndarray, task: Task) -> str:
+    """How well one sequence was predicted, for its profile's axis label
+
+    Parameters
+    ----------
+    true : numpy float array
+        True value (or class) of each residue, NaN where there is no label
+    predicted : numpy float array
+        Predicted value (or class) of each residue
+    task : Task
+
+    Returns
+    -------
+    str
+        ' (Pearson r = ..., MAE = ...)' for regression (leaving out r if it is
+        undefined, e.g. when the true values are all the same), or
+        ' (accuracy ...)' for classification
+    """
+    labelled = ~np.isnan(true)
+    if task.is_classification:
+        return f' (accuracy {np.mean(predicted[labelled] == true[labelled]):.2f})'
+    mae = f'MAE = {np.mean(np.abs(predicted[labelled] - true[labelled])):.3g}'
+    pearson = pearson_r(true[labelled], predicted[labelled])
+    return f' ({mae})' if np.isnan(pearson) else f' (Pearson r = {pearson:.3f}, {mae})'
+

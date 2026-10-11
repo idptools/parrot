@@ -6,8 +6,9 @@ describe it in the methods section of a paper.
 The file has one section each for where the network came from (the command,
 the software versions and the device), the data, the encoding, the
 architecture, the training, the hyperparameter search (parrot-optimize only),
-the results on the test set, and the files written. info_sections() gathers
-them from a finished run, and write_network_info() writes them.
+the results on the test set, how long training took and how fast the network
+predicts, and the files written. info_sections() gathers them from a finished
+run, and write_network_info() writes them.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -32,12 +33,13 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 import numpy as np
 import torch
 
-from parrot import devices
+from parrot import devices, nardini, plm
 from parrot.architectures import ParrotArchitecture
 from parrot.metrics import METRIC_DECIMALS
 from parrot.package_version import PARROT_VERSION
 from parrot.sequence_encoder import SequenceEncoder
 from parrot.tasks import IGNORED_CLASS_LABEL, Task
+from parrot.train_network import TrainingTiming
 
 if TYPE_CHECKING:
     from parrot.scripts.common import TrainingRun
@@ -83,7 +85,8 @@ class Section(NamedTuple):
 def info_sections(run: 'TrainingRun', network: ParrotArchitecture, training: Mapping[str, Any],
                   train_losses: Sequence[float], val_losses: Sequence[float], test_loss: float,
                   metrics: Mapping[str, float], written: Sequence[str],
-                  search: list[tuple[str, str]] | None = None) -> list[Section]:
+                  search: list[tuple[str, str]] | None = None, timing: TrainingTiming | None = None,
+                  prediction_seconds: float | None = None, search_seconds: float | None = None) -> list[Section]:
     """Every section of the info file, for a finished training run
 
     Parameters
@@ -103,6 +106,12 @@ def info_sections(run: 'TrainingRun', network: ParrotArchitecture, training: Map
         The other files written for this network
     search : list of (str, str), optional
         Description of the hyperparameter search (parrot-optimize)
+    timing : TrainingTiming, optional
+        How long each epoch of training took (see train_network.train())
+    prediction_seconds : float, optional
+        How long predicting the test set took
+    search_seconds : float, optional
+        How long the hyperparameter search took (parrot-optimize)
 
     Returns
     -------
@@ -116,6 +125,8 @@ def info_sections(run: 'TrainingRun', network: ParrotArchitecture, training: Map
     if search is not None:
         sections.append(Section('Hyperparameter search', search))
     sections += [results_section(val_losses, test_loss, metrics),
+                 timing_section(network, run.device, timing, prediction_seconds, len(run.test_set), search_seconds,
+                                embeddings_precomputed=isinstance(run.encoder, (plm.PLMEncoder, nardini.NardiniEncoder))),
                  Section('Files', [('network', run.network_file),
                                    *[('also written', path) for path in written]])]
     return sections
@@ -419,6 +430,94 @@ def results_section(val_losses: Sequence[float], test_loss: float, metrics: Mapp
 # .................................................................
 # Writing the file
 
+def format_duration(seconds: float) -> str:
+    """A duration in words, as precise as is useful for its length
+
+    Parameters
+    ----------
+    seconds : float
+        The duration, in seconds (at least 0)
+
+    Returns
+    -------
+    str
+        '0.42s' under a second, '4.2s' under ten seconds, '42s' under a
+        minute, '5m 07s' under an hour, and '2h 03m' beyond. Each tier is
+        chosen after rounding, so 9.97 s is '10s', not '10.0s'.
+    """
+    if round(seconds, 2) < 1:
+        return f'{seconds:.2f}s'
+    if round(seconds, 1) < 10:
+        return f'{seconds:.1f}s'
+    whole_seconds = round(seconds)
+    if whole_seconds < 60:
+        return f'{whole_seconds}s'
+    minutes, whole_seconds = divmod(whole_seconds, 60)
+    if minutes < 60:
+        return f'{minutes}m {whole_seconds:02d}s'
+    hours, minutes = divmod(minutes, 60)
+    return f'{hours}h {minutes:02d}m'
+
+
+def timing_section(network: ParrotArchitecture, device: torch.device, timing: TrainingTiming | None,
+                   prediction_seconds: float | None, test_sequences: int, search_seconds: float | None = None,
+                   embeddings_precomputed: bool = False) -> Section:
+    """How long training (and any hyperparameter search) took, and how fast the network trains and predicts
+
+    Models fitted in one step (scikit-learn) fit and predict on the CPU
+    whatever device was chosen, so their times are given as on the CPU.
+
+    Parameters
+    ----------
+    network : ParrotArchitecture
+        The trained network
+    device : torch.device
+        The device it was trained and tested on
+    timing : TrainingTiming or None
+        How long each epoch took (None if the network's training was not timed,
+        e.g. the best trial of a hyperparameter search)
+    prediction_seconds : float or None
+        How long predicting the test set took
+    test_sequences : int
+        Sequences in the test set
+    search_seconds : float, optional
+        How long the hyperparameter search took
+    embeddings_precomputed : bool, optional
+        True if the test sequences' encodings (protein language model or
+        NARDINI) were computed before training, so prediction only read them
+
+    Returns
+    -------
+    Section
+    """
+    where = devices.describe_device(device) if network.trained_by_gradient_descent else 'CPU (scikit-learn)'
+    entries = []
+    if search_seconds is not None:
+        entries.append(('search time', f'{format_duration(search_seconds)} (every trial, on {where})'))
+    if timing is not None and timing.train_seconds:
+        if network.trained_by_gradient_descent:
+            epochs = len(timing.train_seconds)
+            epochs_text = f'{epochs} epoch' if epochs == 1 else f'{epochs} epochs'
+            entries += [('training time', f'{format_duration(timing.total_seconds)} for {epochs_text}, on {where}'),
+                        ('time per epoch', f'{format_duration(timing.total_seconds / epochs)} on average: '
+                                           f'{format_duration(sum(timing.train_seconds) / epochs)} training and '
+                                           f'{format_duration(sum(timing.val_seconds) / epochs)} measuring the '
+                                           'validation loss'),
+                        ('training speed', f'{timing.training_speed:,.0f} sequences per second')]
+        else:
+            entries.append(('fitting time', f'{format_duration(timing.train_seconds[0])} '
+                                            f'({timing.train_sequences[0]:,} sequences), on {where}'))
+    if prediction_seconds is not None and prediction_seconds > 0:
+        if embeddings_precomputed:
+            how = ('from embeddings computed before training; computing the embeddings of new sequences, as '
+                   'parrot-predict does, takes much longer')
+        else:
+            how = 'including reading and encoding them'
+        entries.append(('prediction speed', f'{test_sequences / prediction_seconds:,.0f} sequences per second on '
+                                            f'{where} (predicting the {test_sequences:,} test sequences, {how})'))
+    return Section('Timing', entries)
+
+
 def write_network_info(path: str, network_file: str, sections: Sequence[Section]) -> None:
     """Write the info file
 
@@ -431,8 +530,7 @@ def write_network_info(path: str, network_file: str, sections: Sequence[Section]
     sections : list of Section
     """
     title = f'PARROT network: {os.path.basename(network_file)}'
-    lines = [title, '=' * len(title),
-             'How this network was trained, in enough detail to reproduce it or to describe it in a paper.', '']
+    lines = [title, '=' * len(title), '']
     for section in sections:
         lines += [section.title, '-' * len(section.title)]
         width = max((len(name) for name, _ in section.entries), default=0)

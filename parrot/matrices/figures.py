@@ -19,7 +19,7 @@ import numpy as np
 from matplotlib.ticker import MaxNLocator
 
 from parrot import figures
-from parrot.tasks import IGNORED_CLASS_LABEL, Task
+from parrot.tasks import Task
 
 # How many test sequences the example heatmaps show
 NUM_EXAMPLES = 3
@@ -27,8 +27,7 @@ NUM_EXAMPLES = 3
 # Size of each heatmap panel, in inches
 PANEL_SIZE_INCHES = 3.0
 
-# Colour map of regression heatmaps (perceptually uniform), and of classification heatmaps (distinct colours)
-REGRESSION_COLOUR_MAP = 'viridis'
+# Colour map of classification heatmaps (distinct colours); regression heatmaps use figures.REGRESSION_COLOUR_MAP
 CLASSIFICATION_COLOUR_MAP = 'tab10'
 
 
@@ -53,31 +52,13 @@ def example_indices(lengths: Sequence[int], num_examples: int = NUM_EXAMPLES) ->
     return [by_length[position] for position in positions]
 
 
-def displayable(matrix: np.ndarray, task: Task) -> np.ndarray:
-    """A matrix ready to show: missing values (NaN, or IGNORED_CLASS_LABEL for classes) become NaN, shown blank.
-
-    Parameters
-    ----------
-    matrix : numpy array
-    task : Task
-
-    Returns
-    -------
-    numpy array of float
-    """
-    values = np.asarray(matrix, dtype=float)
-    if task.is_classification:
-        values = np.where(values == IGNORED_CLASS_LABEL, np.nan, values)
-    return values
-
-
 def colour_range(true: np.ndarray, predicted: np.ndarray, task: Task) -> tuple[float, float]:
     """The lowest and highest value one row of heatmaps shows: every class, or the range of both matrices.
 
     Parameters
     ----------
     true, predicted : numpy arrays
-        Displayable matrices (see displayable())
+        Displayable matrices (see figures.displayable())
     task : Task
 
     Returns
@@ -110,15 +91,15 @@ def plot_matrix_examples(names: Sequence[str], true_values: Sequence[np.ndarray]
         File to save the figure to
     """
     chosen = example_indices([len(matrix) for matrix in true_values])
-    colour_map = CLASSIFICATION_COLOUR_MAP if task.is_classification else REGRESSION_COLOUR_MAP
+    colour_map = CLASSIFICATION_COLOUR_MAP if task.is_classification else figures.REGRESSION_COLOUR_MAP
     columns_name = 'residue' if task.width is None else 'column'
 
     with figures.figure_style():
         fig, axes = plt.subplots(len(chosen), 2, squeeze=False,
                                  figsize=(2 * PANEL_SIZE_INCHES, len(chosen) * PANEL_SIZE_INCHES))
         for row, index in enumerate(chosen):
-            true = displayable(true_values[index], task)
-            predicted = displayable(predictions[index], task)
+            true = figures.displayable(true_values[index], task)
+            predicted = figures.displayable(predictions[index], task)
             low, high = colour_range(true, predicted, task)
             name = names[index] or f'test{index}'
 

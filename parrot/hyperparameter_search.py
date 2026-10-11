@@ -327,7 +327,8 @@ class TrialTrainer:
         criterion = train_network.build_loss_criterion(self.task)
 
         for _ in range(trial.epochs, epochs):
-            train_loss = train_network.train_epoch(network, train_loader, self.task, criterion, optimizer, self.device)
+            train_loss, _ = train_network.train_epoch(network, train_loader, self.task, criterion, optimizer,
+                                                      self.device)
             val_loss = train_network.evaluate_loss(network, val_loader, self.task, self.device)
             progress.record_epoch(train_loss, val_loss, network)
 

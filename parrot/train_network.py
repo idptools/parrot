@@ -18,9 +18,10 @@ Licensed under the MIT license.
 
 import itertools
 import math
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Sized
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import torch
 import torch.nn as nn
@@ -258,6 +259,53 @@ class TrainingHistory:
             network.load_state_dict(self.best_weights)
 
 
+@dataclass
+class TrainingTiming:
+    """How long training took, epoch by epoch, recorded by train() when it is given one
+
+    Attributes
+    ----------
+    train_seconds : list of float
+        Seconds spent training in each epoch (for a model fitted in one step,
+        the time to fit it)
+    train_sequences : list of int
+        Sequences trained on in each epoch
+    val_seconds : list of float
+        Seconds spent measuring the validation loss after each epoch
+    """
+
+    train_seconds: list[float] = field(default_factory=list)
+    train_sequences: list[int] = field(default_factory=list)
+    val_seconds: list[float] = field(default_factory=list)
+
+    def record_epoch(self, train_seconds: float, train_sequences: int, val_seconds: float) -> None:
+        """Add one epoch's timings
+
+        Parameters
+        ----------
+        train_seconds : float
+            Seconds spent training in the epoch
+        train_sequences : int
+            Sequences trained on in the epoch
+        val_seconds : float
+            Seconds spent measuring the validation loss after it
+        """
+        self.train_seconds.append(train_seconds)
+        self.train_sequences.append(train_sequences)
+        self.val_seconds.append(val_seconds)
+
+    @property
+    def total_seconds(self) -> float:
+        """Seconds spent training and validating, over every epoch."""
+        return sum(self.train_seconds) + sum(self.val_seconds)
+
+    @property
+    def training_speed(self) -> float:
+        """Sequences trained on per second, while training (not validating); NaN if no training was timed."""
+        seconds = sum(self.train_seconds)
+        return sum(self.train_sequences) / seconds if seconds > 0 else math.nan
+
+
 def plateau_reached(val_loss: float, recent_val_losses: list[float], epochs_since_best: int, patience: int) -> bool:
     """Decide whether training with --stop auto should end
 
@@ -291,7 +339,7 @@ def plateau_reached(val_loss: float, recent_val_losses: list[float], epochs_sinc
 def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: DataLoader, task: Task,
           device: str | torch.device, learning_rate: float, n_epochs: int, stop_condition: str = 'iter',
           on_improvement: Callable[[ParrotArchitecture], None] | None = None, verbose: bool = False,
-          silent: bool = False) -> tuple[list[float], list[float]]:
+          silent: bool = False, timing: TrainingTiming | None = None) -> tuple[list[float], list[float]]:
     """Train a network, keeping the weights that perform best on the validation set
 
     Every epoch the network is trained on the training set and then evaluated
@@ -329,6 +377,9 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
         If True, print the validation loss every epoch rather than every 5 epochs
     silent : bool, optional
         If True, print nothing
+    timing : TrainingTiming, optional
+        If given, how long each epoch's training and validation took is
+        recorded in it
 
     Returns
     -------
@@ -342,7 +393,7 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
         raise ValueError(f"Invalid stop condition '{stop_condition}': must be 'auto' or 'iter'.")
 
     if not network.trained_by_gradient_descent:
-        return fit_in_one_step(network, train_loader, val_loader, task, device, on_improvement, silent)
+        return fit_in_one_step(network, train_loader, val_loader, task, device, on_improvement, silent, timing)
 
     optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
     criterion = build_loss_criterion(task)
@@ -354,8 +405,12 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
     epochs = range(n_epochs) if stop_condition == 'iter' else itertools.count()
 
     for epoch in epochs:
-        train_loss = train_epoch(network, train_loader, task, criterion, optimizer, device)
+        start = time.perf_counter()
+        train_loss, train_sequences = train_epoch(network, train_loader, task, criterion, optimizer, device)
+        trained = time.perf_counter()
         val_loss = evaluate_loss(network, val_loader, task, device)
+        if timing is not None:
+            timing.record_epoch(trained - start, train_sequences, time.perf_counter() - trained)
 
         # Decided before this epoch is recorded, by comparing it with the epochs before it
         stop_now = (stop_condition == 'auto' and epoch >= patience_epochs
@@ -403,7 +458,7 @@ def print_training_summary(history: TrainingHistory, stopped_early: bool) -> Non
 
 @full_float32_precision()
 def train_epoch(network: nn.Module, loader: DataLoader, task: Task, criterion: nn.Module,
-                optimizer: torch.optim.Optimizer, device: str | torch.device) -> float:
+                optimizer: torch.optim.Optimizer, device: str | torch.device) -> tuple[float, int]:
     """Train a network for one epoch (one pass over the training data)
 
     Parameters
@@ -425,6 +480,8 @@ def train_epoch(network: nn.Module, loader: DataLoader, task: Task, criterion: n
     -------
     float
         Average training loss per sequence
+    int
+        Number of sequences trained on
     """
 
     network.train()
@@ -439,13 +496,13 @@ def train_epoch(network: nn.Module, loader: DataLoader, task: Task, criterion: n
         loss.backward()
         optimizer.step()
 
-    return sum_batch_losses(batch_losses) / n_train_sequences
+    return sum_batch_losses(batch_losses) / n_train_sequences, n_train_sequences
 
 
 def fit_in_one_step(network: ParrotArchitecture, train_loader: DataLoader, val_loader: DataLoader, task: Task,
                     device: str | torch.device,
                     on_improvement: Callable[[ParrotArchitecture], None] | None = None,
-                    silent: bool = False) -> tuple[list[float], list[float]]:
+                    silent: bool = False, timing: TrainingTiming | None = None) -> tuple[list[float], list[float]]:
     """Fit a model that is not trained by gradient descent, and report its losses
 
     Parameters
@@ -464,6 +521,8 @@ def fit_in_one_step(network: ParrotArchitecture, train_loader: DataLoader, val_l
         Called once with the fitted model (e.g. to save it)
     silent : bool, optional
         If True, print nothing
+    timing : TrainingTiming, optional
+        If given, how long fitting and validation took is recorded in it (as one epoch)
 
     Returns
     -------
@@ -473,9 +532,14 @@ def fit_in_one_step(network: ParrotArchitecture, train_loader: DataLoader, val_l
         The average validation loss per sequence (a single value)
     """
 
+    start = time.perf_counter()
     network.fit(train_loader)
+    fitted = time.perf_counter()
     train_loss = evaluate_loss(network, train_loader, task, device)
+    validating = time.perf_counter()
     val_loss = evaluate_loss(network, val_loader, task, device)
+    if timing is not None:
+        timing.record_epoch(fitted - start, len(cast(Sized, train_loader.dataset)), time.perf_counter() - validating)
 
     if on_improvement is not None:
         on_improvement(network)

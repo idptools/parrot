@@ -167,7 +167,7 @@ In terms of command-line syntax, the only difference in the ``parrot-train`` com
 
 You might notice that this network seems to train a bit slower than the previous example. This is because our network has an additional layer. Increasing the ``-nl`` hyperparameter increases training time, but creates a more complex network that may be better at discerning patterns from data. 
 
-Like before, this command outputs a network file, a prediction file, a performance stats file, a training results PNG and a test set performance PNG into the current directory. In this case, the performance image is a scatterplot that compares the true values of the test set sequences to what was predicted by the PARROT network.
+Like before, this command outputs a network file, a prediction file, a performance stats file, a training results PNG and test set performance PNGs into the current directory. In this case, the performance images are a scatterplot that compares the true values of the test set sequences to what was predicted by the PARROT network, and a density plot of the same values ("seq_regress_network_seq_density.png"), which colours the plot by how many values fall in each small square, so it still shows where the values lie when there are too many to see as points. Both are labelled with Pearson's r.
 
 .. image:: ../images/seq_regress_network_seq_scatterplot.png
   :width: 400
@@ -229,7 +229,12 @@ The output from this command is analogous to the other examples. Like the sequen
 .. image:: ../images/res_regress_network_res_scatterplot.png
   :width: 400
 
-Here, each point represents a single residue in the test set, and the line is where predicted and true values are equal. To see whether the network systematically mis-predicts particular sequences, look up their residues in the prediction file, which lists the true and predicted values of every residue of every test sequence.
+Here, each point represents a single residue in the test set, and the line is where predicted and true values are equal. For residue data, ``--include-figs`` also shows the true and predicted values along six of the test sequences ("res_regress_network_res_profiles.png"), chosen to span the range of accuracy from the most to the least accurately predicted:
+
+.. image:: ../images/res_regress_network_res_profiles.png
+  :width: 600
+
+To see whether the network systematically mis-predicts other sequences, look up their residues in the prediction file, which lists the true and predicted values of every residue of every test sequence.
 
 parrot-predict
 ==============

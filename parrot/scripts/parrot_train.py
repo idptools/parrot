@@ -88,14 +88,15 @@ def run() -> None:
     if not run.silent and network.trained_by_gradient_descent:
         print('Validation set loss per epoch:')
 
+    timing = train_network.TrainingTiming()
     train_losses, val_losses = train_network.train(network, run.loader(run.train_set, shuffle=True),
                                                    run.loader(run.val_set), run.task, run.device,
                                                    learning_rate=args.learning_rate, n_epochs=args.epochs,
                                                    stop_condition=args.stop, on_improvement=run.save,
-                                                   verbose=args.verbose, silent=args.silent)
+                                                   verbose=args.verbose, silent=args.silent, timing=timing)
 
     training = dict(learning_rate=args.learning_rate, epochs=args.epochs, stop=args.stop)
-    common.finish_training_run(run, network, train_losses, val_losses, training)
+    common.finish_training_run(run, network, train_losses, val_losses, training, timing=timing)
 
 
 if __name__ == '__main__':

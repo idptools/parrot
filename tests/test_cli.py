@@ -971,11 +971,13 @@ def test_network_name_gets_pt_and_an_info_file(run_cli, tmp_path):
 
     info = (tmp_path / 'my_network_info.txt').read_text()
     assert info.startswith('PARROT network: my_network.pt\n')
-    for heading in ('Provenance', 'Data', 'Encoding', 'Architecture', 'Training', 'Results', 'Files'):
+    assert info.splitlines()[2:4] == ['', 'Provenance']     # straight from the title to the first section
+    for heading in ('Provenance', 'Data', 'Encoding', 'Architecture', 'Training', 'Results', 'Timing', 'Files'):
         assert f'\n{heading}\n' in info
     for fact in ('parrot-train brnn --input-file', 'input file SHA-256', 'classification into 3 classes',
                  'hidden_size           : 10', 'Adam, learning rate 0.001', 'epoch kept', 'test loss',
-                 'random seed : 1', 'my_network_predictions.tsv'):
+                 'random seed : 1', 'my_network_predictions.tsv', 'time per epoch', 'training speed',
+                 'prediction speed'):
         assert fact in ' '.join(info.split()) or fact in info, fact
 
 

@@ -42,8 +42,9 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
     test sequence, named by its ID). Also writes
     "<output_prefix>_performance_stats.txt" if `write_stats`, and the figures
     appropriate to the task if `include_figs` (see figures.plot_test_results;
-    for matrix tasks also "<output_prefix>_matrix_examples.png", heatmaps of a
-    few test sequences).
+    for residue tasks also "<output_prefix>_res_profiles.png", the true and
+    predicted values along a few test sequences, and for matrix tasks
+    "<output_prefix>_matrix_examples.png", heatmaps of a few test sequences).
 
     Parameters
     ----------
@@ -86,7 +87,12 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
         write_performance_metrics(metrics, written[-1])
 
     if include_figs:
-        written += figures.plot_test_results(labeled.true_values, predictions, task, output_prefix, probabilistic)
+        # Regression figures show the Pearson r of the metrics, so the two always agree
+        written += figures.plot_test_results(labeled.true_values, predictions, task, output_prefix, probabilistic,
+                                             pearson=metrics.get('Pearson R'))
+        if task.per_residue:
+            written += figures.plot_residue_profiles(labeled.names, labeled.true_values, predictions, task,
+                                                     output_prefix + '_res_profiles.png')
         if task.is_matrix:
             written.append(output_prefix + '_matrix_examples.png')
             matrix_figures.plot_matrix_examples(labeled.names, labeled.true_values, predictions, task, written[-1])

@@ -17,6 +17,7 @@ Licensed under the MIT license.
 import argparse
 import math
 import os
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -24,7 +25,7 @@ from typing import Any
 import torch
 from torch.utils.data import DataLoader
 
-from parrot import devices, figures, nardini, plm, prediction, reporting
+from parrot import devices, figures, nardini, plm, prediction, reporting, train_network
 from parrot import process_input_data as pid
 from parrot.architectures import ParrotArchitecture, get_architecture
 from parrot.checkpoint import save_network
@@ -548,7 +549,9 @@ def describe_data(run: TrainingRun) -> str:
 
 def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_losses: list[float],
                         val_losses: list[float], training: dict[str, Any],
-                        search: list[tuple[str, str]] | None = None, other_files: Sequence[str] = ()) -> None:
+                        search: list[tuple[str, str]] | None = None, other_files: Sequence[str] = (),
+                        timing: train_network.TrainingTiming | None = None,
+                        search_seconds: float | None = None) -> None:
     """Save the trained network, evaluate and report on the test set, and describe how the network was trained
 
     Parameters
@@ -566,6 +569,10 @@ def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_los
         parrot-optimize's description of its hyperparameter search, for the info file
     other_files : list of str, optional
         Other files the command wrote, to list with the rest
+    timing : TrainingTiming, optional
+        How long each epoch of training took, for the info file
+    search_seconds : float, optional
+        How long parrot-optimize's hyperparameter search took, for the info file
     """
 
     run.save(network)
@@ -578,7 +585,9 @@ def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_los
         written.append(run.output_prefix + '_train_val_loss.png')
         figures.plot_training_loss(train_losses, val_losses, written[-1])
 
+    predicting = time.perf_counter()
     labeled = prediction.predict_labeled(network, run.test_set, run.task, run.device)
+    prediction_seconds = time.perf_counter() - predicting
     metrics, test_files = reporting.report_test_results(labeled, run.task, run.output_prefix,
                                                         probabilistic=run.probabilistic,
                                                         include_figs=run.include_figs, write_stats=run.write_stats)
@@ -586,7 +595,7 @@ def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_los
 
     info_file = run.output_prefix + '_info.txt'
     sections = network_info.info_sections(run, network, training, train_losses, val_losses, labeled.loss, metrics,
-                                          written, search)
+                                          written, search, timing, prediction_seconds, search_seconds)
     network_info.write_network_info(info_file, run.network_file, sections)
     written.insert(0, info_file)
 

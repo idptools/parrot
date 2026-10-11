@@ -82,7 +82,7 @@ Output
 
 * the test-set predictions are written to ``<output>_predictions.npz``: one predicted matrix per test sequence, named by its sequence ID (the predicted class of each cell, for classification). Load them with ``np.load('network_predictions.npz')['protein1']``; the true matrices are in your matrix file.
 * the performance metrics in ``<output>_performance_stats.txt`` pool every cell of every test sequence (counting each pair of residues once for symmetric maps, and leaving out missing cells).
-* with ``--include-figs``, the test-set figure is a scatterplot (``_matrix_scatterplot.png``) or confusion matrix (``_matrix_CM.png``) over those same cells (a scatterplot of more than 100,000 cells shows a fixed random sample of 100,000 of them, with a warning; the metrics always use every cell), and ``_matrix_examples.png`` shows the true and predicted matrices of three test sequences (the shortest, the longest, and one in between) side by side, on the same colour scale.
+* with ``--include-figs``, the test-set figures are a scatterplot and a density plot (``_matrix_scatterplot.png`` and ``_matrix_density.png``, labelled with Pearson's r) or a confusion matrix (``_matrix_CM.png``) over those same cells (a scatterplot of more than 100,000 cells shows a fixed random sample of 100,000 of them, with a warning; the density plot and the metrics always use every cell), and ``_matrix_examples.png`` shows the true and predicted matrices of three test sequences (the shortest, the longest, and one in between) side by side, on the same colour scale.
 
 Predicting
 ----------

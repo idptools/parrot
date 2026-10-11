@@ -19,6 +19,7 @@ Licensed under the MIT license.
 """
 
 import argparse
+import time
 from collections import Counter
 from typing import Any
 
@@ -109,22 +110,28 @@ def run() -> None:
 
     space = hyperparameter_search.SearchSpace(args.architecture, fixed_hyperparameters)
     trainer = hyperparameter_search.TrialTrainer(space, search_loaders(run), len(run.encoder), run.task, run.device)
+    searching = time.perf_counter()
     searcher, best_trial = run_search(args, run, space, trainer, n_trials)
+    search_seconds = time.perf_counter() - searching
     best = searcher.best_values(best_trial)
     hyperparameters_file = run.output_prefix + '_optimal_hyperparams.txt'
     write_hyperparameters(hyperparameters_file, args.architecture, best)
 
+    # The best trial's training happened in stages during the search, so it has no timings of its own
+    timing = None
     if run.cv_sets is None:
         # The best trial already is a full training run on the training set, keeping its best epoch
         network, train_losses, val_losses = trainer.trained_network(best_trial)
     else:
-        network, train_losses, val_losses = train_with_best_values(args, run, best)
+        timing = train_network.TrainingTiming()
+        network, train_losses, val_losses = train_with_best_values(args, run, best, timing)
 
     training = dict(learning_rate=best.get(train_network.LEARNING_RATE.name, train_network.LEARNING_RATE.default),
                     epochs=args.epochs, stop='iter')
     common.finish_training_run(run, network, train_losses, val_losses, training,
                                search=describe_search(args, searcher, best_trial),
-                               other_files=[hyperparameters_file, trials_file(run)])
+                               other_files=[hyperparameters_file, trials_file(run)], timing=timing,
+                               search_seconds=search_seconds)
 
 
 def search_loaders(run: common.TrainingRun) -> list[tuple[DataLoader, DataLoader]]:
@@ -215,8 +222,9 @@ def describe_search(args: argparse.Namespace, searcher: hyperparameter_search.Hy
     return entries
 
 
-def train_with_best_values(args: argparse.Namespace, run: common.TrainingRun,
-                           best: dict[str, HyperParameterValue]) -> tuple[ParrotArchitecture, list[float], list[float]]:
+def train_with_best_values(args: argparse.Namespace, run: common.TrainingRun, best: dict[str, HyperParameterValue],
+                           timing: train_network.TrainingTiming | None = None
+                           ) -> tuple[ParrotArchitecture, list[float], list[float]]:
     """Train the final network on the training set with the best hyperparameters (after a cross-validated search)
 
     Parameters
@@ -226,6 +234,8 @@ def train_with_best_values(args: argparse.Namespace, run: common.TrainingRun,
     run : TrainingRun
     best : dict
         The best configuration (including the learning rate)
+    timing : TrainingTiming, optional
+        If given, how long each epoch took is recorded in it
 
     Returns
     -------
@@ -246,7 +256,7 @@ def train_with_best_values(args: argparse.Namespace, run: common.TrainingRun,
                                                    run.loader(run.val_set), run.task, run.device,
                                                    learning_rate=learning_rate, n_epochs=args.epochs,
                                                    stop_condition='iter', on_improvement=run.save,
-                                                   verbose=args.verbose, silent=args.silent)
+                                                   verbose=args.verbose, silent=args.silent, timing=timing)
     return network, train_losses, val_losses
 
 

@@ -9,6 +9,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+from matplotlib.colors import LogNorm
 
 from parrot import figures, metrics, reporting
 from parrot import process_input_data as pid
@@ -75,6 +76,192 @@ def test_regression_scatterplot_with_identical_true_values(tmp_path, captured_fi
 
     assert os.path.isfile(path)
     assert len(captured_figures[-1].axes[0].collections) == 1
+
+
+def figure_texts(fig: Any) -> list[str]:
+    """Every piece of text drawn in a figure's axes: labels and annotations."""
+    texts = []
+    for ax in fig.axes:
+        texts += [ax.get_xlabel(), ax.get_ylabel(), *[text.get_text() for text in ax.texts]]
+    return texts
+
+
+@pytest.mark.parametrize('true, predicted, expected', [
+    ([1.0, 2.0, 3.0, 4.0], [2.0, 4.0, 6.0, 8.0], 1.0),
+    ([1.0, 2.0, 3.0], [3.0, 2.0, 1.0], -1.0),
+    ([2.0, 2.0, 2.0], [1.0, 2.0, 3.0], np.nan),   # undefined when either set is constant, as in the metrics
+    ([1.0], [1.0], np.nan),
+])
+def test_pearson_r(true, predicted, expected):
+    pearson = figures.pearson_r(np.array(true), np.array(predicted))
+    assert np.isnan(pearson) if np.isnan(expected) else pearson == pytest.approx(expected, abs=1e-3)
+
+
+def test_square_limits_hold_every_value_with_a_margin():
+    assert figures.square_limits(np.array([0.0, 10.0]), np.array([-10.0, 5.0])) == (-11.0, 11.0)
+    assert figures.square_limits(np.array([2.0, 2.0]), np.array([2.0])) == (1.5, 2.5)
+
+
+@pytest.mark.parametrize('predicted', [[np.nan, 0.5], [np.inf, 0.5], []], ids=['nan', 'inf', 'empty'])
+def test_square_limits_refuse_values_that_cannot_be_plotted(predicted):
+    true = np.array([0.0, 1.0]) if predicted else np.array([])
+    with pytest.raises(ValueError, match='only finite ones'):
+        figures.square_limits(true, np.array(predicted))
+
+
+@pytest.mark.parametrize('bad_value', [np.nan, np.inf], ids=['nan', 'inf'])
+def test_predictions_that_are_not_finite_are_left_out_of_the_figures_with_a_warning(tmp_path, captured_figures,
+                                                                                   bad_value):
+    true = [np.array([0.0, 0.5, 1.0, 0.2])]
+    predicted = [np.array([bad_value, 0.4, 1.1, 0.3])]
+    with pytest.warns(UserWarning, match='1 of 4 test-set predictions are not finite'):
+        written = figures.plot_test_results(true, predicted, Task('residues', 1), str(tmp_path / 'net'))
+
+    assert len(written) == 2
+    scatter, density = captured_figures
+    assert density.axes[0].collections[0].get_array().sum() == 3
+    low, high = scatter.axes[0].get_xlim()
+    assert low < 0.2 and high > 1.1    # the axes hold every pair left (the first pair has the bad prediction)
+
+
+def test_regression_figures_are_skipped_with_a_warning_when_no_prediction_is_finite(tmp_path):
+    true, predicted = [np.array([0.2, 0.4])], [np.array([np.nan, np.nan])]
+    with pytest.warns(UserWarning, match='regression figures are not drawn'):
+        assert figures.plot_test_results(true, predicted, Task('residues', 1), str(tmp_path / 'net')) == []
+
+
+def test_figures_show_the_pearson_r_of_the_performance_metrics(tmp_path, captured_figures):
+    task = Task('sequence', 1)
+    labeled = make_labeled(task)
+    metrics, _ = reporting.report_test_results(labeled, task, str(tmp_path / 'net'), include_figs=True)
+    for fig in captured_figures:
+        assert f'Pearson r = {metrics["Pearson R"]:.3f}' in figure_texts(fig)
+
+
+def test_scatter_and_density_plots_share_axes_and_show_pearson_r(tmp_path, captured_figures):
+    rng = np.random.default_rng(0)
+    true = [rng.random(20) for _ in range(5)]
+    predicted = [values + rng.normal(0, 0.1, 20) for values in true]
+    written = figures.plot_test_results(true, predicted, Task('residues', 1), str(tmp_path / 'net'))
+
+    assert written == [str(tmp_path / 'net_res_scatterplot.png'), str(tmp_path / 'net_res_density.png')]
+    scatter, density = captured_figures
+    pearson = figures.pearson_r(np.concatenate(true), np.concatenate(predicted))
+    for fig in (scatter, density):
+        assert f'Pearson r = {pearson:.3f}' in figure_texts(fig)
+    assert scatter.axes[0].get_xlim() == density.axes[0].get_xlim() == density.axes[0].get_ylim()
+    assert density.axes[1].get_ylabel() == 'Residues per bin'
+
+
+def test_density_plot_counts_every_value(tmp_path, captured_figures):
+    true = np.array([0.1, 0.1, 0.1, 0.9])
+    figures.regression_density_plot(true, true.copy(), str(tmp_path / 'density.png'), 'Sequences')
+    counts = captured_figures[-1].axes[0].collections[0].get_array()
+    assert counts.sum() == 4 and counts.max() == 3
+
+
+@pytest.mark.parametrize('repeats, log_scale', [(3, False), (figures.LOG_SCALE_MIN_COUNT, True)])
+def test_density_plots_use_a_log_scale_once_a_bin_holds_enough_values(tmp_path, captured_figures, repeats,
+                                                                      log_scale):
+    values = np.repeat([0.1, 0.9], repeats)
+    figures.regression_density_plot(values, values.copy(), str(tmp_path / 'density.png'))
+    norm = captured_figures[-1].axes[0].collections[0].norm
+    assert isinstance(norm, LogNorm) == log_scale
+
+
+def test_matrix_density_plots_show_every_cell_while_scatterplots_are_sampled(tmp_path, captured_figures,
+                                                                             monkeypatch):
+    monkeypatch.setattr(figures, 'MAX_SCATTER_POINTS', 10)
+    values = [np.arange(25, dtype=float).reshape(5, 5)]
+    with pytest.warns(UserWarning, match='random sample of 10'):
+        figures.plot_test_results(values, values, Task('matrix', 1), str(tmp_path / 'net'))
+    scatter, density = captured_figures
+    assert len(scatter.axes[0].collections[0].get_offsets()) == 10
+    assert density.axes[0].collections[0].get_array().sum() == 25
+
+
+# ..........................................................................................
+# Residue profiles
+
+@pytest.mark.parametrize('true, predicted, task, expected', [
+    ([0.0, 1.0, np.nan], [0.5, 1.0, 5.0], Task('residues', 1), 0.25),       # unlabelled residues are left out
+    ([0, 1, pid.IGNORED_CLASS_LABEL, 2], [0, 2, 1, 2], Task('residues', 3), 1 / 3),
+    ([np.nan, np.nan], [0.5, 0.5], Task('residues', 1), np.inf),
+])
+def test_sequence_error(true, predicted, task, expected):
+    assert figures.sequence_error(np.array(true), np.array(predicted), task) == pytest.approx(expected)
+
+
+def test_profile_examples_default_to_the_current_number_of_examples(monkeypatch):
+    monkeypatch.setattr(figures, 'MIN_PROFILE_RESIDUES', 1)
+    monkeypatch.setattr(figures, 'NUM_PROFILE_EXAMPLES', 2)
+    true = [np.zeros(3) for _ in range(5)]
+    predicted = [np.full(3, i / 10) for i in range(5)]
+    assert len(figures.profile_examples(true, predicted, Task('residues', 1))) == 2
+
+
+def test_profiles_need_enough_labelled_residues_not_just_long_sequences(monkeypatch):
+    monkeypatch.setattr(figures, 'MIN_PROFILE_RESIDUES', 3)
+    # The best-predicted sequence is long but has only 2 labelled residues, so the others are chosen from
+    sparse = np.full(10, np.nan)
+    sparse[[2, 7]] = 0.0
+    true = [sparse, np.zeros(4), np.zeros(4)]
+    predicted = [np.zeros(10), np.full(4, 0.1), np.full(4, 0.2)]
+    assert figures.profile_examples(true, predicted, Task('residues', 1), num_examples=2) == [1, 2]
+
+
+def test_isolated_labelled_residues_are_drawn_as_points(tmp_path, captured_figures):
+    true = np.array([0.1, np.nan, 0.5, np.nan, 0.3, 0.4])    # residues 1 and 3 have no labelled neighbour
+    figures.plot_residue_profiles(['a'], [true], [np.full(6, 0.3)], Task('residues', 1), str(tmp_path / 'p.png'))
+    points = [line for line in captured_figures[-1].axes[0].lines if line.get_marker() == 'o']
+    assert len(points) == 1 and list(points[0].get_xdata()) == [1, 3]
+    np.testing.assert_array_equal(figures.isolated_residues(true), [True, False, True, False, False, False])
+
+
+def test_profiles_are_skipped_with_a_warning_when_no_sequence_can_be_shown(tmp_path):
+    with pytest.warns(UserWarning, match='no profiles are drawn'):
+        written = figures.plot_residue_profiles(['a'], [np.full(4, np.nan)], [np.zeros(4)], Task('residues', 1),
+                                                str(tmp_path / 'p.png'))
+    assert written == [] and not (tmp_path / 'p.png').exists()
+
+
+def test_profiles_span_the_range_of_accuracy(monkeypatch):
+    monkeypatch.setattr(figures, 'MIN_PROFILE_RESIDUES', 3)
+    # Sequence i is predicted with error i (12 sequences), except for one too short and one with no labels
+    true = [np.zeros(4) for _ in range(12)] + [np.zeros(2), np.full(4, np.nan)]
+    predicted = [np.full(4, np.sqrt(i)) for i in range(12)] + [np.zeros(2), np.zeros(4)]
+    chosen = figures.profile_examples(true, predicted, Task('residues', 1), num_examples=6)
+    assert chosen == [1, 3, 5, 7, 9, 11]    # the middle of each sixth, from the most to the least accurate
+
+
+def test_profile_labels_give_the_mean_absolute_error_even_when_r_is_undefined():
+    true, predicted = np.array([0.5, 0.5, np.nan]), np.array([0.4, 0.7, 0.0])
+    assert figures.profile_score(true, predicted, Task('residues', 1)) == ' (MAE = 0.15)'
+
+
+def test_short_sequences_are_shown_only_if_too_few_are_long_enough(monkeypatch):
+    monkeypatch.setattr(figures, 'MIN_PROFILE_RESIDUES', 3)
+    # Only one sequence has at least 3 residues, so all three are shown, from the most to the least accurate
+    true = [np.zeros(2), np.zeros(5), np.zeros(2)]
+    predicted = [np.full(2, 0.1), np.full(5, 0.3), np.full(2, 0.2)]
+    assert figures.profile_examples(true, predicted, Task('residues', 1), num_examples=3) == [0, 2, 1]
+
+
+@pytest.mark.parametrize('task, predicted, score', [
+    (Task('residues', 1), [np.array([0.1, 0.5, 0.9, 0.4]), np.array([0.2, 0.3, 0.8])], 'Pearson r ='),
+    (Task('residues', 1), [np.array([0.1, 0.5, 0.9, 0.4]), np.array([0.2, 0.3, 0.8])], ', MAE = '),
+    (Task('residues', 3), [np.array([0, 1, 2, 2]), np.array([1, 1, 0])], 'accuracy'),
+    (Task('residues', 3), [np.eye(3)[[0, 1, 2, 2]], np.eye(3)[[1, 1, 0]]], 'accuracy'),   # class probabilities
+], ids=['regression-r', 'regression-mae', 'classes', 'probabilities'])
+def test_residue_profiles_name_each_sequence_and_its_score(tmp_path, captured_figures, task, predicted, score):
+    true = ([np.array([0.0, 0.5, 1.0, np.nan]), np.array([0.2, 0.4, 0.9])] if not task.is_classification
+            else [np.array([0, 1, 2, pid.IGNORED_CLASS_LABEL]), np.array([1, 1, 1])])
+    figures.plot_residue_profiles(['first', ''], true, predicted, task, str(tmp_path / 'profiles.png'))
+
+    labels = [ax.get_xlabel() for ax in captured_figures[-1].axes]
+    assert len(labels) == 2 and all(score in label for label in labels)
+    assert {label.split(' (')[0] for label in labels} == {'Residue of first', 'Residue of test1'}
+    assert [line.get_label() for line in captured_figures[-1].axes[0].lines] == ['True', 'Predicted']
 
 
 def test_regression_scatterplot_does_not_accumulate(tmp_path, captured_figures):
@@ -268,20 +455,23 @@ def make_labeled(task: Task) -> LabeledPredictions:
 
 
 @pytest.mark.parametrize('task, probabilistic, expected_figures', [
-    (Task('sequence', 1), False, ['_seq_scatterplot.png']),
-    (Task('residues', 1), False, ['_res_scatterplot.png']),
+    (Task('sequence', 1), False, ['_seq_scatterplot.png', '_seq_density.png']),
+    (Task('residues', 1), False, ['_res_scatterplot.png', '_res_density.png', '_res_profiles.png']),
     (Task('sequence', 3), False, ['_seq_CM.png']),
-    (Task('residues', 3), False, ['_res_CM.png']),
+    (Task('residues', 3), False, ['_res_CM.png', '_res_profiles.png']),
     (Task('sequence', 3), True, ['_ROC_curve.png', '_PR_curve.png']),
-], ids=['seq-regress', 'res-regress', 'seq-class', 'res-class', 'seq-prob'])
+    (Task('residues', 3), True, ['_ROC_curve.png', '_PR_curve.png', '_res_profiles.png']),
+], ids=['seq-regress', 'res-regress', 'seq-class', 'res-class', 'seq-prob', 'res-prob'])
 def test_report_test_results(tmp_path, task, probabilistic, expected_figures):
     prefix = str(tmp_path / 'net')
-    reporting.report_test_results(make_labeled(task), task, prefix, probabilistic=probabilistic, include_figs=True)
+    _, written = reporting.report_test_results(make_labeled(task), task, prefix, probabilistic=probabilistic,
+                                               include_figs=True)
 
     assert len(read_lines(prefix + '_predictions.tsv')) == 6
     assert os.path.isfile(prefix + '_performance_stats.txt')
-    for suffix in expected_figures:
-        assert os.path.isfile(prefix + suffix), suffix
+    assert [path for path in written if path.endswith('.png')] == [prefix + suffix for suffix in expected_figures]
+    for path in written:
+        assert os.path.isfile(path), path
     assert plt.get_fignums() == []
 
 

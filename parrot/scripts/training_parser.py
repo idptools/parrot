@@ -481,7 +481,9 @@ def output_options() -> argparse.ArgumentParser:
     options = argparse.ArgumentParser(add_help=False)
     group = options.add_argument_group('output')
     group.add_argument('--include-figs', dest='include_figs', action='store_true',
-                       help='save figures of the training and of the test-set performance next to the network')
+                       help='save figures of the training and of the test-set performance next to the network '
+                            '(for regression, a scatterplot and a density plot; for residue data, also example '
+                            'profiles of true and predicted values along test sequences)')
     group.add_argument('--no-stats', dest='no_stats', action='store_true',
                        help='do not write the test-set performance statistics file')
     group.add_argument('--verbose', '-v', action='store_true',

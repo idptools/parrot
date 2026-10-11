@@ -176,6 +176,31 @@ def test_one_step_models_are_fitted_by_train(architecture, task_name, capsys):
     assert train_network.evaluate_loss(network, loader(val_set, task), task, 'cpu') == pytest.approx(val_losses[0])
 
 
+def test_train_records_how_long_each_epoch_took():
+    train_set, val_set, _, task = load_task('seq_regress')
+    timing = train_network.TrainingTiming()
+    train_network.train(make_network('sequence', 1), loader(train_set, task, shuffle=True), loader(val_set, task),
+                        task, 'cpu', learning_rate=0.01, n_epochs=3, silent=True, timing=timing)
+
+    assert len(timing.train_seconds) == len(timing.val_seconds) == 3
+    assert timing.train_sequences == [len(train_set)] * 3
+    assert all(seconds > 0 for seconds in timing.train_seconds + timing.val_seconds)
+    assert timing.total_seconds == pytest.approx(sum(timing.train_seconds) + sum(timing.val_seconds))
+    assert timing.training_speed == pytest.approx(3 * len(train_set) / sum(timing.train_seconds))
+
+
+def test_training_speed_is_undefined_before_any_training_is_timed():
+    assert np.isnan(train_network.TrainingTiming().training_speed)
+
+
+def test_one_step_models_record_their_fitting_time():
+    train_set, val_set, _, task = load_task('seq_regress')
+    timing = train_network.TrainingTiming()
+    train_network.train(build_network('knn', 20, task), loader(train_set, task), loader(val_set, task), task, 'cpu',
+                        learning_rate=0.01, n_epochs=8, silent=True, timing=timing)
+    assert len(timing.train_seconds) == 1 and timing.train_sequences == [len(train_set)]
+
+
 def test_train_auto_stops_when_validation_loss_plateaus():
     """With a learning rate of zero the loss never changes, so 'auto' stops after min_epochs + 2 epochs"""
     train_set, val_set, _, task = load_task('seq_class')
