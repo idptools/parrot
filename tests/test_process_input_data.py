@@ -176,6 +176,12 @@ def test_parse_file_exclude_seq_id(write_lines):
     assert data == [['', 'ACD', 1], ['', 'EFG', 0]]
 
 
+def test_parse_file_exclude_seq_id_counts_the_columns_of_the_file(write_lines):
+    path = write_lines('noids.tsv', ['ACD 1', 'EFGH'])
+    with pytest.raises(IOExceptionParrot, match=r'Data line 2 .* expected a sequence and its value\(s\) .* found 1 '):
+        pid.parse_file(path, Task('sequence', 2), exclude_seq_id=True)
+
+
 @pytest.mark.parametrize('label', ['3', '-1'])
 def test_parse_file_sequence_class_out_of_range(write_lines, label):
     path = write_lines('data.tsv', ['id1 ACD 0', f'id2 EFG {label}'])
@@ -450,6 +456,21 @@ def test_length_batches_change_between_epochs_but_follow_the_seed():
     assert first == repeat
 
 
+def test_length_batches_of_a_small_dataset_change_composition_between_epochs():
+    # 216 sequences of distinct lengths in batches of 16 make one pool: without jitter, the same batches came
+    # back every epoch, only in a different order
+    sampler = pid.LengthBatchSampler(list(range(30, 246)), 16, shuffle=True)
+    torch.manual_seed(0)
+    first = {tuple(sorted(batch)) for batch in sampler}
+    later = [{tuple(sorted(batch)) for batch in sampler} for _ in range(5)]
+    assert all(len(first & batches) <= len(first) // 2 for batches in later)
+
+
+@pytest.mark.parametrize('shuffle', [False, True])
+def test_length_batches_of_an_empty_dataset(shuffle):
+    assert sampler_epoch([], 4, shuffle) == []
+
+
 def test_longest_batch_comes_first():
     lengths = list(np.random.randint(1, 100, size=300))
     lengths[123] = 1000
@@ -561,10 +582,45 @@ def test_read_split_file_rejects_out_of_range(write_lines):
         pid.read_split_file(path, num_samples=6)
 
 
-def test_read_split_file_requires_three_lines(write_lines):
-    path = write_lines('split.txt', ['0 1 2', '3 4'])
-    with pytest.raises(ValueError, match='three lines'):
+@pytest.mark.parametrize('lines, count', [(['0 1 2', '3 4'], 2),
+                                          (['0 1 2 3 4 5', '6', '7', '8 9'], 4),     # a fourth set is not ignored
+                                          (['', '0 1 2 3 4 5', '6', '7'], 4)])      # nor is a blank first line
+def test_read_split_file_requires_three_lines(write_lines, lines, count):
+    path = write_lines('split.txt', lines)
+    with pytest.raises(ValueError, match=f'exactly three lines, the training, validation and test sets, but has {count}'):
         pid.read_split_file(path)
+
+
+def test_read_split_file_ignores_blank_lines_after_the_sets(write_lines):
+    path = write_lines('split.txt', ['0 1 2', '3', '4 5', '', ''])
+    train, val, test = pid.read_split_file(path)
+    assert (train.tolist(), val.tolist(), test.tolist()) == ([0, 1, 2], [3], [4, 5])
+
+
+def test_read_split_file_names_the_file_and_line_of_a_value_that_is_not_a_line_number(write_lines):
+    path = write_lines('data.tsv', ['Frag0 ACDE 1.0', 'Frag1 EFGH 2.0', 'Frag2 KLMN 3.0'])
+    with pytest.raises(ValueError, match="Line 1 of the split-file .*data.tsv holds 'Frag0'.*is this a datafile"):
+        pid.read_split_file(path)
+
+
+@pytest.mark.parametrize('percent_val, percent_test', [(0, 0), (0.6, 0.6), (-0.1, 0.2), (0.15, 0)])
+def test_split_data_checks_the_fractions(write_lines, percent_val, percent_test):
+    data_file = write_lines('data.tsv', [f's{i} ACDEF {i}.0' for i in range(30)])
+    with pytest.raises(ValueError, match='validation and test fractions must each be greater than 0'):
+        pid.split_data(data_file, Task('sequence', 1), percent_val=percent_val, percent_test=percent_test,
+                       ignore_warnings=True)
+
+
+def test_split_data_cv_needs_two_folds(write_lines):
+    data_file = write_lines('data.tsv', [f's{i} ACDEF {i}.0' for i in range(30)])
+    with pytest.raises(ValueError, match='at least 2 folds'):
+        pid.split_data_cv(data_file, Task('sequence', 1), n_folds=1, ignore_warnings=True)
+
+
+@pytest.mark.parametrize('fraction', [-0.1, 1.5])
+def test_vector_split_checks_the_fraction(fraction):
+    with pytest.raises(ValueError, match='between 0 and 1'):
+        pid.vector_split(np.arange(10), fraction)
 
 
 def dataset_names(dataset: pid.SequenceDataset) -> set[str]:

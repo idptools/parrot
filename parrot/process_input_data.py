@@ -47,6 +47,13 @@ DEFAULT_BATCHING = 'length'
 # value used by fastai's SortishSampler (Howard & Gugger 2020, Information 11:108).
 LENGTH_POOL_BATCHES = 50
 
+# Before a pool is sorted, each length is multiplied by exp(LENGTH_NOISE x a standard normal number), about +-5%
+# (PARROT's choice). Sequences within a few percent of each other's length are then shuffled among themselves, so
+# the same sequences do not share a batch every epoch, even when one pool holds the whole training set (small
+# datasets). Batches still hold sequences of similar length: for lengths spread evenly from 1 to 500, they are
+# padded to about 8% more positions in all than without the jitter.
+LENGTH_NOISE = 0.05
+
 # Batches are padded to a "round" length rather than exactly to their longest
 # sequence (see padded_batch_length). On GPUs, and Apple-silicon (MPS) GPUs in
 # particular, every new tensor shape costs a compilation, so length-batched data
@@ -310,9 +317,15 @@ def parse_file(tsvfile: str, task: Task, exclude_seq_id: bool = False, ignore_wa
         assert matrix_file is not None
         data = matrix_data.attach_matrices(lines, matrix_data.read_matrix_file(matrix_file), task)
     else:
-        # Add a dummy seqID if none are provided
+        # Add a dummy seqID if none are provided (after checking each line has a sequence and a value, so the
+        # message counts the file's own columns)
         if exclude_seq_id:
-            for line in lines:
+            for line_number, line in enumerate(lines, start=1):
+                if len(line) < 2:
+                    raise parrot_exceptions.IOExceptionParrot(
+                        f'Data line {line_number} is not valid {task.datatype}-mapped data: expected a sequence and '
+                        f'its value(s) (no ID, as --exclude-seq-id says), but found {len(line)} column(s)\n  '
+                        + ' '.join(line))
                 line.insert(0, '')
         data = parse_lines(lines, task.datatype)
 
@@ -616,10 +629,12 @@ class LengthBatchSampler(Sampler[list[int]]):
 
     For training (shuffle=True) the batches are "sortish" (as in fastai's
     SortishSampler): each epoch the dataset is shuffled and cut into pools of
-    LENGTH_POOL_BATCHES batches, each pool is sorted by length and cut into
+    LENGTH_POOL_BATCHES batches, each pool is sorted by length (jittered by a
+    random factor of about LENGTH_NOISE, drawn afresh every epoch) and cut into
     batches, and the order of the batches is shuffled. Batch composition
-    therefore still changes every epoch. The batch holding the longest
-    sequences comes first, so a batch too large for memory fails immediately.
+    therefore changes every epoch, even for a dataset small enough to be one
+    pool. The batch holding the longest sequences comes first, so a batch too
+    large for memory fails immediately.
 
     Without shuffling (for evaluation) the whole dataset is sorted by length.
     Because every PARROT architecture's output for a sequence does not depend
@@ -667,11 +682,14 @@ class LengthBatchSampler(Sampler[list[int]]):
 
         # Shuffle with torch's global generator, so --seed makes this reproducible
         shuffled = torch.randperm(len(self.lengths)).numpy()
+        jittered_lengths = self.lengths * np.exp(LENGTH_NOISE * torch.randn(len(self.lengths)).numpy())
         pool_size = self.batch_size * LENGTH_POOL_BATCHES
         batches = []
         for start in range(0, len(shuffled), pool_size):
             pool = shuffled[start:start + pool_size]
-            batches += self.cut_into_batches(pool[np.argsort(self.lengths[pool], kind='stable')])
+            batches += self.cut_into_batches(pool[np.argsort(jittered_lengths[pool], kind='stable')])
+        if not batches:
+            return
 
         batches = [batches[i] for i in torch.randperm(len(batches)).tolist()]
         longest = max(range(len(batches)), key=lambda i: self.lengths[batches[i]].max())
@@ -744,7 +762,14 @@ def vector_split(values: np.ndarray, fraction: float) -> tuple[np.ndarray, np.nd
         A sorted, random `fraction` of the values (rounding the number up)
     numpy array
         The rest of the values, sorted
+
+    Raises
+    ------
+    ValueError
+        If the fraction is not between 0 and 1
     """
+    if not 0 <= fraction <= 1:
+        raise ValueError(f'The fraction of values in the first part must be between 0 and 1, got {fraction}')
 
     # Subtract a tiny tolerance before rounding up so that floating-point noise
     # (e.g. 1 - 0.1 - 0.3 = 0.6000000000000001) cannot push an exact size up by one
@@ -772,8 +797,14 @@ def random_split_indices(num_samples: int, val_fraction: float,
     -------
     tuple of numpy int arrays
         Sorted (training, validation, test) indices
+
+    Raises
+    ------
+    ValueError
+        If the fractions are not usable (see check_split_fractions)
     """
 
+    check_split_fractions(val_fraction, test_fraction)
     train_fraction = 1 - val_fraction - test_fraction
     training_samples, val_test_samples = vector_split(np.arange(num_samples), train_fraction)
 
@@ -781,6 +812,24 @@ def random_split_indices(num_samples: int, val_fraction: float,
     val_samples, test_samples = vector_split(val_test_samples, val_fraction / (val_fraction + test_fraction))
 
     return training_samples, val_samples, test_samples
+
+
+def check_split_fractions(val_fraction: float, test_fraction: float) -> None:
+    """Check the validation and test fractions of a random split leave room for every set
+
+    Parameters
+    ----------
+    val_fraction, test_fraction : float
+        Fractions of the samples for the validation and test sets
+
+    Raises
+    ------
+    ValueError
+        Unless each is greater than 0 and together they are less than 1 (the training set gets the rest)
+    """
+    if not (0 < val_fraction < 1 and 0 < test_fraction < 1 and val_fraction + test_fraction < 1):
+        raise ValueError('The validation and test fractions must each be greater than 0, and add up to less than 1 '
+                         f'(the training set gets the rest); got {val_fraction} and {test_fraction}')
 
 
 def read_split_file(split_file: str, num_samples: int | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -803,19 +852,24 @@ def read_split_file(split_file: str, num_samples: int | None = None) -> tuple[np
     Raises
     ------
     ValueError
-        If the file does not contain three lines, if any index appears in
-        more than one set (data leakage), or if any index is out of range
+        If the file does not have exactly three lines (blank lines after them
+        aside), if anything in it is not a whole number, if any index appears
+        in more than one set (data leakage), or if any index is out of range
     """
 
-    with open(split_file) as f:
-        lines = [line.rstrip().split() for line in f]
+    with open(split_file, encoding=TEXT_ENCODING) as f:
+        lines = [line.split() for line in f]
 
-    if len(lines) < 3:
-        raise ValueError(f'Split-file {split_file} must contain three lines (train, validation, test).')
+    # Blank lines after the third (such as a final empty line) are not a set; a blank line among the first three
+    # is an empty set
+    while len(lines) > 3 and not lines[-1]:
+        lines.pop()
+    if len(lines) != 3:
+        raise ValueError(f'Split-file {split_file} must have exactly three lines, the training, validation and test '
+                         f'sets, but has {len(lines)}')
 
-    training_samples = np.array([int(i) for i in lines[0]], dtype=int)
-    val_samples = np.array([int(i) for i in lines[1]], dtype=int)
-    test_samples = np.array([int(i) for i in lines[2]], dtype=int)
+    training_samples, val_samples, test_samples = (split_file_indices(split_file, line_number, line)
+                                                   for line_number, line in enumerate(lines, start=1))
 
     # The same sample must never appear in more than one set
     all_samples = np.concatenate([training_samples, val_samples, test_samples])
@@ -827,6 +881,36 @@ def read_split_file(split_file: str, num_samples: int | None = None) -> tuple[np
             raise ValueError(f'Split-file {split_file} contains indices outside the range 0 to {num_samples - 1}.')
 
     return training_samples, val_samples, test_samples
+
+
+def split_file_indices(split_file: str, line_number: int, tokens: list[str]) -> np.ndarray:
+    """The datafile line numbers on one line of a split-file
+
+    Parameters
+    ----------
+    split_file : str
+        The split-file (for error messages)
+    line_number : int
+        Which line of it (from 1)
+    tokens : list of str
+        The line, split on whitespace
+
+    Returns
+    -------
+    numpy int array
+
+    Raises
+    ------
+    ValueError
+        If a token is not a whole number, naming the file and line
+    """
+    try:
+        return np.array([int(token) for token in tokens], dtype=int)
+    except ValueError:
+        bad = next(token for token in tokens if not token.lstrip('+-').isdigit())
+        raise ValueError(f"Line {line_number} of the split-file {split_file} holds '{bad}', which is not a whole "
+                         'number (a split-file lists datafile line numbers, counting from 0; is this a datafile?)'
+                         ) from None
 
 
 def write_split_file(split_file: str, training_samples: np.ndarray, val_samples: np.ndarray,
@@ -913,6 +997,8 @@ def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, spl
         (parsed data, training indices, validation indices, test indices)
     """
 
+    if split_file is None and assign_sets is None:
+        check_split_fractions(percent_val, percent_test)
     data = parse_file(data_file, task, exclude_seq_id=exclude_seq_id, ignore_warnings=ignore_warnings,
                       matrix_file=matrix_file)
 
@@ -1095,6 +1181,8 @@ def split_data_cv(data_file: str, task: Task, encoder: SequenceEncoder | None = 
         validation set, test set)
     """
 
+    if n_folds < 2:
+        raise ValueError(f'Cross-validation needs at least 2 folds, got {n_folds}')
     data, training_samples, val_samples, test_samples = load_and_split(
         data_file, task, exclude_seq_id=exclude_seq_id, split_file=split_file, percent_val=percent_val,
         percent_test=percent_test, ignore_warnings=ignore_warnings, save_splits_output=save_splits_output,

@@ -122,6 +122,20 @@ def test_parse_encode_file_non_numeric(write_lines):
         encode_sequence.parse_encode_file(path)
 
 
+def test_parse_encode_file_ignores_a_byte_order_mark(tmp_path):
+    path = tmp_path / 'encoding.txt'
+    path.write_text('A 1 0\nC 0 1\nD 1 1\n', encoding='utf-8-sig')
+    encode_dict, vector_length = encode_sequence.parse_encode_file(str(path))
+    assert sorted(encode_dict) == ['A', 'C', 'D'] and vector_length == 2
+
+
+@pytest.mark.parametrize('lines, message', [(['AB 1 0', 'C 0 1'], "single character .* 'AB'"),
+                                            (['A', 'C'], "'A' has no values")])
+def test_parse_encode_file_needs_one_character_and_its_values_per_line(write_lines, lines, message):
+    with pytest.raises(ValueError, match=message):
+        encode_sequence.parse_encode_file(write_lines('encoding.txt', lines))
+
+
 def test_parse_encode_file_repeated_character(write_lines):
     path = write_lines('encoding.txt', ['A 1 0', 'C 0 1', 'A 0 0'])
     with pytest.raises(ValueError, match="'A' is listed more than once"):

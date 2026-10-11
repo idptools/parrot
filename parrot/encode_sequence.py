@@ -45,6 +45,10 @@ from parrot.sequence_encoder import check_characters as check_characters
 # Bytes run from 0 to 255; characters that fit in one byte are looked up by their byte value
 NUM_BYTE_VALUES = 256
 
+# Encoding files are read as UTF-8, ignoring a byte-order mark at the start (which some editors write, and which
+# would otherwise become part of the first residue's letter)
+ENCODING_FILE_TEXT_ENCODING = 'utf-8-sig'
+
 
 class LookupTable:
     """Encodes a sequence by looking up every character's vector at once
@@ -265,11 +269,13 @@ def parse_encode_file(file: str) -> tuple[dict[str, list[float]], int]:
     Raises
     ------
     ValueError
-        If the file is empty, if the vectors are not all the same length, if
-        any vector entry is not a number, or if a character is listed twice
+        If the file is empty, if a line does not start with a single
+        character followed by at least one value, if the vectors are not all
+        the same length, if any vector entry is not a number, or if a character
+        is listed twice
     """
 
-    with open(file) as f:
+    with open(file, encoding=ENCODING_FILE_TEXT_ENCODING) as f:
         lines = [x.strip().split() for x in f if len(x.strip()) > 0]
 
     if len(lines) == 0:
@@ -279,8 +285,14 @@ def parse_encode_file(file: str) -> tuple[dict[str, list[float]], int]:
     table: dict[str, list[float]] = {}
     for line in lines:
         character, values = line[0], line[1:]
+        if len(character) != 1:
+            raise ValueError(f"Each line of encoding file {file} must start with a single character (a residue), "
+                             f"but one starts with '{character}'")
+        if not values:
+            raise ValueError(f"Character '{character}' has no values in encoding file {file}; each line is a "
+                             'residue followed by the numbers that encode it')
         if len(values) != vector_length:
-            raise ValueError('Vectors in encoding file do not have same length.')
+            raise ValueError(f'Vectors in encoding file {file} do not have same length.')
         if character in table:
             raise ValueError(f"Character '{character}' is listed more than once in encoding file {file}")
 

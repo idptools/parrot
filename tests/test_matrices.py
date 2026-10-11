@@ -188,6 +188,20 @@ def test_unreadable_matrix_file(tmp_path):
         pid.parse_file(datafile, SQUARE, ignore_warnings=True, matrix_file=str(not_npz))
 
 
+def test_a_single_array_is_not_a_matrix_file(tmp_path):
+    datafile, _ = write_matrix_data(tmp_path, square_matrices(np.random.default_rng(10)))
+    npy_file = tmp_path / 'matrices.npy'
+    np.save(npy_file, np.zeros((3, 3)))
+    with pytest.raises(IOExceptionParrot, match='holds a single array, not a .npz archive'):
+        pid.parse_file(datafile, SQUARE, ignore_warnings=True, matrix_file=str(npy_file))
+
+
+def test_complex_matrices_are_refused():
+    # Their imaginary parts would otherwise be silently dropped
+    with pytest.raises(IOExceptionParrot, match='does not hold real numbers'):
+        matrix_data.check_matrix('a', 'AC', np.array([[1 + 2j, 2], [3, 4j]]), SQUARE)
+
+
 def test_split_data_reads_matrix_data(tmp_path):
     rng = np.random.default_rng(11)
     sequences = {f's{i}': 'ACDEFGHIK'[:3 + i % 6] for i in range(40)}

@@ -43,6 +43,9 @@ MAX_IDS_LISTED = 5
 SYMMETRY_RELATIVE_TOLERANCE = 1e-6
 SYMMETRY_ABSOLUTE_TOLERANCE = 1e-9
 
+# NumPy dtype kinds of the values a matrix may hold: booleans, signed and unsigned integers, and floats
+REAL_NUMBER_KINDS = 'biuf'
+
 
 # .................................................................
 # Reading
@@ -63,13 +66,19 @@ def read_matrix_file(path: str) -> dict[str, np.ndarray]:
     Raises
     ------
     IOExceptionParrot
-        If the file cannot be read as a .npz archive
+        If the file cannot be read as a .npz archive (a single array, as in a
+        .npy file, is not one)
     """
     try:
-        with np.load(path, allow_pickle=False) as archive:
-            return {name: archive[name] for name in archive.files}
+        loaded = np.load(path, allow_pickle=False)
     except (OSError, ValueError) as error:
         raise IOExceptionParrot(f'Cannot read the matrix file {path} as a NumPy .npz archive: {error}') from error
+    if not isinstance(loaded, np.lib.npyio.NpzFile):
+        raise IOExceptionParrot(f'The matrix file {path} holds a single array, not a .npz archive with one matrix '
+                                'per sequence ID; write it with numpy.savez(path, **matrices), where matrices maps '
+                                'each sequence ID to its matrix')
+    with loaded as archive:
+        return {name: archive[name] for name in archive.files}
 
 
 def attach_matrices(lines: list[list[str]], matrices: dict[str, np.ndarray], task: Task) -> list[list[Any]]:
@@ -148,10 +157,10 @@ def check_matrix(sequence_id: str, sequence: str, matrix: np.ndarray, task: Task
                                 f'({len(sequence)}, {expected_columns}): one row per residue and '
                                 + ('one column per residue' if task.width is None else f'{task.width} columns'))
 
-    try:
-        values = matrix.astype(np.float64)
-    except (TypeError, ValueError) as error:
-        raise IOExceptionParrot(f'The matrix of {sequence_id} does not hold numbers ({matrix.dtype})') from error
+    # Real numbers only: converting complex numbers to float64 would silently drop their imaginary parts
+    if matrix.dtype.kind not in REAL_NUMBER_KINDS:
+        raise IOExceptionParrot(f'The matrix of {sequence_id} does not hold real numbers ({matrix.dtype})')
+    values = matrix.astype(np.float64)
     if np.any(np.isinf(values)):
         raise IOExceptionParrot(f'The matrix of {sequence_id} holds infinite values; values must be finite numbers '
                                 'or NaN (missing)')
