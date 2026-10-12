@@ -128,6 +128,14 @@ def test_prediction_speed_says_when_embeddings_were_computed_before_training():
     assert 'from embeddings computed before training' in dict(section.entries)['prediction speed']
 
 
+def test_architecture_section_marks_settings_that_had_no_effect():
+    # A composition window was recorded as if used for sequence data, which uses the whole sequence's composition
+    network = build_network('composition', 20, Task('sequence', 1), {'window_radius': 3, 'hidden_size': 16})
+    entries = dict(network_info.architecture_section(network).entries)
+    assert entries['window_radius'].startswith('3 (no effect: sequence tasks use the whole sequence')
+    assert entries['hidden_size'] == '16'
+
+
 def test_optimize_info_describes_the_search(run_cli, tmp_path, write_lines):
     lines = [line for line in open(data_path('seq_regress_dataset.tsv'))][:60]
     data_file = write_lines('data.tsv', [line.rstrip('\n') for line in lines])
@@ -140,3 +148,14 @@ def test_optimize_info_describes_the_search(run_cli, tmp_path, write_lines):
     for fact in ('successive halving', 'searched learning_rate', 'fixed channels', 'chosen', 'trial',
                  'opt_hyperparameter_trials.tsv', 'opt_optimal_hyperparams.txt', 'search time', 'prediction speed'):
         assert fact in info, fact
+
+
+def test_optimize_info_does_not_call_a_search_of_models_fitted_in_one_step_successive_halving(run_cli, tmp_path):
+    run_cli(parrot_optimize.main, training_command('parrot-optimize', 'knn', data_path('seq_regress_dataset.tsv'),
+                                                   tmp_path / 'opt', 'sequence', 1, '--trials', '3', '--seed', '1',
+                                                   '--silent'))
+    info = (tmp_path / 'opt_info.txt').read_text().splitlines()
+    method = next(line for line in info if line.startswith('method'))
+    configurations = next(line for line in info if line.startswith('configurations'))
+    assert 'successive halving' not in method and 'each fitted once' in method
+    assert configurations.endswith('3 (3 fitted, 0 failed)')

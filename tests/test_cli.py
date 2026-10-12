@@ -738,6 +738,31 @@ def test_cvsplit_ignores_blank_and_comment_lines(run_cli, tmp_path, write_lines)
         assert sorted(np.concatenate([train, val, test]).tolist()) == [0, 1, 2, 3]
 
 
+def test_cvsplit_reads_datafiles_without_ids(run_cli, tmp_path, write_lines):
+    # Without --exclude-seq-id the value column was taken for the sequence, so identical sequences could be parted
+    lines = [f'{sequence} {value}' for value, sequence in enumerate(['AAAA', 'CCCC', 'AAAA', 'DDDD', 'EEEE', 'FFFF'])]
+    run_cli(parrot_cvsplit.main, ['parrot-cvsplit', write_lines('data.tsv', lines), tmp_path / 'splits', '-k', '3',
+                                  '--exclude-seq-id', '--seed', '1'])
+    for fold in range(3):
+        sets = pid.read_split_file(str(tmp_path / f'splits_cv{fold}.txt'), num_samples=6)
+        assert sum(0 in indices and 2 in indices for indices in sets) == 1
+
+
+@pytest.mark.parametrize('lines, arguments, message', [
+    (['AAAA 1.0', 'CCCC 2.0'], [], "Data line 1 .* has the number '1.0' where its sequence should be; .*--exclude-seq-id"),
+    (['a AAAA 1.0', 'b'], [], 'Data line 2 .* has no sequence'),
+])
+def test_cvsplit_checks_the_sequence_column(run_cli, tmp_path, write_lines, lines, arguments, message):
+    with pytest.raises(ValueError, match=message):
+        run_cli(parrot_cvsplit.main, ['parrot-cvsplit', write_lines('data.tsv', lines), tmp_path / 'splits', '-k', '2',
+                                      *arguments])
+
+
+def test_cvsplit_takes_nan_and_inf_for_sequences():
+    assert not parrot_cvsplit.is_finite_number('NAN') and not parrot_cvsplit.is_finite_number('INF')
+    assert parrot_cvsplit.is_finite_number('1.5e3')
+
+
 def test_cvsplit_keeps_every_dot_of_its_prefix(run_cli, tmp_path):
     # Prefixes used to lose everything after their last dot, so these two wrote the same files
     for prefix in ('splits_t0.8', 'splits_t0.9.txt'):

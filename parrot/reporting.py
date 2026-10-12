@@ -117,7 +117,8 @@ def format_values(values: np.ndarray, decimals: int | None = None) -> str:
     values : numpy array or scalar
         The value(s) to format
     decimals : int, optional
-        If given, round to this many decimal places first
+        If given, write every value with exactly this many decimal places (as
+        0.0001 and 0.0000, where rounding and printing gives 1e-04 and 0.0)
 
     Returns
     -------
@@ -125,13 +126,12 @@ def format_values(values: np.ndarray, decimals: int | None = None) -> str:
     """
 
     values = np.asarray(values)
-    if decimals is not None:
-        values = np.around(values, decimals=decimals)
+    text = values.astype(str) if decimals is None else np.char.mod(f'%.{decimals}f', values)
     if values.ndim == 0:
-        return str(values)
+        return str(text)
     if values.ndim == 2:
-        return ' '.join(','.join(row.astype(str)) for row in values)
-    return ' '.join(values.astype(str))
+        return ' '.join(','.join(row) for row in text)
+    return ' '.join(text)
 
 
 def format_true_values(true_values: np.ndarray, task: Task) -> str:

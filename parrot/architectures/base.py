@@ -178,6 +178,27 @@ class ParrotArchitecture(nn.Module):
         """
         return set()
 
+    def settings_without_effect(self) -> dict[str, str]:
+        """Hyperparameters set to something other than their default that have no effect on this network, and why
+
+        These are the network's unused and inactive hyperparameters (see
+        unused_hyperparameters and inactive_hyperparameters) that were changed
+        from their default: parrot-train notes them, and the info file marks
+        them, so that a setting given but not used is not mistaken for one
+        that was. Defaults are left out, since a hyperparameter left at its
+        default was not asked for.
+
+        Returns
+        -------
+        dict
+            Why each one has no effect, by name
+        """
+        reasons = {name: 'not used with the other hyperparameters chosen'
+                   for name in self.inactive_hyperparameters(self.hyperparameter_values)}
+        reasons.update(self.unused_hyperparameters(self.task, self.input_size))
+        defaults = {hyperparameter.name: hyperparameter.default for hyperparameter in self.hyperparameters}
+        return {name: reason for name, reason in reasons.items() if self.hyperparameter_values[name] != defaults[name]}
+
     @property
     def num_classes(self) -> int:
         """Number of output values per sequence (or per residue)."""

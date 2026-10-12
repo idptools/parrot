@@ -326,7 +326,9 @@ def architecture_section(network: ParrotArchitecture) -> Section:
     Section
     """
     entries = [('architecture', f'{network.name}: {network.description}')]
-    entries += [(name, str(value)) for name, value in network.hyperparameter_values.items()]
+    without_effect = network.settings_without_effect()
+    entries += [(name, f'{value} (no effect: {without_effect[name]})' if name in without_effect else str(value))
+                for name, value in network.hyperparameter_values.items()]
 
     if not network.trained_by_gradient_descent:
         entries.append(('model', 'fitted in one step with scikit-learn (see below)'))

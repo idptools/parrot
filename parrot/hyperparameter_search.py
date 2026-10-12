@@ -550,16 +550,24 @@ class HyperparameterSearch:
 
         Normally the best configurations reach the final stage during the
         search, but with few trials none may have. If so, the trial furthest
-        along (the best, among equals) is trained on, one stage at a time.
+        along (the best, among equals) is trained on, one stage at a time. If
+        every trial still waiting has failed or diverged at a later stage, the
+        same choice is made among the trials stopped earlier, which are trained
+        again from the start (their training state was dropped when they were
+        stopped).
 
         Raises
         ------
         RuntimeError
-            If no configuration can be trained further (each failed or diverged)
+            If no configuration can be trained further (each failed or
+            diverged)
         """
         while not any(trial.status == COMPLETED for trial in self.trials):
             continuing = [trial for trial in self.trials
                           if trial.status == WAITING and math.isfinite(trial.stage_losses[-1])]
+            if not continuing:
+                continuing = [trial for trial in self.trials
+                              if trial.status == STOPPED and math.isfinite(trial.stage_losses[-1])]
             if not continuing:
                 raise RuntimeError('Every configuration failed (or diverged), so no network could be trained') \
                     from self._first_failure
@@ -567,6 +575,11 @@ class HyperparameterSearch:
             furthest = max(len(trial.stage_losses) for trial in continuing)
             best = min((trial for trial in continuing if len(trial.stage_losses) == furthest),
                        key=lambda trial: trial.stage_losses[-1])
+            if best.status == STOPPED:
+                if not self.silent:
+                    print(f'  trial {best.number} was stopped earlier, but every configuration trained further has '
+                          'failed, so it is trained again from the start')
+                best.status = WAITING
             self._train_stage(best)
 
     def _train_stage(self, trial: Trial) -> None:

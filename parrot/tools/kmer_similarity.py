@@ -876,7 +876,9 @@ def chance_of_run(covered: np.ndarray, residue_match: np.ndarray, shorter: np.nd
 
         P(covered >= c) = sum over n of P(n stretches) P(n k + extra >= c)
 
-    where P(n stretches) is at most q^(n - 1) (1 - q), and also at most the
+    where P(n stretches) is at most q^(n - 1) (1 - q) (or q^(n - 1) for the
+    most stretches that fit in the shorter sequence, which takes the chance of
+    every longer run, as those cannot happen), and also at most the
     expected number of ways the n - 1 further stretches could be placed:
     r^(n - 1) times the number of ways to share out the residues the shorter
     sequence has to spare (n stretches covering c residues, with a differing
@@ -919,11 +921,14 @@ def chance_of_run(covered: np.ndarray, residue_match: np.ndarray, shorter: np.nd
         fits = np.flatnonzero(stretches <= summed_stretches)
         enough = covered[fits]
         spare = shorter[fits] - (np.maximum(enough, stretches * kmer_size) + stretches - 1)
-        chain = continues[fits] ** (stretches - 1) * (1 - continues[fits])
+        # The most stretches that fit also take the chance that the run would have gone on (it cannot)
+        last = stretches == most_stretches[fits]
+        chain = continues[fits] ** (stretches - 1) * np.where(last, 1.0, 1 - continues[fits])
         # r^(n - 1) x (spare + n - 1 choose n - 1), the ways to place the further stretches
         placements = np.exp(xlogy(stretches - 1, stretch_rate[fits]) + gammaln(spare + stretches)
                             - gammaln(stretches) - gammaln(spare + 1))
-        # nbdtrc(m, n, q): chance of more than m identical residues before n differing ones (each with chance q)
+        # nbdtrc(m, n, 1 - p): chance of more than m identical residues before n differing ones (each residue
+        # differing with chance 1 - p)
         extra_needed = enough - stretches * kmer_size
         enough_extra = np.where(extra_needed > 0,
                                 nbdtrc(np.maximum(extra_needed - 1, 0), stretches, 1 - residue_match[fits]), 1.0)

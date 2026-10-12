@@ -188,6 +188,15 @@ def test_unreadable_matrix_file(tmp_path):
         pid.parse_file(datafile, SQUARE, ignore_warnings=True, matrix_file=str(not_npz))
 
 
+def test_a_matrix_file_of_object_arrays_is_refused_with_a_file_error(tmp_path):
+    # Arrays of Python objects need unpickling, which PARROT never does; numpy's own ValueError named no file
+    datafile, _ = write_matrix_data(tmp_path, square_matrices(np.random.default_rng(10)))
+    object_file = tmp_path / 'objects.npz'
+    np.savez(object_file, a=np.array([np.zeros(2), np.zeros(3)], dtype=object))
+    with pytest.raises(IOExceptionParrot, match='Cannot read the matrices in the matrix file .*objects.npz'):
+        pid.parse_file(datafile, SQUARE, ignore_warnings=True, matrix_file=str(object_file))
+
+
 def test_a_single_array_is_not_a_matrix_file(tmp_path):
     datafile, _ = write_matrix_data(tmp_path, square_matrices(np.random.default_rng(10)))
     npy_file = tmp_path / 'matrices.npy'

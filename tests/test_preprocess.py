@@ -85,6 +85,14 @@ def test_deduplicate_keeps_classification_copies_only_if_they_agree():
     assert any('Removed 1 of them' in line for line in lines)
 
 
+def test_deduplicate_ignores_missing_sequence_labels():
+    # 'nan' never equals 'nan', so copies with missing labels were counted as disagreeing and removed
+    report, lines = report_lines()
+    data = [['a', 'ACD', 'nan'], ['b', 'ACD', '1'], ['c', 'EFG', 'nan'], ['d', 'EFG', 'NaN']]
+    assert preproc.deduplicate(data, 'merge', 'sequence', True, report) == [['b', 'ACD', '1'], ['c', 'EFG', 'nan']]
+    assert any('Removed 0 of them whose copies had different labels' in line for line in lines)
+
+
 def test_deduplicate_merges_residue_labels():
     report, _ = report_lines()
     classification = [['a', 'ACD', '0', '1', 'nan'], ['b', 'ACD', '0', '2', '1'], ['c', 'EF', '1', '1']]
@@ -403,9 +411,12 @@ def test_preprocess_groups_stay_in_one_set_when_deduplication_removes_a_member(r
 
     set_of_tile = {line[0]: name for name, set_lines in read_split_output(output_file).items() for line in set_lines}
     assert all(set_of_tile[f'p{i}_2'] == set_of_tile[f'q{i}_2'] for i in range(40))
+    report = (tmp_path / 'out_preprocess_report.txt').read_text()
     if deduplication:
-        report = (tmp_path / 'out_preprocess_report.txt').read_text()
         assert '40 lines also belong to the group of a copy of their sequence' in report
+    else:
+        # Both copies are still there (identical sequences are kept in one set anyway), so nothing was removed
+        assert 'deduplication removed' not in report
 
 
 def test_preprocess_balances_only_the_training_set(run_cli, tmp_path, write_lines):
@@ -465,6 +476,7 @@ def test_preprocess_writes_a_report(run_cli, tmp_path, write_lines, capsys):
     (['--split', 'kmer', '--kmer-size', '2'], 'between 3 and 8'),
     (['--min-length', '10', '--max-length', '5'], 'cannot be larger'),
     (['--remove-sequence-duplicates', '--deduplicate', 'merge'], 'same as --deduplicate drop'),
+    (['--split', 'homology', '--threads', '0'], '--threads must be at least 1'),
 ])
 def test_preprocess_rejects_invalid_options(run_cli, tmp_path, extra_arguments, message):
     with pytest.raises((ValueError, RuntimeError), match=message):
@@ -513,8 +525,10 @@ def test_preprocess_rejects_delimited_fields_a_datafile_cannot_hold(run_cli, tmp
                        '--delimiter', '\t')
 
 
-@pytest.mark.parametrize('arguments, message', [(['--cb-max-fraction-removed', '1.5'], 'max_fraction_removed'),
-                                                (['--cb-balance-threshold', '0.5'], 'balance threshold'),
+@pytest.mark.parametrize('arguments, message', [(['--cb-max-fraction-removed', '1'],
+                                                 '--cb-max-fraction-removed must be between 0 and 1'),
+                                                (['--cb-balance-threshold', '0.5'],
+                                                 '--cb-balance-threshold must be between 1'),
                                                 (['--cb-block-size', '1'], '--cb-block-size must be at least 2')])
 def test_preprocess_checks_class_balancing_options_before_splitting(run_cli, tmp_path, monkeypatch, arguments,
                                                                      message):
@@ -522,6 +536,27 @@ def test_preprocess_checks_class_balancing_options_before_splitting(run_cli, tmp
     with pytest.raises(Exception, match=message):
         run_preprocess(run_cli, data_path('seq_class_dataset.tsv'), tmp_path / 'out.tsv', 'sequence',
                        'classification', '--split', 'random', '--class-balance', *arguments)
+
+
+def test_preprocess_class_balancing_says_when_every_label_is_missing(run_cli, tmp_path, write_lines):
+    # It used to stop with numpy's "zero-size array to reduction operation" while describing the classes
+    input_file = write_lines('in.tsv', ['a MKVLA nan', 'b MKVLC nan', 'c MKVLD nan'])
+    with pytest.raises(ValueError, match='found no class labels in the data'):
+        run_preprocess(run_cli, input_file, tmp_path / 'out.tsv', 'sequence', 'classification', '--class-balance')
+
+
+@pytest.mark.parametrize('labels, checked', [
+    (['0', '0', '0'], 'Checked: PARROT reads the output as sequence-mapped classification data with 2 classes'),
+    (['0', 'inf', '1'], 'WARNING: PARROT cannot train on the output as it is: Data line 2'),
+    (['0', 'helix', '1'], 'WARNING: PARROT cannot train on the output as it is: Data line 2'),
+])
+def test_preprocess_output_check_counts_at_least_two_classes_and_reports_infinite_labels(run_cli, tmp_path,
+                                                                                         write_lines, labels, checked):
+    # A file of 0s was reported as having "1 classes", and an infinite label crashed with OverflowError
+    input_file = write_lines('in.tsv', [f'{name} MKVL{residue} {label}'
+                                        for name, residue, label in zip('abc', 'ACD', labels)])
+    run_preprocess(run_cli, input_file, tmp_path / 'out.tsv', 'sequence', 'classification')
+    assert checked in (tmp_path / 'out_preprocess_report.txt').read_text()
 
 
 def test_preprocess_warns_when_split_sets_would_be_empty(run_cli, tmp_path, write_lines):
@@ -636,6 +671,15 @@ def test_kmer_search_evalues_are_not_too_significant_for_unrelated_sequences():
 
     assert len(reported) <= 6
     assert all(match.identity < 0.9 for match in reported)
+
+
+@pytest.mark.parametrize('residue_match', [0.06, 0.2])
+def test_chance_of_a_run_filling_a_short_sequence_is_not_understated(residue_match):
+    # Only one 4-residue stretch fits in 12 residues, so covering them all takes 8 more identical residues: p^8.
+    # The run's chance of going on (which it cannot) was left out, understating this 4.6-fold at p = 0.2
+    chance = kmer_similarity.chance_of_run(np.array([12]), np.array([residue_match]), np.array([12]),
+                                           kmer_similarity.KmerCriteria(kmer_size=4))
+    assert chance[0] >= residue_match ** 8 * (1 - 1e-12)
 
 
 def test_kmer_search_with_a_loose_criterion_reports_every_linked_pair():

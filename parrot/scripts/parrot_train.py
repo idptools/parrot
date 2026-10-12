@@ -80,6 +80,10 @@ def run() -> None:
 
     run = common.prepare_training_run(args, PROGRAM_NAME)
     network = build_network(args.architecture, len(run.encoder), run.task, hyperparameters).to(run.device)
+    if not run.silent:
+        flags = {hyperparameter.name: hyperparameter.cli_flag for hyperparameter in network.hyperparameters}
+        for name, reason in network.settings_without_effect().items():
+            print(f'Note: {flags[name]} has no effect here ({reason}), so it is recorded but not used')
 
     settings: dict[str, Any] = dict(architecture=args.architecture, **hyperparameters)
     if network.trained_by_gradient_descent:

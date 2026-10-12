@@ -3,6 +3,7 @@ Tests for parrot.process_input_data: reading datafiles, validating values, build
 datasets, collating batches and splitting data into train/validation/test sets.
 """
 
+import re
 from typing import Any
 
 import numpy as np
@@ -616,6 +617,20 @@ def test_read_split_file_names_the_file_and_line_of_a_value_that_is_not_a_line_n
     path = write_lines('data.tsv', ['Frag0 ACDE 1.0', 'Frag1 EFGH 2.0', 'Frag2 KLMN 3.0'])
     with pytest.raises(ValueError, match="Line 1 of the split-file .*data.tsv holds 'Frag0'.*is this a datafile"):
         pid.read_split_file(path)
+
+
+@pytest.mark.parametrize('token', ['--2', '+-1', '1_0', '\u00b2', '\u0663', '1.0'])
+def test_read_split_file_names_tokens_that_only_look_like_whole_numbers(write_lines, token):
+    # Signs, underscores and other scripts' digits passed a looser check, or int(), and were misread or crashed
+    path = write_lines('split.txt', ['0 1', f'2 {token}', '3'])
+    with pytest.raises(ValueError, match=f"Line 2 of the split-file .*split.txt holds '{re.escape(token)}'"):
+        pid.read_split_file(path)
+
+
+def test_read_split_file_reports_a_negative_line_number_as_out_of_range(write_lines):
+    path = write_lines('split.txt', ['0 1', '2 -1', '3'])
+    with pytest.raises(ValueError, match='outside the range'):
+        pid.read_split_file(path, num_samples=4)
 
 
 @pytest.mark.parametrize('percent_val, percent_test', [(0, 0), (0.6, 0.6), (-0.1, 0.2), (0.15, 0)])

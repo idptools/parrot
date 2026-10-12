@@ -308,7 +308,10 @@ def merge_copies(copies: list[Line], mode: str, datatype: str, classification: b
 
 
 def merge_sequence_labels(copies: list[Line], summary: MergeSummary) -> Line | None:
-    """Sequence classification: keep the first copy if every copy has the same label, otherwise none
+    """Sequence classification: keep the first labelled copy if every labelled copy has the same label, otherwise none
+
+    Missing labels ('nan') are ignored, as they are when residue labels and regression values are merged; if no
+    copy has a label, the first copy is kept.
 
     Parameters
     ----------
@@ -321,10 +324,11 @@ def merge_sequence_labels(copies: list[Line], summary: MergeSummary) -> Line | N
     -------
     list or None
     """
-    if len({label_value(copy[2]) for copy in copies}) > 1:
+    labelled = [copy for copy in copies if not is_missing_label(copy[2])]
+    if len({label_value(copy[2]) for copy in labelled}) > 1:
         summary.conflicting_sequences += 1
         return None
-    return copies[0]
+    return labelled[0] if labelled else copies[0]
 
 
 def merge_sequence_values(copies: list[Line], summary: MergeSummary) -> Line:

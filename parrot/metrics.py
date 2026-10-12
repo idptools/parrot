@@ -91,9 +91,18 @@ def labelled_values(true_values: Sequence[np.ndarray], predictions: Sequence[np.
         The matching predictions: a 1D array, or class probabilities if
         `probabilistic` ([num_labelled X num_classes], one row per sequence or
         labelled residue)
+
+    Raises
+    ------
+    ValueError
+        If `probabilistic` is True for matrix data (which has no class
+        probabilities; see scripts/common.check_probabilistic_classification)
     """
 
     if probabilistic:
+        if task.is_matrix:
+            raise ValueError('Class probabilities apply to sequence and residue classification only, not to matrix '
+                             'data')
         # One row of class probabilities per sequence (sequence data) or per residue (residue data), in the same
         # order as the pooled true labels, so residues with a missing label are left out of both
         true_flat = flatten(true_values)

@@ -208,11 +208,19 @@ def describe_search(args: argparse.Namespace, searcher: hyperparameter_search.Hy
         'name : value' entries
     """
     outcomes = Counter(trial.status for trial in searcher.trials)
-    entries = [('method', 'successive halving, with new configurations proposed by a tree-structured Parzen '
-                          'estimator (TPE) and a third drawn at random'),
-               ('configurations', f'{len(searcher.trials)} ({outcomes[hyperparameter_search.COMPLETED]} trained for '
-                                  f'every epoch, {outcomes[hyperparameter_search.STOPPED]} stopped early, '
-                                  f'{outcomes[hyperparameter_search.FAILED]} failed)')]
+    completed, stopped, failed = (outcomes[status] for status in (hyperparameter_search.COMPLETED,
+                                                                   hyperparameter_search.STOPPED,
+                                                                   hyperparameter_search.FAILED))
+    # Models fitted in one step have a single stage, so nothing is halved and no configuration is stopped early
+    if searcher.space.trained_by_gradient_descent:
+        method = ('successive halving, with new configurations proposed by a tree-structured Parzen estimator (TPE) '
+                  'and a third drawn at random')
+        configurations = f'{completed} trained for every epoch, {stopped} stopped early, {failed} failed'
+    else:
+        method = ('new configurations proposed by a tree-structured Parzen estimator (TPE) and a third drawn at '
+                  'random, each fitted once')
+        configurations = f'{completed} fitted, {failed} failed'
+    entries = [('method', method), ('configurations', f'{len(searcher.trials)} ({configurations})')]
     if len(searcher.stages) > 1:
         entries.append(('stages', f'{" -> ".join(str(epochs) for epochs in searcher.stages)} epochs; the best '
                                   f'1/{searcher.reduction_factor} of each stage continued to the next'))

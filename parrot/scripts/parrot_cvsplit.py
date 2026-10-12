@@ -23,6 +23,7 @@ Licensed under the MIT license.
 """
 
 import argparse
+import math
 import os
 
 import numpy as np
@@ -63,6 +64,8 @@ def build_parser() -> argparse.ArgumentParser:
                         dest='training_fraction', metavar='fraction',
                         help='fraction of each fold\'s non-test sequences used for training, the rest being for '
                              f'validation (default {DEFAULT_TRAINING_FRACTION})')
+    parser.add_argument('--exclude-seq-id', dest='exclude_seq_id', action='store_true',
+                        help='the datafile has no sequence IDs: each line starts with the sequence')
     parser.add_argument('--seed', type=int, default=None, metavar='seed',
                         help='random seed, for reproducible split-files (default: not seeded)')
     return parser
@@ -85,9 +88,7 @@ def run() -> None:
         raise ValueError(f'--k-folds must be at least 2, got {args.num_folds}')
     prefix = split_file_prefix(args.output_splitfiles)
 
-    # Blank and comment lines are skipped exactly as they are when the datafile is read for training,
-    # so the indices line up
-    sequences = [line[1] if len(line) > 1 else '' for line in pid.read_tsv_raw(data_file)]
+    sequences = datafile_sequences(data_file, args.exclude_seq_id)
     splits = cross_validation_splits(sequences, args.num_folds, args.training_fraction)
 
     print('Creating split-files:')
@@ -96,6 +97,52 @@ def run() -> None:
         split_file = f'{prefix}_cv{fold}{SPLIT_FILE_EXTENSION}'
         print(split_file)
         pid.write_split_file(split_file, training, validation, test)
+
+
+def datafile_sequences(data_file: str, exclude_seq_id: bool) -> list[str]:
+    """The sequence on each data line of a datafile, in order
+
+    Blank and comment lines are skipped exactly as they are when the datafile
+    is read for training, so the indices line up with parrot-train's.
+
+    Parameters
+    ----------
+    data_file : str
+        The datafile
+    exclude_seq_id : bool
+        True if the lines have no sequence ID, so each starts with the sequence
+
+    Returns
+    -------
+    list of str
+
+    Raises
+    ------
+    ValueError
+        If a line has no sequence, or its sequence is a number (as it is for a
+        datafile without IDs read as if it had them)
+    """
+    column = 0 if exclude_seq_id else 1
+    sequences = []
+    for number, line in enumerate(pid.read_tsv_raw(data_file), start=1):
+        if len(line) <= column:
+            raise ValueError(f'Data line {number} of {data_file} has no sequence: '
+                             + ("expected '<sequence> <value(s)>'" if exclude_seq_id
+                                else "expected '<ID> <sequence> <value(s)>'"))
+        if is_finite_number(line[column]):
+            hint = '' if exclude_seq_id else '; if the datafile has no sequence IDs, use --exclude-seq-id'
+            raise ValueError(f"Data line {number} of {data_file} has the number '{line[column]}' where its sequence "
+                             f'should be{hint}')
+        sequences.append(line[column])
+    return sequences
+
+
+def is_finite_number(text: str) -> bool:
+    """Whether text is a finite number (not 'NAN' or 'INF', which are also sequences: Asn-Ala-Asn, Ile-Asn-Phe)."""
+    try:
+        return math.isfinite(float(text))
+    except ValueError:
+        return False
 
 
 def split_file_prefix(output_splitfiles: str) -> str:

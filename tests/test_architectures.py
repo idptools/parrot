@@ -149,6 +149,23 @@ def test_searchable():
     assert not HyperParameter('depth', int, 3, 'help').searchable
 
 
+@pytest.mark.parametrize('architecture, task, input_size, values, without_effect', [
+    ('composition', Task('sequence', 1), 20, {'window_radius': 3}, ['window_radius']),
+    ('composition', Task('sequence', 1), 20, {}, []),                          # a default was not asked for
+    ('composition', Task('residues', 1), 20, {'window_radius': 3}, []),
+    ('svm', Task('sequence', 1), 20, {'kernel': 'linear', 'relative_gamma': 2.0}, ['relative_gamma']),
+    ('svm', Task('sequence', 1), 20, {'kernel': 'rbf', 'relative_gamma': 2.0}, []),
+    ('svm', Task('sequence', 1), 1280, {}, []),     # 'features' cannot be dipeptides, but composition is used
+    ('unet2d', Task('matrix', 1, width=4), 20, {'pair_features': 'outer'}, ['pair_features']),
+])
+def test_settings_without_effect_are_the_changed_ones_the_network_does_not_use(architecture, task, input_size,
+                                                                                values, without_effect):
+    defaults = {hyperparameter.name: hyperparameter.default for hyperparameter in architecture_class(
+        architecture).hyperparameters}
+    network = build_network(architecture, input_size, task, {**defaults, **values})
+    assert list(network.settings_without_effect()) == without_effect
+
+
 @pytest.mark.parametrize('kwargs', [
     {'name': 'hidden size'},
     {'value_type': list},
@@ -162,6 +179,7 @@ def test_searchable():
     {'value_type': bool, 'default': True, 'legacy_value': 'no'},
     {'exclusive_minimum': True},                                            # exclusive minimum without a minimum
     {'exclusive_maximum': True},                                            # exclusive maximum without a maximum
+    {'search_range': (0, 5), 'log_scale': True},                            # no logarithm of 0
 ])
 def test_hyperparameter_rejects_invalid_declarations(kwargs):
     arguments = dict(name='hidden_size', value_type=int, default=10, help='help')

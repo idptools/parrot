@@ -15,6 +15,7 @@ Licensed under the MIT license.
 
 import functools
 import math
+import re
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any, NamedTuple
 
@@ -35,6 +36,10 @@ DEFAULT_SET_FRACTIONS = (0.7, 0.15, 0.15)
 # Tolerance (in number of samples) used when converting a set fraction into a set
 # size, to absorb floating-point error in the fractions themselves
 SPLIT_SIZE_TOLERANCE = 1e-9
+
+# A line number in a split-file: digits 0-9, optionally signed (so that a negative number is reported as out of
+# range). int() alone would also accept '1_0' as 10, and digits of other scripts
+SPLIT_FILE_NUMBER = re.compile(r'[+-]?[0-9]+')
 
 # How sequences are grouped into training batches. 'length' groups sequences of
 # similar length (see LengthBatchSampler), so little of each batch is padding;
@@ -910,13 +915,12 @@ def split_file_indices(split_file: str, line_number: int, tokens: list[str]) -> 
     ValueError
         If a token is not a whole number, naming the file and line
     """
-    try:
-        return np.array([int(token) for token in tokens], dtype=int)
-    except ValueError:
-        bad = next(token for token in tokens if not token.lstrip('+-').isdigit())
-        raise ValueError(f"Line {line_number} of the split-file {split_file} holds '{bad}', which is not a whole "
-                         'number (a split-file lists datafile line numbers, counting from 0; is this a datafile?)'
-                         ) from None
+    for token in tokens:
+        if not SPLIT_FILE_NUMBER.fullmatch(token):
+            raise ValueError(f"Line {line_number} of the split-file {split_file} holds '{token}', which is not a "
+                             'whole number (a split-file lists datafile line numbers, counting from 0; is this a '
+                             'datafile?)')
+    return np.array([int(token) for token in tokens], dtype=int)
 
 
 def write_split_file(split_file: str, training_samples: np.ndarray, val_samples: np.ndarray,

@@ -290,6 +290,27 @@ def test_every_configuration_diverging_is_an_error(min_epochs):
     assert all(trial.status == hs.FAILED and trial.failure_reason == hs.DIVERGED for trial in search.trials)
 
 
+class LaterStageFailureTrainer(FakeTrainer):
+    """Trial 1 scores best in the first stage, then fails in the second (as running out of GPU memory would)."""
+
+    def train_to(self, trial, epochs):
+        if trial.number == 1 and epochs > self.first_stage_epochs:
+            raise ValueError('pretend this configuration ran out of memory at its second stage')
+        super().train_to(trial, epochs)
+        return float(trial.number)
+
+
+def test_a_stopped_configuration_is_trained_again_when_the_promoted_one_fails():
+    # Trials 2 and 3 were stopped with good scores; the search used to say every configuration had failed
+    space = hs.SearchSpace('brnn')
+    trainer = LaterStageFailureTrainer(space)
+    search = make_search(trainer=trainer, n_trials=3, max_epochs=9, min_epochs=1)
+    trainer.first_stage_epochs = search.stages[0]
+    best = search.run()
+    assert best.number == 2 and best.status == hs.COMPLETED and best.epochs == 9
+    assert search.trials[0].status == hs.FAILED and search.trials[2].status == hs.STOPPED
+
+
 def test_too_few_trials_still_train_one_configuration_fully():
     search = make_search(n_trials=2, max_epochs=27, min_epochs=3)
     best = search.run()

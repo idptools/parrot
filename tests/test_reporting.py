@@ -169,6 +169,13 @@ def test_density_plots_use_a_log_scale_once_a_bin_holds_enough_values(tmp_path, 
     assert isinstance(norm, LogNorm) == log_scale
 
 
+def test_class_probabilities_of_matrix_data_are_refused_with_a_message():
+    # The commands refuse this combination; through the API it failed with numpy's shape error (or not at all)
+    matrices = [np.zeros((4, 4, 2)), np.zeros((5, 5, 2))]
+    with pytest.raises(ValueError, match='not to matrix data'):
+        metrics.labelled_values([np.zeros((4, 4)), np.zeros((5, 5))], matrices, Task('matrix', 2), probabilistic=True)
+
+
 def test_scatter_samples_cover_the_test_set_evenly_without_lining_up_with_positions(monkeypatch):
     # 20 sequences of 50 residues, as their indices in test-set order: every 50th value would be each one's first residue
     monkeypatch.setattr(figures, 'MAX_SCATTER_POINTS', 20)
@@ -425,8 +432,11 @@ def test_write_performance_metrics(tmp_path):
     (np.int64(2), None, '2'),
     (np.array([0, 2, 1]), None, '0 2 1'),
     (np.array([0.123456, 0.876544]), 4, '0.1235 0.8765'),
+    # Every value has the same form: rounding float32 values and printing them gave '1e-04' and '0.0'
+    (np.array([0.0001, 0.0, 0.9999], dtype=np.float32), 4, '0.0001 0.0000 0.9999'),
+    (np.float32(0.5), 4, '0.5000'),
     # Several values per residue (class probabilities): one comma-separated token per residue
-    (np.array([[0.91, 0.06, 0.03], [0.12, 0.8, 0.08]]), 4, '0.91,0.06,0.03 0.12,0.8,0.08'),
+    (np.array([[0.91, 0.06, 0.03], [0.12, 0.8, 0.08]]), 4, '0.9100,0.0600,0.0300 0.1200,0.8000,0.0800'),
 ])
 def test_format_values(values, decimals, expected):
     assert reporting.format_values(values, decimals) == expected

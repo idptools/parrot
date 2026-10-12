@@ -134,6 +134,9 @@ class HyperParameter:
                 raise ValueError(f"Hyperparameter '{self.name}' is not numeric, so it cannot have a search range")
             if self.search_range[0] >= self.search_range[1]:
                 raise ValueError(f"Hyperparameter '{self.name}' has an empty search range {self.search_range}")
+            if self.log_scale and self.search_range[0] <= 0:
+                raise ValueError(f"Hyperparameter '{self.name}' is searched on a log scale, so its search range "
+                                 f'{self.search_range} must lie above 0')
 
         if self.search_choices is not None:
             if self.search_range is not None:

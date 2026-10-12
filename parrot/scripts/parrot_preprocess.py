@@ -25,8 +25,9 @@ Licensed under the MIT license.
 """
 
 import argparse
+import math
 import os
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -57,6 +58,9 @@ MAX_MMSEQS_SENSITIVITY = 7.5
 
 # Recoding to more classes than this probably means the data are not really classes
 MANY_CLASSES = 100
+
+# The fewest classes PARROT trains on (as parrot-train's --num-classes requires), used when checking the output
+MIN_CLASSES = 2
 
 
 # .................................................................
@@ -233,7 +237,8 @@ def check_arguments(args: argparse.Namespace) -> None:
     if args.remove_sequence_duplicates and args.deduplicate is not None:
         raise ValueError('--remove-sequence-duplicates is the same as --deduplicate drop; give one or the other')
 
-    for name, value in (('--min-length', args.min_length), ('--max-length', args.max_length)):
+    for name, value in (('--min-length', args.min_length), ('--max-length', args.max_length),
+                        ('--threads', args.threads)):
         if value is not None and value < 1:
             raise ValueError(f'{name} must be at least 1, got {value}')
     if args.min_length is not None and args.max_length is not None and args.min_length > args.max_length:
@@ -244,8 +249,14 @@ def check_arguments(args: argparse.Namespace) -> None:
         check_split_settings(args)
     check_matrix_options(args)
     if args.class_balance:
-        # Checked now rather than when balancing, which comes after the (possibly long) split
-        class_balancing.check_balance_settings(args.cb_balance_threshold, args.cb_max_fraction_removed)
+        # Checked now rather than when balancing, which comes after the (possibly long) split, and by flag name
+        # (class_balancing checks them again, by its own parameter names)
+        if not 1.0 <= args.cb_balance_threshold <= class_balancing.MAX_BALANCE_THRESHOLD:
+            raise ValueError(f'--cb-balance-threshold must be between 1 and {class_balancing.MAX_BALANCE_THRESHOLD:g}, '
+                             f'got {args.cb_balance_threshold:g}')
+        if not 0 < args.cb_max_fraction_removed < 1:
+            raise ValueError('--cb-max-fraction-removed must be between 0 and 1 (not inclusive), got '
+                             f'{args.cb_max_fraction_removed:g}')
         if args.cb_block_size is not None and args.cb_block_size < class_balancing.MIN_BLOCK_SIZE:
             raise ValueError(f'--cb-block-size must be at least {class_balancing.MIN_BLOCK_SIZE}, '
                              f'got {args.cb_block_size}')
@@ -596,11 +607,11 @@ def split(lines: list[Line], before_deduplication: list[Line], args: argparse.Na
     if groups:
         report.add(f'{sum(line[0] in groups for line in lines):,} of {len(lines):,} lines belong to a group from '
                    f'{args.groups}; records in a group are kept together')
-        links = removed_copy_links(items, before_deduplication, groups)
+        links = removed_copy_links(items, lines, before_deduplication, groups)
         if links:
-            splitting.merge_groups(items, links)
-            report.add(f'{len(links):,} lines also belong to the group of a copy of their sequence that '
-                       'deduplication removed')
+            splitting.merge_groups(items, [(items[index].group, group) for index, group in links])
+            report.add(f'{len({index for index, _ in links}):,} lines also belong to the group of a copy of their '
+                       'sequence that deduplication removed')
     fractions = dict(zip(splitting.SET_NAMES, args.set_fractions))
     report.add('Target fractions: ' + ', '.join(f'{splitting.SET_LABELS[name]} {fraction:g}'
                                                 for name, fraction in fractions.items()))
@@ -615,18 +626,22 @@ def split(lines: list[Line], before_deduplication: list[Line], args: argparse.Na
     return [lines[item.index] for item in kept], [str(item.split) for item in kept]
 
 
-def removed_copy_links(items: list[splitting.SplitItem], before_deduplication: list[Line],
-                       groups: dict[str, str]) -> list[tuple[str, str]]:
-    """Links between each record's group and the groups of the copies of its sequence that deduplication removed
+def removed_copy_links(items: list[splitting.SplitItem], lines: list[Line], before_deduplication: list[Line],
+                       groups: dict[str, str]) -> list[tuple[int, str]]:
+    """Links between each record and the groups of the copies of its sequence that deduplication removed
 
     Deduplication keeps one line per sequence; the copies it removed may have
     belonged to other groups, whose other records must still stay in the same
-    set as the line that replaced them.
+    set as the line that replaced them. A line that deduplication merged keeps
+    the ID of the first copy, so the removed copies are the (ID, sequence)
+    pairs before deduplication that are not after it.
 
     Parameters
     ----------
     items : list of SplitItem
-        The records to split
+        The records to split, one per line of `lines`
+    lines : list
+        The lines after deduplication
     before_deduplication : list
         Every line before deduplication
     groups : dict
@@ -634,16 +649,20 @@ def removed_copy_links(items: list[splitting.SplitItem], before_deduplication: l
 
     Returns
     -------
-    list of (str, str)
-        Pairs of groups to join (only groups some record still has)
+    list of (int, str)
+        (index of a record, group of a removed copy of its sequence) for each
+        group the record must join (only groups some record still has)
     """
-    groups_of_sequence: dict[str, set[str]] = defaultdict(set)
-    for line in before_deduplication:
-        if line[0] in groups:
-            groups_of_sequence[line[1]].add(groups[line[0]])
+    removed = (Counter((line[0], line[1]) for line in before_deduplication)
+               - Counter((line[0], line[1]) for line in lines))
+    groups_of_removed_copies: dict[str, set[str]] = defaultdict(set)
+    for sequence_id, sequence in removed:
+        if sequence_id in groups:
+            groups_of_removed_copies[sequence].add(groups[sequence_id])
 
     present = {item.group for item in items}
-    return [(item.group, group) for item in items for group in sorted(groups_of_sequence.get(item.sequence, ()))
+    return [(item.index, group) for item in items
+            for group in sorted(groups_of_removed_copies.get(item.sequence, ()))
             if group != item.group and group in present]
 
 
@@ -750,6 +769,11 @@ def balance_classes(lines: list[Line], splits: list[str] | None, args: argparse.
         The kept lines (the training set first, if split)
     list of str or None
         The set of each kept line
+
+    Raises
+    ------
+    ValueError
+        If no line to balance has a class label
     """
     if not args.class_balance:
         return lines, splits
@@ -766,6 +790,9 @@ def balance_classes(lines: list[Line], splits: list[str] | None, args: argparse.
         other_splits = [split for split in splits if split != 'train']
 
     classes, before = class_balancing.class_count_matrix(to_balance)
+    if not classes:
+        raise ValueError('Class balancing (--class-balance) found no class labels in the '
+                         + ('training set' if splits is not None else 'data') + ' (every label is missing)')
     report.add(f'Before: {class_balancing.format_class_counts(classes, before.sum(axis=0))} '
                f'(imbalance {imbalance_text(before.sum(axis=0))}; target <= {args.cb_balance_threshold:g}, removing '
                f'at most {100 * args.cb_max_fraction_removed:g}% of {len(to_balance):,} sequences)')
@@ -872,12 +899,15 @@ def check_output(datafile: str, split_file: str | None, datatype: str, classific
     lines = process_input_data.read_tsv_raw(datafile)
     try:
         if classification:
-            labels = [float(value) for line in lines for value in line[2:] if not preproc.is_missing_label(value)]
-            num_classes = int(max(labels)) + 1 if labels else 1
+            # Labels that are not whole numbers (text, or infinite) are left for parse_file() to report, with their line
+            labels = [preproc.label_value(value) for line in lines for value in line[2:]
+                      if not preproc.is_missing_label(value)]
+            largest = max((label for label in labels if isinstance(label, float) and math.isfinite(label)),
+                          default=0.0)
+            num_classes = max(int(largest) + 1, MIN_CLASSES)
         else:
             num_classes = 1
-        data = process_input_data.parse_file(datafile, Task(datatype, max(num_classes, 2) if classification else 1),
-                                             ignore_warnings=True)
+        data = process_input_data.parse_file(datafile, Task(datatype, num_classes), ignore_warnings=True)
         if split_file is not None:
             process_input_data.read_split_file(split_file, num_samples=len(data))
     except ValueError as error:
@@ -893,9 +923,9 @@ def check_output(datafile: str, split_file: str | None, datatype: str, classific
 
 
 def matrix_class_count(matrix_file: str) -> int:
-    """How many classes the matrices hold: one more than the largest label (and at least 2)
+    """How many classes the matrices hold: one more than the largest label (and at least MIN_CLASSES)
 
-    Labels that are not whole numbers are left for parse_file() to report.
+    Labels that are not whole numbers (including infinite ones) are left for parse_file() to report.
 
     Parameters
     ----------
@@ -906,9 +936,9 @@ def matrix_class_count(matrix_file: str) -> int:
     -------
     int
     """
-    largest_labels = [np.nanmax(matrix) for matrix in read_matrix_file(matrix_file).values()
-                      if not np.all(np.isnan(matrix))]
-    return max(int(max(largest_labels, default=0)) + 1, 2)
+    largest_labels = [matrix[np.isfinite(matrix)].max() for matrix in read_matrix_file(matrix_file).values()
+                      if np.isfinite(matrix).any()]
+    return max(int(max(largest_labels, default=0)) + 1, MIN_CLASSES)
 
 
 def check_matrix_output(datafile: str, split_file: str | None, args: argparse.Namespace,

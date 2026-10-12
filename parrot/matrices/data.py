@@ -67,7 +67,8 @@ def read_matrix_file(path: str) -> dict[str, np.ndarray]:
     ------
     IOExceptionParrot
         If the file cannot be read as a .npz archive (a single array, as in a
-        .npy file, is not one)
+        .npy file, is not one), or an array in it cannot be read (e.g. an
+        array of Python objects, which would need unpickling)
     """
     try:
         loaded = np.load(path, allow_pickle=False)
@@ -78,7 +79,11 @@ def read_matrix_file(path: str) -> dict[str, np.ndarray]:
                                 'per sequence ID; write it with numpy.savez(path, **matrices), where matrices maps '
                                 'each sequence ID to its matrix')
     with loaded as archive:
-        return {name: archive[name] for name in archive.files}
+        try:
+            return {name: archive[name] for name in archive.files}
+        except (OSError, ValueError) as error:
+            raise IOExceptionParrot(f'Cannot read the matrices in the matrix file {path} ({error}); each must be an '
+                                    'array of numbers, as numpy.savez writes from NumPy arrays') from error
 
 
 def attach_matrices(lines: list[list[str]], matrices: dict[str, np.ndarray], task: Task) -> list[list[Any]]:
