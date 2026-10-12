@@ -6,8 +6,8 @@ The imbalance of a dataset is the count of its most common class divided by
 the count of its least common class (1.0 is perfectly balanced). Sequence
 classes are balanced by capping every class at the same size
 (run_class_balance_sequences); residue classes, where each line holds a mix of
-classes, by removing one line at a time, each time the line whose removal
-improves the balance most (run_class_balance_residues).
+classes, by removing one line at a time, each time the line of a random block
+whose removal improves the balance most (run_class_balance_residues).
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -177,15 +177,16 @@ def run_class_balance_residues(lines: list[Line], balance_threshold: float = DEF
     """Remove lines from residue-classification data so its classes are more balanced
 
     This implements Stochastic Residue Class Balancing (SRCB). Each step draws
-    block_size lines at random, works out the imbalance after removing each of
-    them, and removes the one that improves it most. If none of the block
-    improves the balance, every remaining line is checked before giving up, and
-    a line that would make the balance worse (or delete a class entirely) is
-    never removed. Balancing stops when the imbalance is at most
-    balance_threshold, when max_fraction_removed of the lines have been removed,
-    or when no single removal improves the balance (see
-    residue_balance_stop_reason()). Each step costs O(block_size), so this
-    scales to very large datasets; a larger block makes better choices.
+    block_size lines at random (with replacement), works out the imbalance
+    after removing each of them, and removes the one that improves it most. If
+    none of the block improves the balance, every remaining line is checked
+    before giving up, and a line that would make the balance worse (or delete a
+    class entirely) is never removed. Balancing stops when the imbalance is at
+    most balance_threshold, when max_fraction_removed of the lines have been
+    removed, or when no single removal improves the balance (see
+    residue_balance_stop_reason()). Each step costs O(block_size) unless no
+    line of the block improves the balance, so this scales to very large
+    datasets; a larger block makes better choices.
 
     Parameters
     ----------

@@ -2,9 +2,10 @@
 Making PARROT's random choices reproducible.
 
 PARROT draws random numbers from NumPy (data splits, cross-validation folds,
-class balancing, the hyperparameter search) and PyTorch (network initialisation
-and batch shuffling). set_random_seed() seeds both, so a command run with
---seed gives the same result every time on the same machine.
+class balancing, the hyperparameter search, the classical models' random
+states) and PyTorch (network initialisation, dropout and batch shuffling).
+set_random_seed() seeds both, so a command run with --seed gives the same
+result every time on the same machine.
 
 Code that needs its own random number generator gets one from
 random_generator(), which is seeded from NumPy's global generator, so it too

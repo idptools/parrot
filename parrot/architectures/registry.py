@@ -81,7 +81,7 @@ def get_architecture(name: str) -> type[ParrotArchitecture]:
 
 def fill_legacy_values(architecture_class: type[ParrotArchitecture],
                        values: Mapping[str, Any]) -> dict[str, Any]:
-    """Complete the saved hyperparameter values of a network with any hyperparameters added since it was saved
+    """Complete the saved hyperparameter values of a network with any hyperparameters added since it was saved.
 
     A hyperparameter added to PARROT after a network was saved is missing from
     the values saved with it. If the hyperparameter declares a legacy_value (the
@@ -164,6 +164,15 @@ def build_network(architecture: str, input_size: int, task: Task,
     -------
     ParrotArchitecture
         A freshly initialised network on the CPU
+
+    Raises
+    ------
+    ValueError
+        If no architecture with that name is registered, a hyperparameter is
+        given that the architecture does not have, a value is invalid, or the
+        network cannot be built for this task and encoding (e.g. a datatype the
+        architecture does not support, or a classical model's 'dipeptides'
+        features with an encoding too wide for them)
     """
     architecture_class = get_architecture(architecture)
     values = resolve_hyperparameters(architecture_class, hyperparameter_values)

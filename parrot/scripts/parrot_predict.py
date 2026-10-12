@@ -78,8 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
     # Everything below is read from networks saved by this version of PARROT
     saved = parser.add_argument_group(
         'recorded in the saved network',
-        'Networks saved by this version of PARROT record these, so they are only needed for networks saved by earlier '
-        'versions (which recorded only their weights); otherwise, if given, they are checked against the network.')
+        'Networks saved by this version of PARROT record these, so -d, -c and --encode, if given, are only checked '
+        'against the network. Networks saved by earlier versions recorded only their weights: they need -d (and '
+        "--encode, if it was not 'onehot'), and their number of classes and size are read from the weights.")
     saved.add_argument('-d', '--datatype', choices=COMMAND_LINE_DATATYPES,
                        help="'sequence' or 'residues' (networks saved by earlier versions are never 'matrix' networks)")
     saved.add_argument('-c', '--classes', type=int, metavar='num_classes',
@@ -125,7 +126,8 @@ def run() -> None:
     if args.verbose and not args.silent:
         print_prediction_settings(args, seq_file, saved_network, output_file, network, encoder)
 
-    # Protein language model and NARDINI encodings: encode every sequence once, into a cache next to the output
+    # Protein language model and NARDINI encodings: encode every sequence once, into a cache next to the output (or
+    # in --embedding-cache)
     prepare_encoding(encoder, sequences, args.embedding_cache,
                      os.path.join(os.path.dirname(output_file), plm.PREDICT_CACHE_DIRECTORY), device,
                      PROGRAM_NAME, args.silent)

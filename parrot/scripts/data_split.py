@@ -110,6 +110,8 @@ class DataSplit:
         ------
         ValueError
             If any set is empty, or the split-file does not fit the datafile
+        RuntimeError
+            If MMseqs2 fails, or a similarity split cannot separate the sets (see split_by_method)
         """
         self.num_sequences = len(data)
         if self.split_file is not None:
@@ -140,6 +142,11 @@ class DataSplit:
         -------
         tuple of numpy int arrays
             (training, validation, test) indices, in datafile order
+
+        Raises
+        ------
+        RuntimeError
+            If MMseqs2 fails, or a similarity split cannot separate the sets (see splitting.enforce_separation)
         """
         assert self.method is not None and self.fractions is not None
         items = [splitting.SplitItem(index, sample[1], f'sequence {index}') for index, sample in enumerate(data)]
@@ -150,6 +157,7 @@ class DataSplit:
                   f'{PREPROCESS_METHOD_NAMES[self.method]} does):')
 
         def report(line: str) -> None:
+            """Print one line of the splitting's report, indented (unless silent)."""
             if not self.silent:
                 print(f'  {line}')
 
@@ -186,12 +194,15 @@ class DataSplit:
         Raises
         ------
         ValueError
-            If a fold would have no held-out sequence to score
+            If a fold would have no held-out sequence to score, or there are fewer distinct sequences than folds
+        RuntimeError
+            If MMseqs2 fails
         """
         if self.method not in ('kmer', 'mmseqs'):
             return pid.identical_sequence_folds(data, samples, n_folds)
 
         def report(line: str) -> None:
+            """Print one line of the fold assignment's report, indented (unless silent)."""
             if not self.silent:
                 print(f'  {line}')
 

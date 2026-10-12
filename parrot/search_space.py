@@ -3,7 +3,8 @@ The space of hyperparameter configurations searched by parrot-optimize.
 
 A configuration is a value for every searched hyperparameter: the learning rate
 (for networks trained by gradient descent) and every hyperparameter the
-architecture marks as searchable that the user has not fixed. To search the
+architecture marks as searchable that the user has not fixed and that has an
+effect for the task and encoding. To search the
 space, each configuration is also represented as a point: one coordinate in
 [0, 1] per number and one choice index per setting with a fixed set of values
 (see SearchSpace).
@@ -182,6 +183,9 @@ class SearchSpace:
     def from_point(self, point: Sequence[float] | np.ndarray) -> dict[str, HyperParameterValue]:
         """The configuration at a point (the inverse of to_point()).
 
+        Hyperparameters that have no effect, given the others, are set to their
+        defaults (see normalized()).
+
         Parameters
         ----------
         point : numpy array
@@ -204,9 +208,9 @@ class SearchSpace:
     def normalized(self, values: Mapping[str, HyperParameterValue]) -> dict[str, HyperParameterValue]:
         """A configuration with every hyperparameter that has no effect, given the others, at its default value
 
-        Configurations that differ only in such hyperparameters are the same
-        network, so they are tried only once (see
-        ParrotArchitecture.inactive_hyperparameters).
+        The default is as default_point_values() gives it. Configurations that
+        differ only in such hyperparameters are the same network, so they are
+        tried only once (see ParrotArchitecture.inactive_hyperparameters).
 
         Parameters
         ----------
@@ -234,6 +238,9 @@ class SearchSpace:
     def default_point_values(self) -> dict[str, HyperParameterValue]:
         """PARROT's default value of every searched hyperparameter, moved into its search range if outside it, as it
         would be at a point (see default_values)
+
+        A setting whose default is not one of its search choices takes its first
+        search choice instead.
 
         Returns
         -------
@@ -271,9 +278,11 @@ class SearchSpace:
     def initial_design(self, n: int, rng: np.random.Generator) -> list[np.ndarray]:
         """n space-filling points: a Latin hypercube for numbers, and every choice used equally often
 
-        In a Latin hypercube each number's range is cut into n equal slices and
-        each slice is used by exactly one point, so the points spread over every
-        range (unlike a one-at-a-time sweep or plain random points).
+        In a Latin hypercube (McKay, Beckman & Conover 1979, Technometrics
+        21:239) each number's range is cut into n equal slices and each slice
+        is used by exactly one point, so the points spread over every range
+        (unlike a one-at-a-time sweep or plain random points). Each choice is
+        used equally often, as nearly as n allows.
 
         Parameters
         ----------

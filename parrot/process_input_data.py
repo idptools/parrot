@@ -1,7 +1,8 @@
 """
 Module with functions for processing an input datafile into a PyTorch-compatible
 format: reading and validating datafiles, building datasets, collating batches
-and splitting data into training, validation and test sets.
+and splitting data into training, validation and test sets (and
+cross-validation folds).
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -27,7 +28,9 @@ from parrot import parrot_exceptions
 from parrot.encode_sequence import OneHotEncoder
 from parrot.matrices import data as matrix_data
 from parrot.sequence_encoder import SequenceEncoder
-from parrot.tasks import IGNORED_CLASS_LABEL, MISSING_LABEL_TEXT, VALID_DATATYPES, Task  # noqa: F401 (labels: see tasks)
+
+# MISSING_LABEL_TEXT is imported only so that other modules (e.g. tools/preproc.py) can read it from here
+from parrot.tasks import IGNORED_CLASS_LABEL, MISSING_LABEL_TEXT, VALID_DATATYPES, Task  # noqa: F401
 from parrot.tools import dataset_warnings
 
 # Default fractions of the data in the training, validation and test sets
@@ -68,7 +71,8 @@ LENGTH_NOISE = 0.05
 # padded to exact lengths spends more time compiling than computing (measured on
 # MPS: epochs 2-5x slower than with rounded lengths). Rounding up in steps of at
 # least PAD_MIN_STEP residues, and about 1/PAD_STEPS_PER_DOUBLING of the length,
-# keeps the number of distinct shapes small while adding less than 1/8 extra padding.
+# keeps the number of distinct shapes small while adding fewer padded positions
+# than 1/PAD_STEPS_PER_DOUBLING of the length or PAD_MIN_STEP, whichever is larger.
 PAD_MIN_STEP = 8
 PAD_STEPS_PER_DOUBLING = 8
 
@@ -160,6 +164,8 @@ def parse_lines(lines: list[list[str]], datatype: str) -> list[Sample]:
         For the first line that cannot be parsed, saying which data line it is
         (counting only non-empty, non-comment lines), what is wrong with it, and
         what it contains
+    ValueError
+        If `datatype` is not one of VALID_DATATYPES
     """
 
     if datatype not in VALID_DATATYPES:
@@ -304,12 +310,13 @@ def parse_file(tsvfile: str, task: Task, exclude_seq_id: bool = False, ignore_wa
     Raises
     ------
     IOExceptionParrot
-        If the file has no data lines, a line cannot be parsed, a class label
-        is not an integer in the range [0, num_classes - 1], or a matrix does
-        not fit its sequence
+        If the file has no data lines, a line cannot be parsed, or a class label
+        is not an integer in the range [0, num_classes - 1]; for matrix data,
+        also if the matrix file cannot be read, a sequence ID is repeated or has
+        no matrix, or a matrix does not fit its sequence
     ValueError
         If a matrix file is given for a task that is not a matrix task, or
-        missing for one that is
+        missing for one that is, or if `exclude_seq_id` is True for matrix data
     """
 
     if task.is_matrix != (matrix_file is not None):
@@ -497,6 +504,11 @@ def padded_batch_length(longest: int) -> int:
     -------
     int
         The padded length, >= `longest`
+
+    Raises
+    ------
+    ValueError
+        If `longest` is less than 1
     """
     if longest < 1:
         raise ValueError(f'Sequences must have at least one residue, got a longest length of {longest}')
@@ -671,6 +683,11 @@ class LengthBatchSampler(Sampler[list[int]]):
         shuffle : bool
             True for training (sortish, re-randomised every epoch); False for a
             fixed order sorted by length
+
+        Raises
+        ------
+        ValueError
+            If `batch_size` is less than 1
         """
         if batch_size < 1:
             raise ValueError(f'Batch size must be positive, got {batch_size}')
@@ -991,7 +1008,8 @@ def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, spl
     ignore_warnings : bool, optional
         If True, do not print dataset warnings
     save_splits_output : str, optional
-        If given (and no split-file is used), write the random split to this path
+        If given (and no split-file is used), write the split (random, or made
+        by `assign_sets`) to this path
     matrix_file : str, optional
         Matrix tasks only: the .npz file holding each sequence's matrix (see parse_file())
     assign_sets : callable, optional
@@ -1005,6 +1023,16 @@ def load_and_split(data_file: str, task: Task, exclude_seq_id: bool = False, spl
     -------
     tuple
         (parsed data, training indices, validation indices, test indices)
+
+    Raises
+    ------
+    IOExceptionParrot
+        If the datafile (or matrix file) cannot be parsed (see parse_file())
+    ValueError
+        If the validation and test fractions are not usable (see
+        check_split_fractions), the split-file is not valid (see
+        read_split_file()), or the split-file or random split leaves the
+        training, validation or test set empty
     """
 
     if split_file is None and assign_sets is None:
@@ -1045,8 +1073,9 @@ def split_data(data_file: str, task: Task, encoder: SequenceEncoder | None = Non
         The task the data is for
     encoder : SequenceEncoder, optional
         How to encode sequences (default one-hot)
-    exclude_seq_id, split_file, percent_val, percent_test, ignore_warnings, save_splits_output, matrix_file,
-    assign_sets
+    exclude_seq_id, split_file, percent_val, percent_test, ignore_warnings
+        See load_and_split()
+    save_splits_output, matrix_file, assign_sets
         See load_and_split()
 
     Returns
@@ -1151,11 +1180,17 @@ def identical_sequence_folds(data: list[Sample], samples: np.ndarray,
     samples : numpy int array
         The sample indices to divide
     n_folds : int
+        Number of folds, at least 2
 
     Returns
     -------
     list of tuples of numpy int arrays
         For each fold, (training indices, held-out indices)
+
+    Raises
+    ------
+    ValueError
+        If there are fewer than two folds, or fewer distinct sequences than folds
     """
     return cross_validation_folds(samples, n_folds, groups=[data[index][1] for index in samples])
 
@@ -1174,8 +1209,9 @@ def split_data_cv(data_file: str, task: Task, encoder: SequenceEncoder | None = 
 
     Parameters
     ----------
-    data_file, task, encoder, exclude_seq_id, split_file, percent_val, percent_test, ignore_warnings,
-    save_splits_output, matrix_file, assign_sets
+    data_file, task, encoder, exclude_seq_id, split_file, percent_val, percent_test
+        See split_data()
+    ignore_warnings, save_splits_output, matrix_file, assign_sets
         See split_data()
     n_folds : int, optional
         Number of cross-validation folds (default 5)
@@ -1189,6 +1225,16 @@ def split_data_cv(data_file: str, task: Task, encoder: SequenceEncoder | None = 
     tuple
         (list of (fold training set, fold held-out set) pairs, training set,
         validation set, test set)
+
+    Raises
+    ------
+    IOExceptionParrot
+        If the datafile cannot be parsed (see load_and_split())
+    ValueError
+        If there are fewer than two folds, or more folds than training and
+        validation sequences (or, with the default `assign_folds`, than
+        distinct sequences among them), or the split is not usable (see
+        load_and_split())
     """
 
     if n_folds < 2:

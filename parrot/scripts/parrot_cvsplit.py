@@ -189,7 +189,8 @@ def cross_validation_splits(sequences: list[str], num_folds: int,
     Raises
     ------
     ValueError
-        If any set of any fold would be empty (checked before anything is written)
+        If there are fewer distinct sequences than folds, or any set of any fold would be empty (checked before
+        anything is written)
     """
     num_sequences = len(sequences)
     groups = np.array(sequences, dtype=object)

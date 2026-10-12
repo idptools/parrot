@@ -19,7 +19,7 @@ very stringent:
    HomologyCriteria.max_evalue (1e-3) and covers at least
    HomologyCriteria.min_coverage (30%) of the shorter sequence. No
    sequence-identity threshold is used, so any statistically significant
-   alignment counts. Searches use MMseqs2's most sensitive setting.
+   alignment counts. Searches use MMseqs2's most sensitive setting by default.
 2. Clustering. An all-against-all search links similar records, which are
    clustered around representatives, largest first, as in CD-HIT. Records that
    must stay together (the same --groups entry, or identical sequences) are
@@ -30,8 +30,8 @@ very stringent:
    training, test against validation, validation against training), and any
    record in the lower-priority set (training < validation < test) similar
    to the higher-priority set is removed together with its group. Because
-   MMseqs2 E-values depend on the size of the database searched, the search is
-   repeated until a round finds nothing.
+   E-values depend on the size of the database searched, which removing
+   records shrinks, the search is repeated until a round finds nothing.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -91,7 +91,8 @@ class SimilaritySearch(Protocol):
 
     def __call__(self, queries: Sequence[str], targets: Sequence[str] | None = None,
                  weaker: bool = False) -> Sequence[Match]:
-        """Search queries against targets (None: against themselves, each pair once and without self-hits).
+        """Search queries against targets (None: against themselves, without self-hits; a pair may be found both
+        ways round).
 
         Every match that meets the criterion has linked=True; with weaker=True,
         weaker similarities are returned as well (linked=False), for the report.
@@ -116,7 +117,8 @@ class SplitItem:
     group : str
         Records with the same group are always placed in the same set
     split : str or None
-        'train', 'val' or 'test' once assigned
+        'train', 'val' or 'test' once assigned (or the name of another set given
+        to assign_clusters, such as a cross-validation fold)
     """
 
     index: int
@@ -155,8 +157,10 @@ def representative_clusters(keys: Sequence[str], links: Iterable[tuple[str, str]
     directly linked to it joins its cluster. Every member of a cluster is
     therefore a direct relative of its representative; unlike connected
     components, a chain of weak links cannot pull unrelated keys together. This
-    is the scheme used by CD-HIT (Li & Godzik 2006, Bioinformatics 22:1658) and
-    by MMseqs2's default clustering mode.
+    is the scheme used by CD-HIT (Li & Godzik 2006, Bioinformatics 22:1658),
+    with keys ordered by size rather than by sequence length. MMseqs2's default
+    clustering (greedy set cover) also clusters around representatives without
+    chaining, but picks the key with the most links first.
 
     Parameters
     ----------
@@ -209,6 +213,7 @@ def merge_groups(items: Sequence[SplitItem], links: Iterable[tuple[str, str]]) -
     parent: dict[str, str] = {item.group: item.group for item in items}
 
     def root(group: str) -> str:
+        """The group's root (its merged name), shortening the path to it on the way."""
         while parent[group] != group:
             parent[group] = parent[parent[group]]
             group = parent[group]
@@ -229,6 +234,15 @@ def similarity_clusters(items: Sequence[SplitItem], search: SimilaritySearch,
     Clustering only keeps similar records together so that little data is lost
     later; the guarantee that no two sets share similar records comes from
     enforce_separation().
+
+    Parameters
+    ----------
+    items : list of SplitItem
+        The records (records in one group always end up in one cluster)
+    search : SimilaritySearch
+        Finds similar sequences (searched all against all)
+    report : callable
+        Receives report lines
 
     Returns
     -------
@@ -272,6 +286,11 @@ def assign_clusters(items: Sequence[SplitItem], clusters: dict[str, int], fracti
         Decides the order in which clusters of the same size are assigned
     report : callable
         Receives report lines
+
+    Raises
+    ------
+    ValueError
+        If the fractions do not sum to 1
     """
     if not np.isclose(sum(fractions.values()), 1.0):
         raise ValueError(f'Set fractions must sum to 1, got {fractions}')
@@ -300,10 +319,26 @@ def random_split(items: Sequence[SplitItem], fractions: dict[str, float], rng: n
                  report: Callable[[str], None]) -> list[SplitItem]:
     """Assign groups to sets at random (identical sequences are kept in one group, so never split)
 
+    Parameters
+    ----------
+    items : list of SplitItem
+        The records (their groups and sets are modified in place)
+    fractions : dict
+        Target fraction of the records for each set
+    rng : numpy.random.Generator
+        Decides the order in which groups of the same size are assigned
+    report : callable
+        Receives report lines
+
     Returns
     -------
     list of SplitItem
         Every item, with its set
+
+    Raises
+    ------
+    ValueError
+        If the fractions do not sum to 1
     """
     merge_groups(items, identical_sequence_links(items))
     clusters = {group: number for number, group in enumerate(sorted({item.group for item in items}))}
@@ -314,6 +349,15 @@ def random_split(items: Sequence[SplitItem], fractions: dict[str, float], rng: n
 def enforce_separation(items: Sequence[SplitItem], search: SimilaritySearch,
                        report: Callable[[str], None]) -> list[SplitItem]:
     """Search each set against the others, removing records similar to a higher-priority set, until none remain
+
+    Parameters
+    ----------
+    items : list of SplitItem
+        The records, each assigned to 'train', 'val' or 'test'
+    search : SimilaritySearch
+        Finds similar sequences
+    report : callable
+        Receives report lines
 
     Returns
     -------
@@ -370,6 +414,20 @@ def cross_set_matches(items: Sequence[SplitItem], search: SimilaritySearch,
     The pairs of sets are searched with the test set first, so validation
     records already to be removed (similar to the test set) are not searched
     against the training set: training records similar only to them can stay.
+
+    Parameters
+    ----------
+    items : list of SplitItem
+        The records, each assigned to 'train', 'val' or 'test'
+    search : SimilaritySearch
+        Finds similar sequences
+    report : callable
+        Receives a report line for each pair of sets searched
+
+    Returns
+    -------
+    set of str
+        The groups to remove
     """
     by_set: dict[str, list[SplitItem]] = defaultdict(list)
     for item in items:
@@ -417,6 +475,13 @@ def similarity_split(items: Sequence[SplitItem], fractions: dict[str, float], rn
     -------
     list of SplitItem
         The items kept (records similar to a higher-priority set are removed)
+
+    Raises
+    ------
+    ValueError
+        If the fractions do not sum to 1
+    RuntimeError
+        If the sets are still not separated after MAX_SEPARATION_ROUNDS rounds
     """
     report(f'Similarity criterion: {search.describe()}')
     merge_groups(items, identical_sequence_links(items))

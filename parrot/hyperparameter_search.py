@@ -4,20 +4,23 @@ Hyperparameter search for any PARROT architecture (used by parrot-optimize).
 The search space is the learning rate (for networks trained by gradient descent)
 plus every hyperparameter the architecture marks as searchable: numbers over a
 `search_range` (optionally on a log scale) and settings with a fixed set of
-values over their `search_choices`. Hyperparameters fixed by the user are not
-searched, and the rest keep their defaults. Each configuration is scored by its
-best validation loss (or, with cross-validation, the average over folds of each
-fold's best validation loss), exactly as parrot-train chooses its best epoch.
+values over their `search_choices`. Hyperparameters fixed by the user, and those
+that have no effect for the task and encoding, are not searched; every
+hyperparameter that is neither searched nor fixed keeps its default. Each
+configuration is scored by its best validation loss (or, with cross-validation,
+the average over folds of each fold's best validation loss), exactly as
+parrot-train chooses its best epoch.
 
 Two ideas make the search efficient, and need nothing beyond NumPy:
 
 - Successive halving (Jamieson & Talwalkar 2016, AISTATS; in its asynchronous
   form ASHA, Li et al. 2020, MLSys). Every configuration is first trained for a
   few epochs. Once enough configurations have reached a stage, the best
-  1/REDUCTION_FACTOR of them continue for REDUCTION_FACTOR times as many
+  1/REDUCTION_FACTOR of them continue for about REDUCTION_FACTOR times as many
   epochs, carrying on from where they stopped, up to the full number of epochs.
   Poor configurations are therefore abandoned early, and most of the training
-  goes to the promising ones.
+  goes to the promising ones. (Models fitted in one step have a single stage:
+  each configuration is fitted once.)
 - Model-based sampling with a tree-structured Parzen estimator (TPE; Bergstra
   et al. 2011, NeurIPS), in the multivariate form used by BOHB (Falkner et al.
   2018, ICML). After PARROT's default hyperparameters and a space-filling initial
@@ -68,7 +71,8 @@ REDUCTION_FACTOR = 3
 # being explored (BOHB's default random_fraction; Falkner et al. 2018)
 RANDOM_FRACTION = 1 / 3
 
-# How many times a new configuration is drawn before looking for one that has not been tried
+# How many times a new configuration is drawn (from the TPE model or at random) before a small space is listed in
+# full to find one that has not been tried
 MAX_DRAWS_PER_TRIAL = 100
 
 # A search space with at most this many configurations (every hyperparameter a whole number or a choice)
@@ -76,7 +80,8 @@ MAX_DRAWS_PER_TRIAL = 100
 MAX_LISTED_CONFIGURATIONS = 100_000
 
 # The space-filling initial design tries this many configurations, or two per searched hyperparameter if
-# that is more (PARROT's choice: enough to cover the space coarsely before the TPE model takes over)
+# that is more, but never more than the trials left after the defaults (PARROT's choice: enough to cover the
+# space coarsely before the TPE model takes over)
 MIN_INITIAL_DESIGN = 8
 
 # How much of an error message is kept as a failed trial's reason (so the trials table stays readable)
@@ -146,6 +151,11 @@ def stage_epochs(max_epochs: int, min_epochs: int, reduction_factor: int = REDUC
     list of int
         Increasing epoch counts from min_epochs to max_epochs, e.g. [3, 10, 30] for 30 and 3, or [6, 17, 50]
         for 50 and 6
+
+    Raises
+    ------
+    ValueError
+        If min_epochs is not between 1 and max_epochs, or reduction_factor is less than 2
     """
     if not 1 <= min_epochs <= max_epochs:
         raise ValueError(f'The minimum number of epochs must be between 1 and {max_epochs}, got {min_epochs}')
@@ -155,8 +165,8 @@ def stage_epochs(max_epochs: int, min_epochs: int, reduction_factor: int = REDUC
         return [max_epochs]
 
     n_stages = max(2, 1 + round(math.log(max_epochs / min_epochs) / math.log(reduction_factor)))
-    # The stages between the first and the last; each is longer than min_epochs, as n_stages - 2 is at most
-    # log(max_epochs / min_epochs) / log(reduction_factor) - 1/2
+    # The stages between the first and the last; each is longer than min_epochs before rounding, as n_stages - 2 is
+    # at most log(max_epochs / min_epochs) / log(reduction_factor) - 1/2 (one that rounds to min_epochs merges with it)
     middle = [max_epochs / reduction_factor ** steps_back for steps_back in range(n_stages - 2, 0, -1)]
     return sorted({min_epochs, *(round(value) for value in middle), max_epochs})
 
@@ -199,13 +209,14 @@ class Trial:
     stage_losses : list of float
         The score at the end of each stage reached (inf if training failed or diverged)
     epochs : int
-        Epochs trained so far
+        Epochs trained so far (0 for models fitted in one step)
     status : str
         WAITING, STOPPED, COMPLETED or FAILED (see the constants at the top of this module)
     failure_reason : str
         Why training failed (empty unless the status is FAILED)
     folds : list of FoldProgress
-        Training progress on each fold (dropped once the trial cannot continue)
+        Training progress on each fold (dropped when the trial fails, or is
+        stopped because it can never be promoted)
     """
 
     number: int
@@ -251,7 +262,7 @@ class TrialTrainer:
         space : SearchSpace
             The space being searched
         loaders : list of (DataLoader, DataLoader)
-            (training, validation) loaders, one pair per fold
+            (training, validation) loaders: one pair for the validation split, or one per fold
         input_size : int
             Length of the per-residue encoding vectors
         task : Task
@@ -381,6 +392,11 @@ class TrialTrainer:
             Training loss per epoch
         list of float
             Validation loss per epoch
+
+        Raises
+        ------
+        ValueError
+            If configurations are scored by cross-validation (one network per fold)
         """
         if len(self.loaders) != 1:
             raise ValueError('Only a trial scored on the validation split has a single trained network')
@@ -429,13 +445,20 @@ class HyperparameterSearch:
             rounded and at least 1, so there are usually three stages; see stage_epochs())
         reduction_factor : int, optional
             Each stage keeps the best 1/reduction_factor of its configurations and
-            trains them reduction_factor times as long
+            trains them reduction_factor times as long. The epoch settings are
+            not used for models fitted in one step, which have a single stage.
         rng : numpy.random.Generator, optional
-            Source of randomness for choosing configurations
+            Source of randomness for choosing configurations (default: a new, unseeded generator)
         silent : bool, optional
             If True, print nothing
         on_progress : callable, optional
             Called with the search after every step (e.g. to save the trials so far)
+
+        Raises
+        ------
+        ValueError
+            If n_trials is less than 1, or (for networks trained by gradient
+            descent) the epoch settings are invalid (see stage_epochs())
         """
         if n_trials < 1:
             raise ValueError(f'The number of trials must be at least 1, got {n_trials}')
@@ -470,6 +493,12 @@ class HyperparameterSearch:
         Trial
             The best trial: the lowest score among those trained for the full
             number of epochs
+
+        Raises
+        ------
+        RuntimeError
+            If no configuration could be trained for the full number of epochs
+            (see _train_best_to_completion())
         """
         if not self.silent:
             self.print_plan()
@@ -675,7 +704,9 @@ class HyperparameterSearch:
 
         At most n_trials / reduction_factor trials can ever be promoted from a
         stage, so a trial ranked below that many others can never be (its rank
-        can only fall as more trials finish the stage).
+        can only fall as more trials finish the stage). The best trial at each
+        stage is always kept, so that one can still be trained to completion
+        when too few trials were tried for any to be promoted.
         """
         most_promoted = max(1, self.n_trials // self.reduction_factor)
         for stage in range(len(self.stages) - 1):

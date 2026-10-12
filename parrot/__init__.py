@@ -1,7 +1,8 @@
 """
 PARROT
-A framework for training neural networks that map protein sequences to values,
-either one value per sequence or one value per residue.
+A framework for training neural networks (and simple baseline models) that map
+protein sequences to values: one value per sequence, one value per residue, or
+a matrix of values per sequence.
 
 The names below are PARROT's public interface, grouped by what they are for.
 Everything else lives in the module that defines it (e.g.

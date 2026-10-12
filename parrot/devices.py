@@ -173,8 +173,8 @@ def cpu_copy(value: Any) -> Any:
 
     Tensors are always copied, even if they are already on the CPU, so the copy
     stays as it is while training goes on changing the original. Anything that
-    is not a tensor (e.g. a fitted scikit-learn model in a classical network's
-    state dict) is kept as it is.
+    is not a tensor (e.g. the pickled scikit-learn model in a classical
+    network's state dict) is kept as it is.
 
     Parameters
     ----------
@@ -183,7 +183,9 @@ def cpu_copy(value: Any) -> Any:
 
     Returns
     -------
-    The same structure, with every tensor replaced by a detached copy on the CPU
+    Any
+        The same structure, with every tensor replaced by a detached copy on
+        the CPU
     """
     if isinstance(value, torch.Tensor):
         return value.detach().to('cpu', copy=True)

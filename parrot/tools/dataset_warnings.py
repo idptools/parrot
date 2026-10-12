@@ -1,9 +1,10 @@
 """
 Checks of a dataset against common rules of thumb, printing a warning for each
 one it breaks: duplicated sequences, imbalanced classes, and regression values
-that are far from zero, widely spread or skewed. None of these stops PARROT
-from training; they point out data that may train poorly or give misleading
-test results.
+that are far from zero, widely spread or skewed. It also notes how many
+residue or matrix labels are missing. None of these stops PARROT from
+training; they point out data that may train poorly or give misleading test
+results.
 
 The thresholds are rules of thumb rather than hard limits, chosen to flag
 data worth a second look.

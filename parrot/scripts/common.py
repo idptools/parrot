@@ -1,8 +1,11 @@
 """
 Building blocks shared by PARROT's command-line tools: the data loading, and
 saving and reporting, that parrot-train and parrot-optimize share (their
-command line is built in training_parser.py), and the device and
-embedding-cache options that parrot-predict also uses.
+command line is built in training_parser.py); the device and
+embedding-cache options, the encoding of sequences ahead of time and the
+check of --probabilistic-classification, which parrot-predict also uses; and
+the datatypes and legacy-option note that parrot-predict and
+parrot-preprocess also use.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -73,6 +76,7 @@ def check_matrix_arguments(args: argparse.Namespace) -> None:
     """Check the matrix-data arguments of matrix data: a matrix file that exists, and a positive length limit
 
     Only architectures for matrix data offer these options (see training_parser.py).
+    args.matrix_file is replaced by its absolute path.
 
     Parameters
     ----------
@@ -119,7 +123,7 @@ def check_matrix_lengths(sequences: list[str], max_length: int) -> None:
 
 
 def add_embedding_cache_argument(parser: 'argparse._ActionsContainer', default_name: str) -> None:
-    """Add --embedding-cache, which only applies to protein language model encodings
+    """Add --embedding-cache, which only applies to protein language model and NARDINI encodings
 
     Parameters
     ----------
@@ -219,7 +223,7 @@ def check_probabilistic_classification(probabilistic: bool, task: Task) -> None:
 
 
 def select_device(args: argparse.Namespace) -> torch.device:
-    """Choose the device from the --device and --gpu-id arguments
+    """Choose the device from the --device and --gpu-id arguments, and say which it is (unless --silent)
 
     Parameters
     ----------
@@ -451,6 +455,9 @@ def describe_split(data_split: DataSplit, n_folds: int | None) -> str:
 def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: int | None = None) -> TrainingRun:
     """Validate the shared arguments, then load and split the data
 
+    Protein language model embeddings and NARDINI features of every sequence
+    are also computed now, into the embedding cache (see prepare_encoding()).
+
     Parameters
     ----------
     args : argparse.Namespace
@@ -468,9 +475,12 @@ def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: i
     Raises
     ------
     FileNotFoundError
-        If the datafile, split-file, encoding file or output directory does not exist
+        If the datafile, matrix file, encoding file or output directory does not exist
     ValueError
-        If any argument is invalid, or the datafile does not match the task
+        If any argument is invalid (including a --split that is neither a file nor a method), or the datafile does
+        not match the task
+    RuntimeError
+        If the requested device is not available, or --split mmseqs is asked for but MMseqs2 cannot be found
     """
 
     set_random_seed(args.seed)

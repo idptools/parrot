@@ -3,9 +3,9 @@ The steps of parrot-preprocess that clean, deduplicate and recode a datafile,
 and write the processed datafile.
 
 Every function here works on parsed datafile lines ([ID, sequence, value(s)],
-all as text, as read by process_input_data.read_tsv_raw()) and records what it
-did in a ProcessingReport rather than printing it. Splitting is in splitting.py
-and class balancing in class_balancing.py.
+all as text, as read by process_input_data.read_tsv_raw()), and none prints:
+those that report what they did record it in a ProcessingReport. Splitting is
+in splitting.py and class balancing in class_balancing.py.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -245,6 +245,12 @@ def deduplicate(lines: list[Line], mode: str, datatype: str, classification: boo
     -------
     list
         One line per kept sequence, in order of first appearance, with the first copy's ID
+
+    Raises
+    ------
+    ValueError
+        If the mode is unknown, or (merging residue data) copies of a sequence
+        have different numbers of values
     """
     if mode not in DEDUPLICATION_MODES:
         raise ValueError(f"Unknown deduplication mode '{mode}': choose from {', '.join(DEDUPLICATION_MODES)}")
@@ -293,6 +299,11 @@ def merge_copies(copies: list[Line], mode: str, datatype: str, classification: b
     Returns
     -------
     list or None
+
+    Raises
+    ------
+    ValueError
+        If merging residue data whose copies have different numbers of values
     """
     if mode == 'first':
         return copies[0]
@@ -599,6 +610,11 @@ def write_dataset(lines: list[Line], splits: list[str] | None, datafile: str, sp
         Where to write them
     report : ProcessingReport
         Where to record what was written
+
+    Raises
+    ------
+    ValueError
+        If a line's set is not 'train', 'val' or 'test'
     """
     if splits is not None:
         order = [i for name in SET_NAMES for i in range(len(lines)) if splits[i] == name]

@@ -34,7 +34,8 @@ from parrot.devices import cpu_copy, full_float32_precision
 from parrot.tasks import Task
 
 # The learning rate is the one hyperparameter shared by every architecture
-LEARNING_RATE = HyperParameter('learning_rate', float, default=0.001, help='initial learning rate',
+LEARNING_RATE = HyperParameter('learning_rate', float, default=0.001,
+                               help="the Adam optimizer's learning rate (constant throughout training)",
                                search_range=(1e-5, 1e-2), log_scale=True)
 
 # When training stops: after a fixed number of epochs ('iter'), or once the validation loss stops improving ('auto')
@@ -54,9 +55,10 @@ PRINT_EVERY_N_EPOCHS = 5
 def build_loss_criterion(task: Task) -> nn.Module:
     """Build the loss function used for training, validation and testing
 
-    Losses are summed over every sequence (and, for residue-mapped data, every
-    real residue) in a batch. Callers divide the accumulated total by the number
-    of sequences, so all reported losses are average loss per sequence.
+    Losses are summed over every sequence (and, for residue-mapped and matrix
+    data, every labelled residue or matrix cell) in a batch. Callers divide the
+    accumulated total by the number of sequences, so all reported losses are
+    average loss per sequence.
 
     Parameters
     ----------
@@ -82,9 +84,10 @@ def compute_batch_loss(network: nn.Module, batch: pid.Batch, task: Task, criteri
                        device: str | torch.device) -> tuple[torch.Tensor, torch.Tensor]:
     """Run a batch through the network and compute its summed loss
 
-    Padded positions and residues with missing labels never contribute to the
-    loss: for regression they are masked out here, and for classification they
-    carry the label IGNORED_CLASS_LABEL, which `criterion` ignores.
+    Padded positions and residues (or matrix cells) with missing labels never
+    contribute to the loss: for regression they are masked out here, and for
+    classification they carry the label IGNORED_CLASS_LABEL, which `criterion`
+    ignores.
 
     Parameters
     ----------
@@ -104,8 +107,9 @@ def compute_batch_loss(network: nn.Module, batch: pid.Batch, task: Task, criteri
     torch.Tensor
         Scalar loss summed over the batch
     torch.Tensor
-        The network outputs: [batch_dim X num_classes] or
-        [batch_dim X padded_length X num_classes]
+        The network outputs: [batch_dim X num_classes],
+        [batch_dim X padded_length X num_classes] or (matrix tasks)
+        [batch_dim X padded_length X width X num_classes]
     """
 
     vectors = batch.vectors.to(device)
@@ -157,6 +161,8 @@ def sum_batch_losses(batch_losses: list[torch.Tensor]) -> float:
 @full_float32_precision()
 def evaluate_loss(network: nn.Module, loader: DataLoader, task: Task, device: str | torch.device) -> float:
     """Average loss per sequence over a dataset, without updating the network
+
+    The network is left in evaluation mode.
 
     Parameters
     ----------
@@ -352,7 +358,7 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
     device : str or torch.device
         Device the network lives on
     learning_rate : float
-        Initial learning rate for the Adam optimiser
+        Learning rate of the Adam optimiser (constant throughout training)
     n_epochs : int
         With stop_condition='iter', the number of epochs to train for. With
         stop_condition='auto', stop once this many epochs in a row have not
@@ -378,6 +384,11 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
         Average training loss per sequence, for each epoch
     list of float
         Average validation loss per sequence, for each epoch
+
+    Raises
+    ------
+    ValueError
+        If `stop_condition` is not one of STOP_CONDITIONS
     """
 
     if stop_condition not in STOP_CONDITIONS:

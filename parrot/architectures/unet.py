@@ -1,7 +1,7 @@
 """
-A 1D U-Net, adapted from the 2D U-Net written by Nick (GitHub user razonickj)
-on PARROT's parrot-lightning branch (parrot/unet_architecture.py, added in
-commit fedab04).
+A 1D U-Net (Ronneberger et al. 2015, MICCAI, arXiv:1505.04597), adapted from
+the 2D U-Net written by Nick (GitHub user razonickj) on PARROT's
+parrot-lightning branch (parrot/unet_architecture.py, added in commit fedab04).
 
 The encoder repeatedly halves the sequence length (max pooling) while doubling
 the number of channels; the decoder doubles the length back, and at each level
@@ -147,6 +147,11 @@ class Up(nn.Module):
         upsampling : str
             'transposed' (learned transposed convolution) or 'nearest' (repeat
             each position, then a 1x1 convolution)
+
+        Raises
+        ------
+        ValueError
+            If `upsampling` is not one of UPSAMPLING_METHODS
         """
         super().__init__()
         if upsampling == 'transposed':

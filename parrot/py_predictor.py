@@ -42,7 +42,8 @@ class Predictor():
     Attributes
     ----------
     dtype : str
-        Data format that the network was trained for: "sequence" or "residues".
+        Data format that the network was trained for: "sequence", "residues" or
+        "matrix".
     n_classes : int
         Number of data classes. If 1, the network is a regressor; if >1, a
         classifier with n_classes classes.
@@ -50,9 +51,13 @@ class Predictor():
         "classification" or "regression" (a name kept from earlier versions of
         PARROT; the network's full Task is network.task).
     num_layers : int or None
-        Number of hidden layers, for BRNN networks (None for other architectures).
+        The network's num_layers hyperparameter: the number of LSTM layers per
+        direction for a BRNN (or of transformer blocks for a transformer); None
+        for architectures without one.
     hidden_vector_size : int or None
-        Size of the hidden vectors, for BRNN networks (None for other architectures).
+        The network's hidden_size hyperparameter: the size of the LSTM hidden
+        vectors for a BRNN (or the width of each hidden layer for a composition
+        network); None for architectures without one.
     network : ParrotArchitecture
         The loaded network.
     encoder : SequenceEncoder
@@ -83,6 +88,19 @@ class Predictor():
             sequence's encoding, so sequences predicted again are not encoded
             again. By default nothing is stored and each sequence is encoded
             when predicted.
+
+        Raises
+        ------
+        ValueError
+            If `dtype` is not a valid datatype or does not match the saved
+            network, `device` is not a valid choice, `embedding_cache` is given
+            for a network that uses neither a PLM nor a NARDINI encoding, or the
+            file cannot be loaded as a PARROT network (see
+            checkpoint.load_network)
+        FileNotFoundError
+            If `saved_weights` does not exist
+        RuntimeError
+            If the requested device is not available on this machine
         """
 
         if dtype is not None and dtype not in VALID_DATATYPES:

@@ -2,17 +2,23 @@
  Evaluating a Network with Cross-Validation:
 =============================================
 
-This page walks-through a full example of using 10-fold cross-validation to validate that PARROT is training accurate and generalizeable networks. For the purposes of this example, we will use the "seq_regress_dataset.tsv" dataset found in the **/data** folder. For the purposes of this example, I'm going to be saving the networks and other output file to a folder named "/output".
+This page walks-through a full example of using 10-fold cross-validation to validate that PARROT is training accurate and generalizeable networks. (This is cross-validation to evaluate networks; ``parrot-optimize --cv-folds`` uses cross-validation for a different purpose, to score hyperparameter configurations.) For the purposes of this example, we will use the "seq_regress_dataset.tsv" dataset found in the **/data** folder. For the purposes of this example, I'm going to be saving the split-files, networks and other output files to a folder named "cv_test". PARROT does not create output folders, so make it first:
+
+.. code-block:: bash
+
+    mkdir cv_test
 
 **parrot-cvsplit**
 
 First, let's generate the 10 different split-files using ``parrot-cvsplit``. Each of these split-files will specify a different 1/10th of the dataset to be the held-out test set. The remaining 9/10ths will be partitioned randomly into training and validation sets, 80:20.
 
 .. code-block:: bash
-    
+
     parrot-cvsplit data/seq_regress_dataset.tsv cv_test/cv_example_splits -k 10 -t 0.8
 
-This should generate 10 files in the cv_test directory, named cv_example_splits_cv[0-9].txt
+This should generate 10 files in the cv_test directory, named cv_example_splits_cv[0-9].txt (add ``--seed`` to make the same files every time).
+
+``parrot-cvsplit`` keeps identical sequences in the same set, but, like ``--split random``, it can put similar sequences in different sets. The sequences of this example dataset were generated at random, so that does not matter here; for real proteins, where relatives are common, a network can score well on a test set by recognising relatives of its training sequences (see "parrot-cvsplit" and "parrot-preprocess").
 
 **10-fold CV training**
 
@@ -69,7 +75,13 @@ Now repeat this command 9 more times, for each of the cross-validation folds. I 
     .
     parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network cv_test/network9.pt -d sequence --regression -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv9.txt --silent
 
-All of this could also be accomplished using a wrapper shell script. In fact, for larger datasets this is recommended so that you don't have sit around and wait for the network to train each fold.
+All of this could also be accomplished using a wrapper shell script. In fact, for larger datasets this is recommended so that you don't have sit around and wait for the network to train each fold. For example, in bash:
+
+.. code-block:: bash
+
+    for fold in 0 1 2 3 4 5 6 7 8 9; do
+        parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network cv_test/network${fold}.pt -d sequence --regression -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv${fold}.txt --silent
+    done
     
 **Analyze CV predictions**
 

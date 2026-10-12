@@ -13,7 +13,7 @@ This flag determines the stop condition for network training. Currently, there a
 
 .. code-block:: bash
 
-    parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network stop_example.pt --split random --datatype sequence --regression -nl 2 -hs 5 -lr 0.001 -e 10 -b 32 -v --stop auto
+    parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network stop_example.pt --split random --datatype sequence --regression -nl 2 -hs 20 -lr 0.001 -e 20 -b 8 -v --stop auto
 
 .. code-block:: bash
 
@@ -33,9 +33,6 @@ This flag determines the stop condition for network training. Currently, there a
     Splitting 300 sequences (random, as parrot-preprocess --split random does):
       Assigned clusters to sets: training 210 (70.0%), validation 45 (15.0%), test 45 (15.0%)
 
-    WARNING: The batch size (32) is large for 210 training sequences (7 batches per epoch).
-      Few updates per epoch may make training less efficient; consider a smaller --batch.
-
     Training brnn: bidirectional LSTM (the original PARROT network)
     ---------------------------------------------------------------
     Data: 210 training, 45 validation and 45 test sequences (regression, one value per sequence)
@@ -48,43 +45,50 @@ This flag determines the stop condition for network training. Currently, there a
     classes               : 1
     encoding              : onehot
     architecture          : brnn
-    hidden_size           : 5
+    hidden_size           : 20
     num_layers            : 2
     attention_pooling     : True
     loglength_feedforward : True
     learning_rate         : 0.001
-    epochs                : 10
+    epochs                : 20
     stop                  : auto
-    batch_size            : 32
+    batch_size            : 8
     batching              : length
 
     Validation set loss per epoch:
-    Epoch 1 Loss 4.5214
-    Epoch 2 Loss 4.4691
-    Epoch 3 Loss 4.4159
-    Epoch 4 Loss 4.3597
-    Epoch 5 Loss 4.2985
-    Epoch 6 Loss 4.2302
-    Epoch 7 Loss 4.1517
-    Epoch 8 Loss 4.0594
-    Epoch 9 Loss 3.9484
-    Epoch 10    Loss 3.8156
+    Epoch 1 Loss 3.0148
+    Epoch 2 Loss 1.0526
+    Epoch 3 Loss 1.0068
+    Epoch 4 Loss 1.0046
+    Epoch 5 Loss 1.0020
+    Epoch 6 Loss 0.9982
+    Epoch 7 Loss 0.9961
+    Epoch 8 Loss 0.9963
+    Epoch 9 Loss 0.9908
+    Epoch 10    Loss 0.9883
+    Epoch 11    Loss 0.9725
+    Epoch 12    Loss 0.9580
+    Epoch 13    Loss 0.9074
+    Epoch 14    Loss 0.8447
+    Epoch 15    Loss 0.7710
     ...
-    Epoch 217   Loss 0.1360
-    Epoch 218   Loss 0.1347
-    Epoch 219   Loss 0.1357
-    Epoch 220   Loss 0.1489
-    Epoch 221   Loss 0.1344
-    Stopped after 221 epochs, as the validation loss had stopped improving
-    Lowest validation loss 0.1243, at epoch 210 of 221: the network from that epoch is kept
+    Epoch 171   Loss 0.0668
+    Epoch 172   Loss 0.0594
+    Epoch 173   Loss 0.0769
+    Epoch 174   Loss 0.0769
+    Epoch 175   Loss 0.0715
+    Stopped after 175 epochs, as the validation loss had stopped improving
+    Lowest validation loss 0.0542, at epoch 155 of 175: the network from that epoch is kept
 
-    Test set: loss 0.1279, Pearson R 0.988, Spearman R 0.992
+    Test set: loss 0.0545, Pearson R 0.998, Spearman R 0.997
     Network saved to /home/user/parrot_examples/stop_example.pt
     Also written there: stop_example_info.txt, stop_example_predictions.tsv, stop_example_performance_stats.txt
 
-Training stops here because performance has stopped improving, as the output says, and the network from the epoch with the lowest validation loss is kept. Worth mentioning: 'auto' can stop in a local minimum well before the network is fully trained. Be mindful of this when using 'auto' stop condition.
+Training stops here because the validation loss has not improved for 20 epochs in a row since epoch 155 (the lowest), as the output says, and the network from the epoch with the lowest validation loss is kept.
 
-You might also notice that in this example, the validation loss is listed for every single epoch instead of every 5. This is simply because the verbose ``-v`` flag was provided.
+Worth mentioning: 'auto' can stop in a local minimum well before the network is fully trained. Notice how, in this run, the loss barely changed between epochs 3 and 10, while the network was predicting values close to the average of the dataset, before it started to fall again. With a smaller ``-e`` (or a network that leaves such a plateau more slowly), 'auto' often stops on the plateau: on this dataset, the same command with ``-hs 5 -b 32 -e 10`` usually stops after 35-50 epochs, with a test-set Pearson R of about 0.2 or less. Be mindful of this when using 'auto' stop condition, and check the loss curve (``--include-figs``) to see whether training stopped too early.
+
+You might also notice that in this example, the validation loss is listed for every single epoch instead of every 5, and every setting is listed before training starts. This is simply because the verbose ``-v`` flag was provided.
 
 **Splitting data into train/validation/test sets:**
 
@@ -98,7 +102,7 @@ This flag allows the user to set the proportions of data that will be a part of 
 
     parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network setfractions_network.pt --split random --datatype sequence --regression -e 200 --set-fractions 0.5 0.45 0.05
 
-Notice that the output predictions file from this command has fewer datapoints because of the reduced test set. Most likely, the accuracy will be a little worse then the default proportions because the training set is also smaller.
+Notice that the output predictions file from this command has fewer datapoints because of the reduced test set. Most likely, the accuracy will be a little worse than with the default proportions because the training set is also smaller.
 
 Split-files:
 In some cases, users might want precise control over over the training, validation and test set splits of their input data. Instead of a method, ``--split`` can be given the path to a *split_file*, which specifically allocates sequences in `datafile` to the different datasets. An example *split_file* is provided in the **/data** folder for reference. If a file exists with the name given to ``--split``, it is always read as a split-file, even if its name is also a method's.
@@ -126,7 +130,7 @@ charge                      elementary charges            formal side-chain char
 isoelectric point           pH units                      isoelectric point of the free amino acid
 molecular weight            g/mol                         molecular weight of the free amino acid
 aromatic                    1 or 0                        1 for F, W and Y
-hydrogen bonding            1 or 0                        1 for side chains that can form hydrogen bonds
+hydrogen bonding            1 or 0                        1 for side chains that can form hydrogen bonds (D, E, H, K, N, Q, R, S, T, W and Y)
 side-chain SASA             square angstroms              side-chain solvent-accessible surface area in ACE-X-NME
 backbone SASA               square angstroms              backbone solvent-accessible surface area in ACE-X-NME
 solvation free energy       (not recorded)                free energy of solvation of the side chain
@@ -148,17 +152,19 @@ With the ``--encode`` flag and a user-provided file, PARROT is even flexible eno
 
 .. code-block:: bash
 
-    parrot-train brnn --input-file data/nucleotide_dataset.txt --output-network nucleotide_network.pt --split random -d sequence --regression -nl 2 -hs 10 -e 200 --encode data/nucleotide_encoding.txt
+    parrot-train brnn --input-file data/nucleotide_dataset.tsv --output-network nucleotide_network.pt --split random -d sequence --regression -nl 2 -hs 10 -e 200 --encode data/nucleotide_encoding.txt
+
+Finally, residues can be encoded by their embeddings from a protein language model, which reflect each residue's context in the whole sequence (e.g. ``--encode esm2_t12_35M_UR50D``; see :doc:`plm_encodings`), and, for sequence-mapped data, each sequence's NARDINI+ features can be added to every residue (e.g. ``--encode onehot+nardini``; see :doc:`nardini_encoding`). Whatever the encoding, the saved network records it, so ``parrot-predict`` and ``Predictor`` encode new sequences in the same way without being told.
 
 **Probabilistic classification with --probabilistic-classification:**
 
 The standard behavior of "classification" tasks in PARROT is to make predictions of discrete class labels. In reality though, this sort of behavior does not provide any information on the certainty behind these prediction. For example, in a two class problem (classes 0 and 1), if sequence A is deemed to be class 0 with 98% confidence, and sequence B is deemed class 0 with 51% confidence, both of these sequences will appear in the output prediction file as class 0. In some instances, it is useful to provide users a measure of confidence for each of the class predictions that PARROT makes. This can be accomplished with the ``--probabilistic-classification`` flag.
 
-Using this flag is easy and can be used with ``parrot-train``, ``parrot-optimize`` and ``parrot-predict``. For the first two commands, this flag changes how predictions on the test set are output in the "_predictions.tsv" file and changes the figures and performance stats that are output (if specified). For the predict command, it changes how the predictions are outputed. If this flag is combined with ``--include-figs``, it also changes the figure and metrics that are produced for evaluating performance on the test set (see ``parrot-train`` documentation page for more details). Conveniently, this flag can be used in ``parrot-predict`` even if it was not specified during training. As an example, here is the same sequence 3-class classification network making predictions with and without the ``--probabilistic-classification`` flag (default layers and hidden vector size):
+Using this flag is easy and can be used with ``parrot-train``, ``parrot-optimize`` and ``parrot-predict``. For the first two commands, this flag changes how predictions on the test set are output in the "_predictions.tsv" file and changes the performance stats that are output (if specified). For the predict command, it changes how the predictions are outputed. If this flag is combined with ``--include-figs``, it also changes the figures produced for evaluating performance on the test set: ROC and precision-recall curves instead of a confusion matrix (see ``parrot-train`` documentation page for more details). Conveniently, this flag can be used in ``parrot-predict`` even if it was not specified during training. As an example, here is the same sequence 3-class classification network making predictions with and without the ``--probabilistic-classification`` flag (default layers and hidden vector size):
 
 .. code-block:: bash
 
-    parrot-predict data/seqfile.txt prob_example.pt discrete.txt -d sequence -c 3
+    parrot-predict data/seqfile.txt prob_example.pt discrete.txt
 
 Output:
 
@@ -173,7 +179,7 @@ Output:
 
 .. code-block:: bash
 
-    parrot-predict data/seqfile.txt prob_example.pt probabilistic.txt -d sequence -c 3 --probabilistic-classification
+    parrot-predict data/seqfile.txt prob_example.pt probabilistic.txt --probabilistic-classification
 
 Output:
 
@@ -181,14 +187,25 @@ Output:
 
     a1 EADDGLYWQQN 0.0527 0.1081 0.8392
     b2 RRLKHEEDSTSTSTSTSTQ 0.9819 0.0034 0.0148
-    c3 YYYGGAFAFAGRM 0.0742 0.0098 0.916
+    c3 YYYGGAFAFAGRM 0.0742 0.0098 0.9160
     d4 GGIL 0.1509 0.0596 0.7894
     e5 GREPCCMLLYILILAAAQRDESSSSST 0.0465 0.0118 0.9418
-    f6 PGDEADLGHRSLVWADD 0.0645 0.2576 0.678
+    f6 PGDEADLGHRSLVWADD 0.0645 0.2576 0.6780
 
 The three numbers following each sequence represent the probability that the sequence belongs to each of the three classes. Notice the numbers in each row sum to 1.
 
-Currently, probabilistic classification is only implemented for *sequence classification* problems. The same principles would work for *residue classification*, however, we have not thought of a convenient way of representing the information in the output files (each sequence has num_classes x seq_len values).
+Probabilistic classification also works for *residue classification*, where each sequence has num_classes x seq_len values. So that there is still one value per residue in the output files, each residue's class probabilities are written as one comma-separated token. For example, with the residue classification network from the basic examples:
+
+.. code-block:: bash
+
+    parrot-predict data/seqfile.txt res_class_network.pt res_probabilistic.txt --probabilistic-classification
+
+.. code-block:: bash
+
+    a1 EADDGLYWQQN 0.0388,0.7660,0.1952 0.0390,0.6206,0.3404 0.0118,0.8347,0.1535 ...
+    ...
+
+For residue data, the ROC and precision-recall curves and their areas pool every labelled residue of the test set.
 
 Hyperparameter tuning with ``parrot-optimize``:
 -----------------------------------------------
@@ -212,6 +229,7 @@ The search first describes what it will try, then reports each configuration's v
       hidden_size: 5 to 50
       num_layers: 1 to 5
     Epochs per stage: 3 -> 10 -> 30 (the best 1/3 of each stage continue to the next)
+
       trial   1 (default)  epochs    3  val loss 20.61    learning_rate=0.001  hidden_size=10  num_layers=1
       trial   2 (initial)  epochs    3  val loss 20.21    learning_rate=0.00146485  hidden_size=24  num_layers=2
       trial   3 (initial)  epochs    3  val loss 18.13    learning_rate=0.00880616  hidden_size=5  num_layers=1
@@ -234,7 +252,7 @@ The search first describes what it will try, then reports each configuration's v
       trial  20 (model  )  epochs   10  val loss 10.4     learning_rate=0.00843449  hidden_size=8  num_layers=1
       trial  20 (model  )  epochs   30  val loss 9.917    learning_rate=0.00843449  hidden_size=8  num_layers=1
     Best configuration (trial 14, validation loss 9.902):
-      learning_rate=0.00864999  hidden_size=5  num_layers=1  loglength_feedforward=True
+      learning_rate=0.00864999  hidden_size=5  num_layers=1  attention_pooling=True  loglength_feedforward=True
     ...
 
 With ``--epochs 30`` there are three stages: every configuration is trained for 3 epochs, the best third of them continue to 10 epochs, and the best third of those to 30. Trial 1 is PARROT's default hyperparameters, trials 2-9 are spread evenly over the search space, and from trial 10 the search mostly suggests configurations near the best so far ("model"), with some drawn at random. Configurations that are clearly worse, such as those with very small learning rates, are stopped after 3 epochs. The best configuration has already been trained for the full 30 epochs, so it becomes the final network, which is then tested on the held-out test set exactly as in ``parrot-train``.
@@ -243,6 +261,7 @@ As well as the usual ``parrot-train`` output, ``optimize_example_optimal_hyperpa
 
 .. code-block:: bash
 
+    # parrot-optimize trials for the brnn architecture
     trial  origin  status  epochs  val_loss_3_epochs  val_loss_10_epochs  val_loss_30_epochs  learning_rate  hidden_size  num_layers
     1  default  stopped  3  20.6142      0.001  10  1
     2  initial  completed  30  20.2055  11.887  10.0479  0.00146485  24  2
@@ -255,23 +274,24 @@ Hyperparameters you give on the command line are fixed rather than searched, e.g
 Integrating trained PARROT networks into Python workflows:
 ----------------------------------------------------------
 
-We added the option for users to create a predictor object in Python using their trained PARROT network. This option is built-in to the file "py_predictor.py" that is installed with PARROT. Importing PARROT within Python is simple:
+We added the option for users to create a predictor object in Python using their trained PARROT network. This option is built-in to the file "py_predictor.py" that is installed with PARROT, and ``Predictor`` can be imported straight from PARROT:
 
 .. code-block:: python
 
-    >>> from parrot import py_predictor as ppp
+    >>> from parrot import Predictor
 
-To use a saved network, you need to create a Predictor() object. Initializing this object only requires the path to the saved network weights and specification of whether this network is for sequence or residue prediction.
+To use a saved network, you need to create a Predictor() object. Initializing this object only requires the path to the saved network: the network file records its architecture, hyperparameters, datatype, number of classes and encoding (including any standardization, protein language model or NARDINI settings), so new sequences are encoded exactly as the training sequences were. (Networks saved by earlier versions of PARROT only record their weights; for those, also give ``dtype='sequence'`` or ``dtype='residues'``. For newer networks, ``dtype``, if given, is checked against the network.)
 
 .. code-block:: python
 
-    >>> my_predictor = ppp.Predictor('/path/to/network.pt', dtype='sequence')
+    >>> my_predictor = Predictor('/path/to/network.pt')
 
-Now we're ready to make predictions! Once a network is loaded, the time to make predictions is negligible, so your predictor can be applied to as many sequences as you want. Just feed in amino acid sequences to the predict() function one at a time and predicted values will be output.
+Now we're ready to make predictions! Once a network is loaded, the time to make predictions is negligible, so your predictor can be applied to as many sequences as you want. Just feed in amino acid sequences to the predict() function one at a time (each is converted to upper case first) and predicted values will be output as a NumPy array.
 
 .. code-block:: python
 
     >>> value = my_predictor.predict('MYTESTAMINACIDSEQ')
 
-Currently, this Python usage is only implemented for networks that were created using standard, one-hot amino acid encoding. In the future, we may add the option to feed in a particular encoding file so that all trained networks can be used in this manner. If this is a feature you'd be interested in, let us know and we can prioritize adding it!
-    
+What predict() returns depends on the network: for regression, an array of one value (sequence networks) or one value per residue (residue networks); for classification, the probability of each class, with shape [number of classes] (sequence networks) or [sequence length, number of classes] (residue networks); and for matrix networks, the predicted matrix (see the "Matrix data" page).
+
+Predictions run on the CPU by default, which is usually fastest for a few sequences at a time; ``Predictor('/path/to/network.pt', device='auto')`` uses a GPU (CUDA or Apple-silicon MPS) if one is available. For networks trained on protein language model embeddings or NARDINI features, each new sequence must be encoded first, which is the slow step; ``embedding_cache='<directory>'`` stores these encodings so that sequences predicted again are not encoded again (see :doc:`plm_encodings`).

@@ -1,12 +1,13 @@
 """
 Finding similar protein sequences from shared k-mers, without external programs.
 
-This is the search engine behind parrot-preprocess --split kmer, for when
-MMseqs2 is not available. It works like the seeding step of BLAST, FASTA or
-MMseqs2: related sequences share short identical words (k-mers), and because
-they are related, the shared words line up along one alignment diagonal (the
-same offset between their positions in the two sequences). Unrelated sequences
-also share k-mers by chance, but scattered over many diagonals.
+This is the search engine behind --split kmer (in parrot-preprocess,
+parrot-train and parrot-optimize), for when MMseqs2 is not available. It works
+like the seeding step of BLAST, FASTA or MMseqs2: related sequences share short
+identical words (k-mers), and because they are related, the shared words line
+up along one alignment diagonal (the same offset between their positions in the
+two sequences). Unrelated sequences also share k-mers by chance, but scattered
+over many diagonals.
 
 For each pair of sequences, shared k-mers are collected in bands of nearby
 diagonals (KmerCriteria.band_width wide, so short insertions and deletions are
@@ -88,7 +89,8 @@ LOW_COMPLEXITY_WINDOW = 12
 
 # ...whose sequence entropy is below this many bits are masked. SEG uses 2.2 bits, which masks half the residues
 # of the ALBATROSS disordered-region dataset (and 7-9% of yeast or CheZOD proteins) and costs much of the
-# k-mer search's sensitivity there; 1.8 bits masks only the most repetitive sequence.
+# k-mer search's sensitivity there; 1.8 bits masks only the most repetitive stretches (still a third of the
+# residues of ALBATROSS, whose sequences are rich in repeats, but 2% of CheZOD's).
 LOW_COMPLEXITY_ENTROPY = 1.8
 
 # Largest number of k-mer matches (pairs of positions sharing a k-mer) handled at once.
@@ -121,8 +123,9 @@ class KmerCriteria:
     ----------
     kmer_size : int
         Length of the shared words (k). Smaller words find more distant
-        relatives but take longer (the work grows roughly 20-fold for each step
-        down) and are more easily matched by chance.
+        relatives but take longer (a search with k = 3 takes about 20 times as
+        long as with 4, and one with 5 about a fifth as long) and are more
+        easily matched by chance.
     max_evalue : float
         Largest E-value for two sequences to be linked
     min_coverage : float
@@ -264,6 +267,7 @@ def low_complexity_residues(residues: np.ndarray, position: np.ndarray, length_o
     length_of_residue : numpy.ndarray of int64
         Length of the sequence each residue belongs to
     window : int
+        Length of the windows, in residues (only windows within one sequence are checked)
     min_entropy : float
         Windows with less entropy than this (in bits) are low complexity
 
@@ -388,6 +392,9 @@ class KmerSearch:
         Returns
         -------
         list of KmerMatch
+            Every pair with an E-value of at most max_evalue (with weaker, of at
+            most KmerCriteria.reported_evalue); linked is True for those that
+            meet the criterion
         """
         criteria = self.criteria
         self_search = targets is None
@@ -607,6 +614,8 @@ def find_runs(hits: Hits, band_width: int, longest_target: int, max_gap: int, km
     Returns
     -------
     Runs
+        Those of the first layout, then those of the second (a run that lies
+        within a band of each layout is found twice)
     """
     diagonal = hits.query_position - hits.target_position + longest_target
     n_bands = (diagonal.max(initial=0) + band_width) // band_width + 1
@@ -866,7 +875,7 @@ def chance_of_run(covered: np.ndarray, residue_match: np.ndarray, shorter: np.nd
     If two sequences were unrelated, a stretch of k identical residues would
     extend while the next residue is also identical (probability p, the
     residue_match), and the run would continue while another chance stretch
-    starts in one of the stretch's bands within max_gap residues of the query.
+    starts in one of the stretch's bands within max_gap residues along the query.
     The two layouts of bands (see find_runs) hold a stretch's diagonal in two
     bands that together span 1.5 band_width diagonals, so r = 1.5 band_width p^k
     chance stretches start per query residue, and a run found in either layout

@@ -46,6 +46,8 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
     for residue tasks also "<output_prefix>_res_profiles.png", the true and
     predicted values along a few test sequences, and for matrix tasks
     "<output_prefix>_matrix_examples.png", heatmaps of a few test sequences).
+    Warns if the network's output for any test sequence is not finite (see
+    warn_about_non_finite_outputs()).
 
     Parameters
     ----------
@@ -56,7 +58,8 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
     output_prefix : str
         Path and filename prefix for every output file
     probabilistic : bool, optional
-        Report class probabilities rather than class labels (classification only)
+        Report class probabilities rather than class labels (sequence and
+        residue classification only)
     include_figs : bool, optional
         Whether to save figures
     write_stats : bool, optional
@@ -166,9 +169,11 @@ def write_predictions(names: Sequence[str], sequences: Sequence[str], true_value
                       decimals: int | None = None) -> None:
     """Write true and predicted values for labeled sequences
 
-    Each sequence gets two lines:
+    Each sequence gets two lines::
+
         <name>_TRUE <sequence> <true value(s)>
         <name>_PRED <sequence> <predicted value(s)>
+
     Sequences without an ID (datafiles read with --exclude-seq-id) are named
     test0, test1, ... Missing true labels are written as 'nan'.
 
@@ -220,6 +225,7 @@ def matrix_prediction_names(names: Sequence[str] | None, num_sequences: int) -> 
     names : sequence of str or None
         Sequence IDs, or None if the sequences have none
     num_sequences : int
+        Number of sequences (used only without IDs)
 
     Returns
     -------
@@ -234,8 +240,10 @@ def write_unlabeled_predictions(names: Sequence[str] | None, sequences: Sequence
     """Write predictions for unlabeled sequences (as parrot-predict does)
 
     One line per input sequence, in input order, so every sequence ID is kept
-    even when the same sequence appears more than once:
+    even when the same sequence appears more than once::
+
         <name> <sequence> <prediction(s)>
+
     or, without names, <sequence> <prediction(s)>.
 
     For matrix tasks the predictions are instead written as a .npz archive
@@ -263,6 +271,12 @@ def write_unlabeled_predictions(names: Sequence[str] | None, sequences: Sequence
     -------
     str
         The path written
+
+    Raises
+    ------
+    ValueError
+        Matrix tasks: if a sequence ID is empty or appears more than once (see
+        matrices.output.check_matrix_names)
     """
 
     if task.is_matrix:

@@ -2,7 +2,8 @@
 The command line of parrot-train and parrot-optimize: one subcommand per
 architecture, each offering only the options that apply to it.
 
-    parrot-train cnn data.tsv network.pt -d residues -c 1 --channels 32
+    parrot-train cnn --input-file data.tsv --output-network network.pt --split kmer -d residues --regression
+        --channels 32
 
 Every registered architecture gets a subcommand named after it. Its options are
 assembled from sets of options, each defined once below, which a subcommand
@@ -10,24 +11,29 @@ inherits according to the kind of architecture it is (argparse calls these
 "parent parsers"):
 
 - every architecture: the data and how it is split, its encoding, the output,
-  the device and the random seed;
+  the device and the random seed, plus any options the command adds
+  (parrot-optimize: the search's own options);
 - networks trained by gradient descent: the training loop (epochs, batch size
   and batching), plus what the command adds to it (parrot-train: the learning
   rate and stop condition; parrot-optimize: the successive-halving settings);
-- architectures for matrix data: the matrix file and the shape of its matrices;
-- architectures for sequence data: reporting class probabilities;
+- architectures for matrix data: the matrix file, the shape of its matrices
+  and the longest sequence allowed;
+- architectures for sequence or residue data: reporting class probabilities;
 - the architecture's own hyperparameters, one flag each, from its declarations.
 
-The parsed arguments of every subcommand have the same names: an option a
-subcommand does not offer takes its default. The code that runs a command
-therefore never needs to know which subcommand was used. (For example, models
-fitted in one step have no training loop, so they do not offer --epochs; their
-arguments carry its default, which they never use.)
+Apart from each architecture's own hyperparameters, the parsed arguments of
+every subcommand have the same names: an option a subcommand does not offer
+takes its default. The code that runs a command therefore never needs to know
+which subcommand was used. (For example, models fitted in one step have no
+training loop, so they do not offer --epochs; their arguments carry its
+default, which they never use.)
 
-Every command names its architecture, input and output, and task explicitly:
+Every command names its architecture, input and output, split and task
+explicitly:
 
     parrot-train <architecture> --input-file <datafile> --output-network <name>
-        [-d sequence|residues] (--regression | --classification --num-classes N)
+        --split <method or split-file> [-d <datatype>]
+        (--regression | --classification --num-classes N)
 
 Options PARROT no longer has (-c/--classes, --force-cpu, --architecture) are
 recognized, and stop the command with a message saying what replaced them.
@@ -124,6 +130,7 @@ def architectures_in_listing_order() -> list[type[ParrotArchitecture]]:
     list of ParrotArchitecture subclasses
     """
     def kind(architecture: type[ParrotArchitecture]) -> int:
+        """0 for neural networks for sequence and residue data, 1 for models fitted in one step, 2 for matrix data."""
         if 'matrix' in architecture.supported_datatypes:
             return 2
         if not architecture.trained_by_gradient_descent:
@@ -180,6 +187,7 @@ def add_architecture_command(commands: 'argparse._SubParsersAction[argparse.Argu
     add_examples_argument(command, program_name)
 
     # Options this architecture does not offer take their defaults, so every subcommand's arguments have the same names
+    # (apart from each architecture's own hyperparameters)
     for offered, options in option_sets:
         if not offered:
             command.set_defaults(**option_defaults(options))

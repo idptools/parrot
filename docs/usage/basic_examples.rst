@@ -88,7 +88,7 @@ First PARROT splits the data, aiming for 70% of the sequences in the training se
 
 Turning to the actual training results, we can see that our validation set loss falls quickly between epochs 10 and 30 and then keeps falling more slowly, so here the lowest loss is at the last epoch, as the line after the losses says. Often the loss instead levels off and then starts to creep up again, as the network begins to overfit on the training data. Don't worry about this overfitting, since the final network that PARROT returns will be from the epoch that produced the lowest validation set loss. PARROT then applies that network to the test set and prints how well it does, and lists the files it wrote.
 
-If you look in the current directory, you should also see those four files: our trained network "seq_class_network.pt", a description of how it was trained, "seq_class_network_info.txt" (useful for writing up methods), a predictions file "seq_class_network_predictions.tsv", and a performance stats summary file "seq_class_network_performance_stats.txt". The network file can be used to make predictions on new sequences with ``parrot-predict`` but is not readable by eye. The second file is a bit more interesting to look at:
+If you look in the current directory, you should also see those four files: our trained network "seq_class_network.pt", a description of how it was trained, "seq_class_network_info.txt" (useful for writing up methods), a predictions file "seq_class_network_predictions.tsv", and a performance stats summary file "seq_class_network_performance_stats.txt". The network file can be used to make predictions on new sequences with ``parrot-predict`` but is not readable by eye. The predictions file is a bit more interesting to look at:
 
 .. code-block:: bash
 
@@ -124,7 +124,7 @@ Let's demonstrate a few more features of PARROT by training another network. In 
 
 Additionally, we will also modify the training time with the ``--epochs`` flag. In the context of machine learning, an epoch is one "round" through the entire training set. By default, PARROT trains for 100 epochs, which means that a network will be exposed to every sequence in the training set 100 times. It's often necessary to increase this parameter to ensure that the network learns the data to its maximum potential.
 
-The remaining two flags we will add are ``--verbose`` and ``--include-figs``. "Verbose" simply causes the output to terminal to be more descriptive, printing the training results after every epoch instead of every 5. As the name suggests, "include-figs" will cause PNG images to be output into the same directory that we are saving the network.
+The remaining two flags we will add are ``--verbose`` and ``--include-figs``. "Verbose" simply causes the output to terminal to be more descriptive, listing every setting before training starts and printing the training results after every epoch instead of every 5. As the name suggests, "include-figs" will cause PNG images to be output into the same directory that we are saving the network.
 
 .. code-block:: bash
 
@@ -167,7 +167,7 @@ In terms of command-line syntax, the only difference in the ``parrot-train`` com
 
 You might notice that this network seems to train a bit slower than the previous example. This is because our network has an additional layer. Increasing the ``-nl`` hyperparameter increases training time, but creates a more complex network that may be better at discerning patterns from data. 
 
-Like before, this command outputs a network file, a prediction file, a performance stats file, a training results PNG and test set performance PNGs into the current directory. In this case, the performance images are a scatterplot that compares the true values of the test set sequences to what was predicted by the PARROT network, and a density plot of the same values ("seq_regress_network_seq_density.png"), which colours the plot by how many values fall in each small square, so it still shows where the values lie when there are too many to see as points. Both are labelled with Pearson's r.
+Like before, this command outputs a network file, a description of how it was trained ("_info.txt"), a prediction file, a performance stats file, a training results PNG and test set performance PNGs into the current directory. In this case, the performance images are a scatterplot that compares the true values of the test set sequences to what was predicted by the PARROT network, and a density plot of the same values ("seq_regress_network_seq_density.png"), which colours the plot by how many values fall in each small square, so it still shows where the values lie when there are too many to see as points. Both are labelled with Pearson's r.
 
 .. image:: ../images/seq_regress_network_seq_scatterplot.png
   :width: 400
@@ -214,7 +214,7 @@ In this case, the confusion matrix is for every single residue in all of the seq
 .. image:: ../images/res_class_network_res_CM.png
   :width: 400
 
-Evidently class '2' is the tricky one in this example problem.
+Evidently class '2' is the tricky one in this example problem. For residue data, ``--include-figs`` also draws the true and predicted classes along six of the test sequences ("res_class_network_res_profiles.png", each labelled with its accuracy), as shown for residue regression below.
 
 **Residue regression:**
 
@@ -224,7 +224,7 @@ The final kind of machine learning task that PARROT can handle is regression on 
 
     parrot-train brnn --input-file data/res_regress_dataset.tsv --output-network res_regress_network.pt --split random -d residues --regression -e 300 -b 8 --include-figs
 
-The output from this command is analogous to the other examples. Like the sequence regression task, specifying ``--include-figs`` with a residue regression task will produce a scatter plot that shows the network's performance on the test set.
+The output from this command is analogous to the other examples. Like the sequence regression task, specifying ``--include-figs`` with a residue regression task will produce a scatter plot (and a density plot, "res_regress_network_res_density.png") that shows the network's performance on the test set.
 
 .. image:: ../images/res_regress_network_res_scatterplot.png
   :width: 400
@@ -250,7 +250,7 @@ You can use a trained network from ``parrot-optimize`` or ``parrot-train`` to pr
     e5 GREPCCMLLYILILAAAQRDESSSSST
     f6 PGDEADLGHRSLVWADD
 
-To run ``parrot-predict``, we need to provide the path to this sequence file, the path to our trained network file, and the location where we want to output our predictions to. The saved network records its architecture, hyperparameters, task and encoding, so nothing else is needed (``--datatype`` and ``--classes``, if given, are checked against the saved network).
+To run ``parrot-predict``, we need to provide the path to this sequence file, the path to our trained network file, and the location where we want to output our predictions to. The saved network records its architecture, hyperparameters, task and encoding, so nothing else is needed (``--datatype`` and ``--classes``, if given, are checked against the saved network). The **/data** folder also has the same sequences without IDs, "seqfile_noIDs.txt", for use with the ``--exclude-seq-id`` flag.
 
 Let's run our trained sequence regression network on this sequence file:
 
@@ -271,11 +271,11 @@ We can see these predictions in "seq_regress_newPredictions.txt":
 
 Remember: results will vary since networks train with stochasticity.
 
-Now let's make predictions on the same sequences with our residue classification network. We don't need to provide hyperparameters here because we used the default values above.
+Now let's make predictions on the same sequences with our residue classification network. Again, we don't need to say anything about the network: the network file records that it predicts a class for every residue, and how many classes there are.
 
 .. code-block:: bash
 
-    parrot-predict data/seqfile.txt res_class_network.pt res_class_newPredictions.txt --datatype residues --classes 3
+    parrot-predict data/seqfile.txt res_class_network.pt res_class_newPredictions.txt
 
 .. code-block:: bash
 

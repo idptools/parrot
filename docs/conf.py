@@ -58,6 +58,10 @@ napoleon_google_docstring = False
 napoleon_use_param = False
 napoleon_use_ivar = True
 
+# A class's page shows its __init__ docstring after the class docstring: PARROT documents constructor parameters
+# (e.g. Predictor's) in __init__, as numpy style suggests
+autoclass_content = 'both'
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
@@ -75,7 +79,7 @@ master_doc = 'index'
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = 'en'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -173,3 +177,19 @@ texinfo_documents = [
 
 
 # -- Extension configuration -------------------------------------------------
+
+
+def drop_credits_footer(app, what, name, obj, options, lines):
+    """Leave out the credits that end every module docstring, below a line of dots
+
+    reStructuredText reads the line of dots as a section title's overline, so the footer breaks the API pages.
+    """
+    for index, line in enumerate(lines):
+        if line.strip() and set(line.strip()) == {'.'}:
+            del lines[index:]
+            break
+
+
+def setup(app):
+    """Register the docstring hooks."""
+    app.connect('autodoc-process-docstring', drop_credits_footer)

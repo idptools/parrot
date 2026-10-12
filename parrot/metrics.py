@@ -213,8 +213,9 @@ def performance_metrics(true_values: Sequence[np.ndarray], predictions: Sequence
                         probabilistic: bool = False) -> dict[str, float]:
     """Compute summary statistics of performance
 
-    Residue-mapped values are pooled across all sequences; residues with missing
-    labels are left out.
+    Residue and matrix values are pooled across all sequences; residues (or
+    matrix cells) with missing labels are left out, and each pair of residues
+    of a symmetric map is counted once (see labelled_values()).
 
     Parameters
     ----------
@@ -223,7 +224,8 @@ def performance_metrics(true_values: Sequence[np.ndarray], predictions: Sequence
     task : Task
         The task the network was trained for
     probabilistic : bool, optional
-        True if `predictions` are class probabilities
+        True if `predictions` are class probabilities (sequence or residue
+        classification)
 
     Returns
     -------

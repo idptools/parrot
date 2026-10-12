@@ -7,9 +7,9 @@ Two sequences are homologous if any MMseqs2 alignment between them has an
 E-value of at most HomologyCriteria.max_evalue (1e-3) and covers at least
 HomologyCriteria.min_coverage (30%) of the shorter sequence (the stretch of
 the shorter sequence between the alignment's ends, so gaps opposite insertions
-in the longer sequence do not count). No
-sequence-identity threshold is used, so any statistically significant alignment
-counts, and searches use MMseqs2's most sensitive setting.
+in the longer sequence do not count). No sequence-identity threshold is used,
+so any statistically significant alignment counts, and searches use MMseqs2's
+most sensitive setting by default.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -31,11 +31,12 @@ from pathlib import Path
 
 from parrot.tools.splitting import Match, identity_summary
 
-INSTALL_HELP = ('MMseqs2 is needed for --split homology but the `mmseqs` command was not found. Install it with '
+INSTALL_HELP = ('MMseqs2 is needed for --split homology (parrot-preprocess) and --split mmseqs (parrot-train, '
+                'parrot-optimize), but the `mmseqs` command was not found. Install it with '
                 '`conda install -c conda-forge -c bioconda mmseqs2` or `brew install mmseqs2`, or download a static '
-                'binary from https://github.com/soedinglab/MMseqs2/releases, then put it on the PATH or pass its '
-                'location with --mmseqs. Alternatively, --split kmer needs nothing extra but only finds closer '
-                'relatives.')
+                'binary from https://github.com/soedinglab/MMseqs2/releases, then put it on the PATH (or pass its '
+                'location to parrot-preprocess with --mmseqs). Alternatively, --split kmer needs nothing extra but '
+                'only finds closer relatives.')
 
 # How much of MMseqs2's error output is shown when it fails
 MAX_ERROR_CHARACTERS = 2000
@@ -165,6 +166,7 @@ def mmseqs_version(executable: str) -> str:
     Returns
     -------
     str
+        'unknown' if it reports nothing
     """
     result = subprocess.run([executable, 'version'], capture_output=True, text=True)
     return result.stdout.strip() or 'unknown'
@@ -226,6 +228,10 @@ class MMseqsSearch:
         Returns
         -------
         list of Alignment
+            Every alignment with an E-value of at most max_evalue (with weaker,
+            of at most HomologyCriteria.reported_evalue); linked is True for
+            those that meet the criteria. Searched against themselves, a pair
+            may be found both ways round.
 
         Raises
         ------

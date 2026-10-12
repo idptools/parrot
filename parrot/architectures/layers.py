@@ -220,6 +220,11 @@ def masked_pool(features: torch.Tensor, mask: torch.Tensor, method: str) -> torc
     -------
     torch.Tensor
         [batch_dim X channels]
+
+    Raises
+    ------
+    ValueError
+        If `method` is not one of POOLING_METHODS
     """
 
     if method == 'mean':

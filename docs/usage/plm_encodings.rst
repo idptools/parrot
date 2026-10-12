@@ -10,7 +10,7 @@ PARROT supports two families of models:
 
 Model weights are downloaded from Hugging Face the first time a model is used and kept in the Hugging Face cache (``~/.cache/huggingface``); they are not stored in PARROT's network files.
 
-Sequences must be written in uppercase one-letter codes. Besides the 20 standard amino acids, the models accept ``X`` (unknown) and ``B``, ``Z``, ``U`` and ``O``. PARROT stops with an error, before embedding anything, if a sequence contains any other character: the models would read it (including any lowercase letter) as an unknown token, which silently gives wrong embeddings.
+Sequences must be written in uppercase one-letter codes. Besides the 20 standard amino acids, the models accept ``X`` (unknown) and ``B``, ``Z``, ``U`` and ``O``. PARROT stops with an error, before embedding anything, if a sequence contains any other character: the models would read it (including any lowercase letter) as an unknown token, which silently gives wrong embeddings. (``parrot-preprocess --uppercase`` converts a datafile; ``Predictor`` converts each sequence to upper case itself.)
 
 .. note::
 
@@ -50,7 +50,7 @@ Running the PLM takes far longer than training or running a PARROT network on it
 * ``parrot-predict`` embeds the sequences to predict before predicting. By default its cache is a directory called ``parrot_predict_embeddings`` next to the output file.
 * ``Predictor`` (in Python) embeds each sequence when it is predicted and stores nothing, unless given ``embedding_cache=<directory>``.
 
-Before embedding, PARROT prints how many sequences need embedding and how much the cache will grow, and it stops if the disk does not have room. The cache size is about
+Before embedding, PARROT prints how many unique sequences there are, how many are already in the cache and how much the cache will grow, and it stops if the disk does not have room (it asks for 25% more free space than the estimate). While embedding, it prints its progress (residues embedded, speed and time left) every 30 seconds and when it finishes. The cache size is about
 
     (number of residues) x (values per residue) x 2 bytes
 
@@ -61,14 +61,15 @@ Each cache directory contains a ``README.md`` describing what is in it (models, 
 * **Reuse a cache** by passing ``--embedding-cache <directory>`` to ``parrot-train``, ``parrot-optimize`` or ``parrot-predict``. Sequences already in the cache are not embedded again, so training several networks on the same data with the same model embeds each sequence only once. Point all of them at the same directory.
 * **Deleting a cache is safe**: nothing in it is needed to use a trained network, and embeddings are recomputed when next needed.
 * **Keep caches out of synced folders** (e.g. Dropbox or iCloud) if they are large, using ``--embedding-cache``.
-* Only one PARROT command may write to a cache at a time; a ``<model>.h5.lock`` file marks a cache being written.
-* Caches are only created for PLM encodings. ``--embedding-cache`` is an error with any other encoding.
+* **Several commands can share a cache at the same time** (e.g. training runs started together on the same data). Only one writes to it at a time: a ``<model>.h5.lock`` file marks a cache being written, and another command that needs to write waits for it (for up to 10 minutes, after which it stops with an error). Reading never blocks a command that is writing. If a run that crashed leaves a lock file behind, delete it.
+* Embeddings are added to the cache in groups as they are computed, so an interrupted run keeps most of its work.
+* Caches are only created for PLM encodings and NARDINI features (see "NARDINI features"). ``--embedding-cache`` is an error with any other encoding.
 
 How residues are embedded
 -------------------------
 
 * Each residue's embedding is the PLM's final-layer representation of that residue, after the model's last layer norm (the start and end tokens the model adds are removed).
-* ESM-2 was trained on sequences of up to 1,022 residues, and ESM C on up to 2,046. Longer sequences are embedded in overlapping windows of that length (consecutive windows share 256 residues), and residues covered by more than one window get the average of their embeddings.
+* ESM-2 was trained on sequences of up to 1,022 residues, and ESM C on up to 2,046. Longer sequences are embedded in overlapping windows of that length (consecutive windows share at least 256 residues, and the last window ends at the end of the sequence), and residues covered by more than one window get the average of their embeddings.
 * Models always run in 32-bit precision. (EvolutionaryScale's own loader switches ESM C to 16-bit "bfloat16" on a GPU, which would make embeddings depend on the device.)
 * Embeddings are rounded to 16-bit floats, whether or not they go through a cache, so a sequence is always encoded the same way.
 * The trained network file records the model, the windowing and the storage precision, so ``parrot-predict`` and ``Predictor`` embed new sequences exactly as the training sequences were.
@@ -78,6 +79,7 @@ Things to know
 --------------
 
 * ``--standardize-encoding`` cannot be used with PLM encodings: an embedding depends on the residue's context, so there is no per-amino-acid table to standardize.
-* The scikit-learn models (``linear``, ``svm``, ``random_forest``, ``knn``) use the average embedding over the sequence (plus the log of its length) as their features: the standard "mean-pooled embedding" baseline. Their ``dipeptides`` feature set is not available, because it would need hundreds of thousands of features.
+* The scikit-learn models (``linear``, ``svm``, ``random_forest``, ``knn``) use the average embedding over the sequence (plus the log of its length) as their features: the standard "mean-pooled embedding" baseline. Their ``dipeptides`` feature set is not available (it needs an encoding of at most 32 values per residue), because it would need over a hundred thousand features; ``parrot-optimize`` does not search it.
+* Protein language model embeddings cannot be combined with NARDINI features.
 * Prediction with a PLM network is much slower than with a one-hot network, because every new sequence has to be embedded. For large-scale prediction, choose the smallest model that is accurate enough, use a GPU, and reuse caches when predicting the same sequences again.
 * The PLM is never trained (fine-tuned). Fine-tuning would make every epoch as slow as embedding the whole dataset, and is not supported.

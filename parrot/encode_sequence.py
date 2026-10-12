@@ -10,8 +10,10 @@ given amino acid gets the same vector:
 
 and any of these can be standardized (see StandardizedEncoder). Protein
 language model embeddings, where a residue's vector depends on the whole
-sequence, are in plm.py. get_encoder() builds any of them from the name used on
-the command line, and encoder_from_config() rebuilds one saved with a network.
+sequence, are in plm.py, and NARDINI+ features of the whole sequence (alone, or
+appended to a per-amino-acid encoding) are in nardini.py. get_encoder() builds
+any of them from the name used on the command line, and encoder_from_config()
+rebuilds one saved with a network.
 
 one_hot(), biophysics() and UserEncoder are kept from earlier versions of
 PARROT, which other packages use.
@@ -188,7 +190,8 @@ BIOPHYSICAL_SCALES = (
 )
 
 # Each amino acid's value on each scale of BIOPHYSICAL_SCALES. The histidine row was recorded as the average
-# of its protonated (HIP) and neutral (HIE) forms.
+# of its protonated (HIP) and neutral (HIE) forms; that can only apply to its last three values, as its charge
+# is +1 and its hydrophobicity, isoelectric point and molecular weight are the standard ones.
 #              hydro- charge  pI    mol.   arom- H-bond side-chain backbone solvation
 #              phobic                weight atic          SASA       SASA     free energy
 BIOPHYSICS = {'A': [1.8, 0, 6.0, 89.1, 0, 0, 75.8, 76.1, 1.9],
@@ -367,6 +370,15 @@ class UserEncoder(SequenceEncoder):
         table : dict, optional
             Maps each character to its encoding vector. Exactly one of
             `encode_file` and `table` must be given.
+
+        Raises
+        ------
+        FileNotFoundError
+            If `encode_file` does not exist
+        ValueError
+            If both or neither of `encode_file` and `table` are given, the
+            encoding file is not valid (see parse_encode_file()), or the
+            vectors of `table` do not all have the same length
         """
 
         if (encode_file is None) == (table is None):
@@ -406,7 +418,7 @@ class UserEncoder(SequenceEncoder):
 
     @property
     def alphabet(self) -> str:
-        """Every character the encoding file defines."""
+        """Every character the encoding scheme defines."""
         return ''.join(self.encode_dict)
 
     def to_config(self) -> dict[str, Any]:
@@ -469,6 +481,12 @@ class StandardizedEncoder(SequenceEncoder):
             Per-feature mean and scale, as stored in a saved network. If
             omitted (the usual case) they are computed from the base
             encoding's table.
+
+        Raises
+        ------
+        ValueError
+            If only one of `mean` and `scale` is given, or they do not have one
+            value per feature of the base encoding
         """
 
         if (mean is None) != (scale is None):
@@ -534,7 +552,8 @@ def standardization_parameters(encoder: SequenceEncoder) -> tuple[np.ndarray, np
 # .................................................................
 # Choosing an encoding
 
-# Encodings that can be selected by name; anything else is treated as a path to an encoding file
+# Per-amino-acid encodings that can be selected by name. get_encoder() treats any other name that is not a
+# protein language model or NARDINI encoding as a path to an encoding file.
 BUILT_IN_ENCODERS: dict[str, type[SequenceEncoder]] = {OneHotEncoder.name: OneHotEncoder,
                                                        BiophysicsEncoder.name: BiophysicsEncoder}
 
@@ -616,6 +635,8 @@ def get_nardini_encoder(encoding: str, standardize: bool, num_scrambles: int | N
 
     Raises
     ------
+    FileNotFoundError
+        If the per-residue encoding is not a built-in name and no such file exists
     ValueError
         If 'nardini' alone is standardized, or combined with a protein language model
     """

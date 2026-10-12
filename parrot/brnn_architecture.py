@@ -39,6 +39,7 @@ class BRNN_MtM(BRNN):
     """
 
     def __init__(self, input_size: int, hidden_size: int, num_layers: int, num_classes: int, device: str) -> None:
+        """Build a residue-mapped BRNN (parameters as described for the class)."""
         super().__init__(input_size, Task('residues', num_classes), hidden_size=hidden_size, num_layers=num_layers,
                          attention_pooling=False, loglength_feedforward=False)
         self.device = device
@@ -62,6 +63,7 @@ class BRNN_MtO(BRNN):
     """
 
     def __init__(self, input_size: int, hidden_size: int, num_layers: int, num_classes: int, device: str) -> None:
+        """Build a sequence-mapped BRNN (parameters as described for the class)."""
         super().__init__(input_size, Task('sequence', num_classes), hidden_size=hidden_size, num_layers=num_layers,
                          attention_pooling=False, loglength_feedforward=False)
         self.device = device

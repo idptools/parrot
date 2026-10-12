@@ -149,12 +149,17 @@ class TPESampler:
             One width per dimension (only used for numeric dimensions)
         """
         # Scott's rule for a d-dimensional kernel density estimate: standard deviation x n^(-1 / (d + 4))
+        # (Scott 1992, Multivariate Density Estimation, Wiley)
         scott = points.std(axis=0) * len(points) ** (-1.0 / (len(self.space) + 4))
         bandwidths: np.ndarray = np.clip(scott, MIN_BANDWIDTH, 1.0)
         return bandwidths
 
     def _sample(self, centres: np.ndarray, bandwidth: np.ndarray, n: int) -> np.ndarray:
         """Draw n points from the kernel density centred on `centres`.
+
+        Numbers move by their kernel of the given width. Choices always switch
+        with the widened probability suggest() draws candidates with (see the
+        comment below), whatever the bandwidth.
 
         Parameters
         ----------

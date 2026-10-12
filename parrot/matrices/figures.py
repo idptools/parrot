@@ -39,6 +39,8 @@ def example_indices(lengths: Sequence[int], num_examples: int = NUM_EXAMPLES) ->
     lengths : list of int
         Length of each test sequence
     num_examples : int, optional
+        How many to choose (default NUM_EXAMPLES), spread evenly through the
+        sequences in order of length, from the shortest to the longest
 
     Returns
     -------

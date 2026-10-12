@@ -2,8 +2,9 @@
 The interface every PARROT network architecture implements.
 
 An architecture is a PyTorch module that takes a zero-padded batch of encoded
-sequences (plus the true length of each sequence) and returns either one output
-vector per sequence or one output vector per residue, depending on the task.
+sequences (plus the true length of each sequence) and returns one output vector
+per sequence, one output vector per residue, or (for matrix data, see
+parrot/matrices/base.py) one matrix per sequence, depending on the task.
 Each architecture also declares its hyperparameters (see hyperparameters.py),
 which is what lets the command-line tools build flags for them and the
 optimiser search over them without knowing anything else about the architecture.
@@ -49,19 +50,21 @@ class ParrotArchitecture(nn.Module):
     forward(x, lengths) receives a zero-padded batch `x` of shape
     [batch_dim X padded_length X input_size] and the true length of each
     sequence (or None if the batch is unpadded). It must return a tensor of
-    shape [batch_dim X num_classes] for sequence-mapped tasks or
-    [batch_dim X padded_length X num_classes] for residue-mapped tasks, and the
-    output for a sequence must not depend on how much padding it was given.
-    For classification the outputs are unnormalised logits.
+    shape [batch_dim X num_classes] for sequence-mapped tasks,
+    [batch_dim X padded_length X num_classes] for residue-mapped tasks, or
+    [batch_dim X padded_length X width X num_classes] for matrix tasks (see
+    parrot/matrices/base.py), and the output for a sequence must not depend on
+    how much padding it was given. For classification the outputs are
+    unnormalised logits.
 
     Attributes
     ----------
     name : str
-        Registry key used to select the architecture (e.g. 'brnn').
+        Registry key used to select the architecture (e.g. 'brnn'), and the
+        architecture's subcommand of parrot-train and parrot-optimize.
     description : str
         One-line description, shown in the list of architectures in
-        command-line help. `name` is the architecture's subcommand of
-        parrot-train and parrot-optimize.
+        command-line help.
     hyperparameters : tuple of HyperParameter
         The architecture's hyperparameters.
     supported_datatypes : tuple of str
@@ -215,6 +218,11 @@ class ParrotArchitecture(nn.Module):
         ----------
         loader : DataLoader
             Batches of the training data
+
+        Raises
+        ------
+        NotImplementedError
+            Always, here: architectures fitted in one step override this
         """
         raise NotImplementedError(f"The '{self.name}' architecture is trained by gradient descent, not fitted")
 
@@ -235,8 +243,9 @@ class ParrotArchitecture(nn.Module):
 
         Saved networks store the weights under the names `attention_pool` and
         `fc`, so these names must not change. The attention pool is created
-        before `fc` so that a network built from a given random seed always
-        starts from the same weights.
+        before `fc`, as every architecture created them before this readout was
+        shared, so that a given random seed still gives a network the same
+        starting weights as in earlier versions of PARROT.
 
         Parameters
         ----------

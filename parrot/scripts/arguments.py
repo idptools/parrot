@@ -66,6 +66,9 @@ INTERRUPTED_EXIT_CODE = 130
 def run_command(program_name: str, command: Callable[[], None]) -> None:
     """Run a command, reporting mistakes in its input as a one-line message rather than a traceback
 
+    If the PARROT_TRACEBACK environment variable (TRACEBACK_VARIABLE) is set, input errors and
+    Ctrl-C are raised as they are instead, with their traceback.
+
     Parameters
     ----------
     program_name : str

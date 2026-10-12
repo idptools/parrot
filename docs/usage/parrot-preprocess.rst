@@ -10,7 +10,7 @@ Once PARROT is installed, the user can run ``parrot-preprocess`` from the comman
 
     $ parrot-preprocess data_file output_file -d <datatype> -m <mode> <flags>
 
-Where *data_file* is a standard PARROT datafile and *output_file* is where the processed datafile is written. A typical run, which merges duplicate sequences, splits the data so that no set contains a homologue of another set (``--split kmer`` if MMseqs2 is not installed), and balances the classes of the training set, is:
+Where *data_file* is a standard PARROT datafile and *output_file* is where the processed datafile is written (an existing file is overwritten). Every other output file is named after *output_file*, without its final extension, in the same directory, which must already exist (``clean.tsv`` gives ``clean_split_file.txt`` and ``clean_preprocess_report.txt``). A typical run, which merges duplicate sequences, splits the data so that no set contains a homologue of another set (``--split kmer`` if MMseqs2 is not installed), and balances the classes of the training set, is:
 
 .. code-block:: bash
 
@@ -37,30 +37,38 @@ Steps are always carried out in the order below, and each is optional.
     *  ``--show-examples`` : Print a longer guide to ``parrot-preprocess``: examples of how to use it, what it does and how it works.
     *  ``--delimiter`` : The character separating columns, if not whitespace. Spaces around each field are ignored. The output is a whitespace-separated PARROT datafile, so no field may contain whitespace (an ID such as ``sp|P1|A protein`` is refused, with a message saying which).
     *  ``--seed`` : Integer random seed, which makes the split and class balancing reproducible. By default no seed is set.
-    *  ``--verbose`` / ``-v`` : Print the report as it is written.
+    *  ``--verbose`` / ``-v`` : Print the report as it is written (otherwise only the names of the files written are printed).
+
+Options that only apply to some steps are refused, before any work is done, if that step is not run: for example ``--recode-classes`` and ``--class-balance`` without ``-m classification``, ``--groups`` or ``--set-fractions`` without ``--split``, or ``--kmer-size`` with ``--split homology``. Mistakes in the input stop the command with a one-line message (see "When something goes wrong" on the "Getting Started" page).
 
 Cleaning sequences
 ------------------
 
     *  ``--uppercase`` : Convert every sequence to upper case.
     *  ``--remove-nonstandard`` : Remove sequences containing anything other than the 20 standard amino acids.
-    *  ``--min-length`` / ``--max-length`` : Remove sequences shorter or longer than these.
+    *  ``--min-length`` / ``--max-length`` : Remove sequences shorter or longer than these (in residues; at least 1).
+
+These are applied in the order listed, so ``--uppercase --remove-nonstandard`` keeps sequences that were written in lower case. The report says how many sequences each removed (and, for ``--remove-nonstandard``, which characters were found). If cleaning removes every line, nothing is written.
 
 Recoding class labels
 ---------------------
 
-    *  ``--recode-classes`` : Recode class labels of any kind (e.g. 'helix', 'coil' or 5, 10, 20) as PARROT's 0, 1, 2, ... Numeric labels keep their numeric order, and labels that are the same number (``1`` and ``1.0``) become one class. Missing labels (``nan``) are kept. The mapping is written to ``<output>_class_mapping.txt``.
+    *  ``--recode-classes`` : Classification only. Recode class labels of any kind (e.g. 'helix', 'coil' or 5, 10, 20) as PARROT's 0, 1, 2, ... If every label is a number, the classes keep their numeric order, and labels that are the same number (``1`` and ``1.0``) become one class; otherwise the labels are numbered in alphabetical order. Missing labels (``nan``) are kept (only residue data can be trained on with missing labels). The mapping is written to ``<output>_class_mapping.txt``, one ``<label> = <class>`` line per label.
+
+If the class labels are not already 0, 1, 2, ... and ``--recode-classes`` is not given, the check at the end of the report warns that PARROT cannot train on the output and suggests ``--recode-classes``.
 
 Duplicate sequences
 -------------------
 
 Identical sequences in different sets are the most blatant form of leakage, and contradictory copies confuse training. ``--deduplicate`` keeps one line per unique sequence (named after the first copy):
 
-    *  ``merge`` : For regression, the copies' values are averaged (residue by residue for residue data, ignoring ``nan``). For classification, a sequence is kept once if all copies have the same label, and removed if they disagree (labels that are the same number, such as ``1`` and ``1.0``, agree); for residue data, each residue keeps its label if every labelled copy agrees and otherwise becomes ``nan``, and a sequence left with no labelled residue is removed.
+    *  ``merge`` : For regression, the copies' values are averaged (residue by residue for residue data, ignoring ``nan``). For classification, a sequence is kept once if all its labelled copies have the same label, and removed if they disagree (labels that are the same number, such as ``1`` and ``1.0``, agree, and missing labels, ``nan``, are ignored); for residue data, each residue keeps its label if every labelled copy agrees and otherwise becomes ``nan``, and a sequence left with no labelled residue is removed.
     *  ``first`` : Keep the first copy as it is.
     *  ``drop`` : Remove every copy, since there is no way to know which is right.
 
-``--remove-sequence-duplicates`` is the same as ``--deduplicate drop``. ``--remove-line-duplicates`` removes only lines that are exact copies of an earlier line (same ID, sequence and values), keeping the first copy of each and leaving every line in its original order.
+The line kept for each sequence takes the place of its first copy, so the lines stay in their original order, and the report says how many sequences were duplicated and what was done with them.
+
+``--remove-sequence-duplicates`` is the same as ``--deduplicate drop`` (so the two cannot be given together). ``--remove-line-duplicates`` removes only lines that are exact copies of an earlier line (same ID, sequence and values), keeping the first copy of each and leaving every line in its original order; the report says how many sequences still appear more than once. It can be combined with ``--deduplicate`` (it runs first), but not with ``--remove-sequence-duplicates``.
 
 Even without ``--deduplicate``, every ``--split`` method always puts identical sequences in the same set.
 
@@ -73,7 +81,7 @@ A test set only measures how well a network generalises if none of its sequences
     *  ``--split kmer`` : Keep similar sequences in the same set, using PARROT's own k-mer search. Needs nothing extra, but only finds closer relatives (see below).
     *  ``--split random`` : Split at random, keeping only identical sequences (and ``--groups``) together.
     *  ``--set-fractions`` : Target proportions of the training, validation and test sets (default ``0.7 0.15 0.15``).
-    *  ``--groups`` : A file of ``<sequence ID> <group>`` lines. Records in the same group are always put in the same set, for example overlapping tiles or fragments of one protein, or measurements of one protein under different conditions. If deduplication removed a copy that belonged to a group, the line that replaced it joins that group too.
+    *  ``--groups`` : A file of ``<sequence ID> <group>`` lines (blank lines and lines starting with ``#`` are ignored; records whose ID is not in the file are each a group of their own). Records in the same group are always put in the same set, for example overlapping tiles or fragments of one protein, or measurements of one protein under different conditions. If deduplication removed a copy that belonged to a group, the line that replaced it joins that group too.
 
 The output datafile lists the training lines, then the validation lines, then the test lines, and ``<output>_split_file.txt`` gives the line numbers of each set.
 
@@ -82,14 +90,14 @@ The output datafile lists the training lines, then the validation lines, then th
 1. *Similarity criterion.* With ``--split homology``, two sequences are homologous if they are identical, or if any MMseqs2 alignment between them has an E-value of at most 10\ :sup:`-3` and covers at least 30% of the shorter sequence (the stretch of the shorter sequence between the alignment's ends, so gaps opposite an insertion in the longer sequence do not count). No sequence-identity threshold is used, so any statistically significant alignment counts, however low its identity. MMseqs2 searches at its most sensitive setting (``-s 7.5``) and considers up to 2,000 targets per query. ``--split kmer`` applies the same E-value and coverage thresholds to its own estimates (see below).
 2. *Clustering.* An all-against-all search links similar sequences, which are then clustered around representatives (largest first, as in CD-HIT), so that a chain of weak links cannot merge unrelated families. Groups and identical sequences are always in the same cluster.
 3. *Assignment.* Clusters are shared out among the sets, largest first, each to the set furthest below its target fraction.
-4. *Separation check.* Each set is searched against the others (test against training, test against validation, validation against training). Any sequence in the lower-priority set (training < validation < test) that is similar to the higher-priority set is removed, together with its group. E-values depend on the size of the database searched, so this is repeated until a round finds nothing, and the report ends with ``PASSED``. Typically only a few percent of the data are removed.
+4. *Separation check.* Each set is searched against the others (test against training, test against validation, validation against training). Any sequence in the lower-priority set (training < validation < test) that is similar to the higher-priority set is removed, together with its group. E-values depend on the size of the database searched, so this is repeated until a round finds nothing (at most five rounds; if the sets are still not separated, ``parrot-preprocess`` stops with an error), and the report then says ``PASSED``, followed by how many lines were removed and the final size of each set. Typically only a few percent of the data are removed.
 
-The report also lists every weaker similarity between sets, up to E = 10\ :sup:`-2` (or up to ``--homology-evalue``, if that is larger), grouped by sequence identity, so any remaining similarity is visible.
+The report also counts every weaker similarity between sets, up to E = 10\ :sup:`-2` (or up to ``--homology-evalue``, if that is larger), by sequence identity (estimated from the shared k-mers, for ``--split kmer``), so any remaining similarity is visible. With ``--split random``, the sets are not searched against each other, so similar sequences can end up in different sets.
 
 Options for both ``--split homology`` and ``--split kmer``:
 
-    *  ``--homology-evalue`` : Largest E-value of a similarity that links two sequences (default 1e-3).
-    *  ``--homology-coverage`` : Smallest fraction of the shorter sequence the similarity must cover (default 0.3).
+    *  ``--homology-evalue`` : Largest E-value of a similarity that links two sequences (default 1e-3; must be positive).
+    *  ``--homology-coverage`` : Smallest fraction of the shorter sequence the similarity must cover (default 0.3; above 0 and at most 1).
     *  ``--no-masking`` : Do not mask low-complexity regions, so that similarity in them (common in disordered proteins) also links sequences. This is even more stringent; by default these regions are masked, so that similarity driven only by compositional bias or simple repeats does not count.
 
 Options for ``--split homology`` only:
@@ -124,22 +132,23 @@ Split                   Test proteins with a homologue         Test-training ali
 
 For the 46,067 disordered regions of the ALBATROSS dataset, the share of test sequences with an MMseqs2 homologue in the training set falls from 5.3% with a random split (137 alignments at >= 90% identity) to 2.3% with ``--split kmer`` (7 at >= 90%, between nearly identical regions, mostly of 14 to 46 residues, too short for the words they share to be significant), and to 0 with ``--split homology``.
 
-So ``--split kmer`` removes nearly all leakage between close relatives, which is the strongest leakage, but not between distant homologues. Use ``--split homology`` whenever MMseqs2 is available. A k-mer split takes about 40 seconds for the yeast proteome and about two minutes for ALBATROSS (MMseqs2: about a minute and 25 seconds).
+So ``--split kmer`` removes nearly all leakage between close relatives, which is the strongest leakage, but not between distant homologues. Use ``--split homology`` whenever MMseqs2 is available. A k-mer split takes about 40 seconds for the yeast proteome and about two minutes for ALBATROSS (with MMseqs2, about a minute and about 25 seconds respectively). The k-mer search runs on one CPU core.
 
 Class balancing
 ---------------
 
 Classification only. ``--class-balance`` down-samples the more common classes. If the data are split, only the training set is balanced: the validation and test sets keep the data's natural class mix, so reported performance reflects real data. The imbalance is the count of the most common class divided by the count of the least common class (1.0 is perfectly balanced).
 
-    *  ``--cb-balance-threshold`` : Stop once the imbalance is at most this (default 1.4).
-    *  ``--cb-max-fraction-removed`` : The largest fraction of the (training) sequences that may be removed (default 0.25).
-    *  ``--cb-block-size`` : For residue data, how many randomly drawn sequences are considered for each removal (default 100; larger makes better choices, more slowly).
+    *  ``--cb-balance-threshold`` : Stop once the imbalance is at most this (default 1.4, the largest imbalance PARROT's training commands accept without a warning; between 1 and 5).
+    *  ``--cb-max-fraction-removed`` : The largest fraction of the (training) sequences that may be removed (default 0.25; strictly between 0 and 1).
+    *  ``--cb-block-size`` : For residue data, how many randomly drawn sequences are considered for each removal (default 100, at least 2; larger makes better choices, more slowly). It does nothing for sequence data, and says so.
+    *  ``--cb-shuffle-off`` : No longer has any effect, since balancing always keeps the input order; it is accepted (with a note) so that older commands keep working.
 
 For **sequence** data, every class is capped at the same size. The cap is lowered until the threshold is reached, or as far as the budget allows. This removes the fewest sequences needed for the best balance possible. The least common class is never reduced, and sequences with a missing label are never removed.
 
-For **residue** data, each sequence contains residues of several classes, so sequences are removed one at a time. Each removal is the one, among ``--cb-block-size`` randomly drawn sequences, that improves the balance most. If none of them improves it, every remaining sequence is checked before stopping. A removal that would make the balance worse, or remove a class entirely, is never made. The imbalance after each removal is written to ``<output>_class_balance_trace.csv``.
+For **residue** data, each sequence contains residues of several classes, so sequences are removed one at a time. Each removal is the one, among ``--cb-block-size`` randomly drawn sequences, that improves the balance most. If none of them improves it, every remaining sequence is checked before stopping. A removal that would make the balance worse, or remove a class entirely, is never made. Balancing stops when the threshold is reached, when the budget is used up, or when no single removal improves the balance, and the report says which. The imbalance before balancing and after each removal is written to ``<output>_class_balance_trace.csv``, one ``<step>, <imbalance>`` line each (step 1 is before any removal).
 
-Balancing keeps the input order of the lines.
+Balancing keeps the input order of the lines. The report gives the count of each class, and the imbalance, before and after.
 
 Matrix data
 -----------
@@ -154,8 +163,8 @@ See the "Matrix data" page for the file formats.
 Output
 ------
 
-    *  *output_file* : The processed datafile (training, then validation, then test lines, if the data were split).
+    *  *output_file* : The processed datafile, with whitespace-separated columns (training, then validation, then test lines, if the data were split). Blank and comment lines of the input are not kept.
     *  ``<output>_split_file.txt`` : With ``--split``, the split-file to train on with ``parrot-train --split``. The datafile and split-file only match each other, so always use them together.
-    *  ``<output>_preprocess_report.txt`` : What every step did. It ends with a check that PARROT reads the output (and that the split-file matches it).
+    *  ``<output>_preprocess_report.txt`` : What every step did, starting with the PARROT version, the time and the input file. It ends with a check that PARROT reads the output (and that the split-file matches it); if it cannot, the report (and the terminal) says why, as a warning rather than an error.
     *  ``<output>_class_mapping.txt`` : With ``--recode-classes``, the label mapping.
     *  ``<output>_class_balance_trace.csv`` : With ``--class-balance`` on residue data, the imbalance after each removal.

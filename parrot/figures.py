@@ -88,8 +88,8 @@ MIN_PROFILE_RESIDUES = 30
 PROFILE_PANEL_SIZE = (7.0, 1.6)
 ISOLATED_RESIDUE_MARKER_SIZE = 3.0
 
-# matplotlib settings applied to every figure. Arial is used if it is installed, and otherwise the closest
-# sans-serif font matplotlib has. Font type 42 (TrueType) keeps text as editable text in PDF and PostScript
+# matplotlib settings applied to every figure. Arial is used if it is installed, then Helvetica, and otherwise
+# DejaVu Sans (which comes with matplotlib). Font type 42 (TrueType) keeps text as editable text in PDF and PostScript
 # files, and 'none' keeps it as text in SVG files.
 FIGURE_STYLE = {
     'font.family': 'sans-serif',
@@ -143,7 +143,8 @@ def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[n
     ("_seq_scatterplot.png" and "_seq_density.png", and likewise "_res_" and
     "_matrix_"); classification a confusion matrix ("_seq_CM.png", "_res_CM.png"
     or "_matrix_CM.png"); and probabilistic classification ROC and
-    precision-recall curves ("_ROC_curve.png" and "_PR_curve.png"). Residue and
+    precision-recall curves ("_ROC_curve.png" and "_PR_curve.png") instead of
+    a confusion matrix. Residue and
     matrix values are pooled over every sequence (scatterplots show at most
     MAX_SCATTER_POINTS values, see scatter_sample(); the density plot always
     shows every value). Predictions that are not finite (NaN or
@@ -161,7 +162,8 @@ def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[n
     output_prefix : str
         Path and filename prefix for the figures
     probabilistic : bool, optional
-        True if `predictions` are class probabilities
+        True if `predictions` are class probabilities (sequence or residue
+        classification)
     pearson : float, optional
         Regression: Pearson's r to write on the plots, e.g. the one in the
         performance metrics, so that the figures and statistics agree
@@ -170,8 +172,9 @@ def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[n
     Returns
     -------
     list of str
-        The files written (none for regression, with a warning, if no
-        prediction is finite)
+        The files written (none, with a warning, for regression if no
+        prediction is finite, or for probabilistic classification if any class
+        probability is not finite)
     """
 
     data_label = 'matrix' if task.is_matrix else 'res' if task.per_residue else 'seq'
@@ -610,8 +613,9 @@ def sequence_error(true: np.ndarray, predicted: np.ndarray, task: Task) -> float
     -------
     float
         Mean absolute error (regression) or the fraction of residues wrongly
-        classified (classification); inf if no residue has a label, and NaN
-        if a prediction is NaN
+        classified (classification); inf if no residue has a label (or a
+        labelled residue's prediction is infinite), and NaN if a labelled
+        residue's prediction is NaN
     """
     labelled = ~missing_label_mask(true, task)
     if not labelled.any():
@@ -631,7 +635,8 @@ def profile_examples(true_values: Sequence[np.ndarray], predictions: Sequence[np
     being good or bad. Sequences with at least MIN_PROFILE_RESIDUES labelled
     residues are chosen from if there are enough of them, so that a sequence
     is never shown, and ranked, on the strength of a few residues; sequences
-    with no labelled residue, or a prediction that is NaN, never are.
+    with no labelled residue, or a prediction at a labelled residue that is not
+    finite, never are.
 
     Parameters
     ----------

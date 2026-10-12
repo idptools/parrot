@@ -1,15 +1,17 @@
 #!/usr/bin/env python
 """
-Usage: $ parrot-preprocess raw_data_file processed_data_file <flags>
+Usage: $ parrot-preprocess input_data_file output_data_file -d <datatype> -m <mode> <flags>
 
 parrot-preprocess turns a PARROT datafile into one ready for training: it can
 clean sequences, recode class labels, deal with duplicate sequences, split the
 data into training, validation and test sets without leakage between them
-(keeping homologous sequences in the same set, with MMseqs2), and balance the
-classes of the training set. It writes the processed datafile, a matching
-split-file (if the data were split) and a report of everything it did.
+(keeping similar sequences in the same set, found with MMseqs2 or PARROT's own
+k-mer search; or at random, keeping identical sequences together), and balance
+the classes (of the training set only, if the data were split). It writes the
+processed datafile, a matching split-file (if the data were split) and a report
+of everything it did.
 
-Each step is one function below, run in this order by main(): read, clean,
+Each step is one function below, run in this order by run(): read, clean,
 recode, deduplicate, split, balance, write.
 
 For more information on usage, use the '-h' flag.
@@ -75,7 +77,8 @@ def build_parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(
         prog=PROGRAM_NAME, description='parrot-preprocess cleans, deduplicates, splits (without leakage between sets) and class-balances '
-                    'a PARROT datafile, writing a processed datafile, a matching split-file and a report.')
+                    'a PARROT datafile, writing a processed datafile, a matching split-file (with --split) and a '
+                    'report.')
     add_examples_argument(parser, PROGRAM_NAME)
     add_input_arguments(parser)
     add_cleaning_arguments(parser)
@@ -181,8 +184,8 @@ def add_balancing_arguments(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('class balancing (classification only)')
     group.add_argument('--class-balance', action='store_true',
                        help='down-sample the more common classes so classes are balanced (only the training set, if '
-                            'the data are split); for residue data, the balance after each removal is written to '
-                            '<output>_class_balance_trace.csv')
+                            'the data are split); for residue data, the imbalance before balancing and after each '
+                            'removal is written to <output>_class_balance_trace.csv')
     group.add_argument('--cb-block-size', type=int, default=None, metavar='sequences',
                        help='residue data: the number of randomly drawn sequences considered for each removal '
                             f'(default {class_balancing.DEFAULT_BLOCK_SIZE}; larger makes better choices, more slowly)')
@@ -224,7 +227,7 @@ def check_arguments(args: argparse.Namespace) -> None:
     RuntimeError
         If --split homology was asked for but MMseqs2 cannot be found
     FileNotFoundError
-        If the input datafile does not exist
+        If the input datafile, the --groups file or the --matrix-file does not exist
     """
     arguments.check_file_exists(args.input_data_file, 'Datafile')
     if args.recode_classes and args.mode != 'classification':
@@ -323,7 +326,7 @@ def check_options_match_split_method(args: argparse.Namespace) -> None:
 
 
 def check_split_settings(args: argparse.Namespace) -> None:
-    """Check the values of the splitting options, and that MMseqs2 can be found if it is needed
+    """Check the values of the splitting options, and that the --groups file and (if it is needed) MMseqs2 can be found
 
     Parameters
     ----------
@@ -336,6 +339,8 @@ def check_split_settings(args: argparse.Namespace) -> None:
         If a value is out of range
     RuntimeError
         If --split homology was asked for but MMseqs2 cannot be found
+    FileNotFoundError
+        If the --groups file does not exist
     """
     arguments.check_set_fractions(args.set_fractions)
     if args.groups is not None:
@@ -544,6 +549,8 @@ def remove_duplicates(lines: list[Line], args: argparse.Namespace, classificatio
                       report: ProcessingReport) -> list[Line]:
     """Remove exact duplicate lines (--remove-line-duplicates), and deal with duplicated sequences (--deduplicate).
 
+    --remove-sequence-duplicates is dealt with as --deduplicate drop.
+
     Parameters
     ----------
     lines : list
@@ -556,6 +563,11 @@ def remove_duplicates(lines: list[Line], args: argparse.Namespace, classificatio
     -------
     list
         The kept lines
+
+    Raises
+    ------
+    ValueError
+        If dealing with duplicated sequences removes every line
     """
     if args.remove_line_duplicates:
         report.section('Duplicate lines')
@@ -580,6 +592,8 @@ def split(lines: list[Line], before_deduplication: list[Line], args: argparse.Na
           report: ProcessingReport) -> tuple[list[Line], list[str] | None]:
     """Assign every line to the training, validation or test set (--split), keeping similar sequences together
 
+    With --split random, only identical sequences (and the records of each --groups group) are kept together.
+
     Parameters
     ----------
     lines : list
@@ -596,6 +610,13 @@ def split(lines: list[Line], before_deduplication: list[Line], args: argparse.Na
         The kept lines (records similar to a higher-priority set are removed)
     list of str or None
         The set of each kept line, or None if the data are not split
+
+    Raises
+    ------
+    ValueError
+        If a line of the --groups file does not have two fields, or any set ends up empty
+    RuntimeError
+        If MMseqs2 fails, or the sets are still not separated after splitting.MAX_SEPARATION_ROUNDS searches
     """
     if args.split_method is None:
         return lines, None
@@ -819,7 +840,10 @@ def balance_classes(lines: list[Line], splits: list[str] | None, args: argparse.
 
 def balance_residue_classes(lines: list[Line], args: argparse.Namespace, output_prefix: str,
                             report: ProcessingReport) -> list[Line]:
-    """Balance residue classes, writing the imbalance after each removal to <output>_class_balance_trace.csv
+    """Balance residue classes, writing the imbalance before balancing and after each removal to a trace file
+
+    The trace file, <output>_class_balance_trace.csv, has one '<row number>, <imbalance>' line per value: row 1 is
+    the imbalance before balancing, and row n + 1 the imbalance after n removals.
 
     Parameters
     ----------
@@ -846,7 +870,7 @@ def balance_residue_classes(lines: list[Line], args: argparse.Namespace, output_
     with open(trace_file, 'w') as fh:
         for step, imbalance in enumerate(tracker, start=1):
             fh.write(f'{step}, {imbalance:.3f}\n')
-    report.add(f'Imbalance after each removal written to {trace_file}')
+    report.add(f'Imbalance before balancing and after each removal written to {trace_file}')
     return balanced
 
 

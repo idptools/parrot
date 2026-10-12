@@ -89,9 +89,11 @@ Learn a matrix for each sequence (e.g. a contact map) with a 2D U-Net:
 How it works
 ------------
 1. The datafile (--input-file) has '<ID> <sequence> <value(s)>' on each line:
-   one value per sequence (-d sequence) or one per residue (-d residues). The
-   values are numbers to predict (--regression) or classes labelled 0, 1, ...
-   (--classification, with --num-classes). Every line is checked first.
+   one value per sequence (-d sequence) or one per residue (-d residues). For
+   matrix data (unet2d) it has '<ID> <sequence>', and each sequence's matrix
+   is in --matrix-file. The values are numbers to predict (--regression) or
+   classes labelled 0, 1, ... (--classification, with --num-classes). Every
+   line is checked first.
 2. The data are divided into training, validation and test sets (--split),
    as a split-file says or by one of parrot-preprocess's methods: 'mmseqs' or
    'kmer' put similar sequences (found by MMseqs2, or by PARROT's own k-mer
@@ -102,19 +104,23 @@ How it works
    the name is also a method's. --seed makes the split, and training,
    repeatable.
 3. Each residue is encoded as a vector of numbers (--encode; one-hot by
-   default).
+   default). Protein language model and NARDINI encodings are slow to
+   compute, so every sequence is encoded once before training, into a
+   parrot_train_embeddings directory next to the network (or
+   --embedding-cache).
 4. The network is trained for -e epochs (100 by default). After every epoch
    its loss on the validation set is measured, and the network from the epoch
    with the lowest validation loss is the one kept, so training for too long
    does no harm. With --stop auto, training instead ends once -e epochs in a
-   row have not lowered the validation loss by at least 0.5%. The simple models (linear, svm, random_forest, knn)
-   are fitted in one step instead.
+   row have not lowered the validation loss by at least 0.5%. The simple
+   models (linear, svm, random_forest, knn) are fitted in one step instead.
 5. The kept network is saved as --output-network (with '.pt' added if the
    name does not end with it); the file records its architecture,
    hyperparameters, task and encoding, so parrot-predict needs only the file.
    It is then tested: predictions for the test set go to
-   <network>_predictions.tsv, and performance metrics to
-   <network>_performance_stats.txt (and figures, with --include-figs).
+   <network>_predictions.tsv (<network>_predictions.npz for matrix data), and
+   performance metrics to <network>_performance_stats.txt (and figures, with
+   --include-figs).
 6. <network>_info.txt records everything about how the network was trained:
    the exact command, software versions, the data (with a checksum of the
    datafile), the split, the encoding, the architecture and its number of
@@ -169,19 +175,24 @@ How it works
    keeps being explored.
 3. Successive halving keeps the search cheap: every configuration is first
    trained for a few epochs (--min-epochs, by default a ninth of --epochs), and
-   only the best third of each stage continue, for three times as many epochs,
-   up to --epochs (with -e 30, the stages are 3, 10 and 30 epochs). Poor
-   configurations are dropped early. Hyperparameters that have no effect on
-   your data (e.g. the composition window for sequence data) are not searched.
+   only the best third of each stage continue, for three times as many epochs
+   (--reduction-factor, 3 by default), up to --epochs (with -e 30, the stages
+   are 3, 10 and 30 epochs). Poor configurations are dropped early. The simple
+   models (linear, svm, random_forest, knn) are fitted in one step, so each of
+   their configurations is simply fitted once. Hyperparameters that have no
+   effect on your data (e.g. the composition window for sequence data) are
+   not searched.
 4. Each configuration is scored by its lowest validation loss, exactly as
    parrot-train chooses its best epoch (with --cv-folds, by its average over
    the folds, which keep identical sequences together, and with --split kmer
    or mmseqs similar ones too).
-5. The best configuration's network is saved and tested on the test set.
-   <network>_optimal_hyperparams.txt gives its hyperparameters,
-   <network>_hyperparameter_trials.tsv records every trial as it finishes, and
-   <network>_info.txt describes how the network was trained, including the
-   search.
+5. The best configuration's network has already been trained for --epochs on
+   the training set, so it is saved and tested on the test set (with
+   --cv-folds, a network is first trained on the training set with the best
+   configuration). <network>_optimal_hyperparams.txt gives its
+   hyperparameters, <network>_hyperparameter_trials.tsv records every trial as
+   it finishes, and <network>_info.txt describes how the network was trained,
+   including the search.
 
 The default 50 trials cost about as much as 15-20 parrot-train runs with the
 same --epochs, so a GPU helps.
@@ -214,7 +225,7 @@ The same, for a file with just one sequence on each line:
 
 For classification, the probability of each class rather than just the most
 likely one (for residue networks, each residue's probabilities are written as
-one comma-separated token, e.g. 0.91,0.06,0.03):
+one comma-separated token, e.g. 0.9100,0.0600,0.0300):
 
     parrot-predict sequences.txt network.pt predictions.txt --probabilistic-classification
 
@@ -234,13 +245,17 @@ How it works
    (Networks saved by PARROT 1.x record only their weights, so they need
    --datatype, and --encode if they were not trained on one-hot encoding.)
 2. Every sequence is checked first, so a residue the encoding cannot read
-   stops the command before anything is predicted.
-3. Sequences are predicted in batches of similar length, and each unique
-   sequence is predicted once.
-4. The output has one line per line of the sequence file, in the same order:
-   the ID, the sequence, and its predicted value(s), one per sequence or one
-   per residue. Networks for matrix data write a NumPy .npz archive instead,
-   with one matrix per sequence ID.
+   stops the command before anything is predicted. Networks trained on a
+   protein language model or NARDINI encoding then encode every sequence once,
+   into a parrot_predict_embeddings directory next to the output (or
+   --embedding-cache).
+3. Sequences are predicted in batches of similar length (up to --batch, 64
+   by default), and each unique sequence is predicted once.
+4. The output has one line per sequence of the sequence file, in the same
+   order (blank lines and lines starting with '#' are skipped): the ID, the
+   sequence, and its predicted value(s), one per sequence or one per residue.
+   Networks for matrix data write a NumPy .npz archive instead, with one
+   matrix per sequence ID.
 '''
 
 PREPROCESS_GUIDE = '''
@@ -320,9 +335,14 @@ exist):
     ...
     parrot-train brnn --input-file data.tsv --output-network cv/network9.pt --split cv/splits_cv9.txt -d sequence --regression
 
-Five folds, training on 90% of each fold's non-test sequences:
+Five folds, training on 90% of each fold's non-test sequences (written as
+cv/five_fold_cv0.txt to cv/five_fold_cv4.txt):
 
-    parrot-cvsplit data.tsv cv/splits -k 5 -t 0.9
+    parrot-cvsplit data.tsv cv/five_fold -k 5 -t 0.9
+
+For a datafile without sequence IDs (each line starts with the sequence):
+
+    parrot-cvsplit data.tsv cv/splits --exclude-seq-id
 
 How it works
 ------------
@@ -330,14 +350,15 @@ The sequences are shuffled (repeatably, with --seed) and divided into k folds
 of near-equal size, keeping identical sequences in the same fold. Fold i is
 the test set of split-file i, and the other sequences are divided between its
 training set (-t, 0.8 by default) and its validation set, again keeping
-identical sequences together. Each split-file has three lines, giving the training,
-validation and test sets as line numbers of the datafile (counting from 0, and
-skipping blank and comment lines), as parrot-train --split expects.
+identical sequences together. Each split-file has three lines, giving the
+training, validation and test sets as line numbers of the datafile (counting
+from 0, and skipping blank and comment lines), as parrot-train --split
+expects.
 
 Apart from identical sequences, folds are drawn at random, so close relatives
 can end up in different sets; parrot-preprocess --split makes splits that keep
-them together. To score
-hyperparameters by cross-validation, use parrot-optimize --cv-folds.
+them together. To score hyperparameters by cross-validation, use
+parrot-optimize --cv-folds.
 '''
 
 # Each command's guide, by the command's name

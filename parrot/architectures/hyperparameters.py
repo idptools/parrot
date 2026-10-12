@@ -3,9 +3,9 @@ Declaring the hyperparameters of a network architecture.
 
 Each architecture lists its hyperparameters as HyperParameter declarations.
 Everything else about a hyperparameter follows from its declaration: its
-command-line flag and help (parrot-train), whether and how parrot-optimize
-searches it, the checks applied to its value, and the value used for networks
-saved before it existed.
+command-line flag and help (parrot-train and parrot-optimize), whether and how
+parrot-optimize searches it, the checks applied to its value, and the value
+used for networks saved before it existed.
 
 Hyperparameters that several architectures have in common are declared once,
 at the end of this module, so the same flag means the same thing for each of
@@ -73,11 +73,12 @@ class HyperParameter:
         (parrot-optimize), for numeric hyperparameters. None means the range is
         not searched.
     log_scale : bool, optional
-        If True the optimiser searches this hyperparameter on a log10 scale.
+        If True the optimiser searches this hyperparameter on a log scale.
     search_choices : tuple, optional
         The values hyperparameter optimisation tries, for hyperparameters with a
         fixed set of values (`choices`, or True/False). None means they are not
-        searched. A hyperparameter has either a search_range or search_choices.
+        searched. A hyperparameter can have a search_range or search_choices,
+        not both.
     legacy_value : int, float, str or bool, optional
         The value used for networks saved before this hyperparameter existed, if
         that differs from `default` (e.g. a feature that is now on by default
@@ -107,8 +108,14 @@ class HyperParameter:
         ------
         ValueError
             If the name is not a Python identifier, the type is not supported,
-            options are given that do not apply to the type, the search range is
-            empty, or the default, legacy value or a search choice is invalid.
+            options are given that do not apply to the type (choices, bounds, a
+            search range or log_scale for an on/off hyperparameter, or a search
+            range for a text one), a text hyperparameter has no choices, an
+            exclusive bound is set without the bound, the search range is
+            empty, a log-scale search range does not lie above 0, both a
+            search range and search choices are given, there are
+            fewer than two distinct search choices, or the default, legacy value
+            or a search choice is invalid.
         """
         if not self.name.isidentifier():
             raise ValueError(f"Hyperparameter name '{self.name}' must be a valid Python identifier")
@@ -179,7 +186,8 @@ class HyperParameter:
         Raises
         ------
         ValueError
-            If the value is the wrong type, cannot be represented exactly as
+            If the value is the wrong type, is not a finite number (for a
+            numeric hyperparameter), cannot be represented exactly as
             `value_type` (e.g. 2.5 for an integer hyperparameter), is outside
             the allowed range, or is not one of `choices`.
         """

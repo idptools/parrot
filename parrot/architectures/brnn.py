@@ -115,6 +115,11 @@ def run_lstm_unpacked(lstm: nn.LSTM, x: torch.Tensor, lengths: torch.Tensor) -> 
     torch.Tensor
         Final hidden state of each layer and direction [num_layers*2 X batch_dim X
         hidden_size], ordered as torch.nn.LSTM orders them
+
+    Raises
+    ------
+    ValueError
+        If `lstm` is not batch_first and bidirectional, or has projections
     """
     if lstm.proj_size != 0 or not lstm.bidirectional or not lstm.batch_first:
         raise ValueError('run_lstm_unpacked expects a batch_first bidirectional LSTM without projections')

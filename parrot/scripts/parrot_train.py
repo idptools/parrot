@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
-Usage: $ parrot-train <architecture> data_file output_network <flags>
+Usage: $ parrot-train <architecture> --input-file <datafile> --output-network <name> --split <method or split-file>
+       (--regression | --classification --num-classes N) <flags>
 
 Driver script for training a network with user-specified hyperparameters. Each
 architecture is a subcommand with its own options (see training_parser.py);

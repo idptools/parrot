@@ -4,8 +4,9 @@ The interface every sequence encoding implements.
 An encoder turns a sequence (a string) into one vector of numbers per residue.
 PARROT's encodings are built on this base class: the per-amino-acid tables in
 encode_sequence.py (one-hot, biophysical scales, user files, standardized
-versions of these) and the protein language models in plm.py. This module
-imports nothing else from PARROT, so every encoding module can build on it.
+versions of these), the protein language models in plm.py and the NARDINI+
+features in nardini.py. This module imports nothing else from PARROT, so every
+encoding module can build on it.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -98,7 +99,8 @@ class SequenceEncoder:
         Returns
         -------
         torch.Tensor
-            float64 for the per-amino-acid tables, float32 for protein language models
+            float64 for the per-amino-acid tables, float32 for protein language
+            models and NARDINI encodings
         """
         raise NotImplementedError
 

@@ -83,7 +83,7 @@ def cpu_state_dict(network: torch.nn.Module) -> dict[str, Any]:
     Returns
     -------
     dict
-        Parameter name -> CPU tensor (non-tensor entries, such as the fitted
+        Parameter name -> CPU tensor (non-tensor entries, such as the pickled
         scikit-learn model of a classical network, are kept as they are)
     """
     state: dict[str, Any] = cpu_copy(network.state_dict())
@@ -118,9 +118,14 @@ def load_network(path: str, device: str | torch.device = 'cpu', legacy_datatype:
     Raises
     ------
     ValueError
-        If the file is not a saved PARROT network, a weights-only file is
-        loaded without `legacy_datatype`, or its encoding does not match the
+        If the file is not a saved PARROT network, or names an architecture,
+        hyperparameter or encoding this version of PARROT does not have; or,
+        for a weights-only file, `legacy_datatype` is not given or is not
+        'sequence' or 'residues', or `legacy_encoding` does not match the
         network's input size
+    FileNotFoundError
+        If `path` does not exist, or, for a weights-only file, `legacy_encoding`
+        is neither a built-in encoding nor an existing encoding file
     """
 
     # Load onto the CPU first, so files saved from any device can be read, then move
@@ -134,7 +139,8 @@ def load_network(path: str, device: str | torch.device = 'cpu', legacy_datatype:
         raise ValueError(f'{path} is not a saved PARROT network: it holds neither a network saved by parrot-train or '
                          'parrot-optimize nor the weights of a BRNN saved by an earlier version of PARROT')
     if is_checkpoint(saved):
-        # Hyperparameters added since the network was saved take the value that reproduces it
+        # Hyperparameters added since the network was saved take the value that reproduces it, where they declare one
+        # (see fill_legacy_values), and otherwise their default
         hyperparameters = fill_legacy_values(get_architecture(saved['architecture']), saved['hyperparameters'])
         network = build_network(saved['architecture'], saved['input_size'], Task.from_config(saved['task']),
                                 hyperparameters)
@@ -188,7 +194,32 @@ def infer_legacy_brnn_shape(state_dict: dict[str, torch.Tensor]) -> dict[str, in
 
 def _network_from_legacy_weights(state_dict: dict[str, torch.Tensor], datatype: str | None,
                                  encoding: str) -> tuple[ParrotArchitecture, SequenceEncoder]:
-    """Rebuild a BRNN from a weights-only file written by an earlier version of PARROT."""
+    """Rebuild a BRNN from a weights-only file written by an earlier version of PARROT
+
+    Parameters
+    ----------
+    state_dict : dict
+        The weights read from the file
+    datatype : str or None
+        'sequence' or 'residues' (the file does not record which)
+    encoding : str
+        The encoding the network was trained with, as given to get_encoder()
+
+    Returns
+    -------
+    ParrotArchitecture
+        The BRNN, with the weights loaded
+    SequenceEncoder
+        The encoder to use with it
+
+    Raises
+    ------
+    ValueError
+        If `datatype` is None or not one of LEGACY_DATATYPES, or the encoding's
+        vectors are not the length the network expects
+    FileNotFoundError
+        If `encoding` is neither a built-in encoding nor an existing encoding file
+    """
 
     if datatype is None:
         raise ValueError('This network was saved by an older version of PARROT and does not record its datatype; '

@@ -7,7 +7,7 @@ As well as one value per sequence or one value per residue, PARROT can learn a *
 * **Square maps** (L x L for a sequence of L residues): one value for every pair of residues, such as a contact map, a distance map, or the strength of interaction between two residues. Maps can be symmetric (``--symmetric``) or not.
 * **Fixed-width matrices** (L x N, with ``--matrix-width N``): N values for every residue, where the N columns are related and ordered (for example a property measured at N temperatures, or a distribution over N bins), rather than N unrelated features.
 
-Matrix data is the ``matrix`` datatype, and is learnt by the ``unet2d`` architecture, a 2D U-Net (see below): ``parrot-train unet2d`` and ``parrot-optimize unet2d``, which need no ``-d``. It works with every encoding, regression and classification, and the ``parrot-train``, ``parrot-optimize``, ``parrot-predict`` and ``parrot-preprocess`` commands.
+Matrix data is the ``matrix`` datatype, and is learnt by the ``unet2d`` architecture, a 2D U-Net (see below): ``parrot-train unet2d`` and ``parrot-optimize unet2d``, which need no ``-d``. It works with every per-residue encoding (not NARDINI features, which describe whole sequences), regression and classification, and the ``parrot-train``, ``parrot-optimize``, ``parrot-predict`` and ``parrot-preprocess`` commands.
 
 Input files
 -----------
@@ -34,9 +34,9 @@ Sequence IDs are therefore required (``--exclude-seq-id`` cannot be used), and e
 
 **Missing values.** A cell with no value (e.g. a pair of residues that was not measured) is written as NaN, for regression and for classification. These cells are ignored in training, in the performance metrics and in the figures. Every matrix needs at least one value that is not missing. Infinite values are an error.
 
-**Classification.** Cells hold class labels 0, 1, ..., ``classes - 1`` (stored as numbers; NaN for missing). As for other data, ``-c`` gives the number of classes.
+**Classification.** Cells hold class labels 0, 1, ..., ``classes - 1`` (stored as whole numbers; NaN for missing). As for other data, give ``--classification`` with ``--num-classes`` (or ``--regression`` for values).
 
-**Symmetric maps.** With ``--symmetric``, every map must be symmetric (cell (i, j) equal to cell (j, i), with NaN in the same places). Each pair of residues is then counted once in the loss and the metrics (the diagonal and upper triangle), and the network's predictions are made exactly symmetric by averaging each cell with its mirror image. ``--symmetric`` only applies to square maps.
+**Symmetric maps.** With ``--symmetric``, every map must be symmetric (cell (i, j) equal to cell (j, i), with NaN in the same places). Each pair of residues is then counted once in the loss and the metrics (the diagonal and upper triangle), and the network's predictions are made exactly symmetric by averaging each cell with its mirror image. ``--symmetric`` only applies to square maps (with ``--matrix-width`` it is an error).
 
 Training
 --------
@@ -52,7 +52,7 @@ The flags for matrix data are:
     *  ``--symmetric`` : the maps are symmetric (square maps only).
     *  ``--max-matrix-length`` : square maps only; the longest sequence allowed (default 512). A square map takes memory in proportion to the square of the sequence length: a 512-residue map has about 262,000 cells, and the 2D U-Net with its default settings keeps roughly 1-3 kB per cell while training, so one such sequence needs up to about 1 GB. Longer sequences are an error rather than a crash part-way through training; remove them (e.g. ``parrot-preprocess --max-length``), or raise the limit if your GPU has the memory. Lower ``--batch`` as well when sequences are long.
 
-All other ``parrot-train`` flags work as usual. ``parrot-optimize`` takes the same flags and searches the 2D U-Net's hyperparameters (below), including with ``--cv-folds``.
+All other ``parrot-train`` flags work as usual, except ``--exclude-seq-id`` (see above) and ``--probabilistic-classification``, which ``unet2d`` does not offer (``Predictor`` gives class probabilities; see "Predicting" below). ``parrot-optimize`` takes the same flags and searches the 2D U-Net's hyperparameters (below), including with ``--cv-folds``.
 
 The unet2d architecture
 -----------------------
@@ -66,14 +66,14 @@ The unet2d architecture
 Its hyperparameters are:
 
 	*  ``--pair-channels`` : features each residue is projected to before they are combined into the grid (default 16; searched over 4-32).
-	*  ``--pair-features`` : square maps only; ``concatenate`` or ``outer`` (default concatenate; both are searched for square maps).
+	*  ``--pair-features`` : square maps only (it has no effect on fixed-width matrices); ``concatenate`` or ``outer`` (default concatenate; both are searched for square maps).
 	*  ``--base-channels`` : channels at full resolution, doubled at each level down (default 16; searched over 8-32).
 	*  ``--depth`` : number of times the grid is halved (default 3; searched over 1-4).
 	*  ``--kernel-size`` : width of each convolution; one of 3, 5, 7, 9, 11 (default 3; searched over 3, 5 and 7, since a 2D convolution's weights grow with the square of its width: the largest network searched has about 41 million parameters).
 	*  ``--dropout`` : dropout probability, at least 0 and below 1 (default 0.0; searched over 0.0-0.5).
 	*  ``--upsampling`` : how the decoder doubles the grid, ``transposed`` (a learned transposed convolution) or ``nearest`` (repeating each cell) (default transposed; both are searched).
 
-Compared with Nick's original, the input grid is built from the per-residue encoding (so any PARROT encoding can be used) rather than from a one-hot code of residue pairs, layer normalization replaces batch normalization, padded cells are re-zeroed after every layer, and the number of levels is a hyperparameter. Together these make a sequence's prediction independent of how much padding it is given when batched with longer sequences, and let sequences of any length be used.
+Compared with Nick's original, the input grid is built from the per-residue encoding (so any of PARROT's per-residue encodings can be used) rather than from a one-hot code of residue pairs, layer normalization replaces batch normalization, padded cells are re-zeroed after every layer, and the number of levels is a hyperparameter. Together these make a sequence's prediction independent of how much padding it is given when batched with longer sequences, and let sequences of any length be used.
 
 Output
 ------

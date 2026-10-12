@@ -23,7 +23,8 @@ Two families of models are supported:
 The model weights are not stored in PARROT's network files: a saved network
 records which model and settings produced its embeddings, and the model is
 loaded by name. Model libraries and h5py are only imported when a PLM encoding
-is used; install them with `pip install idptools-parrot[plm]` (ESM-2) or
+is used (h5py also for NARDINI encodings, which share the embedding cache);
+install them with `pip install idptools-parrot[plm]` (ESM-2) or
 `pip install idptools-parrot[esmc]` (ESM C). Do not install Meta's fair-esm in
 the same environment as EvolutionaryScale's esm: both use the import name `esm`.
 
@@ -144,8 +145,8 @@ PROGRESS_INTERVAL_SECONDS = 30
 # this often...
 CACHE_POLL_SECONDS = 0.2
 
-# ...for at most this long, since a write of RESIDUES_PER_CACHE_WRITE residues takes seconds, so a lock file older
-# than this is almost certainly left by a process that stopped while writing
+# ...for at most this long, since a write of RESIDUES_PER_CACHE_WRITE residues takes seconds, so a lock file still
+# there after this long is almost certainly left by a process that stopped while writing
 CACHE_WAIT_SECONDS = 600
 
 # Default cache directories, created next to the command's output
@@ -184,6 +185,11 @@ def window_starts(length: int, window: int, overlap: int) -> list[int]:
     list of int
         0-based starts. A sequence no longer than `window` has one window; the
         last window of a longer sequence ends exactly at the sequence end.
+
+    Raises
+    ------
+    ValueError
+        If the sequence is longer than `window` and `overlap` is not between 0 and window - 1
     """
     if length <= window:
         return [0]
@@ -236,6 +242,20 @@ class EmbeddingCache:
 
     def __init__(self, directory: str | Path, model_name: str, embedding_size: int, per_residue: bool = True,
                  storage_dtype: Any = STORAGE_DTYPE) -> None:
+        """
+        Parameters
+        ----------
+        directory : str or Path
+            The cache directory (created when the cache is first written)
+        model_name : str
+            What produced the embeddings; also the name of the HDF5 file
+        embedding_size : int
+            Length of each residue's embedding (or of each sequence's vector)
+        per_residue : bool, optional
+            True if each residue has an embedding, False if each sequence has one vector
+        storage_dtype : numpy dtype, optional
+            The precision embeddings are stored at (default STORAGE_DTYPE)
+        """
         self.directory = Path(directory).resolve()
         self.model_name = model_name
         self.embedding_size = embedding_size
@@ -267,8 +287,13 @@ class EmbeddingCache:
         ------
         KeyError
             If the sequence is not in the cache
+        FileNotFoundError
+            If the cache has no file yet
+        ValueError
+            If the cache holds a different sequence under the same hash
         """
         def read(reader: Any) -> np.ndarray | None:
+            """The sequence's embedding from the open file, or None if it is not there."""
             key = self.key(sequence)
             if key not in reader:
                 return None
@@ -304,10 +329,13 @@ class EmbeddingCache:
     def write(self, embeddings: dict[str, np.ndarray]) -> None:
         """Add embeddings (sequence -> [length X embedding size] array, or [embedding size] vector) to the cache
 
+        Sequences already in the cache are skipped. If another process is
+        writing to the cache, this waits for it to finish (see wait_for_lock_file).
+
         Raises
         ------
         RuntimeError
-            If another process is writing to the cache
+            If another process's lock file is still there after CACHE_WAIT_SECONDS
         ValueError
             If the file holds embeddings from something else, or an embedding has the wrong shape
         """
@@ -343,6 +371,7 @@ class EmbeddingCache:
     def stored_layout(self) -> tuple[int, bool, str]:
         """(values per embedding, whether embeddings are per residue, storage dtype), as recorded in the file."""
         def read(reader: Any) -> tuple[int, bool, str]:
+            """The layout from the open file's attributes and its first dataset (if any)."""
             first = next((group[name] for group in reader.values() for name in group), None)
             storage_dtype = first.dtype.name if first is not None else self.storage_dtype.name
             return (int(reader.attrs.get('embedding_size', 0)), bool(reader.attrs.get('per_residue', True)),
@@ -392,14 +421,18 @@ class EmbeddingCache:
 
     @property
     def _lock_path(self) -> Path:
+        """The lock file that marks the cache as being written: <model>.h5.lock."""
         return self.path.with_suffix('.h5.lock')
 
     def _lock(self) -> '_CacheLock':
+        """The lock to hold while writing to the cache."""
         return _CacheLock(self._lock_path)
 
 
 def wait_for_lock_file(path: Path) -> None:
     """Wait while another process holds a cache's lock file (it is writing to the cache)
+
+    Prints a note when it starts waiting.
 
     Parameters
     ----------
@@ -428,9 +461,11 @@ class _CacheLock:
     wait_for_lock_file)."""
 
     def __init__(self, path: Path) -> None:
+        """Lock the cache with the lock file at `path` (taken on entering the with block)."""
         self.path = path
 
     def __enter__(self) -> None:
+        """Create the lock file, once no other process holds it (see wait_for_lock_file for when this gives up)."""
         while True:
             wait_for_lock_file(self.path)
             try:
@@ -442,6 +477,7 @@ class _CacheLock:
         os.close(descriptor)
 
     def __exit__(self, *exception: Any) -> None:
+        """Remove the lock file, whether or not the write succeeded."""
         self.path.unlink()
 
 
@@ -470,7 +506,7 @@ def write_cache_readme(directory: Path, program: str) -> None:
     updated = datetime.datetime.now().isoformat(timespec='seconds')
     text = f"""# PARROT embedding cache
 
-This directory holds encodings that are slow to compute, for PARROT: per-residue embeddings from a protein language model (PLM), and NARDINI+ features of whole sequences. It was created by `{program}` and last updated on {updated}.
+This directory holds encodings that are slow to compute, for PARROT: per-residue embeddings from a protein language model (PLM), and NARDINI+ features of whole sequences. It was last updated by `{program}`, on {updated}.
 
 Computing these is by far the slowest part of using such an encoding, so every sequence is encoded once and stored here. Training reads the stored values every epoch instead of recomputing them, and any later command that uses the same encoding and cache directory (training another network, or predicting the same sequences again) skips sequences that are already here.
 
@@ -487,13 +523,13 @@ Total: {human_size(total_bytes)}.
 Each file is an HDF5 file with one dataset per sequence. Datasets are named by the SHA-256 hash of the sequence (grouped by its first two characters), and each records the sequence itself as an attribute.
 
 - **PLM embeddings** (`<model>.h5`): each dataset has shape [sequence length X values per residue], stored as 16-bit floats. Each value is the model's final-layer representation of that residue (after the model's last layer norm), computed with the whole sequence as context. Sequences longer than the model was trained on ({ESM2_MAX_WINDOW:,} residues for ESM-2, {ESMC_MAX_WINDOW:,} for ESM C) are embedded in overlapping windows of that length, and residues covered by more than one window get the average. The size is about (number of residues) x (values per residue) x 2 bytes.
-- **NARDINI+ features** (`nardini_*.h5`): each dataset is one vector of NARDINI+ z-scores for the whole sequence, stored as 32-bit floats, computed by SPARROW with the settings in the file name (the compositional background, the number of scrambles and the random seed). See PARROT's documentation on NARDINI encodings.
+- **NARDINI+ features** (`nardini_*.h5`): each dataset is one vector of NARDINI+ z-scores for the whole sequence, stored as 32-bit floats, computed by SPARROW with the settings in the file name (the compositional background, the number of scrambles, the random seed and the SPARROW version). See PARROT's documentation on NARDINI encodings.
 
 ## Reusing or deleting this cache
 
 - **Deleting it is safe.** Nothing here is needed to use a trained network; embeddings are simply recomputed when next needed.
 - **To reuse it** (e.g. when training several networks on the same data, or predicting the same sequences again), pass `--embedding-cache <this directory>` to `parrot-train`, `parrot-optimize` or `parrot-predict`.
-- Only one PARROT command should write to a cache at a time. A `<model>.h5.lock` file marks a cache being written; if one is left behind by a run that crashed, delete it.
+- Several PARROT commands can use a cache at once: they take turns to write to it, and a `<model>.h5.lock` file marks a cache being written. If one is left behind by a run that crashed, delete it.
 """
     (directory / 'README.md').write_text(text)
 
@@ -535,6 +571,11 @@ class PLMEncoder(SequenceEncoder):
             Window length for long sequences (default: the model's max_window)
         overlap : int, optional
             Residues shared by consecutive windows
+
+        Raises
+        ------
+        ValueError
+            If model_name is not a key of PLM_MODELS
         """
         if not is_plm_encoding(model_name):
             raise ValueError(f"Unknown protein language model '{model_name}': choose from "
@@ -585,7 +626,7 @@ class PLMEncoder(SequenceEncoder):
             torch.cuda.empty_cache()
 
     def encode(self, seq: str) -> torch.Tensor:
-        """The [len(seq) X input_size] embedding of a sequence (from the cache if possible)"""
+        """The [len(seq) X input_size] embedding of a sequence (from the cache if possible, adding it if missing)"""
         if self.cache is None:
             embedding = self.embed([seq])[seq]
         else:
@@ -614,6 +655,8 @@ class PLMEncoder(SequenceEncoder):
         ------
         RuntimeError
             If no cache has been set, or the disk does not have room for the cache
+        ValueError
+            If a sequence has a character the model cannot read as one residue
         """
         if self.cache is None:
             raise RuntimeError('Call use_cache() before prepare()')
@@ -710,6 +753,11 @@ class PLMEncoder(SequenceEncoder):
 
     def _run_model(self, chunks: list[str]) -> list[np.ndarray]:
         """Final-layer embeddings of a batch of sequences (each at most `window` residues)
+
+        Parameters
+        ----------
+        chunks : list of str
+            The sequences (or windows of longer sequences) to embed together
 
         Returns
         -------

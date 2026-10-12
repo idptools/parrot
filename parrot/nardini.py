@@ -23,8 +23,9 @@ The features describe whole sequences, so only sequence-mapped data can use them
 
 The patterning z-scores are computed by scrambling each sequence (1,000 times by
 default), which takes about 35-100 ms per sequence. So, as for protein language
-models, every sequence is computed once before training, in parallel across CPU
-cores, and stored in the embedding cache (see plm.EmbeddingCache). SPARROW
+models, every sequence is computed once before training (or predicting), in
+parallel across CPU cores, and stored in the embedding cache (see
+plm.EmbeddingCache). SPARROW
 derives each sequence's scrambles from the sequence and a fixed seed, which is
 saved with the network, so a sequence always gets the same features: when
 training and when predicting, and whether or not they came from the cache.
@@ -39,11 +40,11 @@ non-random binary patterns within sequences of intrinsically disordered
 proteins. J. Mol. Biol. 434, 167373 (2022). [NARDINI]
 
 King, M. R. et al. Macromolecular condensation organizes nucleolar sub-phases
-and sets up a pH gradient. Cell 187, 1889-1906.e24 (2024). [NARDINI+]
+to set up a pH gradient. Cell 187, 1889-1906.e24 (2024). [NARDINI+]
 
 Ruff, K. M., King, M. R. et al. Molecular grammars of predicted intrinsically
-disordered regions that span the human proteome. Cell (2025). [the human
-IDRome background]
+disordered regions that span the human proteome. Cell 189, 323-342.e17
+(2026; published online 2025). [the human IDRome background]
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -336,6 +337,9 @@ class NardiniEncoder(SequenceEncoder):
         ------
         RuntimeError
             If no cache has been set
+        ValueError
+            If a sequence cannot be scored (see check_sequences()), or the
+            installed SPARROW's features differ from a saved network's
         """
         if self.cache is None:
             raise RuntimeError('Call use_cache() before prepare()')

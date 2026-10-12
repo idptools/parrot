@@ -1,7 +1,7 @@
 """
-A 2D U-Net for matrix data, after the 2D U-Net written by Nick (GitHub user
-razonickj) on PARROT's parrot-lightning branch (parrot/unet_architecture.py,
-added in commit fedab04).
+A 2D U-Net (Ronneberger et al. 2015, MICCAI, arXiv:1505.04597) for matrix
+data, after the 2D U-Net written by Nick (GitHub user razonickj) on PARROT's
+parrot-lightning branch (parrot/unet_architecture.py, added in commit fedab04).
 
 The encoder repeatedly halves the grid in both directions (max pooling) while
 doubling the number of channels; the decoder doubles it back, and at each level
@@ -22,7 +22,8 @@ however much padding it was given (as the 1D U-Net in architectures/unet.py):
   grid is padded internally to a multiple of 2**depth, so sequences of any
   length can be used;
 - the decoder upsamples with a transposed convolution or nearest-neighbour
-  repetition (both purely local).
+  repetition (both purely local) rather than bilinear interpolation (the
+  original's default).
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -48,7 +49,7 @@ from parrot.tasks import Task
 
 # Kernel widths parrot-optimize tries. A 2D convolution's weights grow with the square of its width, so the widest
 # 1D widths are left out: with the largest searched base_channels and depth (32 and 4) the network then has at most
-# about 41 million parameters (the default has half a million), rather than 1.5 billion.
+# about 41 million parameters (the default has half a million), rather than about 100 million with width 11.
 SEARCHED_KERNEL_SIZES = (3, 5, 7)
 
 
@@ -128,6 +129,11 @@ class Up2d(nn.Module):
         upsampling : str
             'transposed' (learned transposed convolution) or 'nearest' (repeat
             each cell, then a 1x1 convolution)
+
+        Raises
+        ------
+        ValueError
+            If `upsampling` is not one of UPSAMPLING_METHODS
         """
         super().__init__()
         if upsampling == 'transposed':

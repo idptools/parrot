@@ -35,7 +35,7 @@ from parrot.tasks import Task
 
 @register_architecture
 class Composition(ParrotArchitecture):
-    """Composition (plus log length) fed to a multilayer perceptron
+    """Composition (plus log length, for sequence tasks) fed to a multilayer perceptron
 
     The parameter names (`mlp.N`) are stored in saved networks, so they must not change.
 

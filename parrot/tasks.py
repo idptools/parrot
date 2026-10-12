@@ -76,6 +76,7 @@ class Task:
     symmetric: bool = False
 
     def __post_init__(self) -> None:
+        """Check the settings, raising ValueError as described above, and store num_classes and width as plain ints."""
         if self.datatype not in VALID_DATATYPES:
             raise ValueError(f"Invalid datatype '{self.datatype}': must be one of {', '.join(VALID_DATATYPES)}")
 

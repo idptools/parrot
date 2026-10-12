@@ -229,7 +229,7 @@ def file_sha256(path: str) -> str:
 
 
 def describe_task(task: Task) -> str:
-    """'regression', or 'classification into N classes'."""
+    """'regression', or 'classification into N classes (labelled 0 to N-1)'."""
     if task.is_classification:
         return f'classification into {task.num_classes} classes (labelled 0 to {task.num_classes - 1})'
     return 'regression'
@@ -288,7 +288,7 @@ def encoding_section(encoder: SequenceEncoder) -> Section:
 
 
 def flatten_settings(settings: Mapping[str, Any], prefix: str = '') -> list[tuple[str, str]]:
-    """Saved settings as 'name : value' entries: nested settings get dotted names, and long lists their length
+    """Saved settings as 'name : value' entries: nested settings get dotted names, and long lists and tables their length
 
     Parameters
     ----------
@@ -368,8 +368,8 @@ def training_section(network: ParrotArchitecture, run: 'TrainingRun', training: 
     entries = [('loss', describe_loss(run.task)),
                ('optimizer', describe_optimizer(training['learning_rate'])),
                ('batch size', f'{run.batch_size} sequences'),
-               ('batching', 'sequences of similar length batched together, with the batches in a new random '
-                            'order every epoch' if run.batching == 'length' else 'random batches every epoch'),
+               ('batching', 'sequences of similar length batched together, with new batches, in a new random '
+                            'order, every epoch' if run.batching == 'length' else 'random batches every epoch'),
                ('stopping', f'training stopped {stop}'),
                ('epochs trained', str(len(val_losses)))]
     if best is not None:

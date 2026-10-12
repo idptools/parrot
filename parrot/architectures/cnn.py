@@ -5,9 +5,11 @@ Each residual block normalises its input, applies a 1D convolution and adds the
 result back to its input. The spacing between the residues each convolution
 looks at (the dilation) doubles from one block to the next (1, 2, 4, 8) and then
 repeats, so a few blocks can see a long stretch of sequence while every position
-is still computed in parallel. This is the ByteNet design (Kalchbrenner et al.
-2016, arXiv:1610.10099), which CARP showed to be competitive with transformers
-for protein sequences (Yang et al. 2022, bioRxiv doi:10.1101/2022.05.19.492714).
+is still computed in parallel. This is a simplified form of the ByteNet design
+(Kalchbrenner et al. 2016, arXiv:1610.10099, whose blocks also have a 1x1
+convolution either side of the dilated one), which CARP showed to be
+competitive with transformers for protein sequences (Yang et al. 2022, bioRxiv
+doi:10.1101/2022.05.19.492714).
 
 The convolutions only reach a fixed number of residues (61 with the defaults),
 so by default each block also adds a summary of the whole sequence to every

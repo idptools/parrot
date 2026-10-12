@@ -14,6 +14,8 @@ time points). Everything specific to matrix data lives in this package:
 - layers.py: 2D building blocks shared by matrix architectures (masks,
   per-cell normalisation, symmetric maps)
 - architectures/: one module per matrix architecture (unet2d.py)
+- output.py: writing predicted matrices to a .npz archive
+- figures.py: heatmaps of true and predicted matrices
 
 The rest of PARROT (encodings, training, checkpoints, the hyperparameter
 search) is shared with sequence and residue data.

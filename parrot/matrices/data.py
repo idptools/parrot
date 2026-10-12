@@ -151,9 +151,9 @@ def check_matrix(sequence_id: str, sequence: str, matrix: np.ndarray, task: Task
     ------
     IOExceptionParrot
         If the matrix is not two-dimensional, does not have one row per residue
-        and the task's number of columns, holds a value that is infinite or not
-        a number, has no values at all (every value missing), or is not
-        symmetric although the task is
+        and the task's number of columns, holds values that are not real
+        numbers or are infinite, has no values at all (every value missing), or
+        is not symmetric although the task is
     """
     matrix = np.asarray(matrix)
     expected_columns = len(sequence) if task.width is None else task.width

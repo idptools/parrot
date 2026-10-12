@@ -112,6 +112,14 @@ class ClassicalModel(ParrotArchitecture):
             The task the model is for (must be sequence-mapped)
         hyperparameter_values : dict
             The value of every declared hyperparameter, including 'features'
+
+        Raises
+        ------
+        ValueError
+            If the task is not sequence-mapped, a hyperparameter is missing,
+            undeclared or not allowed, or 'dipeptides' features are asked for
+            with an encoding of more than MAX_DIPEPTIDE_ENCODING_SIZE values per
+            residue
         """
         super().__init__(input_size, task, hyperparameter_values)
         self.feature_set = str(hyperparameter_values['features'])

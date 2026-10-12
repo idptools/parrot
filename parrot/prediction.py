@@ -41,11 +41,13 @@ class LabeledPredictions:
         The sequences
     true_values : list of numpy arrays
         The true value(s) for each sequence: a scalar for sequence-mapped data,
-        or one value per residue for residue-mapped data
+        one value per residue for residue-mapped data, or a matrix for matrix
+        data
     outputs : list of numpy arrays
         The raw network output for each sequence: [num_classes] for
-        sequence-mapped data or [sequence_length X num_classes] for residue-mapped
-        data (classification outputs are logits)
+        sequence-mapped data, [sequence_length X num_classes] for residue-mapped
+        data or [sequence_length X width X num_classes] for matrix data
+        (classification outputs are logits)
     loss : float
         Average loss per sequence, computed with the training loss function
     """
@@ -160,7 +162,8 @@ def predict_sequences(network: ParrotArchitecture, sequences: list[str], encoder
     dict
         Maps each unique sequence to its raw network output: [num_classes] for
         sequence-mapped networks, [sequence_length X num_classes] for
-        residue-mapped networks
+        residue-mapped networks, or [sequence_length X width X num_classes] for
+        matrix networks
     """
 
     # Batch sequences of similar length together, so little computation is spent on padding
@@ -196,7 +199,8 @@ def output_to_prediction(output: np.ndarray, task: Task, probabilistic: bool = F
     Parameters
     ----------
     output : numpy array
-        Raw output for one sequence: [num_classes] or [sequence_length X num_classes]
+        Raw output for one sequence: [num_classes], [sequence_length X num_classes]
+        or [sequence_length X width X num_classes]
     task : Task
         The task the network is for
     probabilistic : bool, optional
@@ -206,9 +210,10 @@ def output_to_prediction(output: np.ndarray, task: Task, probabilistic: bool = F
     Returns
     -------
     numpy array
-        Regression: the predicted value (scalar) or one value per residue.
-        Classification: the predicted class (scalar) or one class per residue,
-        or, if `probabilistic`, the probability of each class.
+        Regression: the predicted value (scalar), one value per residue, or
+        the predicted matrix. Classification: the predicted class (scalar),
+        one class per residue or per matrix cell, or, if `probabilistic`, the
+        probability of each class (a last dimension of length num_classes).
     """
 
     if not task.is_classification:

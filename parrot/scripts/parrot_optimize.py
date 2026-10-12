@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Usage: $ parrot-optimize <architecture> data_file output_network <flags>
+Usage: $ parrot-optimize <architecture> --input-file <datafile> --output-network <name> --split <split> <flags>
 
 Search for good hyperparameters for a network architecture on a dataset, then
 train and test a network with the best ones. See parrot/hyperparameter_search.py
@@ -248,7 +248,7 @@ def train_with_best_values(args: argparse.Namespace, run: common.TrainingRun, be
         The parsed arguments
     run : TrainingRun
     best : dict
-        The best configuration (including the learning rate)
+        The best configuration (including the learning rate, for networks trained by gradient descent)
     timing : TrainingTiming, optional
         If given, how long each epoch took is recorded in it
 
@@ -308,7 +308,7 @@ def check_search_arguments(args: argparse.Namespace) -> int:
 
 
 def write_hyperparameters(path: str, architecture: str, hyperparameters: dict[str, Any]) -> None:
-    """Record the chosen hyperparameters as "<name>: <value>" lines
+    """Record the chosen hyperparameters as "<name>: <value>" lines, after an "architecture: <name>" line
 
     Parameters
     ----------
@@ -317,7 +317,7 @@ def write_hyperparameters(path: str, architecture: str, hyperparameters: dict[st
     architecture : str
         Name of the architecture
     hyperparameters : dict
-        Hyperparameter names and values (including the learning rate)
+        Hyperparameter names and values (including the learning rate, for networks trained by gradient descent)
     """
 
     with open(path, 'w') as f:
