@@ -466,6 +466,21 @@ def test_length_batches_of_a_small_dataset_change_composition_between_epochs():
     assert all(len(first & batches) <= len(first) // 2 for batches in later)
 
 
+def test_length_jitter_adds_little_padding_to_a_dataset_of_many_pools(monkeypatch):
+    # A training set of many pools already gets new batch-mates from the random pools, so its jitter is scaled
+    # down; unscaled, it padded these batches to about 7% more positions
+    lengths = list(np.random.default_rng(0).integers(50, 1000, size=16 * pid.LENGTH_POOL_BATCHES * 20))
+    full_noise = pid.LENGTH_NOISE
+
+    def padded_positions(noise):
+        monkeypatch.setattr(pid, 'LENGTH_NOISE', noise)
+        torch.manual_seed(0)
+        return sum(max(lengths[i] for i in batch) * len(batch)
+                   for batch in pid.LengthBatchSampler(lengths, 16, shuffle=True))
+
+    assert padded_positions(full_noise) < 1.01 * padded_positions(0.0)
+
+
 @pytest.mark.parametrize('shuffle', [False, True])
 def test_length_batches_of_an_empty_dataset(shuffle):
     assert sampler_epoch([], 4, shuffle) == []

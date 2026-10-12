@@ -526,7 +526,7 @@ def test_predicted_matrices_need_unique_ids():
 def test_large_matrix_scatterplots_show_a_warned_sample(monkeypatch):
     monkeypatch.setattr(figures, 'MAX_SCATTER_POINTS', 10)
     true_values, predicted_values = np.arange(25.0), np.arange(25.0) + 1
-    with pytest.warns(UserWarning, match='random sample of 10 of the 25 values'):
+    with pytest.warns(UserWarning, match='shows 10 of the 25 test values'):
         true_shown, predicted_shown = figures.scatter_sample(true_values, predicted_values)
     assert len(true_shown) == 10
     np.testing.assert_array_equal(predicted_shown, true_shown + 1)   # pairs stay together

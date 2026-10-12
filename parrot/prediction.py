@@ -166,6 +166,8 @@ def predict_sequences(network: ParrotArchitecture, sequences: list[str], encoder
     # Batch sequences of similar length together, so little computation is spent on padding
     unique_sequences = list(dict.fromkeys(sequences))
     by_length = sorted(unique_sequences, key=len)
+    # Progress counts the sequences actually run, so say when that is fewer than were given
+    counted = 'sequences' if len(unique_sequences) == len(sequences) else 'distinct sequences'
     predictions = {}
 
     network.eval()
@@ -182,7 +184,7 @@ def predict_sequences(network: ParrotArchitecture, sequences: list[str], encoder
         # Report progress each time another print_frequency sequences have been predicted
         done = start + len(batch_sequences)
         if print_frequency is not None and done // print_frequency > start // print_frequency:
-            print(f'  predicted {done:,} of {len(unique_sequences):,} sequences')
+            print(f'  predicted {done:,} of {len(unique_sequences):,} {counted}')
 
     # Return the sequences in the order they were first given
     return {sequence: predictions[sequence] for sequence in unique_sequences}

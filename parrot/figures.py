@@ -52,9 +52,12 @@ REFERENCE_LINE_WIDTH = 0.75
 # Area of each point in a scatterplot, in points^2
 SCATTER_POINT_SIZE = 6
 
-# Scatterplots of matrix data with more cells than this (a test set of 100 sequences of 300 residues has 9 million)
-# show a random sample of this many, drawn with a fixed seed so the same results always give the same figure
-MAX_SCATTER_POINTS = 100_000
+# Scatterplots of more values than this (a test set of 6,000 proteins has about 2 million residues) show a sample of
+# this many, spread evenly over the test set (see scatter_sample) and drawn with a fixed seed, so the same results
+# always give the same figure; the density plot always shows every value. Chosen by eye on 1.8 million per-residue
+# pLDDT values: at this size the points still show the shape of the data, while at 100,000 they merge into a solid
+# block, as do all of them.
+MAX_SCATTER_POINTS = 10_000
 SCATTER_SAMPLE_SEED = 0
 
 # Margin around the values on each axis of a scatter or density plot, as a fraction of their range (as matplotlib
@@ -141,9 +144,9 @@ def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[n
     "_matrix_"); classification a confusion matrix ("_seq_CM.png", "_res_CM.png"
     or "_matrix_CM.png"); and probabilistic classification ROC and
     precision-recall curves ("_ROC_curve.png" and "_PR_curve.png"). Residue and
-    matrix values are pooled over every sequence (matrix scatterplots show at
-    most MAX_SCATTER_POINTS cells, see scatter_sample(); the density plot
-    always shows every value). Predictions that are not finite (NaN or
+    matrix values are pooled over every sequence (scatterplots show at most
+    MAX_SCATTER_POINTS values, see scatter_sample(); the density plot always
+    shows every value). Predictions that are not finite (NaN or
     infinite, e.g. from a network whose training diverged) cannot be plotted,
     so they are left out of the regression figures, with a warning.
 
@@ -183,8 +186,7 @@ def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[n
         if pearson is None:
             pearson = pearson_r(true_flat, predicted_flat)
         limits = square_limits(true_flat, predicted_flat)
-        scatter_true, scatter_predicted = (scatter_sample(true_flat, predicted_flat) if task.is_matrix
-                                           else (true_flat, predicted_flat))
+        scatter_true, scatter_predicted = scatter_sample(true_flat, predicted_flat)
         scatterplot_path = f'{output_prefix}_{data_label}_scatterplot.png'
         density_path = f'{output_prefix}_{data_label}_density.png'
         regression_scatterplot(scatter_true, scatter_predicted, scatterplot_path, limits, pearson)
@@ -207,23 +209,36 @@ def plot_test_results(true_values: Sequence[np.ndarray], predictions: Sequence[n
 
 
 def scatter_sample(true_values: np.ndarray, predicted_values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """The values a scatterplot shows: all of them, or (with a warning) a random sample of MAX_SCATTER_POINTS if there
-    are more
+    """The values a scatterplot shows: all of them, or (with a warning) MAX_SCATTER_POINTS spread evenly over them
+
+    With more than MAX_SCATTER_POINTS values, they are cut into
+    MAX_SCATTER_POINTS consecutive slices of (as near as possible) equal size,
+    and one value is drawn at random from each. In test-set order (sequence by
+    sequence, residue by residue), this covers the test set as evenly as taking
+    every n-th value would, without lining up with positions in the sequences:
+    every n-th value of sequences that all have one length would show the same
+    few positions of each.
 
     Parameters
     ----------
     true_values, predicted_values : numpy arrays
-        Paired values
+        Paired values, in test-set order
 
     Returns
     -------
     (numpy array, numpy array)
+        The values shown, in the same order
     """
-    if len(true_values) <= MAX_SCATTER_POINTS:
+    num_values = len(true_values)
+    if num_values <= MAX_SCATTER_POINTS:
         return true_values, predicted_values
-    warnings.warn(f'The scatterplot shows a random sample of {MAX_SCATTER_POINTS:,} of the {len(true_values):,} values; '
-                  'the performance metrics use every value')
-    chosen = np.random.default_rng(SCATTER_SAMPLE_SEED).choice(len(true_values), MAX_SCATTER_POINTS, replace=False)
+    warnings.warn(f'The scatterplot shows {MAX_SCATTER_POINTS:,} of the {num_values:,} test values, spread evenly over '
+                  'the test set; the density plot and the performance metrics use every value')
+
+    # Slice i holds values edges[i] to edges[i + 1] - 1; none is empty, as there are more values than slices
+    edges = np.arange(MAX_SCATTER_POINTS + 1) * num_values // MAX_SCATTER_POINTS
+    offsets = np.random.default_rng(SCATTER_SAMPLE_SEED).integers(0, np.diff(edges))
+    chosen = edges[:-1] + offsets
     return true_values[chosen], predicted_values[chosen]
 
 

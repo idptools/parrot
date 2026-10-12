@@ -169,12 +169,30 @@ def test_density_plots_use_a_log_scale_once_a_bin_holds_enough_values(tmp_path, 
     assert isinstance(norm, LogNorm) == log_scale
 
 
-def test_matrix_density_plots_show_every_cell_while_scatterplots_are_sampled(tmp_path, captured_figures,
-                                                                             monkeypatch):
+def test_scatter_samples_cover_the_test_set_evenly_without_lining_up_with_positions(monkeypatch):
+    # 20 sequences of 50 residues, as their indices in test-set order: every 50th value would be each one's first residue
+    monkeypatch.setattr(figures, 'MAX_SCATTER_POINTS', 20)
+    indices = np.arange(1000.0)
+    with pytest.warns(UserWarning, match='shows 20 of the 1,000 test values'):
+        shown, _ = figures.scatter_sample(indices, indices)
+    with pytest.warns(UserWarning):
+        shown_again, _ = figures.scatter_sample(indices, indices)
+
+    np.testing.assert_array_equal(shown // 50, np.arange(20))   # one value from each sequence, in order
+    assert len(set(shown % 50)) > 1                             # at different positions
+    np.testing.assert_array_equal(shown, shown_again)           # the same results always give the same figure
+
+
+@pytest.mark.parametrize('task, values', [
+    (Task('sequence', 1), [np.array([float(value)]) for value in range(25)]),
+    (Task('residues', 1), [np.arange(12, dtype=float), np.arange(13, dtype=float)]),
+    (Task('matrix', 1), [np.arange(25, dtype=float).reshape(5, 5)]),
+])
+def test_density_plots_show_every_value_while_scatterplots_are_sampled(task, values, tmp_path, captured_figures,
+                                                                       monkeypatch):
     monkeypatch.setattr(figures, 'MAX_SCATTER_POINTS', 10)
-    values = [np.arange(25, dtype=float).reshape(5, 5)]
-    with pytest.warns(UserWarning, match='random sample of 10'):
-        figures.plot_test_results(values, values, Task('matrix', 1), str(tmp_path / 'net'))
+    with pytest.warns(UserWarning, match='shows 10 of the 25 test values'):
+        figures.plot_test_results(values, values, task, str(tmp_path / 'net'))
     scatter, density = captured_figures
     assert len(scatter.axes[0].collections[0].get_offsets()) == 10
     assert density.axes[0].collections[0].get_array().sum() == 25

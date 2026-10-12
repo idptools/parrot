@@ -349,6 +349,13 @@ def test_predict_sequences_print_frequency(capsys):
     assert capsys.readouterr().out.splitlines() == ['  predicted 2 of 3 sequences']
 
 
+def test_predict_sequences_progress_counts_distinct_sequences(capsys):
+    # Identical sequences are run once, so progress counts distinct sequences, and says so
+    prediction.predict_sequences(make_network('sequence', 1), ['ACD', 'EFG', 'ACD', 'HIK'],
+                                 encode_sequence.OneHotEncoder(), 'cpu', batch_size=2, print_frequency=2)
+    assert capsys.readouterr().out.splitlines() == ['  predicted 2 of 3 distinct sequences']
+
+
 def test_auto_stop_says_why_training_ended(capsys):
     train_set, val_set, _, task = load_task('seq_class')
     train_network.train(make_network('sequence', 3), loader(train_set, task), loader(val_set, task), task, 'cpu',
