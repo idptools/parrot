@@ -1,8 +1,8 @@
 ![PARROT_logo_full](https://user-images.githubusercontent.com/54642153/122615183-b274f280-d04d-11eb-88bf-1530d18d310c.png)
 
-# PARROT-2: <\in development>
+# PARROT2: in development
 
-> **PARROT2 is in active development on the `parrot2` branch and has not yet been released.** `pip install idptools-parrot` installs the latest release, PARROT 1.7.6 (May 2025), and the [online documentation](https://idptools-parrot.readthedocs.io/en/latest/) describes PARROT 1.7. To use PARROT2, install it from this branch (see below). Commands, options, and file formats may still change before it is released.
+> **PARROT2 (version 2.0.0.dev0) is in active development on the `parrot2` branch and has not yet been released.** `pip install idptools-parrot` installs the latest release, PARROT 1.7.6 (May 2025), and the [online documentation](https://idptools-parrot.readthedocs.io/en/latest/) describes PARROT 1.7. To use PARROT2, install it from this branch (see below). Commands, options, and file formats may still change before it is released.
 
 **PARROT** trains machine-learning models that map protein sequences to values, behind an easy-to-use command-line interface. PARROT is well-suited for a variety of protein bioinformatics tasks. With only an input data file containing sequences and their values, you can train, optimize, and test a network for whatever purpose, then apply it to new, unlabeled sequences to generate predictions and biological hypotheses.
 
@@ -12,7 +12,7 @@ PARROT handles regression and classification problems, with one value per sequen
 
 PARROT2 is a substantial rewrite of PARROT 1. In brief:
 
-* **Architectures:** `parrot-train` and `parrot-optimize` take the architecture as a subcommand: `brnn`, `cnn`, `unet`, `transformer,` and `composition; simple models: linear, svm, random_forest, and knn; and `unet2d for matrix data. You can add new architectures as a single module.
+* **Architectures:** `parrot-train` and `parrot-optimize` take the architecture as a subcommand: `brnn`, `cnn`, `unet`, `transformer`, and `composition`; the simple models `linear`, `svm`, `random_forest`, and `knn`; and `unet2d` for matrix data. You can add new architectures as a single module.
 * **Data:** matrix data, missing residue labels (NaN), and parrot-preprocess, which cleans and deduplicates a data file, splits it into training, validation, and test sets without leakage between them (keeping similar sequences, found with MMseqs2 or PARROT's own k-mer search, in the same set), and balances classes.
 * **Encodings:** protein language model embeddings (ESM-2 and ESM-C) and NARDINI+ features, computed once and cached, and standardized encodings.
 * **Hyperparameter search:** `parrot-optimize` was rewritten without GPy/GPyOpt, combining successive halving with model-based sampling (TPE); with its defaults it costs about 15-20 times less than before.
