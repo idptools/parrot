@@ -133,6 +133,18 @@ def test_cpu_can_be_chosen_when_gpus_are_available(monkeypatch):
     assert select_device(device_arguments(device='cpu')) == torch.device('cpu')
 
 
+def test_predictor_chooses_a_gpu_id_as_the_command_line_does(monkeypatch, tmp_path):
+    network_file = tmp_path / 'net.pt'
+    save_network(str(network_file), make_network('residues', 1), get_encoder('onehot'))
+
+    # the device is resolved as resolve_device() resolves it, so a bad choice fails before the network is loaded
+    with pytest.raises(ValueError, match='cannot be combined'):
+        Predictor(network_file, gpu_id=0)  # the default device is the CPU
+    fake_availability(monkeypatch, cuda=False, mps=True)
+    with pytest.raises(RuntimeError, match='CUDA'):
+        Predictor(network_file, device='auto', gpu_id=0)
+
+
 @pytest.mark.parametrize('main_function, arguments', [
     (parrot_train.main, ['parrot-train', 'brnn', '--force-cpu']),
     (parrot_predict.main, ['parrot-predict', 'sequences.txt', 'net.pt', 'out.txt', '--force-cpu']),
@@ -388,6 +400,18 @@ def test_train_on_gpu_then_predict_anywhere(run_cli, tmp_path, architecture, dev
     from_cpu = Predictor(network_file).predict(sequence)
     from_gpu = Predictor(network_file, device=device).predict(sequence)
     assert np.allclose(from_cpu, from_gpu, atol=FLOAT32_TOLERANCE)
+
+
+@pytest.mark.real_devices
+@requires_cuda
+def test_predictor_runs_on_the_cuda_device_given(tmp_path):
+    network_file = tmp_path / 'net.pt'
+    save_network(str(network_file), make_network('residues', 1), get_encoder('onehot'))
+
+    predictor = Predictor(network_file, device='cuda', gpu_id=0)
+    assert predictor.device == torch.device('cuda:0')
+    assert next(predictor.network.parameters()).device == torch.device('cuda:0')
+    assert predictor.predict_batch(FITTING_SEQUENCES[:3])[0].shape == (len(FITTING_SEQUENCES[0]),)
 
 
 @pytest.mark.real_devices

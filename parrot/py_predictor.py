@@ -56,7 +56,9 @@ class Predictor():
 
     Predictions run on the CPU unless another device is requested, e.g.
     Predictor(path, device='auto') to use a GPU (CUDA or Apple-silicon MPS) when
-    one is available. The CPU is the default because a GPU only pays off for
+    one is available, or Predictor(path, device='cuda', gpu_id=1) to use the
+    second NVIDIA GPU.
+    The CPU is the default because a GPU only pays off for
     many sequences at once, and MPS cannot be used inside forked worker
     processes (e.g. multiprocessing on macOS with the 'fork' start method).
 
@@ -100,7 +102,8 @@ class Predictor():
     """
 
     def __init__(self, saved_weights: str | Path, dtype: str | None = None, device: str = 'cpu',
-                 embedding_cache: str | Path | None = None, embed_in_isolation: bool = False) -> None:
+                 embedding_cache: str | Path | None = None, embed_in_isolation: bool = False,
+                 gpu_id: int | None = None) -> None:
         """
         Parameters
         ----------
@@ -127,16 +130,21 @@ class Predictor():
             predicted without its full-length protein on its own, rather than
             raising an error. Its embeddings then differ from those the network
             was trained on, so its prediction may be less accurate.
+        gpu_id : int, optional
+            Index of the CUDA device to run on, as parrot-predict's --gpu-id.
+            Giving one asks for CUDA, so `device` must then be 'cuda' or 'auto'.
+            By default, CUDA runs on the current CUDA device.
 
         Raises
         ------
         ValueError
             If `dtype` is not a valid datatype or does not match the saved
-            network, `device` is not a valid choice, `embedding_cache` is given
-            for a network that uses neither a PLM nor a NARDINI encoding,
-            `embed_in_isolation` is given for a network trained without
-            --embedding-context, or the file cannot be loaded as a PARROT
-            network (see checkpoint.load_network)
+            network, `device` is not a valid choice, `gpu_id` is given with
+            `device` 'cpu' or 'mps' or is not a CUDA device on this machine,
+            `embedding_cache` is given for a network that uses neither a PLM
+            nor a NARDINI encoding, `embed_in_isolation` is given for a network
+            trained without --embedding-context, or the file cannot be loaded
+            as a PARROT network (see checkpoint.load_network)
         FileNotFoundError
             If `saved_weights` does not exist
         RuntimeError
@@ -147,7 +155,7 @@ class Predictor():
             raise ValueError(f"dtype must be one of {', '.join(repr(datatype) for datatype in VALID_DATATYPES)}, "
                              f'got {dtype!r}')
 
-        self.device = devices.resolve_device(device)
+        self.device = devices.resolve_device(device, gpu_id)
         self.network, self.encoder = checkpoint.load_network(str(saved_weights), device=self.device,
                                                              legacy_datatype=dtype)
         network_task = self.network.task
