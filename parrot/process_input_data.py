@@ -30,7 +30,8 @@ from parrot.matrices import data as matrix_data
 from parrot.sequence_encoder import SequenceEncoder
 
 # MISSING_LABEL_TEXT is imported only so that other modules (e.g. tools/preproc.py) can read it from here
-from parrot.tasks import IGNORED_CLASS_LABEL, MISSING_LABEL_TEXT, VALID_DATATYPES, Task  # noqa: F401
+from parrot.tasks import (IGNORED_CLASS_LABEL, MISSING_LABEL_TEXT, UNCERTAINTY_SEPARATOR,  # noqa: F401
+                          VALID_DATATYPES, Task)
 from parrot.tools import dataset_warnings
 
 # Default fractions of the data in the training, validation and test sets
@@ -76,7 +77,8 @@ LENGTH_NOISE = 0.05
 PAD_MIN_STEP = 8
 PAD_STEPS_PER_DOUBLING = 8
 
-# A parsed datafile line: [sequence ID, sequence, value(s)]
+# A parsed datafile line: [sequence ID, sequence, value(s)], or with uncertainties [sequence ID, sequence, value(s),
+# SD(s)] (see parse_line)
 Sample = list[Any]
 
 # Text files are read as UTF-8, ignoring a byte-order mark at the start (which some editors write, and which would
@@ -139,8 +141,8 @@ def read_tsv_raw(tsvfile: str, delimiter: str | None = None) -> list[list[str]]:
     return lines
 
 
-def parse_lines(lines: list[list[str]], datatype: str) -> list[Sample]:
-    """Convert the fields of each datafile line into [id, sequence, value(s)]
+def parse_lines(lines: list[list[str]], datatype: str, uncertainties: bool = False) -> list[Sample]:
+    """Convert the fields of each datafile line into [id, sequence, value(s)] (with uncertainties, then the SD(s))
 
     For residue-mapped data, individual residue values may be 'nan' to mark a
     residue with no label; these are kept as NaN.
@@ -151,12 +153,15 @@ def parse_lines(lines: list[list[str]], datatype: str) -> list[Sample]:
         Output from read_tsv_raw()
     datatype : str
         'residues' (a value per residue) or 'sequence' (a single value)
+    uncertainties : bool, optional
+        True if every value is written with its SD, as 'value,SD' (see parse_line())
 
     Returns
     -------
     list
         One [id, sequence, value(s)] list per line, where value(s) is a float
-        (datatype='sequence') or a numpy array of floats (datatype='residues')
+        (datatype='sequence') or a numpy array of floats (datatype='residues');
+        with uncertainties, each list ends with the SD(s), in the same form
 
     Raises
     ------
@@ -174,15 +179,19 @@ def parse_lines(lines: list[list[str]], datatype: str) -> list[Sample]:
     data: list[Sample] = []
     for line_number, fields in enumerate(lines, start=1):
         try:
-            data.append(parse_line(fields, datatype))
+            data.append(parse_line(fields, datatype, uncertainties))
         except ValueError as error:
             message = f"Data line {line_number} is not valid {datatype}-mapped data: {error}\n  {' '.join(fields)}"
             raise parrot_exceptions.IOExceptionParrot(message) from error
     return data
 
 
-def parse_line(fields: list[str], datatype: str) -> Sample:
-    """Convert the fields of one datafile line into [id, sequence, value(s)]
+def parse_line(fields: list[str], datatype: str, uncertainties: bool = False) -> Sample:
+    """Convert the fields of one datafile line into [id, sequence, value(s)] (with uncertainties, then the SD(s))
+
+    With uncertainties, every value is written as 'value,SD' (e.g. '3.21,0.15'),
+    where SD is the standard deviation of the value's measurement error. A
+    missing residue value is still 'nan', and needs no SD.
 
     Parameters
     ----------
@@ -190,12 +199,16 @@ def parse_line(fields: list[str], datatype: str) -> Sample:
         The line split into fields: ID, sequence, then the value(s)
     datatype : str
         'residues' (a value per residue) or 'sequence' (a single value)
+    uncertainties : bool, optional
+        True if every value is written with its SD
 
     Returns
     -------
     list
         [id, sequence, value(s)]: a float for sequence-mapped data, or a numpy
-        array of floats (NaN for a missing label) for residue-mapped data
+        array of floats (NaN for a missing label) for residue-mapped data. With
+        uncertainties, [id, sequence, value(s), SD(s)], the SDs in the same
+        form as the values (NaN for a missing label).
 
     Raises
     ------
@@ -208,9 +221,79 @@ def parse_line(fields: list[str], datatype: str) -> Sample:
         raise ValueError(f'expected an ID, a sequence and its value(s), but found {len(fields)} column(s)')
 
     sequence_id, sequence, values = fields[0], fields[1], fields[2:]
+    if uncertainties:
+        values, sds = split_uncertainties(values)
+    elif any(UNCERTAINTY_SEPARATOR in value for value in values):
+        raise ValueError(f"values such as '{next(value for value in values if UNCERTAINTY_SEPARATOR in value)}' "
+                         'are not numbers; if each is a value and its SD, give --uncertainties')
+
     if datatype == 'residues':
-        return [sequence_id, sequence, parse_residue_values(values, sequence)]
-    return [sequence_id, sequence, parse_sequence_value(values)]
+        numbers = parse_residue_values(values, sequence)
+        return [sequence_id, sequence, numbers] + ([check_sds(sds, numbers)] if uncertainties else [])
+    number = parse_sequence_value(values)
+    return [sequence_id, sequence, number] + ([float(check_sds(sds, np.array([number]))[0])] if uncertainties else [])
+
+
+def split_uncertainties(tokens: list[str]) -> tuple[list[str], list[str]]:
+    """Split 'value,SD' tokens into values and SDs (a missing value, 'nan', has no SD)
+
+    Parameters
+    ----------
+    tokens : list of str
+        A line's values, each 'value,SD' or 'nan'
+
+    Returns
+    -------
+    list of str
+        The values
+    list of str
+        Their SDs ('nan' for a missing value)
+
+    Raises
+    ------
+    ValueError
+        If a token is not 'value,SD' (or 'nan')
+    """
+    values, sds = [], []
+    for token in tokens:
+        parts = token.split(UNCERTAINTY_SEPARATOR)
+        if len(parts) == 1 and parts[0].lower() == MISSING_LABEL_TEXT:
+            parts.append(MISSING_LABEL_TEXT)
+        if len(parts) != 2:
+            raise ValueError(f"with --uncertainties every value is written as 'value{UNCERTAINTY_SEPARATOR}SD' (or "
+                             f"'{MISSING_LABEL_TEXT}' if missing), but found '{token}'")
+        values.append(parts[0])
+        sds.append(parts[1])
+    return values, sds
+
+
+def check_sds(sds: list[str], values: np.ndarray) -> np.ndarray:
+    """Convert a line's SDs to numbers, checking every labelled value has a finite, non-negative SD
+
+    Parameters
+    ----------
+    sds : list of str
+        The SDs, as written (one per value)
+    values : numpy array of float
+        The values they belong to (NaN where missing)
+
+    Returns
+    -------
+    numpy array of float
+        The SDs, NaN where the value is missing
+
+    Raises
+    ------
+    ValueError
+        If an SD is not a number, or a labelled value's SD is not finite or is negative
+    """
+    numbers = np.array(sds, dtype=float)
+    labelled = ~np.isnan(values)
+    bad = labelled & ~(np.isfinite(numbers) & (numbers >= 0))
+    if bad.any():
+        first_bad = sds[int(np.argmax(bad))]
+        raise ValueError(f"the SD of every value must be a finite number of at least 0, got '{first_bad}'")
+    return np.where(labelled, numbers, np.nan)
 
 
 def parse_residue_values(values: list[str], sequence: str) -> np.ndarray:
@@ -280,7 +363,9 @@ def parse_file(tsvfile: str, task: Task, exclude_seq_id: bool = False, ignore_wa
     number for sequence-mapped data or one number per residue for residue-mapped
     data. For classification, values must be integer class labels in the range
     [0, num_classes - 1]. For residue-mapped data, a residue with no label can be
-    given the value 'nan'; it is ignored when training and evaluating.
+    given the value 'nan'; it is ignored when training and evaluating. For a
+    task with uncertainties, every value is written as 'value,SD' (see
+    parse_line()).
 
     Parameters
     ----------
@@ -342,7 +427,7 @@ def parse_file(tsvfile: str, task: Task, exclude_seq_id: bool = False, ignore_wa
                         f'its value(s) (no ID, as --exclude-seq-id says), but found {len(line)} column(s)\n  '
                         + ' '.join(line))
                 line.insert(0, '')
-        data = parse_lines(lines, task.datatype)
+        data = parse_lines(lines, task.datatype, task.uncertainties)
 
     # The warnings run before class labels are converted, because they read missing labels as NaN
     if not ignore_warnings:
@@ -467,8 +552,15 @@ class SequenceDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx: int) -> tuple[str, torch.Tensor, Any]:
-        """Return (name, encoded sequence, value(s)) for one sequence."""
-        name, sequence, value = self.data[idx]
+        """Return (name, encoded sequence, value(s)) for one sequence
+
+        With uncertainties, the value(s) are paired with their SDs: an array
+        [value, SD], or [sequence_length X 2] for residue-mapped data.
+        """
+        sample = self.data[idx]
+        name, sequence, value = sample[0], sample[1], sample[2]
+        if len(sample) > 3:
+            value = np.stack([np.asarray(value, dtype=float), np.asarray(sample[3], dtype=float)], axis=-1)
         return name, self.encoder.encode(sequence), value
 
     @property
@@ -485,6 +577,13 @@ class SequenceDataset(Dataset):
     def values(self) -> list[Any]:
         """The value(s) of every sequence (a number, or one per residue), in dataset order."""
         return [sample[2] for sample in self.data]
+
+    @property
+    def uncertainties(self) -> list[Any] | None:
+        """The SD of every sequence's value(s), in dataset order, or None if the data have no uncertainties."""
+        if not self.data or len(self.data[0]) <= 3:
+            return None
+        return [sample[3] for sample in self.data]
 
 
 def padded_batch_length(longest: int) -> int:
@@ -556,7 +655,8 @@ def pad_targets(targets: list[Any], task: Task, padded_length: int) -> torch.Ten
     ----------
     targets : list
         One target per sequence: a class label or value (sequence-mapped) or a
-        list of labels or values (residue-mapped)
+        list of labels or values (residue-mapped); with uncertainties, each
+        value paired with its SD (see SequenceDataset.__getitem__)
     task : Task
         The task the targets are for
     padded_length : int
@@ -573,6 +673,8 @@ def pad_targets(targets: list[Any], task: Task, padded_length: int) -> torch.Ten
         Residue regression: float32 [batch_dim X padded_length X 1], with padded
         positions set to 0 and missing labels left as NaN (both must be masked
         out of the loss).
+        Regression with uncertainties: the same, with a last dimension of 2
+        holding each value and its SD (0 at padded positions).
         Matrix data: see matrices.data.pad_matrix_targets.
     """
 
@@ -582,7 +684,15 @@ def pad_targets(targets: list[Any], task: Task, padded_length: int) -> torch.Ten
     if not task.per_residue:
         if task.is_classification:
             return torch.LongTensor(targets)
+        if task.uncertainties:
+            return torch.FloatTensor(np.array(targets, dtype=float))
         return torch.FloatTensor([[target] for target in targets])
+
+    if task.uncertainties:
+        padded_pairs = np.zeros([len(targets), padded_length, 2])
+        for i, target in enumerate(targets):
+            padded_pairs[i, :len(target)] = target
+        return torch.FloatTensor(padded_pairs)
 
     padding_value = IGNORED_CLASS_LABEL if task.is_classification else 0
     padded = np.full([len(targets), padded_length], padding_value, dtype=float)

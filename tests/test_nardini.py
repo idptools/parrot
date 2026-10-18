@@ -19,7 +19,7 @@ from parrot import process_input_data as pid  # noqa: E402
 from parrot.checkpoint import load_network  # noqa: E402
 from parrot.encode_sequence import StandardizedEncoder, encoder_from_config, get_encoder  # noqa: E402
 from parrot.py_predictor import Predictor  # noqa: E402
-from parrot.scripts import parrot_predict, parrot_train  # noqa: E402
+from parrot.scripts import parrot_predict, parrot_preprocess, parrot_train  # noqa: E402
 from parrot.tasks import Task  # noqa: E402
 
 from tests.helpers import data_path, training_command  # noqa: E402
@@ -176,6 +176,19 @@ def test_features_are_computed_once_into_the_cache(tmp_path, monkeypatch):
         np.testing.assert_array_equal(reader.features(sequence), expected)
 
 
+def test_the_progress_bar_counts_every_sequence_computed(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(nardini, 'SEQUENCES_PER_CACHE_WRITE', 2)
+    encoder = nardini_encoder()
+    encoder.use_cache(tmp_path)
+    encoder.prepare(SEQUENCES, 'test')
+    shown = capsys.readouterr().err
+    assert 'Computing NARDINI+ features: 100%' in shown and f'{len(SEQUENCES)}/{len(SEQUENCES)}' in shown
+
+    # Nothing left to compute, so no bar
+    encoder.prepare(SEQUENCES, 'test')
+    assert capsys.readouterr().err == ''
+
+
 def test_each_number_of_scrambles_has_its_own_cache_file(tmp_path):
     for scrambles in (QUICK_SCRAMBLES, 2 * QUICK_SCRAMBLES):
         encoder = get_encoder('nardini', nardini_scrambles=scrambles)
@@ -239,9 +252,11 @@ def test_train_and_predict_with_nardini_features(run_cli, tmp_path, write_lines,
                                   '--device', 'cpu', '--silent', '--encode', encoding])
     predicted = [float(line.split()[2]) for line in (tmp_path / 'out.txt').read_text().splitlines()]
 
-    # Predictor gives the same predictions as parrot-predict
+    # Predictor gives parrot-predict's predictions (up to float32 rounding), one sequence at a time or all at once
     predictor = Predictor(tmp_path / 'net.pt')
     np.testing.assert_allclose([predictor.predict(sequence)[0] for sequence in SEQUENCES], predicted, rtol=1e-5)
+    batch = Predictor(tmp_path / 'net.pt').predict_batch(SEQUENCES)
+    np.testing.assert_allclose([prediction[0] for prediction in batch], predicted, rtol=1e-5)
 
 
 def test_training_again_reuses_the_cached_features(run_cli, tmp_path, write_lines, capsys):
@@ -265,6 +280,33 @@ def test_train_rejects_nardini_misuse(run_cli, tmp_path, datatype, arguments, me
     with pytest.raises(ValueError, match=message):
         run_cli(parrot_train.main, training_command('parrot-train', 'brnn', data_file, tmp_path / 'net.pt', datatype,
                                                     1, '-e', '1', '--device', 'cpu', '--silent', *arguments))
+
+
+def test_preprocess_computes_the_features_ahead_of_time(run_cli, tmp_path, write_lines, capsys):
+    data_file = write_datafile(write_lines)
+    cache = tmp_path / 'shared_cache'
+    run_cli(parrot_preprocess.main, ['parrot-preprocess', data_file, tmp_path / 'clean.tsv', '-d', 'sequence', '-m',
+                                     'regression', '--encode', 'nardini', '--nardini-scrambles', QUICK_SCRAMBLES,
+                                     '--embedding-cache', cache])
+    run_cli(parrot_train.main, training_command('parrot-train', 'composition', tmp_path / 'clean.tsv',
+                                                tmp_path / 'net.pt', 'sequence', 1, '--encode', 'nardini',
+                                                '--nardini-scrambles', QUICK_SCRAMBLES, '-e', '1', '--device', 'cpu',
+                                                '--embedding-cache', cache, '--ignore-warnings'))
+    output = capsys.readouterr().out
+    assert '0 already in the cache' in output and '40 already in the cache' in output
+
+
+@pytest.mark.parametrize('datatype, arguments, message', [
+    ('residues', ['--encode', 'nardini'], 'sequence-mapped data'),
+    ('sequence', ['--encode', 'nardini', '--device', 'cpu'], 'computed on the CPU'),
+    ('sequence', ['--encode', 'onehot+nardini', '--gpu-id', '0'], 'computed on the CPU'),
+])
+def test_preprocess_rejects_nardini_misuse(run_cli, tmp_path, datatype, arguments, message):
+    data_file = data_path('res_regress_dataset.tsv' if datatype == 'residues' else 'seq_regress_dataset.tsv')
+    with pytest.raises(ValueError, match=message):
+        run_cli(parrot_preprocess.main, ['parrot-preprocess', data_file, tmp_path / 'out.tsv', '-d', datatype, '-m',
+                                         'regression', *arguments])
+    assert not (tmp_path / 'out.tsv').exists()
 
 
 def test_predict_refuses_sequences_nardini_cannot_score(run_cli, tmp_path, write_lines):

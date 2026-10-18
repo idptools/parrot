@@ -150,6 +150,94 @@ def test_predictor_rejects_invalid_dtype(tmp_path):
 
 
 # ..........................................................................................
+# Predicting many sequences at once
+
+# Sequences of different lengths, one repeated and one in lowercase, so batches mix lengths and need padding
+BATCH_SEQUENCES = ['ACDEFGHIK', 'mkvlaagivg', 'W', 'ACDEFGHIK', 'QRSTVWYQRSTVWYQRSTVWY', 'GSGSGS']
+
+
+@pytest.mark.parametrize('task', [Task('sequence', 1), Task('sequence', 3), Task('residues', 1), Task('residues', 4)],
+                         ids=lambda task: f'{task.datatype}-{task.num_classes}')
+def test_predict_batch_gives_what_predict_gives_each_sequence(tmp_path, task):
+    _, _, path = save_checkpoint(tmp_path, task)
+    predictor = py_predictor.Predictor(path)
+
+    batch = predictor.predict_batch(BATCH_SEQUENCES, batch_size=2)
+
+    assert len(batch) == len(BATCH_SEQUENCES)
+    for sequence, predicted in zip(BATCH_SEQUENCES, batch):
+        single = predictor.predict(sequence)
+        assert predicted.shape == single.shape
+        np.testing.assert_allclose(predicted, single, rtol=1e-5, atol=1e-6)
+
+
+@pytest.mark.parametrize('architecture', ARCHITECTURES_UNDER_TEST)
+def test_predict_batch_every_architecture(tmp_path, test_architecture, architecture):
+    task = Task('residues', 1) if supports(architecture, 'residues') else Task('sequence', 1)
+    network = ready_network(architecture, task).eval()
+    path = str(tmp_path / 'network.pt')
+    save_network(path, network, get_encoder('onehot'))
+    predictor = py_predictor.Predictor(path)
+
+    for sequence, predicted in zip(BATCH_SEQUENCES, predictor.predict_batch(BATCH_SEQUENCES, batch_size=4)):
+        np.testing.assert_allclose(predicted, predictor.predict(sequence), rtol=1e-5, atol=1e-6)
+
+
+def test_predict_batch_runs_the_network_in_batches_of_distinct_sequences(tmp_path, monkeypatch):
+    _, _, path = save_checkpoint(tmp_path, Task('sequence', 1))
+    predictor = py_predictor.Predictor(path)
+    batch_sizes = []
+    original_forward = type(predictor.network).forward
+
+    def recording_forward(self, x, lengths):
+        batch_sizes.append(x.shape[0])
+        return original_forward(self, x, lengths)
+
+    monkeypatch.setattr(type(predictor.network), 'forward', recording_forward)
+    predictor.predict_batch(BATCH_SEQUENCES, batch_size=2)
+
+    # Six sequences, of which five are distinct: batches of 2, 2 and 1
+    assert batch_sizes == [2, 2, 1]
+
+
+def test_predict_batch_of_no_sequences_is_empty(tmp_path):
+    _, _, path = save_checkpoint(tmp_path, Task('sequence', 1))
+    assert py_predictor.Predictor(path).predict_batch([]) == []
+
+
+def test_predict_batch_needs_a_list_of_sequences(tmp_path):
+    _, _, path = save_checkpoint(tmp_path, Task('sequence', 1))
+    with pytest.raises(TypeError, match='takes a list of sequences'):
+        py_predictor.Predictor(path).predict_batch('ACDEF')
+
+
+def test_predict_batch_checks_its_batch_size(tmp_path):
+    _, _, path = save_checkpoint(tmp_path, Task('sequence', 1))
+    with pytest.raises(ValueError, match='batch_size must be at least 1'):
+        py_predictor.Predictor(path).predict_batch(['ACDEF'], batch_size=0)
+
+
+def test_predict_batch_checks_every_sequence_before_predicting(tmp_path, monkeypatch):
+    _, _, path = save_checkpoint(tmp_path, Task('sequence', 1))
+    predictor = py_predictor.Predictor(path)
+    monkeypatch.setattr(py_predictor.prediction, 'predict_sequences',
+                        lambda *args, **kwargs: pytest.fail('predicted anyway'))
+
+    with pytest.raises(ValueError, match='Invalid amino acid'):
+        predictor.predict_batch(['ACDEF', 'ACDXF'])
+
+
+@pytest.mark.parametrize('arguments, message', [
+    ({'full_lengths': ['AACDEFAA']}, 'full_lengths only applies to networks trained with --embedding-context'),
+    ({'starts': [3]}, 'starts only applies with full_lengths'),
+])
+def test_predict_batch_refuses_contexts_for_a_network_trained_without_them(tmp_path, arguments, message):
+    _, _, path = save_checkpoint(tmp_path, Task('sequence', 1))
+    with pytest.raises(ValueError, match=message):
+        py_predictor.Predictor(path).predict_batch(['ACDEF'], **arguments)
+
+
+# ..........................................................................................
 # Weights-only networks saved by earlier versions of PARROT
 
 @pytest.mark.parametrize('datatype, num_classes, num_layers, hidden_size', [

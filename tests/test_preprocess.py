@@ -477,6 +477,13 @@ def test_preprocess_writes_a_report(run_cli, tmp_path, write_lines, capsys):
     (['--min-length', '10', '--max-length', '5'], 'cannot be larger'),
     (['--remove-sequence-duplicates', '--deduplicate', 'merge'], 'same as --deduplicate drop'),
     (['--split', 'homology', '--threads', '0'], '--threads must be at least 1'),
+    (['--encode', 'onehot'], 'quick to compute'),
+    (['--encode', 'biophysics'], 'quick to compute'),
+    (['--encode', 'esm2_t6_8M_UR50D', '--nardini-scrambles', '10'], 'only applies to NARDINI encodings'),
+    (['--embedding-cache', 'cache'], '--embedding-cache only applies with --encode'),
+    (['--nardini-scrambles', '10'], '--nardini-scrambles only applies with --encode'),
+    (['--device', 'cpu'], '--device only applies with --encode'),
+    (['--gpu-id', '0'], '--gpu-id only applies with --encode'),
 ])
 def test_preprocess_rejects_invalid_options(run_cli, tmp_path, extra_arguments, message):
     with pytest.raises((ValueError, RuntimeError), match=message):

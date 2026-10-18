@@ -27,6 +27,8 @@ Licensed under the MIT license.
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
+import math
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -34,6 +36,7 @@ from torch.utils.data import DataLoader
 from parrot.architectures.hyperparameters import HyperParameter, HyperParameterValue
 from parrot.architectures.layers import AttentionPool, append_log_length, masked_pool
 from parrot.tasks import Task
+from parrot.uncertainties import MODEL_ERROR_BUFFER
 
 
 class ParrotArchitecture(nn.Module):
@@ -73,6 +76,11 @@ class ParrotArchitecture(nn.Module):
     trained_by_gradient_descent : bool
         True (default) for networks trained epoch by epoch with a learning rate.
         False for models fitted in a single step by fit() (see classical.py).
+    supports_uncertainties : bool
+        True (default) if the architecture can be trained on regression values
+        with uncertainties (--uncertainties; see parrot/uncertainties.py). A
+        network built for such a task holds its model error in a buffer named
+        uncertainties.MODEL_ERROR_BUFFER, saved with its weights.
     input_size : int
         Length of the per-residue encoding vectors.
     task : Task
@@ -86,6 +94,7 @@ class ParrotArchitecture(nn.Module):
     hyperparameters: ClassVar[tuple[HyperParameter, ...]]
     supported_datatypes: ClassVar[tuple[str, ...]] = ('sequence', 'residues')
     trained_by_gradient_descent: ClassVar[bool] = True
+    supports_uncertainties: ClassVar[bool] = True
 
     def __init__(self, input_size: int, task: Task, hyperparameter_values: Mapping[str, HyperParameterValue]) -> None:
         """
@@ -101,18 +110,25 @@ class ParrotArchitecture(nn.Module):
         Raises
         ------
         ValueError
-            If the architecture does not support the task's datatype, a declared
-            hyperparameter is missing from `hyperparameter_values` (or an
-            undeclared one is present), or a value is not allowed
+            If the architecture does not support the task's datatype or (for a
+            task with uncertainties) uncertainties, a declared hyperparameter is
+            missing from `hyperparameter_values` (or an undeclared one is
+            present), or a value is not allowed
         """
         if task.datatype not in self.supported_datatypes:
             raise ValueError(f"The '{self.name}' architecture only supports "
                              f"{' and '.join(self.supported_datatypes)}-mapped data, not '{task.datatype}' data")
+        if task.uncertainties and not self.supports_uncertainties:
+            raise ValueError(f"The '{self.name}' architecture cannot be trained on values with uncertainties")
 
         super().__init__()
         self.input_size = input_size
         self.task = task
         self.hyperparameter_values = self.checked_hyperparameter_values(hyperparameter_values)
+        # The model error s (see parrot/uncertainties.py): NaN until training first fits it. Filling it consumes no
+        # random numbers, so a seeded network starts with the same weights with or without uncertainties.
+        if task.uncertainties:
+            self.register_buffer(MODEL_ERROR_BUFFER, torch.tensor(math.nan))
 
     @classmethod
     def checked_hyperparameter_values(cls, values: Mapping[str, HyperParameterValue]) -> dict[str, HyperParameterValue]:

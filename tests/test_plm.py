@@ -8,20 +8,24 @@ downloaded (tests never download anything).
 """
 
 import importlib.util
+import io
 import subprocess
 import sys
+import tempfile
 import threading
 from collections import namedtuple
 
 import numpy as np
 import pytest
 import torch
+from tqdm import tqdm
 
 from parrot import encode_sequence, plm
+from parrot import process_input_data as pid
 from parrot.architectures import build_network
 from parrot.checkpoint import load_network
 from parrot.py_predictor import Predictor
-from parrot.scripts import parrot_predict, parrot_train
+from parrot.scripts import parrot_predict, parrot_preprocess, parrot_train
 from parrot.tasks import Task
 
 from tests.helpers import EXAMPLE_TASKS, FULL_PRECISION, TF32_EVERYWHERE, data_path, tf32_settings, training_command
@@ -228,6 +232,49 @@ def test_prepare_reports_size_and_embeds_each_sequence_once(fake_plm, tmp_path, 
     assert 'last updated by `parrot-train`' in readme
 
 
+def recording_progress_bar(monkeypatch: pytest.MonkeyPatch, module) -> list[tqdm]:
+    """Make `module`'s progress bars draw to a string, and return the list each bar made is added to."""
+    bars: list[tqdm] = []
+
+    def make_bar(total, unit, description, silent):
+        bar = tqdm(total=total, unit=f' {unit}', desc=description, file=io.StringIO())
+        bars.append(bar)
+        return bar
+
+    monkeypatch.setattr(module, 'progress_bar', make_bar)
+    return bars
+
+
+def test_window_residues_counts_overlapping_window_residues_once_per_window():
+    # 25 residues in windows of 10 overlapping by 4: windows start at 0, 6, 12 and 15
+    assert plm.window_starts(25, 10, 4) == [0, 6, 12, 15]
+    assert plm.window_residues(['A' * 25], 10, 4) == 40
+    # Shorter sequences count once each, however often they are given
+    assert plm.window_residues(['ACD', 'EF', 'ACD'], 10, 4) == 5
+
+
+def test_the_progress_bar_reaches_its_total_when_embedding_into_the_cache(fake_plm, tmp_path, monkeypatch):
+    bars = recording_progress_bar(monkeypatch, plm)
+    encoder = plm.PLMEncoder(MODEL, window=10, overlap=4)
+    encoder.use_cache(tmp_path / 'cache')
+
+    encoder.prepare(['A' * 25, 'ACDEFG', 'KLM', 'ACDEFG'], 'parrot-train')
+
+    assert len(bars) == 1
+    assert bars[0].total == 40 + 6 + 3 and bars[0].n == bars[0].total
+
+
+def test_the_progress_bar_is_shown_unless_silent(fake_plm, tmp_path, capsys):
+    encoder = plm.PLMEncoder(MODEL)
+    encoder.use_cache(tmp_path / 'cache')
+    encoder.prepare(['ACDEFGHIK'], 'parrot-train', silent=True)
+    assert capsys.readouterr().err == ''
+
+    encoder.prepare(['KLMNPQ'], 'parrot-train')
+    shown = capsys.readouterr().err
+    assert 'Embedding: 100%' in shown and 'residues/s' in shown
+
+
 def test_prepare_checks_disk_space(fake_plm, tmp_path, monkeypatch):
     encoder = plm.PLMEncoder(MODEL)
     encoder.use_cache(tmp_path)
@@ -246,6 +293,18 @@ def test_encoding_is_the_same_with_and_without_a_cache(fake_plm, tmp_path):
     np.testing.assert_array_equal(with_cache.encode('MKWVTF').numpy(), first.numpy())
     np.testing.assert_array_equal(with_cache.encode('MKWVTF').numpy(), first.numpy())  # now read from the cache
     assert first.dtype == torch.float32
+
+
+def test_an_encoder_can_stop_using_its_cache(fake_plm, tmp_path):
+    encoder = plm.PLMEncoder(MODEL)
+    encoder.use_cache(tmp_path)
+    encoder.encode('MKWVTF')
+
+    encoder.use_cache(None)
+    assert encoder.cache is None and encoder.context_cache is None
+    encoder.encode('ACDEF')
+    # The cache is left as it was: holding the first sequence, and not the second
+    assert plm.EmbeddingCache(tmp_path, MODEL, EMBEDDING_SIZE).missing(['MKWVTF', 'ACDEF']) == ['ACDEF']
 
 
 # ..........................................................................................
@@ -365,6 +424,55 @@ def test_embedding_cache_can_be_shared(fake_plm, run_cli, tmp_path):
     assert not (tmp_path / plm.TRAIN_CACHE_DIRECTORY).exists()
 
 
+# Sequences for Predictor.predict_batch(): of different lengths, with one repeated
+BATCH_SEQUENCES = ['MKVLAAGIVGLLLA', 'ACDEFGHIKLMNPQRSTVWY', 'MKVLAAGIVGLLLA', 'GSGSYGQQ']
+
+
+def test_predict_batch_embeds_every_sequence_at_once_and_keeps_nothing(fake_plm, run_cli, tmp_path, monkeypatch):
+    train(run_cli, tmp_path / 'net.pt')
+    # Temporary directories are made here, so it can be checked that the temporary cache is deleted
+    temporary = tmp_path / 'temporary'
+    temporary.mkdir()
+    monkeypatch.setattr(tempfile, 'tempdir', str(temporary))
+    predictor = Predictor(tmp_path / 'net.pt')
+
+    fake_run_model.calls = 0
+    batch = predictor.predict_batch(BATCH_SEQUENCES)
+
+    # The three distinct sequences are embedded together, in one run of the model (predict() runs it for each)
+    assert fake_run_model.calls == 1
+    assert list(temporary.iterdir()) == []
+    assert predictor.encoder.cache is None and predictor.encoder.context_cache is None
+    for sequence, predicted in zip(BATCH_SEQUENCES, batch):
+        np.testing.assert_allclose(predicted, predictor.predict(sequence), rtol=1e-5, atol=1e-6)
+
+
+def test_predict_batch_fills_the_predictors_embedding_cache(fake_plm, run_cli, tmp_path):
+    train(run_cli, tmp_path / 'net.pt')
+    cache = tmp_path / 'predict_cache'
+    predictor = Predictor(tmp_path / 'net.pt', embedding_cache=cache)
+
+    first = predictor.predict_batch(BATCH_SEQUENCES)
+    calls = fake_run_model.calls
+    again = predictor.predict_batch(BATCH_SEQUENCES)
+
+    assert (cache / f'{MODEL}.h5').is_file()
+    assert fake_run_model.calls == calls  # the second batch was read from the cache
+    for first_prediction, second_prediction in zip(first, again):
+        np.testing.assert_array_equal(first_prediction, second_prediction)
+
+
+def test_predict_batch_prints_nothing_unless_asked(fake_plm, run_cli, tmp_path, capsys):
+    train(run_cli, tmp_path / 'net.pt')
+    predictor = Predictor(tmp_path / 'net.pt')
+    capsys.readouterr()
+
+    predictor.predict_batch(BATCH_SEQUENCES)
+    assert capsys.readouterr() == ('', '')
+    predictor.predict_batch(BATCH_SEQUENCES, show_progress=True)
+    assert 'PLM encoding' in capsys.readouterr().out
+
+
 def test_no_cache_for_other_encodings(run_cli, tmp_path):
     filename, datatype, num_classes = EXAMPLE_TASKS['res_regress']
     run_cli(parrot_train.main, training_command('parrot-train', 'brnn', data_path(filename), tmp_path / 'net.pt',
@@ -378,6 +486,60 @@ def test_no_cache_for_other_encodings(run_cli, tmp_path):
     with pytest.raises(ValueError, match='only applies to protein language model'):
         run_cli(parrot_predict.main, ['parrot-predict', data_path('seqfile.txt'), tmp_path / 'net.pt',
                                       tmp_path / 'out.txt', '--silent', '--embedding-cache', tmp_path / 'c'])
+
+
+def preprocess(run_cli, output_file, *extra):
+    """Split the residue-regression example data with parrot-preprocess, embedding every sequence ahead of time."""
+    filename, datatype, _ = EXAMPLE_TASKS['res_regress']
+    run_cli(parrot_preprocess.main, ['parrot-preprocess', data_path(filename), output_file, '-d', datatype, '-m',
+                                     'regression', '--split', 'random', '--seed', '1', '--encode', MODEL, *extra])
+
+
+def train_on_preprocessed(run_cli, output_file, network_file, *extra):
+    """Train briefly on what preprocess() wrote, on its split."""
+    split_file = output_file.with_name(output_file.stem + '_split_file.txt')
+    run_cli(parrot_train.main, training_command('parrot-train', 'brnn', output_file, network_file, 'residues', 1,
+                                                '--split', split_file, '-e', '1', '--encode', MODEL, '--seed', '1',
+                                                '--silent', *extra))
+
+
+def test_preprocess_embeds_every_sequence_of_its_output_for_training(fake_plm, run_cli, tmp_path):
+    output_file = tmp_path / 'clean.tsv'
+    cache = tmp_path / 'cache'
+    preprocess(run_cli, output_file, '--embedding-cache', cache)
+
+    sequences = [line[1] for line in pid.read_tsv_raw(str(output_file))]
+    assert plm.EmbeddingCache(cache, MODEL, EMBEDDING_SIZE).missing(sequences) == []
+    assert 'parrot-preprocess' in (cache / 'README.md').read_text()
+    report = (tmp_path / 'clean_preprocess_report.txt').read_text()
+    assert 'Encoding ahead of time' in report and f'--embedding-cache {cache}' in report
+
+    # Training on the output finds every sequence in the cache, so embeds nothing
+    calls = fake_run_model.calls
+    train_on_preprocessed(run_cli, output_file, tmp_path / 'net.pt', '--embedding-cache', cache)
+    assert fake_run_model.calls == calls
+
+
+def test_preprocess_cache_is_where_training_looks_by_default(fake_plm, run_cli, tmp_path):
+    output_file = tmp_path / 'clean.tsv'
+    preprocess(run_cli, output_file)
+    assert (tmp_path / plm.TRAIN_CACHE_DIRECTORY / f'{MODEL}.h5').is_file()
+
+    # A network saved next to the output looks in the same default directory
+    calls = fake_run_model.calls
+    train_on_preprocessed(run_cli, output_file, tmp_path / 'net.pt')
+    assert fake_run_model.calls == calls
+
+
+def test_preprocess_checks_sequences_before_writing_anything(fake_plm, run_cli, tmp_path, write_lines):
+    data_file = write_lines('data.tsv', ['a ACDEF 1.0', 'b acdef 2.0'])
+    with pytest.raises(ValueError, match='upper case'):
+        run_cli(parrot_preprocess.main, ['parrot-preprocess', data_file, tmp_path / 'out.tsv', '-d', 'sequence', '-m',
+                                         'regression', '--encode', MODEL])
+
+    assert not (tmp_path / 'out.tsv').exists()
+    assert not (tmp_path / plm.TRAIN_CACHE_DIRECTORY).exists()
+    assert fake_run_model.calls == 0
 
 
 # ..........................................................................................

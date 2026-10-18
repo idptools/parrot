@@ -73,7 +73,7 @@ Its hyperparameters are:
 	*  ``--dropout`` : dropout probability, at least 0 and below 1 (default 0.0; searched over 0.0-0.5).
 	*  ``--upsampling`` : how the decoder doubles the grid, ``transposed`` (a learned transposed convolution) or ``nearest`` (repeating each cell) (default transposed; both are searched).
 
-Compared with Nick's original, the input grid is built from the per-residue encoding (so any of PARROT's per-residue encodings can be used) rather than from a one-hot code of residue pairs, layer normalization replaces batch normalization, padded cells are re-zeroed after every layer, and the number of levels is a hyperparameter. Together these make a sequence's prediction independent of how much padding it is given when batched with longer sequences, and let sequences of any length be used.
+Compared with Nick's original, the input grid is built from the per-residue encoding (so any of PARROT's per-residue encodings can be used) rather than from a one-hot code of residue pairs, layer normalization replaces batch normalization, padded cells are re-zeroed after every layer, and the number of levels is a hyperparameter. Together these make a sequence's prediction independent of how much padding it is given when batched with longer sequences (up to float32 rounding), and let sequences of any length be used.
 
 Output
 ------

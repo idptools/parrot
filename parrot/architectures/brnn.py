@@ -7,7 +7,9 @@ states of the forward and reverse directions (as PARROT always did, and with
 --attention-pooling-off). The summary, by default with log(sequence length), is
 passed through a linear layer ("many-to-one").
 For residue-mapped tasks the linear layer is applied to the LSTM output at
-every residue ("many-to-many").
+every residue ("many-to-many"). With --dropout, dropout is applied to what the
+LSTM passes on: between stacked LSTM layers, and to the LSTM output (or final
+hidden states) the output layer sees.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -26,7 +28,7 @@ import torch.nn as nn
 from torch.func import functional_call
 
 from parrot.architectures.base import ParrotArchitecture
-from parrot.architectures.hyperparameters import ATTENTION_POOLING, LOGLENGTH_FEEDFORWARD, HyperParameter
+from parrot.architectures.hyperparameters import ATTENTION_POOLING, DROPOUT, LOGLENGTH_FEEDFORWARD, HyperParameter
 from parrot.architectures.layers import padding_mask, resolve_lengths
 from parrot.architectures.registry import register_architecture
 from parrot.tasks import Task
@@ -36,6 +38,12 @@ BRNN_ATTENTION_POOLING = dataclasses.replace(
     ATTENTION_POOLING,
     help='sequence tasks only: summarise each sequence by pooling the LSTM output at every residue with learned '
          'attention weights (when off, by the final hidden states of the two directions, as PARROT always did)')
+
+# Dropout, as for the other networks, but not searched by parrot-optimize unless it is given, so that a search of the
+# BRNN tries the same configurations as before the BRNN had dropout
+BRNN_DROPOUT = dataclasses.replace(
+    DROPOUT, search_range=None,
+    help='dropout probability (at least 0, below 1), applied to the LSTM output and between stacked LSTM layers')
 
 
 def run_lstm(lstm: nn.LSTM, x: torch.Tensor,
@@ -199,6 +207,9 @@ class BRNN(ParrotArchitecture):
         Number of stacked LSTM layers in each direction
     lstm : torch.nn.LSTM
         The bidirectional LSTM layer(s)
+    dropout : torch.nn.Dropout
+        Dropout applied to the LSTM output (or final hidden states) before the
+        output layer
     attention_pool : AttentionPool or None
         Sequence-mapped tasks with attention pooling: pools the LSTM output at
         every residue into one vector per sequence. None means the final hidden
@@ -216,12 +227,13 @@ class BRNN(ParrotArchitecture):
                        cli_aliases=('-hs',), minimum=1, search_range=(5, 50)),
         HyperParameter('num_layers', int, default=1, help='number of LSTM layers per direction',
                        cli_aliases=('-nl',), minimum=1, search_range=(1, 5)),
+        BRNN_DROPOUT,
         BRNN_ATTENTION_POOLING,
         LOGLENGTH_FEEDFORWARD,
     )
 
     def __init__(self, input_size: int, task: Task, hidden_size: int, num_layers: int, attention_pooling: bool,
-                 loglength_feedforward: bool) -> None:
+                 loglength_feedforward: bool, dropout: float = 0.0) -> None:
         """
         Parameters
         ----------
@@ -238,13 +250,22 @@ class BRNN(ParrotArchitecture):
             output at every residue, rather than by the final hidden states
         loglength_feedforward : bool
             Sequence tasks: also give the output layer log(sequence length)
+        dropout : float, optional
+            Dropout probability, applied to the LSTM output and between stacked
+            LSTM layers (default 0, no dropout). It comes last, with a default,
+            so that code which built a BRNN before it existed still works.
         """
-        super().__init__(input_size, task, {'hidden_size': hidden_size, 'num_layers': num_layers,
+        super().__init__(input_size, task, {'hidden_size': hidden_size, 'num_layers': num_layers, 'dropout': dropout,
                                             'attention_pooling': attention_pooling,
                                             'loglength_feedforward': loglength_feedforward})
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True)
+        # torch's LSTM only applies dropout between stacked layers, and warns if given dropout with a single layer
+        lstm_dropout = dropout if num_layers > 1 else 0.0
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True,
+                            dropout=lstm_dropout)
+        # Has no weights, so saved networks are unaffected
+        self.dropout = nn.Dropout(dropout)
 
         # *2 because the forward and reverse directions are concatenated
         self.build_readout(hidden_size * 2, attention_pooling=attention_pooling, log_length=loglength_feedforward)
@@ -271,15 +292,15 @@ class BRNN(ParrotArchitecture):
         out, h_n = run_lstm(self.lstm, x, lengths)
 
         if self.task.per_residue:
-            per_residue_output: torch.Tensor = self.fc(out)
+            per_residue_output: torch.Tensor = self.fc(self.dropout(out))
             return per_residue_output
 
         lengths = resolve_lengths(x, lengths)
         if self.attention_pool is not None:
             # Every residue's output contributes, weighted by learned attention
-            summary = self.pool_residues(out, padding_mask(lengths, out.shape[1]))
+            summary = self.pool_residues(self.dropout(out), padding_mask(lengths, out.shape[1]))
         else:
             # Final hidden state of the last layer in each direction: h_n[-2] is the
             # forward direction (after seq[n]) and h_n[-1] the reverse (after seq[0])
-            summary = torch.cat((h_n[-2], h_n[-1]), dim=-1)
+            summary = self.dropout(torch.cat((h_n[-2], h_n[-1]), dim=-1))
         return self.sequence_output(summary, lengths)

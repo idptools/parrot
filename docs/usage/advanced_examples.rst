@@ -294,4 +294,20 @@ Now we're ready to make predictions! Once a network is loaded, the time to make 
 
 What predict() returns depends on the network: for regression, an array of one value (sequence networks) or one value per residue (residue networks); for classification, the probability of each class, with shape [number of classes] (sequence networks) or [sequence length, number of classes] (residue networks); and for matrix networks, the predicted matrix (see the "Matrix data" page).
 
-Predictions run on the CPU by default, which is usually fastest for a few sequences at a time; ``Predictor('/path/to/network.pt', device='auto')`` uses a GPU (CUDA or Apple-silicon MPS) if one is available. For networks trained on protein language model embeddings or NARDINI features, each new sequence must be encoded first, which is the slow step; ``embedding_cache='<directory>'`` stores these encodings so that sequences predicted again are not encoded again (see :doc:`plm_encodings`).
+To predict many sequences, give them all to predict_batch(), which returns a list of these arrays, one per sequence in the same order:
+
+.. code-block:: python
+
+    >>> values = my_predictor.predict_batch(['MYTESTAMINACIDSEQ', 'MSDNEEGQSKRRQ', 'MKVLAAGIVGLLLA'])
+
+This predicts the sequences together, as ``parrot-predict`` does, which for more than a handful of sequences is much faster than calling predict() on each. Every sequence is encoded first: for a protein language model, the model runs over many sequences at once, and NARDINI+ features are computed on several CPU cores. The network then runs over batches of ``batch_size`` sequences of similar length (default 64; a smaller batch uses less memory, which a large matrix network may need). Each distinct sequence is predicted once. The predictions match predict()'s up to float32 rounding, not exactly: which sequences share a batch, and so ``batch_size``, changes the order of the floating-point operations, giving differences of the order of 1e-7 relative. ``show_progress=True`` prints what is being encoded, with a progress bar.
+
+Predictions run on the CPU by default, which is usually fastest for a few sequences at a time; ``Predictor('/path/to/network.pt', device='auto')`` uses a GPU (CUDA or Apple-silicon MPS) if one is available. For networks trained on protein language model embeddings or NARDINI features, each new sequence must be encoded first, which is the slow step; ``embedding_cache='<directory>'`` stores these encodings so that sequences predicted again are not encoded again (see :doc:`plm_encodings`). Without it, predict() keeps nothing, and predict_batch() encodes its sequences into a temporary cache (in the system's temporary directory) that is deleted once they are predicted. Either way, the encodings take about (number of residues) x (values per residue) x 2 bytes of disk while they are there.
+
+A network trained with ``--embedding-context`` embeds each sequence within the full-length protein it was cut from, so ``predict()`` needs that protein too, and finds the sequence in it (``start=`` gives its 1-based start if it occurs more than once). ``predict_batch()`` takes one full-length protein per sequence (``full_lengths=``, and ``starts=`` if needed), and embeds each protein once, however many of the sequences come from it. ``Predictor('/path/to/network.pt', embed_in_isolation=True)`` embeds a sequence given without its full-length protein (or with None in ``full_lengths``) on its own instead of raising an error.
+
+.. code-block:: python
+
+    >>> value = my_predictor.predict('SPLSWEETKRHADH', full_length='MGLLSQGSPLSWEETKRHADHVRRHGILQF')
+    >>> values = my_predictor.predict_batch(['SPLSWEETKRHADH', 'VRRHGILQF'],
+    ...                                     full_lengths=['MGLLSQGSPLSWEETKRHADHVRRHGILQF'] * 2)

@@ -32,8 +32,8 @@ def test_checkpoint_round_trip(tmp_path, encoding, task):
 
     assert loaded_network.name == 'brnn'
     assert loaded_network.task == task
-    assert loaded_network.hyperparameter_values == {'hidden_size': 6, 'num_layers': 2, 'attention_pooling': True,
-                                                    'loglength_feedforward': True}
+    assert loaded_network.hyperparameter_values == {'hidden_size': 6, 'num_layers': 2, 'dropout': 0.0,
+                                                    'attention_pooling': True, 'loglength_feedforward': True}
     assert loaded_encoder.to_config() == encoder.to_config()
     assert not loaded_network.training
     torch.testing.assert_close(outputs_for(loaded_network, loaded_encoder, 'ACDEFGHIK'),

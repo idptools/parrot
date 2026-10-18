@@ -27,12 +27,17 @@ from sklearn.metrics import accuracy_score, auc, average_precision_score, f1_sco
 
 from parrot.process_input_data import missing_label_mask
 from parrot.tasks import Task
+from parrot.uncertainties import MIN_VARIANCE
 
 # Number of decimal places performance metrics are rounded to
 METRIC_DECIMALS = 3
 
 # A correlation needs at least this many pairs of values (with fewer, it is reported as NaN)
 MIN_CORRELATION_VALUES = 2
+
+# With uncertainties, how many total SDs (sqrt(SD^2 + s^2)) from its prediction a value may be to count as within
+# that many: 1 and 2 SDs hold 68% and 95% of a Gaussian
+COVERAGE_SDS = (1, 2)
 
 
 def flatten(values: Sequence[np.ndarray]) -> np.ndarray:
@@ -262,3 +267,54 @@ def performance_metrics(true_values: Sequence[np.ndarray], predictions: Sequence
         metrics['Accuracy'] = accuracy_score(true_flat, predicted_flat)
 
     return {name: round(float(value), METRIC_DECIMALS) for name, value in metrics.items()}
+
+
+def uncertainty_metrics(true_values: Sequence[np.ndarray], sds: Sequence[np.ndarray],
+                        predictions: Sequence[np.ndarray], model_error: float) -> dict[str, float]:
+    """How well the error model fits the test set, for regression with uncertainties
+
+    Each value's total SD is sqrt(SD^2 + s^2), its own measurement SD combined
+    with the model error s (see parrot/uncertainties.py). If the error model
+    is right, the residuals divided by their total SDs are standard Gaussian.
+    Residue values are pooled across all sequences, leaving out missing ones.
+
+    Parameters
+    ----------
+    true_values, sds, predictions : list of numpy arrays
+        The true value(s), their SDs and the predicted value(s) of each sequence
+    model_error : float
+        The network's model error s
+
+    Returns
+    -------
+    dict
+        'Reduced chi-squared': the mean squared residual in units of total SD
+        (about 1 if the error model fits; above 1, the errors are larger than
+        it says). 'Within 1 SD' and 'Within 2 SD': the fraction of values within
+        1 and 2 total SDs of their prediction (about 0.68 and 0.95 if it fits).
+        'Noise ceiling R': the highest Pearson R any model could reach on these
+        values given their measurement errors, sqrt(1 - mean(SD^2) / var(values))
+        (assuming the errors are independent of the true values; 0 if the
+        measurement errors account for all the spread of the values, NaN for
+        fewer than two values or values that are all the same). Values are
+        rounded to METRIC_DECIMALS places, and are NaN if any prediction is not
+        finite.
+    """
+    values, value_sds, predicted = (flatten(arrays) for arrays in (true_values, sds, predictions))
+    labelled = ~np.isnan(values)
+    values, value_sds, predicted = values[labelled], value_sds[labelled], predicted[labelled]
+
+    metrics = {}
+    if np.all(np.isfinite(predicted)):
+        z_scores = (values - predicted) / np.sqrt(np.maximum(value_sds ** 2 + model_error ** 2, MIN_VARIANCE))
+        metrics['Reduced chi-squared'] = float(np.mean(z_scores ** 2))
+        for count in COVERAGE_SDS:
+            metrics[f'Within {count} SD'] = float(np.mean(np.abs(z_scores) <= count))
+    else:
+        metrics['Reduced chi-squared'] = math.nan
+        metrics.update({f'Within {count} SD': math.nan for count in COVERAGE_SDS})
+
+    spread = np.var(values) if len(values) >= MIN_CORRELATION_VALUES else 0.0
+    metrics['Noise ceiling R'] = (math.sqrt(max(0.0, 1 - float(np.mean(value_sds ** 2)) / spread)) if spread > 0
+                                  else math.nan)
+    return {name: round(value, METRIC_DECIMALS) for name, value in metrics.items()}

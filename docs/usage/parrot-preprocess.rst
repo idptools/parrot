@@ -2,7 +2,7 @@
  parrot-preprocess
 ===================
 
-``parrot-preprocess`` turns a PARROT datafile into one ready for training. It can clean sequences, recode class labels, deal with duplicate sequences, split the data into training, validation and test sets **without leakage between them**, and balance the classes of the training set. It writes the processed datafile, a matching split-file to train on with ``parrot-train --split``, and a report of everything it did.
+``parrot-preprocess`` turns a PARROT datafile into one ready for training. It can clean sequences, recode class labels, deal with duplicate sequences, split the data into training, validation and test sets **without leakage between them**, and balance the classes of the training set. It writes the processed datafile, a matching split-file to train on with ``parrot-train --split``, and a report of everything it did. It can also compute a protein language model or NARDINI encoding of every sequence of the output ahead of time, so that training starts straight away.
 
 Once PARROT is installed, the user can run ``parrot-preprocess`` from the command line:
 
@@ -25,6 +25,7 @@ Steps are always carried out in the order below, and each is optional.
 3. **Deduplication** (``--deduplicate``, ``--remove-line-duplicates``, ``--remove-sequence-duplicates``)
 4. **Splitting** into training, validation and test sets (``--split``)
 5. **Class balancing** (``--class-balance``): of the training set only, if the data were split
+6. **Encoding ahead of time** (``--encode``): after the output is written
 
 **Required flags:**
 
@@ -36,6 +37,7 @@ Steps are always carried out in the order below, and each is optional.
     *  ``--help`` / ``-h`` : Display a help message.
     *  ``--show-examples`` : Print a longer guide to ``parrot-preprocess``: examples of how to use it, what it does and how it works.
     *  ``--delimiter`` : The character separating columns, if not whitespace. Spaces around each field are ignored. The output is a whitespace-separated PARROT datafile, so no field may contain whitespace (an ID such as ``sp|P1|A protein`` is refused, with a message saying which).
+    *  ``--uncertainties`` : Regression only. Every value is written as ``value,SD``, where SD is the standard deviation of its measurement error (a missing residue value is still ``nan``), as for ``parrot-train --uncertainties``; see the "Values with uncertainties" page. The values and SDs are passed through unchanged, except by ``--deduplicate merge`` (below), and the output is checked as data with uncertainties. It cannot be combined with ``--delimiter ,``.
     *  ``--seed`` : Integer random seed, which makes the split and class balancing reproducible. By default no seed is set.
     *  ``--verbose`` / ``-v`` : Print the report as it is written (otherwise only the names of the files written are printed).
 
@@ -62,7 +64,7 @@ Duplicate sequences
 
 Identical sequences in different sets are the most blatant form of leakage, and contradictory copies confuse training. ``--deduplicate`` keeps one line per unique sequence (named after the first copy):
 
-    *  ``merge`` : For regression, the copies' values are averaged (residue by residue for residue data, ignoring ``nan``). For classification, a sequence is kept once if all its labelled copies have the same label, and removed if they disagree (labels that are the same number, such as ``1`` and ``1.0``, agree, and missing labels, ``nan``, are ignored); for residue data, each residue keeps its label if every labelled copy agrees and otherwise becomes ``nan``, and a sequence left with no labelled residue is removed.
+    *  ``merge`` : For regression, the copies' values are averaged (residue by residue for residue data, ignoring ``nan``). With ``--uncertainties``, the average is weighted by 1/SD², and written with its own SD, 1/√Σ(1/SD²) (the standard combination of independent estimates); if a copy has an SD of 0, the merged value is the mean of the exact copies, with SD 0. For classification, a sequence is kept once if all its labelled copies have the same label, and removed if they disagree (labels that are the same number, such as ``1`` and ``1.0``, agree, and missing labels, ``nan``, are ignored); for residue data, each residue keeps its label if every labelled copy agrees and otherwise becomes ``nan``, and a sequence left with no labelled residue is removed.
     *  ``first`` : Keep the first copy as it is.
     *  ``drop`` : Remove every copy, since there is no way to know which is right.
 
@@ -160,6 +162,29 @@ For matrix data (``-d matrix``) the datafile holds ``<ID> <sequence>`` on each l
 
 See the "Matrix data" page for the file formats.
 
+Encoding ahead of time
+----------------------
+
+Protein language model embeddings and NARDINI features are slow to compute, so ``parrot-train``, ``parrot-optimize`` and ``parrot-predict`` compute them for every sequence before they start, and store them in an embedding cache (see "Protein language model encodings"). ``--encode`` does this in ``parrot-preprocess`` instead, for every sequence of the output, in exactly the same way and into the same kind of cache. Training then finds every sequence already there, so the encoding can be computed once (for example overnight, or on a machine with a GPU) and any number of networks trained on it afterwards.
+
+    *  ``--encode`` : A protein language model (e.g. ``esm2_t33_650M_UR50D``) or, for sequence data, a NARDINI encoding (``nardini`` or ``<encoding>+nardini``, e.g. ``onehot+nardini``). Any other encoding is refused: it is quick to compute, so PARROT computes it as it is needed and never stores it.
+    *  ``--embedding-cache`` : The cache directory (default: a ``parrot_train_embeddings`` directory next to the output datafile). Sequences already in it are not computed again.
+    *  ``--nardini-scrambles`` : NARDINI encodings only. Scrambles of each sequence for its patterning z-scores (default 1,000). Give ``parrot-train`` the same number, since each number of scrambles has its own file in the cache.
+    *  ``--device`` / ``--gpu-id`` : Protein language models only. The device to run the model on, as for ``parrot-train`` (NARDINI features are always computed on the CPU).
+    *  ``--embedding-context`` / ``--embedding-context-map`` : Protein language models only. Embed each sequence within the full-length protein it was cut from: the FASTA file of full-length proteins, and a map with one ``<sequence ID> <full-length ID> [start]`` line per sequence (see "Embedding fragments within their full-length proteins" on the "Protein language model encodings" page). Every sequence of the output is placed in its protein before anything is written. The table of where each one is embedded is written as ``<output>_embedded_context.tsv``. Give ``parrot-train`` the same two options, so that it reads these embeddings.
+    *  ``--embed-mean-subtraction`` : Protein language models only. Subtract each embedding's mean over its residues before it is stored (with ``--embedding-context``, the full-length protein's mean). These embeddings have their own files in the cache, so give ``parrot-train`` the same option, so that it reads them. See "Subtracting each embedding's mean" on the "Protein language model encodings" page.
+
+These options are refused without ``--encode``. The sequences are checked before anything is written, so a sequence the encoding cannot read (for example one in lower case, which ``--uppercase`` fixes) stops the command with nothing written. Encoding starts once the datafile and split-file are written, so if it stops part of the way, none of the preprocessing is lost, and the cache keeps every sequence already computed. The report then gets a final section saying where the cache is and how to use it:
+
+.. code-block:: bash
+
+    $ parrot-preprocess data.tsv clean.tsv -d sequence -m regression --split homology --seed 1 \
+        --encode esm2_t33_650M_UR50D --embedding-cache embeddings
+    $ parrot-train cnn --input-file clean.tsv --output-network network.pt -d sequence --regression --split clean_split_file.txt \
+        --encode esm2_t33_650M_UR50D --embedding-cache embeddings
+
+``parrot-train`` and ``parrot-optimize`` need ``--embedding-cache`` to find the cache, unless the network is saved in the same directory as the output datafile (both default to a ``parrot_train_embeddings`` directory there). ``parrot-predict`` reads the same cache with ``--embedding-cache``, and only computes sequences that are not in it.
+
 Output
 ------
 
@@ -168,3 +193,5 @@ Output
     *  ``<output>_preprocess_report.txt`` : What every step did, starting with the PARROT version, the time and the input file. It ends with a check that PARROT reads the output (and that the split-file matches it); if it cannot, the report (and the terminal) says why, as a warning rather than an error.
     *  ``<output>_class_mapping.txt`` : With ``--recode-classes``, the label mapping.
     *  ``<output>_class_balance_trace.csv`` : With ``--class-balance`` on residue data, the imbalance after each removal.
+    *  ``parrot_train_embeddings/`` (or ``--embedding-cache``) : With ``--encode``, the embedding cache, with a ``README.md`` describing what is in it.
+    *  ``<output>_embedded_context.tsv`` : With ``--embedding-context``, where each sequence is embedded: its full-length protein and the residues it covers there (see "Protein language model encodings").

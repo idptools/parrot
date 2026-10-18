@@ -79,8 +79,8 @@ def test_train_all_tasks(run_cli, tmp_path, task_name, figure_suffix):
     # The saved network records everything needed to rebuild it
     network, encoder = load_network(str(output_network))
     assert network.name == 'brnn' and network.task == Task(datatype, num_classes)
-    assert network.hyperparameter_values == {'hidden_size': 10, 'num_layers': 1, 'attention_pooling': True,
-                                             'loglength_feedforward': True}
+    assert network.hyperparameter_values == {'hidden_size': 10, 'num_layers': 1, 'dropout': 0.0,
+                                             'attention_pooling': True, 'loglength_feedforward': True}
     assert encoder.name == 'onehot'
 
 
@@ -89,8 +89,8 @@ def test_train_hyperparameter_flags(run_cli, tmp_path):
               '-hs', '6', '--num-layers', '2', '--silent', architecture='brnn')
 
     network, _ = load_network(str(tmp_path / 'net.pt'))
-    assert network.hyperparameter_values == {'hidden_size': 6, 'num_layers': 2, 'attention_pooling': True,
-                                             'loglength_feedforward': True}
+    assert network.hyperparameter_values == {'hidden_size': 6, 'num_layers': 2, 'dropout': 0.0,
+                                             'attention_pooling': True, 'loglength_feedforward': True}
 
 
 @pytest.mark.parametrize('architecture, flags, expected', [
@@ -153,6 +153,7 @@ def test_train_rejects_hyperparameters_of_other_architectures(run_cli, tmp_path,
     ('composition', ['--num-hidden-layers', '0', '--window-radius', '3']),
     ('cnn', ['--channels', '16', '--num-blocks', '2', '--kernel-size', '3', '--pooling', 'max']),
     ('unet', ['--base-channels', '8', '--depth', '2', '--upsampling', 'nearest', '--dropout', '0.1']),
+    ('brnn', ['--num-layers', '2', '--dropout', '0.2']),
 ])
 @pytest.mark.parametrize('task_name', ['seq_regress', 'res_class'])
 def test_train_and_predict_with_each_architecture(run_cli, tmp_path, architecture, flags, task_name):
@@ -476,8 +477,8 @@ def test_optimize_end_to_end(run_cli, tmp_path, write_lines):
                          f"hidden_size: {best['hidden_size']}", f"num_layers: {best['num_layers']}"]
     network, _ = load_network(str(tmp_path / 'net.pt'))
     assert network.hyperparameter_values == {'hidden_size': int(best['hidden_size']),
-                                             'num_layers': int(best['num_layers']), 'attention_pooling': True,
-                                             'loglength_feedforward': True}
+                                             'num_layers': int(best['num_layers']), 'dropout': 0.0,
+                                             'attention_pooling': True, 'loglength_feedforward': True}
 
 
 def test_optimize_is_reproducible_with_seed(run_cli, tmp_path, write_lines):

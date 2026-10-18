@@ -5,6 +5,7 @@ individual architectures, and the backwards-compatible BRNN_MtO / BRNN_MtM class
 """
 
 import math
+import warnings
 
 import numpy as np
 import pytest
@@ -14,7 +15,7 @@ from parrot import brnn_architecture, encode_sequence
 from parrot import process_input_data as pid
 from parrot.architectures import (HyperParameter, ParrotArchitecture, available_architectures, build_network,
                                   get_architecture, register_architecture, registry, resolve_hyperparameters)
-from parrot.architectures.brnn import BRNN, run_lstm
+from parrot.architectures.brnn import BRNN, BRNN_DROPOUT, run_lstm
 from parrot.architectures.hyperparameters import DROPOUT
 from parrot.architectures.cnn import DILATION_CYCLE
 from parrot.architectures.layers import (AttentionPool, ChannelLayerNorm, GlobalContext, append_log_length,
@@ -247,9 +248,9 @@ def test_register_rejects_duplicate_hyperparameters(monkeypatch):
 
 
 def test_resolve_hyperparameters():
-    assert resolve_hyperparameters(BRNN) == {'hidden_size': 10, 'num_layers': 1, 'attention_pooling': True,
-                                             'loglength_feedforward': True}
-    assert resolve_hyperparameters(BRNN, {'num_layers': 3}) == {'hidden_size': 10, 'num_layers': 3,
+    assert resolve_hyperparameters(BRNN) == {'hidden_size': 10, 'num_layers': 1, 'dropout': 0.0,
+                                             'attention_pooling': True, 'loglength_feedforward': True}
+    assert resolve_hyperparameters(BRNN, {'num_layers': 3}) == {'hidden_size': 10, 'num_layers': 3, 'dropout': 0.0,
                                                                 'attention_pooling': True,
                                                                 'loglength_feedforward': True}
 
@@ -264,8 +265,8 @@ def test_build_network():
 
     assert isinstance(network, BRNN) and isinstance(network, ParrotArchitecture)
     assert network.input_size == 9 and network.num_classes == 2
-    assert network.hyperparameter_values == {'hidden_size': 6, 'num_layers': 1, 'attention_pooling': True,
-                                             'loglength_feedforward': True}
+    assert network.hyperparameter_values == {'hidden_size': 6, 'num_layers': 1, 'dropout': 0.0,
+                                             'attention_pooling': True, 'loglength_feedforward': True}
     assert network.hidden_size == 6 and network.num_layers == 1
 
 
@@ -731,6 +732,53 @@ def test_brnn_attention_pooling_weights_every_residue():
 
 def test_brnn_attention_pooling_is_only_for_sequence_tasks():
     assert build_network('brnn', 20, Task('residues', 2), {'attention_pooling': True}).attention_pool is None
+
+
+def test_brnn_dropout_is_off_by_default_and_not_searched():
+    network = build_network('brnn', 20, Task('sequence', 1))
+
+    assert network.hyperparameter_values['dropout'] == 0.0
+    assert network.lstm.dropout == 0.0 and network.dropout.p == 0.0
+    assert not BRNN_DROPOUT.searchable
+
+    # Networks saved before the BRNN had dropout are rebuilt without it
+    saved = fill_legacy_values(BRNN, {'hidden_size': 5, 'num_layers': 2})
+    assert resolve_hyperparameters(BRNN, saved)['dropout'] == 0.0
+
+    # Code that built a BRNN directly before it had dropout still works
+    direct = BRNN(20, Task('sequence', 1), hidden_size=5, num_layers=1, attention_pooling=True,
+                  loglength_feedforward=True)
+    assert direct.hyperparameter_values['dropout'] == 0.0
+
+
+@pytest.mark.parametrize('num_layers, expected_lstm_dropout', [(1, 0.0), (3, 0.3)])
+def test_brnn_dropout_between_lstm_layers_only_with_several_layers(num_layers, expected_lstm_dropout):
+    # torch warns about LSTM dropout with a single layer, which would only confuse users
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        network = build_network('brnn', 20, Task('residues', 1), {'num_layers': num_layers, 'dropout': 0.3})
+
+    assert network.lstm.dropout == expected_lstm_dropout
+    assert network.dropout.p == 0.3
+
+
+@pytest.mark.parametrize('task, values', [
+    (Task('residues', 2), {'num_layers': 1}),
+    (Task('residues', 2), {'num_layers': 2}),
+    (Task('sequence', 1), {'num_layers': 1, 'attention_pooling': True}),
+    (Task('sequence', 1), {'num_layers': 1, 'attention_pooling': False}),
+])
+def test_brnn_dropout_acts_in_training_only(task, values):
+    """Dropout changes the output while training, and leaves it exactly as without dropout for predictions"""
+    torch.manual_seed(0)
+    with_dropout = build_network('brnn', 20, task, {**values, 'dropout': 0.5})
+    without_dropout = build_network('brnn', 20, task, values)
+    without_dropout.load_state_dict(with_dropout.state_dict())
+    batch, lengths = encode_batch(SEQUENCES)
+
+    with torch.no_grad():
+        torch.testing.assert_close(with_dropout.eval()(batch, lengths), without_dropout.eval()(batch, lengths))
+        assert not torch.allclose(with_dropout.train()(batch, lengths), without_dropout.train()(batch, lengths))
 
 
 # ..........................................................................................

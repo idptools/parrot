@@ -1,11 +1,12 @@
 """
 Building blocks shared by PARROT's command-line tools: the data loading, and
 saving and reporting, that parrot-train and parrot-optimize share (their
-command line is built in training_parser.py); the device and
-embedding-cache options, the encoding of sequences ahead of time and the
-check of --probabilistic-classification, which parrot-predict also uses; and
-the datatypes and legacy-option note that parrot-predict and
-parrot-preprocess also use.
+command line is built in training_parser.py); the device, embedding-cache and
+embedding-context options and the encoding of sequences ahead of time, which
+parrot-predict and parrot-preprocess also use (parrot-preprocess also shares
+--nardini-scrambles); the check of --probabilistic-classification, which
+parrot-predict also uses; and the datatypes and legacy-option note that
+parrot-predict and parrot-preprocess also use.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -28,9 +29,10 @@ from typing import Any
 import torch
 from torch.utils.data import DataLoader
 
-from parrot import devices, figures, nardini, plm, prediction, reporting, train_network
+from parrot import devices, embedding_context, figures, nardini, plm, prediction, reporting, train_network
 from parrot import process_input_data as pid
 from parrot.architectures import ParrotArchitecture, get_architecture
+from parrot.architectures.classical import ClassicalModel
 from parrot.checkpoint import save_network
 from parrot.encode_sequence import get_encoder
 from parrot.metrics import METRIC_DECIMALS
@@ -137,6 +139,179 @@ def add_embedding_cache_argument(parser: 'argparse._ActionsContainer', default_n
                         help='protein language model and NARDINI encodings only: directory in which to store each '
                              f'sequence\'s encoding (default: a "{default_name}" directory next to the output). Point '
                              'several runs at the same directory to encode each sequence only once')
+
+
+def add_nardini_scrambles_argument(parser: 'argparse._ActionsContainer') -> None:
+    """Add --nardini-scrambles, which only applies to NARDINI encodings
+
+    Parameters
+    ----------
+    parser : argparse.ArgumentParser or argument group
+        Where to add the argument
+    """
+
+    parser.add_argument('--nardini-scrambles', dest='nardini_scrambles', type=int, metavar='num_scrambles',
+                        help='NARDINI encodings only: scrambles of each sequence used for its patterning z-scores '
+                             f'(default {nardini.DEFAULT_NUM_SCRAMBLES:,}; the cost grows in proportion)')
+
+
+def add_embedding_context_arguments(parser: 'argparse._ActionsContainer') -> None:
+    """Add --embedding-context and --embedding-context-map, which only apply to protein language model encodings
+
+    Parameters
+    ----------
+    parser : argparse.ArgumentParser or argument group
+        Where to add the arguments
+    """
+
+    parser.add_argument('--embedding-context', dest='embedding_context', metavar='fasta_file',
+                        help='protein language model encodings only: a FASTA file of the full-length proteins the '
+                             'sequences were cut from. Each sequence is then embedded within its full-length protein '
+                             '(named in --embedding-context-map), rather than on its own')
+    parser.add_argument('--embedding-context-map', dest='embedding_context_map', metavar='map_file',
+                        help="with --embedding-context: one '<sequence ID> <full-length ID> [start]' line per "
+                             'sequence, naming the protein it was cut from (by the first word of its FASTA header '
+                             'line). start is the 1-based position of its first residue, needed only if it occurs '
+                             f"more than once in the protein; a full-length ID of '{embedding_context.NO_CONTEXT}' "
+                             'embeds that sequence on its own')
+
+
+def add_embed_mean_subtraction_argument(parser: 'argparse._ActionsContainer') -> None:
+    """Add --embed-mean-subtraction, which only applies to protein language model encodings
+
+    Parameters
+    ----------
+    parser : argparse.ArgumentParser or argument group
+        Where to add the argument
+    """
+
+    parser.add_argument('--embed-mean-subtraction', dest='embed_mean_subtraction', action='store_true',
+                        help="protein language model encodings only: subtract each embedding's mean over its residues "
+                             "(its mean pool) from every residue's embedding before it is stored, so that what is "
+                             'left is how each residue differs from the sequence as a whole (with '
+                             '--embedding-context, from the whole full-length protein). Stored in their own files in '
+                             'the embedding cache; saved with the network and applied automatically when predicting')
+
+
+def check_mean_subtraction_applies(args: argparse.Namespace, encoder: SequenceEncoder) -> None:
+    """Refuse --embed-mean-subtraction for the scikit-learn models when sequences are embedded on their own
+
+    Their features are each sequence's mean embedding and the log of its length
+    (see architectures/classical.py). Mean subtraction makes the mean embedding
+    of a sequence embedded on its own zero, so they would learn from its length
+    alone. Within a full-length protein (--embedding-context), the protein's
+    mean is subtracted instead, and a fragment's mean embedding is how it
+    differs from its protein, so that is allowed.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed training arguments (with --embedding-context already checked)
+    encoder : SequenceEncoder
+        The encoding in use
+
+    Raises
+    ------
+    ValueError
+        If the architecture is a scikit-learn model and sequences are mean-subtracted on their own
+    """
+    if not (isinstance(encoder, plm.PLMEncoder) and encoder.mean_subtracted):
+        return
+    if args.embedding_context is not None or not issubclass(get_architecture(args.architecture), ClassicalModel):
+        return
+    raise ValueError(f"--embed-mean-subtraction cannot be used with '{args.architecture}' unless the sequences are "
+                     'embedded within their full-length proteins (--embedding-context): its features are each '
+                     "sequence's mean embedding, which mean subtraction makes zero")
+
+
+def check_embedding_context_arguments(args: argparse.Namespace, encoder: SequenceEncoder) -> None:
+    """Check --embedding-context and --embedding-context-map before any work is done
+
+    The two files' paths are replaced by their absolute paths.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Arguments parsed by a parser built with add_embedding_context_arguments()
+    encoder : SequenceEncoder
+        The encoding in use
+
+    Raises
+    ------
+    ValueError
+        If only one of the two is given, the encoding is not a protein language model, or the sequences have no
+        IDs (--exclude-seq-id)
+    FileNotFoundError
+        If either file does not exist
+    """
+    if args.embedding_context is None and args.embedding_context_map is None:
+        return
+    if args.embedding_context is None or args.embedding_context_map is None:
+        raise ValueError('--embedding-context and --embedding-context-map go together: the FASTA file of full-length '
+                         'proteins, and which of them each sequence was cut from')
+    if not isinstance(encoder, plm.PLMEncoder):
+        raise ValueError('--embedding-context only applies to protein language model encodings (other encodings do '
+                         f"not depend on the rest of the sequence), not '{encoder.name}'")
+    if getattr(args, 'exclude_seq_id', False):
+        raise ValueError("--embedding-context finds each sequence's full-length protein by its sequence ID, so it "
+                         'cannot be used with --exclude-seq-id')
+    args.embedding_context = arguments.check_file_exists(args.embedding_context, 'FASTA file of full-length proteins')
+    args.embedding_context_map = arguments.check_file_exists(args.embedding_context_map, 'Embedding context map')
+
+
+def place_in_context(args: argparse.Namespace, encoder: SequenceEncoder, ids: list[str],
+                     sequences: list[str]) -> embedding_context.ContextAssignment | None:
+    """Give the encoder each sequence's full-length context, if --embedding-context was given
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Arguments checked by check_embedding_context_arguments()
+    encoder : SequenceEncoder
+        The encoding in use (a PLMEncoder if --embedding-context was given)
+    ids, sequences : list of str
+        Every sequence that will be encoded, and its ID
+
+    Returns
+    -------
+    ContextAssignment or None
+        Where each sequence is embedded (None without --embedding-context)
+
+    Raises
+    ------
+    ValueError
+        If any sequence cannot be placed in its full-length protein (see embedding_context.assign_contexts())
+    """
+    if args.embedding_context is None:
+        return None
+    assert isinstance(encoder, plm.PLMEncoder)
+    assignment = embedding_context.assign_contexts(ids, sequences, args.embedding_context, args.embedding_context_map)
+    encoder.add_contexts(assignment.contexts)
+    return assignment
+
+
+def write_context_table(assignment: embedding_context.ContextAssignment, output_prefix: str, silent: bool) -> str:
+    """Write where each sequence is embedded to <output_prefix>_embedded_context.tsv, and say so (unless silent)
+
+    Parameters
+    ----------
+    assignment : ContextAssignment
+    output_prefix : str
+        Path and filename prefix of the command's output
+    silent : bool
+        If True, print nothing
+
+    Returns
+    -------
+    str
+        The file written
+    """
+    table_file = output_prefix + embedding_context.CONTEXT_TABLE_SUFFIX
+    embedding_context.write_context_table(table_file, assignment.rows)
+    if not silent:
+        print(f'\nEmbedding context: {assignment.describe()}. Where each sequence is embedded is written to '
+              f'{table_file}')
+    return table_file
 
 
 def prepare_encoding(encoder: SequenceEncoder, sequences: list[str], cache_directory: str | None,
@@ -295,6 +470,10 @@ class TrainingRun:
         Print more detail
     silent : bool
         Print nothing
+    context : ContextAssignment or None
+        With --embedding-context, where each sequence is embedded
+    context_table : str or None
+        With --embedding-context, the table of where each sequence is embedded
     """
 
     program_name: str
@@ -318,6 +497,8 @@ class TrainingRun:
     write_stats: bool
     verbose: bool
     silent: bool
+    context: embedding_context.ContextAssignment | None = None
+    context_table: str | None = None
 
     def loader(self, dataset: pid.SequenceDataset, shuffle: bool = False) -> DataLoader:
         """Wrap one of this run's datasets in a DataLoader."""
@@ -456,7 +637,8 @@ def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: i
     """Validate the shared arguments, then load and split the data
 
     Protein language model embeddings and NARDINI features of every sequence
-    are also computed now, into the embedding cache (see prepare_encoding()).
+    are also computed now, into the embedding cache (see prepare_encoding()),
+    within each sequence's full-length protein if --embedding-context was given.
 
     Parameters
     ----------
@@ -495,10 +677,16 @@ def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: i
     if args.save_splits:
         save_splits_output = output_prefix + '_split_file.txt'
 
-    encoder = get_encoder(args.encode, standardize=args.standardize_encoding, nardini_scrambles=args.nardini_scrambles)
+    encoder = get_encoder(args.encode, standardize=args.standardize_encoding, nardini_scrambles=args.nardini_scrambles,
+                          mean_subtracted=args.embed_mean_subtraction)
     check_embedding_cache_applies(encoder, args.embedding_cache)
+    check_embedding_context_arguments(args, encoder)
+    check_mean_subtraction_applies(args, encoder)
     check_matrix_arguments(args)
-    task = Task(args.datatype, number_of_classes(args), width=args.matrix_width, symmetric=args.symmetric)
+    if args.uncertainties and not args.regression:
+        raise ValueError("--uncertainties applies to regression only: the SDs are of the values' measurement errors")
+    task = Task(args.datatype, number_of_classes(args), width=args.matrix_width, symmetric=args.symmetric,
+                uncertainties=args.uncertainties)
     nardini.check_task(encoder, task)
 
     arguments.check_positive(args.epochs, 'Number of epochs')
@@ -529,6 +717,9 @@ def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: i
     encoder.check_sequences(every_sequence)
     if task.is_square:
         check_matrix_lengths(every_sequence, args.max_matrix_length)
+    every_id = train_set.names + val_set.names + test_set.names
+    context = place_in_context(args, encoder, every_id, every_sequence)
+    context_table = write_context_table(context, output_prefix, args.silent) if context is not None else None
     prepare_encoding(encoder, every_sequence, args.embedding_cache,
                      os.path.join(os.path.dirname(network_file), plm.TRAIN_CACHE_DIRECTORY), device,
                      program_name, args.silent)
@@ -541,7 +732,7 @@ def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: i
                        cv_sets=cv_sets, batch_size=args.batch, batching=args.batching,
                        probabilistic=args.probabilistic_classification,
                        include_figs=args.include_figs, write_stats=not args.no_stats,
-                       verbose=args.verbose, silent=args.silent)
+                       verbose=args.verbose, silent=args.silent, context=context, context_table=context_table)
 
 
 def print_run_header(title: str, run: TrainingRun, settings: dict[str, Any]) -> None:
@@ -586,6 +777,8 @@ def describe_data(run: TrainingRun) -> str:
     predicted = DATATYPE_DESCRIPTIONS[task.datatype]
     if task.is_classification:
         predicted = f'classification into {task.num_classes} classes, {predicted}'
+    elif task.uncertainties:
+        predicted = f'regression with uncertainties, {predicted}'
     else:
         predicted = f'regression, {predicted}'
 
@@ -629,6 +822,8 @@ def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_los
     written = list(other_files)
     if run.saved_split_file is not None:
         written.append(run.saved_split_file)
+    if run.context_table is not None:
+        written.append(run.context_table)
 
     # Models fitted in one step have no loss curve to plot
     if run.include_figs and network.trained_by_gradient_descent:

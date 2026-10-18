@@ -558,7 +558,8 @@ BUILT_IN_ENCODERS: dict[str, type[SequenceEncoder]] = {OneHotEncoder.name: OneHo
                                                        BiophysicsEncoder.name: BiophysicsEncoder}
 
 
-def get_encoder(encoding: str, standardize: bool = False, nardini_scrambles: int | None = None) -> SequenceEncoder:
+def get_encoder(encoding: str, standardize: bool = False, nardini_scrambles: int | None = None,
+                mean_subtracted: bool = False) -> SequenceEncoder:
     """Build the encoder described by a command-line style encoding string
 
     Parameters
@@ -577,6 +578,9 @@ def get_encoder(encoding: str, standardize: bool = False, nardini_scrambles: int
     nardini_scrambles : int, optional
         NARDINI encodings only: scrambles per sequence for the patterning
         z-scores (default nardini.DEFAULT_NUM_SCRAMBLES)
+    mean_subtracted : bool, optional
+        Protein language models only: subtract each embedding's mean over its
+        residues from every residue (see plm.PLMEncoder)
 
     Returns
     -------
@@ -590,6 +594,10 @@ def get_encoder(encoding: str, standardize: bool = False, nardini_scrambles: int
         If the options do not apply to the encoding
     """
 
+    if mean_subtracted and not plm.is_plm_encoding(encoding):
+        raise ValueError('--embed-mean-subtraction only applies to protein language model encodings (it subtracts '
+                         f"each embedding's mean over its residues), not '{encoding}'")
+
     if nardini.is_nardini_encoding(encoding):
         return get_nardini_encoder(encoding, standardize, nardini_scrambles)
     if nardini_scrambles is not None:
@@ -601,7 +609,7 @@ def get_encoder(encoding: str, standardize: bool = False, nardini_scrambles: int
             raise ValueError('--standardize-encoding cannot be used with a protein language model encoding: '
                              'PLM embeddings depend on each residue\'s context, so there is no per-amino-acid '
                              'table to standardize')
-        return plm.PLMEncoder(encoding)
+        return plm.PLMEncoder(encoding, mean_subtracted=mean_subtracted)
 
     encoder: SequenceEncoder
     if encoding in BUILT_IN_ENCODERS:

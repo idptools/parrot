@@ -349,11 +349,15 @@ class TrialTrainer:
         if progress.optimizer_state is not None:
             optimizer.load_state_dict(progress.optimizer_state)
         criterion = train_network.build_loss_criterion(self.task)
+        # With uncertainties, a new network's first epoch is weighted by a model error fitted to its untrained
+        # residuals, as train_network.train() does; after that, each epoch's validation refits it
+        if self.task.uncertainties and progress.network_state is None:
+            train_network.refit_model_error(network, val_loader, self.task, self.device)
 
         for _ in range(trial.epochs, epochs):
             train_loss, _ = train_network.train_epoch(network, train_loader, self.task, criterion, optimizer,
                                                       self.device)
-            val_loss = train_network.evaluate_loss(network, val_loader, self.task, self.device)
+            val_loss = train_network.validation_loss(network, val_loader, self.task, self.device)
             progress.record_epoch(train_loss, val_loss, network)
 
         progress.network_state = cpu_copy(network.state_dict())

@@ -48,9 +48,10 @@ Running the PLM takes far longer than training or running a PARROT network on it
 
 * ``parrot-train`` and ``parrot-optimize`` embed every sequence in the datafile (training, validation and test) before training starts. Every epoch then reads the cached embeddings, so training is as fast as with any other encoding of the same size. By default the cache is a directory called ``parrot_train_embeddings`` next to the output network.
 * ``parrot-predict`` embeds the sequences to predict before predicting. By default its cache is a directory called ``parrot_predict_embeddings`` next to the output file.
-* ``Predictor`` (in Python) embeds each sequence when it is predicted and stores nothing, unless given ``embedding_cache=<directory>``.
+* ``parrot-preprocess --encode <model>`` embeds every sequence of its output datafile ahead of time, so that later training runs given the same ``--embedding-cache`` start straight away (see "parrot-preprocess").
+* ``Predictor`` (in Python) embeds each sequence when it is predicted and stores nothing, unless given ``embedding_cache=<directory>``. ``Predictor.predict_batch()`` embeds all its sequences first, as ``parrot-predict`` does, into ``embedding_cache`` or, without one, into a temporary cache that is deleted once they are predicted.
 
-Before embedding, PARROT prints how many unique sequences there are, how many are already in the cache and how much the cache will grow, and it stops if the disk does not have room (it asks for 25% more free space than the estimate). While embedding, it prints its progress (residues embedded, speed and time left) every 30 seconds and when it finishes. The cache size is about
+Before embedding, PARROT prints how many unique sequences there are, how many are already in the cache and how much the cache will grow, and it stops if the disk does not have room (it asks for 25% more free space than the estimate). While embedding, it shows a progress bar (on stderr) with the residues embedded, the speed and the time left. Residues where the windows of a long sequence overlap (see below) count once per window, since the model runs over them more than once. When the output goes to a file rather than a terminal (for example the log of a run started with ``nohup``), the bar is redrawn only every 30 seconds, so the log does not fill with updates. The cache size is about
 
     (number of residues) x (values per residue) x 2 bytes
 
@@ -64,6 +65,8 @@ Each cache directory contains a ``README.md`` describing what is in it (models, 
 * **Several commands can share a cache at the same time** (e.g. training runs started together on the same data). Only one writes to it at a time: a ``<model>.h5.lock`` file marks a cache being written, and another command that needs to write waits for it (for up to 10 minutes, after which it stops with an error). Reading never blocks a command that is writing. If a run that crashed leaves a lock file behind, delete it.
 * Embeddings are added to the cache in groups as they are computed, so an interrupted run keeps most of its work.
 * Caches are only created for PLM encodings and NARDINI features (see "NARDINI features"). ``--embedding-cache`` is an error with any other encoding.
+* Fragments embedded within their full-length proteins (see below) are stored in a separate file of the cache.
+* Mean-subtracted embeddings (``--embed-mean-subtraction``; see below) are also stored in files of their own.
 
 How residues are embedded
 -------------------------
@@ -74,6 +77,73 @@ How residues are embedded
 * Embeddings are rounded to 16-bit floats, whether or not they go through a cache, so a sequence is always encoded the same way.
 * The trained network file records the model, the windowing and the storage precision, so ``parrot-predict`` and ``Predictor`` embed new sequences exactly as the training sequences were.
 * The PLM runs on the same device as training or prediction (see ``--device``). Use a GPU if you can: on a CPU, embedding is many times slower.
+
+Embedding fragments within their full-length proteins
+-----------------------------------------------------
+
+A PLM embeds each residue in the context of the whole sequence it is given. So the residues of a peptide embedded on its own get different embeddings from the same residues embedded within the protein they come from. Many datasets are libraries of fragments cut out of larger proteins, for example peptides tiled across a proteome. For these, ``--embedding-context`` embeds each full-length protein instead, and cuts each fragment's residues out of its embedding. Whether this helps depends on what was measured: it makes most sense when the measured property belongs to the region within its native protein. If the fragments were measured on their own (for example, each peptide fused to a reporter), embedding them on their own may match the experiment better. It is worth training both ways and comparing.
+
+Which protein each fragment comes from is given explicitly, never guessed, with two files:
+
+* **A FASTA file** (``--embedding-context``) of the full-length proteins. Each protein is named by the first word of its header line (for a UniProt entry, ``sp|P04637|P53_HUMAN``, not ``P04637``). It can be a whole proteome: only the proteins named in the map are kept in memory. Sequences are read as they are, so they must be upper case, with no gaps or ``*`` marking a stop codon.
+* **A map** (``--embedding-context-map``) with one line per sequence of the datafile: ``<sequence ID> <full-length ID> [start]``, separated by whitespace. ``start`` is the 1-based position of the fragment's first residue in the full-length protein. It is only needed if the fragment occurs more than once in that protein; otherwise, the fragment is found by searching the protein. A full-length ID of ``-`` says the fragment has no full-length protein, and it is embedded on its own. Blank lines and lines starting with ``#`` (e.g. a header) are skipped.
+
+For example::
+
+    # fragment          protein          start
+    P04637_tile0001     sp|P04637|P53_HUMAN  1
+    P04637_tile0002     sp|P04637|P53_HUMAN
+    designed_peptide_7  -
+
+PARROT checks every sequence before embedding anything, and stops with an error listing the first few problems if any sequence:
+
+* has no line in the map;
+* names a protein that is not in the FASTA file;
+* does not match its protein at the start given;
+* without a start, does not occur in its protein, or occurs more than once.
+
+Only exact matches count, so a fragment carrying a mutation will not be found in the wild-type protein. Embeddings are looked up by sequence, so a sequence must have the same context under every ID it has. Two IDs of identical proteins count as the same context. If the same sequence comes from different proteins under different IDs, PARROT stops; ``parrot-preprocess --deduplicate`` merges or drops repeated sequences. Lines of the map for IDs that are not in the datafile are ignored and counted.
+
+Every command that uses ``--embedding-context`` writes a table of where each sequence was embedded, ``<output>_embedded_context.tsv``, next to its output: the network for ``parrot-train`` and ``parrot-optimize``, the output datafile for ``parrot-preprocess``, and the predictions for ``parrot-predict``. It has a header line, then one tab-separated line per sequence with these columns:
+
+* the sequence's ID and sequence;
+* the full-length protein's ID (``-`` for a sequence embedded on its own);
+* the residues of the full-length protein it covers (1-based and inclusive, e.g. ``31-60``, or ``-``);
+* a note on how it was placed (start given in the map, start found by searching, or embedded on its own).
+
+.. code-block:: bash
+
+    parrot-preprocess tiles.tsv clean.tsv -d sequence -m regression --split kmer --encode esm2_t33_650M_UR50D \
+        --embedding-cache embeddings --embedding-context proteome.fasta --embedding-context-map tile_map.tsv
+    parrot-train cnn --input-file clean.tsv --output-network net.pt --split clean_split_file.txt -d sequence \
+        --regression --encode esm2_t33_650M_UR50D --embedding-cache embeddings \
+        --embedding-context proteome.fasta --embedding-context-map tile_map.tsv
+
+Some practical points:
+
+* **Cost.** Each full-length protein is embedded once, however many of its fragments there are, so the time depends on the residues of the proteins rather than of the fragments. For overlapping tiles this can be less than embedding the tiles themselves. The cache stores only the fragments' embeddings, so its size is as before.
+* **The cache.** In-context embeddings are stored in their own file of the cache, ``<model>.context.h5``, so they are never mistaken for embeddings of sequences on their own (which stay in ``<model>.h5``). Each is stored under its fragment, its full-length protein and its start. So adding fragments, editing the map or changing the FASTA file never makes what is stored wrong; only new combinations are embedded.
+* **Training and predicting.** A network trained with ``--embedding-context`` records this. ``parrot-predict`` then needs ``--embedding-context`` and ``--embedding-context-map`` too, matching the sequences to predict to the map by their IDs (so not with ``--exclude-seq-id``). Without them it stops, unless given ``--embed-in-isolation``, which embeds each sequence on its own (for example, new peptides with no full-length protein). Those embeddings differ from the ones the network was trained on, so predictions may be less accurate. Both options are errors for a network trained without ``--embedding-context``.
+* **In Python**, ``Predictor.predict(fragment, full_length=protein)`` embeds the fragment within ``protein``, and ``start=`` gives its 1-based start if it occurs more than once. ``Predictor.predict_batch(fragments, full_lengths=proteins)`` does the same for a list of fragments (one protein per fragment, and ``starts=`` if needed), embedding each protein once. ``Predictor(path, embed_in_isolation=True)`` embeds a sequence predicted without ``full_length`` on its own instead of raising an error.
+* **Splitting.** Embedded in context, a fragment's embedding carries information from the rest of its protein, including from neighbouring fragments. Keep all the fragments of a protein in the same set (e.g. with a split-file), or similar fragments in the training and test sets will make the test results look better than they are.
+
+Subtracting each embedding's mean
+---------------------------------
+
+Part of each residue's PLM embedding is shared by every residue of the sequence it was given, and so describes the sequence as a whole rather than the residue. ``--embed-mean-subtraction`` removes that shared part. Every time a sequence is embedded, the mean of its embedding over its residues (its mean pool) is subtracted from every residue's embedding before the embedding is stored, so what is left is how each residue differs from the sequence as a whole.
+
+With ``--embedding-context``, the sequence embedded is the full-length protein. So the mean subtracted is the protein's, and each fragment is cut out afterwards. A fragment's embedding then describes how its residues differ from the rest of their protein, and keeps what distinguishes the fragment within it. A fragment mapped to ``-`` is embedded on its own, so its own mean is subtracted.
+
+.. code-block:: bash
+
+    parrot-train cnn --input-file clean.tsv --output-network net.pt --split clean_split_file.txt -d sequence \
+        --regression --encode esm2_t33_650M_UR50D --embedding-cache embeddings --embed-mean-subtraction \
+        --embedding-context proteome.fasta --embedding-context-map tile_map.tsv
+
+* **The cache.** Mean-subtracted embeddings are stored in files of their own, ``<model>.mean_subtracted.h5`` (and ``<model>.mean_subtracted.context.h5`` in context), so they never mix with the embeddings the model gives. Using it for the first time means embedding every sequence again. To embed ahead of time, give ``parrot-preprocess --encode`` the same option.
+* **Training and predicting.** The network records that its embeddings were mean-subtracted, so ``parrot-predict`` and ``Predictor`` subtract the mean from new sequences' embeddings automatically.
+* **The scikit-learn models** (``linear``, ``svm``, ``random_forest``, ``knn``) use each sequence's mean embedding as their features. Mean subtraction makes that zero for a sequence embedded on its own, so these models only accept ``--embed-mean-subtraction`` with ``--embedding-context``. Even then, any sequence mapped to ``-`` has a mean embedding of zero.
+* The mean is subtracted at full precision, before rounding to 16-bit floats, so the stored embeddings average to zero only to within that rounding.
 
 Things to know
 --------------

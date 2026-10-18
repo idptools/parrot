@@ -3,6 +3,8 @@ Tests for parrot.architectures.classical: the simple models fitted in one step
 (linear, svm, random_forest, knn).
 """
 
+import warnings
+
 import numpy as np
 import pytest
 import torch
@@ -76,6 +78,26 @@ def test_linear_model_recovers_composition_target():
 
     predicted = np.array([output[0] for output in labeled.outputs])
     assert pearsonr(np.array(labeled.true_values), predicted)[0] > 0.99
+
+
+def test_regression_targets_near_zero_fit_without_warnings(tmp_path):
+    """Single-precision rounding of targets near 0 used to fail scikit-learn's check that their scaling can be undone"""
+    rng = np.random.default_rng(0)
+    datafile = tmp_path / 'near_zero.tsv'
+    with open(datafile, 'w') as handle:
+        for index in range(200):
+            sequence = ''.join(rng.choice(list('ACDEFGHIKLMNPQRSTVWY'), 20))
+            # Half the values within 0.001 of 0 and half far from it, so the rounding error of scaling the values
+            # (relative to their mean and spread) is large next to the values near 0
+            value = rng.normal(-10, 1) if index % 2 == 0 else rng.normal(0, 1e-4)
+            handle.write(f'seq{index} {sequence} {value:.6g}\n')
+    task = Task('sequence', 1)
+    train_set, _, _ = pid.split_data(str(datafile), task, ignore_warnings=True)
+    network = build_network('linear', 20, task, {})
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        network.fit(pid.make_dataloader(train_set, task, 32))
 
 
 @pytest.mark.parametrize('architecture', ONE_STEP_ARCHITECTURES)

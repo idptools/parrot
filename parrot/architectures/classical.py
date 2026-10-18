@@ -12,6 +12,12 @@ Features are standardised before fitting, and so are regression targets (the
 standardisation is undone when predicting), so hyperparameters such as the SVM
 penalty behave consistently across datasets.
 
+With uncertainties (see parrot/uncertainties.py), each sequence is weighted by
+1 / (SD^2 + s^2), where s is the model error: the linear, SVM and random-forest
+models are fitted with these as scikit-learn sample weights, refitted as s is
+re-estimated (see train_network.fit_in_one_step). k-nearest neighbours cannot
+weight its training sequences, so it does not support uncertainties.
+
 The models behave like any other PARROT architecture: forward() maps a padded
 batch to outputs (for classification, the log of the predicted class
 probabilities, which act as logits), so evaluation, prediction, reporting and
@@ -53,6 +59,7 @@ from parrot.architectures.layers import (adjacent_pair_composition, composition_
                                          resolve_lengths, zero_padding)
 from parrot.architectures.registry import register_architecture
 from parrot.tasks import Task
+from parrot.uncertainties import MIN_VARIANCE, model_error_of
 
 # Sets of sequence features the models can use
 FEATURE_SETS = ('composition', 'dipeptides')
@@ -181,6 +188,9 @@ class ClassicalModel(ParrotArchitecture):
     def fit(self, loader: DataLoader[Any]) -> None:
         """Fit the model to every sequence in a dataset
 
+        With uncertainties, each sequence is weighted by 1 / (SD^2 + s^2) (see
+        sample_weights()), or equally while the model error s is not yet known.
+
         Parameters
         ----------
         loader : DataLoader
@@ -195,12 +205,47 @@ class ClassicalModel(ParrotArchitecture):
         training_targets = torch.cat(targets).numpy()
         num_samples, num_features = training_features.shape
 
-        model = make_pipeline(StandardScaler(), self.make_estimator(num_samples, num_features))
-        if not self.task.is_classification:
-            model = TransformedTargetRegressor(regressor=model, transformer=StandardScaler())
-            training_targets = training_targets.ravel()
+        pipeline = make_pipeline(StandardScaler(), self.make_estimator(num_samples, num_features))
+        if self.task.is_classification:
+            self.estimator = pipeline.fit(training_features, training_targets)
+            return
 
-        self.estimator = model.fit(training_features, training_targets)
+        # Standard scaling can always be undone, so scikit-learn's check that it can is skipped: on single-precision
+        # targets, rounding of values near 0 sometimes fails the check, with a spurious warning
+        model = TransformedTargetRegressor(regressor=pipeline, transformer=StandardScaler(), check_inverse=False)
+        fit_options = {}
+        if self.task.uncertainties:
+            # Targets are [value, SD] pairs (see process_input_data.pad_targets)
+            weights = self.sample_weights(training_targets[:, 1])
+            training_targets = training_targets[:, :1]
+            if weights is not None:
+                # The pipeline passes an option to the estimator that is its last step, named <step>__<option>
+                fit_options[f'{pipeline.steps[-1][0]}__sample_weight'] = weights
+        self.estimator = model.fit(training_features, training_targets.ravel(), **fit_options)
+
+    def sample_weights(self, sds: np.ndarray) -> np.ndarray | None:
+        """Weights for fitting to values with uncertainties: 1 / (SD^2 + s^2), scaled to average 1
+
+        Scaling to an average of 1 keeps the regularisation (the ridge penalty,
+        the SVM's C) as strong, relative to the fit, as it is without weights.
+
+        Parameters
+        ----------
+        sds : numpy array
+            The SD of each training value
+
+        Returns
+        -------
+        numpy array or None
+            None (equal weights) while the model error s is not yet known
+        """
+        model_error = float(model_error_of(self))
+        if not np.isfinite(model_error):
+            return None
+        # As in the loss, the variance is kept above 0 (for an SD of 0 with a model error of exactly 0)
+        weights = 1 / np.maximum(np.asarray(sds, dtype=np.float64) ** 2 + model_error ** 2, MIN_VARIANCE)
+        normalised: np.ndarray = weights / weights.mean()
+        return normalised
 
     def forward(self, x: torch.Tensor, lengths: torch.Tensor | None = None) -> torch.Tensor:
         """Predict from sequence features
@@ -407,6 +452,8 @@ class KNearestNeighbors(ClassicalModel):
 
     name = 'knn'
     description = 'k-nearest neighbours on sequence features'
+    # scikit-learn's k-nearest neighbours cannot weight its training sequences
+    supports_uncertainties = False
     hyperparameters = (
         HyperParameter('num_neighbors', int, default=5, minimum=1, search_range=(1, 50),
                        help='number of most similar training sequences used for each prediction'),

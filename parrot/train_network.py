@@ -23,6 +23,7 @@ from collections.abc import Callable, Sized
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -32,6 +33,7 @@ from parrot.architectures import HyperParameter, ParrotArchitecture
 from parrot.architectures.layers import padding_mask
 from parrot.devices import cpu_copy, full_float32_precision
 from parrot.tasks import Task
+from parrot.uncertainties import fit_model_error, gaussian_nll, model_error_of, set_model_error
 
 # The learning rate is the one hyperparameter shared by every architecture
 LEARNING_RATE = HyperParameter('learning_rate', float, default=0.001,
@@ -44,6 +46,18 @@ STOP_CONDITIONS = ('iter', 'auto')
 # With --stop auto, the validation loss must fall by at least this fraction below the loss of the last epoch that
 # improved this much, for training to count as still improving (so a tiny new best does not keep training going)
 AUTO_STOP_RELATIVE_IMPROVEMENT = 0.005
+
+# With uncertainties the loss is a negative log-likelihood, which can be negative, so a relative fall means nothing.
+# Instead it must fall by this much per labelled value: the same 0.5% improvement, measured in likelihood
+# (a likelihood 1/(1 - 0.005) times as large lowers its negative log by log(1/(1 - 0.005)))
+AUTO_STOP_LOG_LIKELIHOOD_IMPROVEMENT = -math.log(1 - AUTO_STOP_RELATIVE_IMPROVEMENT)
+
+# Models fitted in one step with uncertainties are refitted as their model error is re-estimated, until it changes
+# by less than this fraction (PARROT's choice: well below the model error's own uncertainty)...
+MODEL_ERROR_TOLERANCE = 0.01
+
+# ...or they have been refitted this many times (PARROT's choice: it usually settles within two or three)
+MAX_MODEL_ERROR_REFITS = 5
 
 # How often (in epochs) the validation loss is printed when not in verbose mode
 PRINT_EVERY_N_EPOCHS = 5
@@ -71,13 +85,68 @@ def build_loss_criterion(task: Task) -> nn.Module:
         MSE for residue and matrix regression, L1 for sequence regression, and
         cross-entropy for classification. The cross-entropy loss ignores padded
         positions and missing labels, which carry the label IGNORED_CLASS_LABEL.
+        For regression with uncertainties, the Gaussian negative log-likelihood
+        (see UncertaintyLoss).
     """
 
+    if task.uncertainties:
+        return UncertaintyLoss()
     if task.is_classification:
         return nn.CrossEntropyLoss(reduction='sum', ignore_index=pid.IGNORED_CLASS_LABEL)
     if task.per_residue or task.is_matrix:
         return nn.MSELoss(reduction='sum')
     return nn.L1Loss(reduction='sum')
+
+
+class UncertaintyLoss(nn.Module):
+    """The loss for values with uncertainties: the Gaussian negative log-likelihood (see parrot/uncertainties.py)
+
+    Unlike the other losses it needs the network's model error, so
+    compute_batch_loss() calls it with (predicted, values, SDs, model error).
+    """
+
+    def forward(self, predicted: torch.Tensor, values: torch.Tensor, sds: torch.Tensor,
+                model_error: torch.Tensor) -> torch.Tensor:
+        """The summed negative log-likelihood (see uncertainties.gaussian_nll)
+
+        Parameters
+        ----------
+        predicted, values, sds : torch.Tensor
+            The predictions, values and SDs of every labelled value (1D)
+        model_error : torch.Tensor
+            The network's model error s
+
+        Returns
+        -------
+        torch.Tensor
+            A scalar
+        """
+        return gaussian_nll(predicted, values, sds, model_error)
+
+
+def labelled_with_uncertainties(outputs: torch.Tensor, targets: torch.Tensor,
+                                lengths: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """The prediction, value and SD of every labelled value in a batch with uncertainties (leaving out padding)
+
+    Parameters
+    ----------
+    outputs : torch.Tensor
+        The network's outputs: [batch_dim X 1] or [batch_dim X padded_length X 1]
+    targets : torch.Tensor
+        The batch's targets, on the same device: the same shape but with a last
+        dimension of 2, holding each value and its SD (see pid.pad_targets)
+    lengths : torch.Tensor
+        The true length of each sequence
+
+    Returns
+    -------
+    tuple of torch.Tensor
+        (predictions, values, SDs), each 1D
+    """
+    if outputs.dim() == 3:
+        mask = padding_mask(lengths.to(outputs.device), outputs.shape[1]) & ~torch.isnan(targets[..., 0])
+        outputs, targets = outputs[mask], targets[mask]
+    return outputs[..., 0], targets[..., 0], targets[..., 1]
 
 
 def compute_batch_loss(network: nn.Module, batch: pid.Batch, task: Task, criterion: nn.Module,
@@ -117,7 +186,9 @@ def compute_batch_loss(network: nn.Module, batch: pid.Batch, task: Task, criteri
 
     outputs = network(vectors, batch.lengths)
 
-    if task.is_classification and (task.per_residue or task.is_matrix):
+    if task.uncertainties:
+        loss = criterion(*labelled_with_uncertainties(outputs, targets, batch.lengths), model_error_of(network))
+    elif task.is_classification and (task.per_residue or task.is_matrix):
         # CrossEntropyLoss expects the class dimension second ([batch, classes, length(, width)])
         loss = criterion(outputs.movedim(-1, 1), targets)
     elif task.per_residue:
@@ -162,7 +233,8 @@ def sum_batch_losses(batch_losses: list[torch.Tensor]) -> float:
 def evaluate_loss(network: nn.Module, loader: DataLoader, task: Task, device: str | torch.device) -> float:
     """Average loss per sequence over a dataset, without updating the network
 
-    The network is left in evaluation mode.
+    The network is left in evaluation mode. With uncertainties, the loss uses
+    the network's model error as it is (see refit_model_error() to fit it).
 
     Parameters
     ----------
@@ -194,6 +266,88 @@ def evaluate_loss(network: nn.Module, loader: DataLoader, task: Task, device: st
     total_loss = sum_batch_losses(batch_losses)
 
     return total_loss / n_sequences
+
+
+@full_float32_precision()
+def refit_model_error(network: ParrotArchitecture, loader: DataLoader, task: Task,
+                      device: str | torch.device) -> tuple[float, float]:
+    """Fit a network's model error to its residuals on a dataset (with uncertainties), and return the loss there
+
+    The model error is set to its maximum-likelihood value given the
+    network's predictions of the dataset (see uncertainties.fit_model_error),
+    and the loss is then computed with it. Training does this on the
+    validation set after every epoch.
+
+    Parameters
+    ----------
+    network : ParrotArchitecture
+        A network built for a task with uncertainties (left in evaluation mode)
+    loader : DataLoader
+        Batches of the dataset
+    task : Task
+        The task being trained
+    device : str or torch.device
+        Device the network lives on
+
+    Returns
+    -------
+    float
+        The loss with the new model error: total divided by the number of sequences
+    float
+        The average number of labelled values per sequence
+
+    Raises
+    ------
+    ValueError
+        If the task has no uncertainties
+    """
+    if not task.uncertainties:
+        raise ValueError('Only a network trained on values with uncertainties has a model error to fit')
+    predicted: list[torch.Tensor] = []
+    values: list[torch.Tensor] = []
+    sds: list[torch.Tensor] = []
+    n_sequences = 0
+
+    network.eval()
+    with torch.no_grad():
+        for batch in loader:
+            outputs = network(batch.vectors.to(device), batch.lengths)
+            for collected, part in zip((predicted, values, sds),
+                                       labelled_with_uncertainties(outputs, batch.targets.to(device), batch.lengths)):
+                collected.append(part)
+            n_sequences += len(batch.names)
+
+    all_predicted, all_values, all_sds = (torch.cat(parts) for parts in (predicted, values, sds))
+    residuals = (all_values - all_predicted).cpu().double().numpy()
+    # A network that has diverged (non-finite predictions) keeps its model error; its loss is then not finite
+    if np.all(np.isfinite(residuals)):
+        set_model_error(network, fit_model_error(residuals, all_sds.cpu().double().numpy()))
+    total = float(gaussian_nll(all_predicted, all_values, all_sds, model_error_of(network)))
+    return total / n_sequences, len(residuals) / n_sequences
+
+
+def validation_loss(network: ParrotArchitecture, loader: DataLoader, task: Task, device: str | torch.device) -> float:
+    """The validation loss after an epoch; with uncertainties, the model error is first refitted to the validation set
+
+    Parameters
+    ----------
+    network : ParrotArchitecture
+        The network being trained
+    loader : DataLoader
+        Batches of the validation set
+    task : Task
+        The task being trained
+    device : str or torch.device
+        Device the network lives on
+
+    Returns
+    -------
+    float
+        Average loss per sequence
+    """
+    if task.uncertainties:
+        return refit_model_error(network, loader, task, device)[0]
+    return evaluate_loss(network, loader, task, device)
 
 
 # .................................................................
@@ -312,7 +466,7 @@ class TrainingTiming:
         return sum(self.train_sequences) / seconds if seconds > 0 else math.nan
 
 
-def meaningfully_better(val_loss: float, reference_loss: float) -> bool:
+def meaningfully_better(val_loss: float, reference_loss: float, minimum_fall: float | None = None) -> bool:
     """True if a validation loss improves on a reference by at least AUTO_STOP_RELATIVE_IMPROVEMENT (--stop auto)
 
     Parameters
@@ -321,12 +475,17 @@ def meaningfully_better(val_loss: float, reference_loss: float) -> bool:
         Validation loss of the current epoch
     reference_loss : float
         Validation loss of the last epoch that improved meaningfully (inf before the first)
+    minimum_fall : float, optional
+        If given, the loss must instead fall by at least this much (for a loss
+        that can be negative; see AUTO_STOP_LOG_LIKELIHOOD_IMPROVEMENT)
 
     Returns
     -------
     bool
         False for a NaN loss
     """
+    if minimum_fall is not None:
+        return val_loss < reference_loss - minimum_fall
     return val_loss < reference_loss * (1 - AUTO_STOP_RELATIVE_IMPROVEMENT)
 
 
@@ -339,7 +498,10 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
 
     Every epoch the network is trained on the training set and then evaluated
     on the validation set. When training finishes, the network holds the
-    weights from the epoch with the lowest validation loss.
+    weights from the epoch with the lowest validation loss. With
+    uncertainties, the model error is fitted to the validation set before
+    training and after every epoch (see refit_model_error()), and the network
+    keeps the model error of the epoch it keeps.
 
     Models that are not trained by gradient descent (see architectures/classical.py)
     are instead fitted in one step; the learning rate, number of epochs and stop
@@ -363,8 +525,9 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
         With stop_condition='iter', the number of epochs to train for. With
         stop_condition='auto', stop once this many epochs in a row have not
         lowered the validation loss by at least AUTO_STOP_RELATIVE_IMPROVEMENT
-        (relative to the last epoch that did), so training lasts at least
-        n_epochs + 1 epochs.
+        (relative to the last epoch that did; with uncertainties, by
+        AUTO_STOP_LOG_LIKELIHOOD_IMPROVEMENT per labelled value), so training
+        lasts at least n_epochs + 1 epochs.
     stop_condition : str, optional
         'iter' (default) or 'auto'
     on_improvement : callable, optional
@@ -401,6 +564,13 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
     criterion = build_loss_criterion(task)
     history = TrainingHistory()
 
+    # With uncertainties, the first epoch is weighted by a model error fitted to the untrained network's residuals,
+    # and --stop auto counts the improvement per labelled value (see AUTO_STOP_LOG_LIKELIHOOD_IMPROVEMENT)
+    minimum_fall = None
+    if task.uncertainties:
+        _, values_per_sequence = refit_model_error(network, val_loader, task, device)
+        minimum_fall = AUTO_STOP_LOG_LIKELIHOOD_IMPROVEMENT * values_per_sequence
+
     # With 'auto', training ends once n_epochs epochs in a row have not improved the validation loss meaningfully
     # (see meaningfully_better), so there is no fixed number of epochs
     patience_epochs = n_epochs
@@ -411,11 +581,11 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
         start = time.perf_counter()
         train_loss, train_sequences = train_epoch(network, train_loader, task, criterion, optimizer, device)
         trained = time.perf_counter()
-        val_loss = evaluate_loss(network, val_loader, task, device)
+        val_loss = validation_loss(network, val_loader, task, device)
         if timing is not None:
             timing.record_epoch(trained - start, train_sequences, time.perf_counter() - trained)
 
-        if meaningfully_better(val_loss, reference_loss):
+        if meaningfully_better(val_loss, reference_loss, minimum_fall):
             reference_loss, last_meaningful_epoch = val_loss, epoch
         stop_now = stop_condition == 'auto' and epoch - last_meaningful_epoch >= patience_epochs
 
@@ -435,6 +605,8 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
     history.restore_best_weights(network)
     if not silent:
         print_training_summary(history, stopped_early=stop_condition == 'auto')
+        if task.uncertainties:
+            print_model_error(network)
     return history.train_losses, history.val_losses
 
 
@@ -456,6 +628,18 @@ def print_training_summary(history: TrainingHistory, stopped_early: bool) -> Non
         return
     print(f'Lowest validation loss {history.best_loss:.4f}, at epoch {history.best_epoch + 1} of {epochs}: the '
           'network from that epoch is kept')
+
+
+def print_model_error(network: ParrotArchitecture) -> None:
+    """Report a network's model error (with uncertainties), in the units of the values
+
+    Parameters
+    ----------
+    network : ParrotArchitecture
+        A network built for a task with uncertainties
+    """
+    print(f'Model error s = {float(model_error_of(network)):.4g}: the SD of the error in its predictions, beyond each '
+          "value's own SD (fitted on the validation set)")
 
 
 @full_float32_precision()
@@ -535,7 +719,10 @@ def fit_in_one_step(network: ParrotArchitecture, train_loader: DataLoader, val_l
     """
 
     start = time.perf_counter()
-    network.fit(train_loader)
+    if task.uncertainties:
+        fit_with_model_error(network, train_loader, val_loader, task, device)
+    else:
+        network.fit(train_loader)
     fitted = time.perf_counter()
     train_loss = evaluate_loss(network, train_loader, task, device)
     validating = time.perf_counter()
@@ -548,5 +735,42 @@ def fit_in_one_step(network: ParrotArchitecture, train_loader: DataLoader, val_l
 
     if not silent:
         print(f'Fitted in one step: validation loss {val_loss:.4f}')
+        if task.uncertainties:
+            print_model_error(network)
 
     return [train_loss], [val_loss]
+
+
+def fit_with_model_error(network: ParrotArchitecture, train_loader: DataLoader, val_loader: DataLoader, task: Task,
+                         device: str | torch.device) -> None:
+    """Fit a model fitted in one step to values with uncertainties, re-estimating its model error as it is refitted
+
+    The model is first fitted with every sequence weighted equally. Then, in
+    turn, the model error is fitted to the validation set (see
+    refit_model_error()) and the model refitted with weights
+    1 / (SD^2 + s^2), until the model error changes by less than
+    MODEL_ERROR_TOLERANCE (or after MAX_MODEL_ERROR_REFITS refits). The
+    model error is left fitted to the final model.
+
+    Parameters
+    ----------
+    network : ParrotArchitecture
+        A model fitted in one step, built for a task with uncertainties
+    train_loader, val_loader : DataLoader
+        Batches of the training and validation sets
+    task : Task
+        The task being trained
+    device : str or torch.device
+        Device the model's outputs are placed on
+    """
+    set_model_error(network, math.nan)
+    network.fit(train_loader)
+    previous = math.nan
+    for _ in range(MAX_MODEL_ERROR_REFITS):
+        refit_model_error(network, val_loader, task, device)
+        model_error = float(model_error_of(network))
+        if abs(model_error - previous) <= MODEL_ERROR_TOLERANCE * previous:
+            return
+        previous = model_error
+        network.fit(train_loader)
+    refit_model_error(network, val_loader, task, device)

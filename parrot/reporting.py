@@ -25,13 +25,16 @@ import numpy as np
 from parrot import figures
 from parrot.matrices import figures as matrix_figures
 from parrot.matrices.output import name_matrices, write_matrix_predictions
-from parrot.metrics import METRIC_DECIMALS, performance_metrics
+from parrot.metrics import METRIC_DECIMALS, performance_metrics, uncertainty_metrics
 from parrot.prediction import LabeledPredictions, output_to_prediction
 from parrot.process_input_data import missing_label_mask
 from parrot.tasks import Task
 
 # Number of decimal places used when writing class probabilities
 PROBABILITY_DECIMALS = 4
+
+# Significant figures of the model error s (with uncertainties), which is in the units of the values
+MODEL_ERROR_SIGNIFICANT_FIGURES = 4
 
 
 def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: str, probabilistic: bool = False,
@@ -47,7 +50,9 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
     predicted values along a few test sequences, and for matrix tasks
     "<output_prefix>_matrix_examples.png", heatmaps of a few test sequences).
     Warns if the network's output for any test sequence is not finite (see
-    warn_about_non_finite_outputs()).
+    warn_about_non_finite_outputs()). With uncertainties, the metrics include
+    how well the error model fits (see metrics.uncertainty_metrics), and the
+    statistics file also gives the model error s.
 
     Parameters
     ----------
@@ -87,9 +92,14 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
                           decimals=decimals)
 
     metrics = performance_metrics(labeled.true_values, predictions, task, probabilistic)
+    if task.uncertainties:
+        assert labeled.uncertainties is not None
+        metrics.update(uncertainty_metrics(labeled.true_values, labeled.uncertainties, predictions,
+                                           labeled.model_error))
     if write_stats:
         written.append(output_prefix + '_performance_stats.txt')
-        write_performance_metrics(metrics, written[-1])
+        write_performance_metrics(metrics, written[-1],
+                                  model_error=labeled.model_error if task.uncertainties else None)
 
     if include_figs:
         # Regression figures show the Pearson r of the metrics, so the two always agree
@@ -296,7 +306,7 @@ def write_unlabeled_predictions(names: Sequence[str] | None, sequences: Sequence
     return output_path
 
 
-def write_performance_metrics(metrics: dict[str, float], output_path: str) -> None:
+def write_performance_metrics(metrics: dict[str, float], output_path: str, model_error: float | None = None) -> None:
     """Write performance metrics as "<name> : <value>" lines
 
     Parameters
@@ -305,8 +315,14 @@ def write_performance_metrics(metrics: dict[str, float], output_path: str) -> No
         Metric names and values (see metrics.performance_metrics())
     output_path : str
         File to write
+    model_error : float, optional
+        With uncertainties, the network's model error s, written last (to
+        MODEL_ERROR_SIGNIFICANT_FIGURES significant figures, as it is in the
+        units of the values)
     """
 
     with open(output_path, 'w') as fh:
         for name, value in metrics.items():
             fh.write(f'{name} : {value:.{METRIC_DECIMALS}f}\n')
+        if model_error is not None:
+            fh.write(f'Model error s : {model_error:.{MODEL_ERROR_SIGNIFICANT_FIGURES}g}\n')

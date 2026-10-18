@@ -86,6 +86,12 @@ Learn a matrix for each sequence (e.g. a contact map) with a 2D U-Net:
 
     parrot-train unet2d --input-file data.tsv --output-network network.pt --split kmer --regression --matrix-file maps.npz --symmetric
 
+Train on values that each come with the standard deviation of their
+measurement error, written as 'value,SD' (e.g. 3.21,0.15), so that precise
+values count for more than noisy ones:
+
+    parrot-train brnn --input-file data.tsv --output-network network.pt --split kmer -d sequence --regression --uncertainties
+
 How it works
 ------------
 1. The datafile (--input-file) has '<ID> <sequence> <value(s)>' on each line:
@@ -107,13 +113,19 @@ How it works
    default). Protein language model and NARDINI encodings are slow to
    compute, so every sequence is encoded once before training, into a
    parrot_train_embeddings directory next to the network (or
-   --embedding-cache).
+   --embedding-cache). With --embedding-context and --embedding-context-map,
+   a protein language model embeds each sequence within the full-length
+   protein it was cut from, rather than on its own. --embed-mean-subtraction
+   subtracts each embedding's mean over its residues before it is stored.
 4. The network is trained for -e epochs (100 by default). After every epoch
    its loss on the validation set is measured, and the network from the epoch
    with the lowest validation loss is the one kept, so training for too long
    does no harm. With --stop auto, training instead ends once -e epochs in a
    row have not lowered the validation loss by at least 0.5%. The simple
    models (linear, svm, random_forest, knn) are fitted in one step instead.
+   With --uncertainties, each value is weighted by 1 / (SD^2 + s^2), where
+   the model error s, the error of the predictions beyond the values' own, is
+   fitted on the validation set after every epoch.
 5. The kept network is saved as --output-network (with '.pt' added if the
    name does not end with it); the file records its architecture,
    hyperparameters, task and encoding, so parrot-predict needs only the file.
@@ -233,11 +245,13 @@ On the CPU, printing nothing (e.g. in a script):
 
     parrot-predict sequences.txt network.pt predictions.txt --device cpu --silent
 
-From Python, one sequence at a time:
+From Python, one sequence at a time, or a list of sequences at once (as
+parrot-predict predicts them, and much faster than one at a time):
 
     from parrot import Predictor
     predictor = Predictor('network.pt')
     values = predictor.predict('MKVLAAGIVGLLLA')
+    all_values = predictor.predict_batch(['MKVLAAGIVGLLLA', 'MSDNEEGQSKRRQ'])
 
 How it works
 ------------
@@ -248,7 +262,11 @@ How it works
    stops the command before anything is predicted. Networks trained on a
    protein language model or NARDINI encoding then encode every sequence once,
    into a parrot_predict_embeddings directory next to the output (or
-   --embedding-cache).
+   --embedding-cache). A network trained with --embedding-context needs the
+   same two options (or --embed-in-isolation), so each sequence is embedded
+   within its full-length protein, as the training sequences were. A network
+   trained with --embed-mean-subtraction subtracts each embedding's mean
+   automatically.
 3. Sequences are predicted in batches of similar length (up to --batch, 64
    by default), and each unique sequence is predicted once.
 4. The output has one line per sequence of the sequence file, in the same
@@ -269,7 +287,8 @@ sequences, recode class labels, deal with duplicate sequences, split the data
 into training, validation and test sets with no leakage between them, and
 balance the classes of the training set. It writes the processed datafile, a
 matching split-file to train on with parrot-train --split, and a report of
-every step.
+every step. It can also compute a protein language model or NARDINI encoding
+of every sequence ahead of time.
 
 Examples
 --------
@@ -295,6 +314,24 @@ numbers 0, 1, ... that PARROT needs:
 
     parrot-preprocess data.tsv clean.tsv -d sequence -m classification --recode-classes
 
+Merge duplicate sequences whose values each come with the standard deviation
+of their measurement error ('value,SD'), weighting each copy by 1 / SD^2:
+
+    parrot-preprocess data.tsv clean.tsv -d sequence -m regression --uncertainties --deduplicate merge
+
+Split the data, then compute the ESM-2 embedding of every sequence of the
+output ahead of time, so that training on it starts straight away:
+
+    parrot-preprocess data.tsv clean.tsv -d sequence -m regression --split kmer --encode esm2_t33_650M_UR50D --embedding-cache embeddings
+    parrot-train cnn --input-file clean.tsv --output-network network.pt --split clean_split_file.txt -d sequence --regression --encode esm2_t33_650M_UR50D --embedding-cache embeddings
+
+Embed each peptide of a tiling library within the full-length protein it was
+cut from, rather than on its own. proteome.fasta holds the full-length
+proteins, and tile_map.tsv has a '<peptide ID> <protein ID> [start]' line per
+peptide. Give parrot-train the same two options:
+
+    parrot-preprocess tiles.tsv clean.tsv -d sequence -m regression --split kmer --encode esm2_t33_650M_UR50D --embedding-cache embeddings --embedding-context proteome.fasta --embedding-context-map tile_map.tsv
+
 How it works
 ------------
 The steps always run in this order, and each is optional:
@@ -309,6 +346,12 @@ The steps always run in this order, and each is optional:
    sequence in another set is removed (keeping test, then validation, then
    training sequences).
 5. Balancing the classes of the training set (--class-balance).
+6. Encoding every sequence of the output ahead of time (--encode, for protein
+   language model and NARDINI encodings), into the embedding cache that
+   parrot-train reads with --embedding-cache; with --embedding-context, within
+   each sequence's full-length protein (where each one is embedded is written
+   to <output>_embedded_context.tsv), and with --embed-mean-subtraction, with
+   each embedding's mean over its residues subtracted.
 
 Every step is recorded in <output>_preprocess_report.txt (-v also prints it),
 which ends by checking that parrot-train can read the output.

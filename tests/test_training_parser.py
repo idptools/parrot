@@ -78,7 +78,7 @@ def test_subcommands_offer_only_their_own_hyperparameters(architecture):
 def test_given_hyperparameters_are_collected_and_the_rest_take_defaults():
     args = parse(parrot_train, [*required_arguments('brnn'), '-hs', '7', '--attention-pooling-off'])
     assert training_parser.given_hyperparameters(args) == {'hidden_size': 7, 'attention_pooling': False}
-    assert training_parser.hyperparameters_from_args(args) == {'hidden_size': 7, 'num_layers': 1,
+    assert training_parser.hyperparameters_from_args(args) == {'hidden_size': 7, 'num_layers': 1, 'dropout': 0.0,
                                                                'attention_pooling': False,
                                                                'loglength_feedforward': True}
 

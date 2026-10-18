@@ -5,8 +5,10 @@ Every PARROT network maps a protein sequence to a single value
 (sequence-mapped data), to one value per residue (residue-mapped data), or to a
 matrix of values with one row per residue (matrix data; see parrot.matrices),
 and each value is either a class label (classification) or a real number
-(regression). A Task bundles these choices so that the rest of the code can
-pass around one object instead of separate datatype / problem-type /
+(regression). Regression values on sequences or residues can also come with an
+uncertainty: the standard deviation (SD) of each value's measurement error (see
+parrot/uncertainties.py). A Task bundles these choices so that the rest of the
+code can pass around one object instead of separate datatype / problem-type /
 number-of-classes arguments.
 
 This module also holds the conventions for missing labels, which every part of
@@ -34,6 +36,9 @@ VALID_DATATYPES = ('sequence', 'residues', 'matrix')
 # capitalisation is accepted.
 MISSING_LABEL_TEXT = 'nan'
 
+# Separates a value from its uncertainty (SD) in a datafile token, e.g. '3.21,0.15' (with --uncertainties)
+UNCERTAINTY_SEPARATOR = ','
+
 # Class label given to padded positions and to missing labels in residue and matrix classification data. This
 # matches the default ignore_index of torch.nn.CrossEntropyLoss, so these positions never contribute to the loss.
 IGNORED_CLASS_LABEL = -100
@@ -60,20 +65,26 @@ class Task:
         Square matrix tasks only: True if every map is symmetric (the value for
         residues i and j is the value for j and i, as in a contact map). Each
         pair is then counted once in the loss, and networks predict symmetric maps.
+    uncertainties : bool, optional
+        Sequence and residue regression only: True if every value comes with
+        the standard deviation of its measurement error, which training takes
+        into account (see parrot/uncertainties.py).
 
     Raises
     ------
     ValueError
         If `datatype` is not one of VALID_DATATYPES, `num_classes` is not a
         positive integer, `width` is given for a task that is not 'matrix' or
-        is not a positive integer, or `symmetric` is set for a task that is not
-        a square matrix task.
+        is not a positive integer, `symmetric` is set for a task that is not
+        a square matrix task, or `uncertainties` is set for a task that is not
+        sequence or residue regression.
     """
 
     datatype: str
     num_classes: int
     width: int | None = None
     symmetric: bool = False
+    uncertainties: bool = False
 
     def __post_init__(self) -> None:
         """Check the settings, raising ValueError as described above, and store num_classes and width as plain ints."""
@@ -96,6 +107,10 @@ class Task:
 
         if self.symmetric and not self.is_square:
             raise ValueError('Only square matrix tasks (one column per residue) can be symmetric')
+
+        if self.uncertainties and (self.is_classification or self.is_matrix):
+            raise ValueError('Uncertainties apply to sequence and residue regression only, not to classification or '
+                             'matrix data')
 
     @property
     def is_classification(self) -> bool:
@@ -130,10 +145,14 @@ class Task:
         if self.is_matrix:
             config['width'] = self.width
             config['symmetric'] = self.symmetric
+        # Only recorded when set, so networks trained without uncertainties are saved exactly as before
+        if self.uncertainties:
+            config['uncertainties'] = True
         return config
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> 'Task':
         """Rebuild a Task from the dictionary written by to_config()."""
         return cls(datatype=config['datatype'], num_classes=int(config['num_classes']), width=config.get('width'),
-                   symmetric=bool(config.get('symmetric', False)))
+                   symmetric=bool(config.get('symmetric', False)),
+                   uncertainties=bool(config.get('uncertainties', False)))

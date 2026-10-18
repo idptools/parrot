@@ -53,6 +53,7 @@ Bidirectional LSTM followed by a fully connected layer. For sequence data the LS
 
 	*  ``--hidden-size`` / ``-hs`` : size of the LSTM hidden vectors (default 10; searched over 5-50).
 	*  ``--num-layers`` / ``-nl`` : number of LSTM layers per direction (default 1; searched over 1-5).
+	*  ``--dropout`` : dropout probability, at least 0 and below 1, applied to the LSTM output (or final hidden states) the output layer sees and, with more than one layer, between layers (default 0.0; not searched, so that ``parrot-optimize`` searches the BRNN as it always has; give it to fix it at that value).
 	*  ``--attention-pooling-off`` : sequence data only; summarise the sequence by the final hidden states instead of attention pooling (see above).
 	*  ``--loglength-feedforward-off`` : sequence data only; do not give the output layer log(sequence length) (see above).
 

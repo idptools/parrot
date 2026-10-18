@@ -18,7 +18,8 @@ inherits according to the kind of architecture it is (argparse calls these
   rate and stop condition; parrot-optimize: the successive-halving settings);
 - architectures for matrix data: the matrix file, the shape of its matrices
   and the longest sequence allowed;
-- architectures for sequence or residue data: reporting class probabilities;
+- architectures for sequence or residue data: reporting class probabilities,
+  and (for those that support it) training on values with uncertainties;
 - the architecture's own hyperparameters, one flag each, from its declarations.
 
 Apart from each architecture's own hyperparameters, the parsed arguments of
@@ -54,12 +55,14 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
-from parrot import nardini, plm, train_network
+from parrot import plm, train_network
 from parrot import process_input_data as pid
 from parrot.architectures import (HyperParameter, HyperParameterValue, ParrotArchitecture, available_architectures,
                                   get_architecture, resolve_hyperparameters)
 from parrot.scripts.arguments import EXAMPLES_FLAG, RetiredOption
-from parrot.scripts.common import DEFAULT_MAX_MATRIX_LENGTH, add_device_arguments, add_embedding_cache_argument
+from parrot.scripts.common import (DEFAULT_MAX_MATRIX_LENGTH, add_device_arguments, add_embedding_cache_argument,
+                                   add_embed_mean_subtraction_argument, add_embedding_context_arguments,
+                                   add_nardini_scrambles_argument)
 from parrot.scripts.data_split import SPLIT_METHODS
 from parrot.scripts.examples import add_examples_argument
 
@@ -164,11 +167,13 @@ def add_architecture_command(commands: 'argparse._SubParsersAction[argparse.Argu
     trained_by_gradient_descent = architecture.trained_by_gradient_descent
     learns_matrices = 'matrix' in architecture.supported_datatypes
     learns_classes_of_sequences_or_residues = bool({'sequence', 'residues'} & set(architecture.supported_datatypes))
+    learns_values_with_uncertainties = learns_classes_of_sequences_or_residues and architecture.supports_uncertainties
 
     # Every option set, in the order the help lists them, and whether this architecture offers it
     option_sets = [
         (True, required_options(architecture)),
         (True, data_options(architecture)),
+        (learns_values_with_uncertainties, uncertainty_options()),
         (trained_by_gradient_descent, shared_training_loop_options()),
         *[(trained_by_gradient_descent, options) for options in training_loop_options],
         (True, hyperparameter_options(architecture, describe_search)),
@@ -324,10 +329,10 @@ def data_options(architecture: type[ParrotArchitecture]) -> argparse.ArgumentPar
                             'the amino acids (or other characters) it defines, so that features on different '
                             'scales contribute equally; saved with the network and applied automatically when '
                             'predicting')
-    group.add_argument('--nardini-scrambles', dest='nardini_scrambles', type=int, metavar='num_scrambles',
-                       help='NARDINI encodings only: scrambles of each sequence used for its patterning z-scores '
-                            f'(default {nardini.DEFAULT_NUM_SCRAMBLES:,}; the cost grows in proportion)')
+    add_nardini_scrambles_argument(group)
     add_embedding_cache_argument(group, plm.TRAIN_CACHE_DIRECTORY)
+    add_embedding_context_arguments(group)
+    add_embed_mean_subtraction_argument(group)
     return options
 
 
@@ -461,6 +466,23 @@ def matrix_options() -> argparse.ArgumentParser:
                        metavar='residues',
                        help='square maps only: refuse sequences longer than this, as memory grows with length^2 '
                             f'(default {DEFAULT_MAX_MATRIX_LENGTH})')
+    return options
+
+
+def uncertainty_options() -> argparse.ArgumentParser:
+    """--uncertainties (architectures for sequence or residue data that can weight their training values)
+
+    Returns
+    -------
+    argparse.ArgumentParser
+    """
+    options = argparse.ArgumentParser(add_help=False)
+    group = options.add_argument_group('data')
+    group.add_argument('--uncertainties', action='store_true',
+                       help="regression: every value in the datafile is written as 'value,SD', where SD is the "
+                            "standard deviation of its measurement error (a missing residue value is still 'nan'); "
+                            'training weights each value by its SD, and fits the error of the predictions beyond '
+                            "the values' own errors (the model error)")
     return options
 
 

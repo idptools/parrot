@@ -14,8 +14,9 @@ To predict with a network trained by ``parrot-train`` or ``parrot-optimize``, lo
 
     predictor = Predictor('network.pt')    # Predictor('network.pt', device='auto') uses a GPU if there is one
     values = predictor.predict('MKVLAAGIVGLLLA')
+    all_values = predictor.predict_batch(['MKVLAAGIVGLLLA', 'MSDNEEGQSKRRQ'])
 
-``predict`` takes one sequence at a time and returns a NumPy array: for regression, the predicted value (or one value per residue, or the predicted matrix); for classification, the probability of each class (for every residue or matrix cell, for residue and matrix networks).
+``predict`` takes one sequence at a time and returns a NumPy array: for regression, the predicted value (or one value per residue, or the predicted matrix); for classification, the probability of each class (for every residue or matrix cell, for residue and matrix networks). ``predict_batch`` takes a list of sequences and returns a list of these arrays, one per sequence in the same order. It predicts the sequences together, as ``parrot-predict`` does (every sequence is encoded first, then the network runs over batches of similar length), so for more than a handful of sequences it is much faster than ``predict`` on each. Its predictions match those of ``predict`` up to float32 rounding, not exactly: which sequences share a batch changes the order of the floating-point operations.
 
 Networks can also be built, trained and saved in Python, with the same functions the command-line tools use. For example, to train a CNN on one of the example datasets in the **/data** folder, split by the example split-file:
 
@@ -121,6 +122,12 @@ plm.py
 .. automodule:: parrot.plm
    :members:
 
+embedding_context.py
+--------------------
+
+.. automodule:: parrot.embedding_context
+   :members:
+
 nardini.py
 ----------
 
@@ -137,6 +144,12 @@ train_network.py
 ----------------
 
 .. automodule:: parrot.train_network
+   :members:
+
+uncertainties.py
+----------------
+
+.. automodule:: parrot.uncertainties
    :members:
 
 prediction.py

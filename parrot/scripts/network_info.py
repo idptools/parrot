@@ -40,6 +40,7 @@ from parrot.package_version import PARROT_VERSION
 from parrot.sequence_encoder import SequenceEncoder
 from parrot.tasks import IGNORED_CLASS_LABEL, Task
 from parrot.train_network import TrainingTiming
+from parrot.uncertainties import model_error_of
 
 if TYPE_CHECKING:
     from parrot.scripts.common import TrainingRun
@@ -206,6 +207,13 @@ def data_section(run: 'TrainingRun') -> Section:
         entries.append(('matrices', f'{"square maps" if task.width is None else f"{task.width} columns"}'
                                     f'{", symmetric" if task.symmetric else ""}'))
     entries.append(describe_values(task, [value for dataset in datasets for value in dataset.values]))
+    if task.uncertainties:
+        every_sd = [sds for dataset in datasets for sds in dataset.uncertainties or []]
+        entries.append(describe_uncertainties(task, every_sd))
+    if run.context is not None:
+        entries += [('embedding context', f'{run.context.library_file} (SHA-256 {file_sha256(run.context.library_file)})'),
+                    ('embedding context map', f'{run.context.map_file} (SHA-256 {file_sha256(run.context.map_file)})'),
+                    ('embedded in context', run.context.describe())]
     return Section('Data', entries)
 
 
@@ -229,9 +237,11 @@ def file_sha256(path: str) -> str:
 
 
 def describe_task(task: Task) -> str:
-    """'regression', or 'classification into N classes (labelled 0 to N-1)'."""
+    """'regression', 'regression with uncertainties' or 'classification into N classes (labelled 0 to N-1)'."""
     if task.is_classification:
         return f'classification into {task.num_classes} classes (labelled 0 to {task.num_classes - 1})'
+    if task.uncertainties:
+        return "regression with uncertainties (each value given with the SD of its measurement error)"
     return 'regression'
 
 
@@ -269,6 +279,31 @@ def describe_values(task: Task, values: Sequence[Any]) -> tuple[str, str]:
     if missing.any():
         description += f'; {int(missing.sum()):,} missing ({unit} labels written as nan, which are ignored)'
     return ('classes' if task.is_classification else 'values', description)
+
+
+def describe_uncertainties(task: Task, sds: Sequence[Any]) -> tuple[str, str]:
+    """The SDs of the values' measurement errors (with uncertainties), summarized: median and range
+
+    Parameters
+    ----------
+    task : Task
+    sds : list
+        Every sequence's SD(s), as stored in the datasets (NaN for a missing value)
+
+    Returns
+    -------
+    (str, str)
+        A 'name : value' entry
+    """
+    pooled = np.concatenate([np.ravel(np.asarray(sd, dtype=float)) for sd in sds])
+    known = pooled[~np.isnan(pooled)]
+    unit = 'sequence' if task.datatype == 'sequence' else 'residue'
+    description = (f"SD of each {unit}'s value (its measurement error): median {np.median(known):.4g}, range "
+                   f'{known.min():.4g} to {known.max():.4g}')
+    exact = int(np.sum(known == 0))
+    if exact:
+        description += f'; {exact:,} with an SD of 0'
+    return ('uncertainties', description)
 
 
 def encoding_section(encoder: SequenceEncoder) -> Section:
@@ -357,14 +392,23 @@ def training_section(network: ParrotArchitecture, run: 'TrainingRun', training: 
     Section
     """
     if not network.trained_by_gradient_descent:
+        if run.task.uncertainties:
+            return Section('Training', [('training', 'fitted in one step to the training set, each sequence weighted '
+                                                     'by 1 / (SD^2 + s^2), and refitted as the model error s was '
+                                                     're-estimated on the validation set'),
+                                        model_error_entry(network)])
         return Section('Training', [('training', 'fitted in one step to the training set; the validation set is '
                                                  'only used to report the validation loss')])
 
     best = best_epoch(val_losses)
     epochs = training['epochs']
+    if run.task.uncertainties:
+        improvement = f'{train_network.AUTO_STOP_LOG_LIKELIHOOD_IMPROVEMENT:.4f} per labelled value'
+    else:
+        improvement = f'{100 * train_network.AUTO_STOP_RELATIVE_IMPROVEMENT:g}%'
     stop = (f'after {epochs} epochs' if training['stop'] == 'iter' else
-            f'once the validation loss had not improved by at least '
-            f'{100 * train_network.AUTO_STOP_RELATIVE_IMPROVEMENT:g}% for {epochs} epochs in a row (--stop auto)')
+            f'once the validation loss had not improved by at least {improvement} for {epochs} epochs in a row '
+            '(--stop auto)')
     entries = [('loss', describe_loss(run.task)),
                ('optimizer', describe_optimizer(training['learning_rate'])),
                ('batch size', f'{run.batch_size} sequences'),
@@ -376,7 +420,26 @@ def training_section(network: ParrotArchitecture, run: 'TrainingRun', training: 
         entries += [('epoch kept', f'{best + 1}, the epoch with the lowest validation loss (the network after each '
                                    'epoch is evaluated on the validation set)'),
                     ('training loss at that epoch', f'{train_losses[best]:.4f}')]
+    if run.task.uncertainties:
+        entries.append(model_error_entry(network))
     return Section('Training', entries)
+
+
+def model_error_entry(network: ParrotArchitecture) -> tuple[str, str]:
+    """The network's model error s (with uncertainties), as a 'name : value' entry
+
+    Parameters
+    ----------
+    network : ParrotArchitecture
+        A network trained with uncertainties
+
+    Returns
+    -------
+    (str, str)
+    """
+    return ('model error', f"s = {float(model_error_of(network)):.4g}: the SD of the error in the network's "
+                           "predictions beyond each value's own SD, fitted by maximum likelihood to the residuals "
+                           'on the validation set (after every epoch, for networks trained by gradient descent)')
 
 
 def best_epoch(val_losses: Sequence[float]) -> int | None:
@@ -389,6 +452,11 @@ def best_epoch(val_losses: Sequence[float]) -> int | None:
 
 def describe_loss(task: Task) -> str:
     """The loss function training minimizes (see train_network.build_loss_criterion)."""
+    if task.uncertainties:
+        where = 'over the sequences' if task.datatype == 'sequence' else 'over every labelled residue'
+        return ('Gaussian negative log-likelihood of each value given its prediction, with variance SD^2 + s^2 (the '
+                "value's own SD and the model error s), so each value is weighted by 1 / (SD^2 + s^2); summed "
+                f'{where} of a batch, and reported as the average per sequence')
     if task.is_classification:
         loss = 'cross-entropy'
     elif task.datatype == 'sequence':

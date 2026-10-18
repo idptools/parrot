@@ -13,6 +13,7 @@ https://github.com/idptools/parrot
 Licensed under the MIT license.
 """
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -27,6 +28,16 @@ from parrot.matrices.data import unpad_matrix_outputs
 from parrot.sequence_encoder import SequenceEncoder
 from parrot.tasks import Task
 from parrot.train_network import build_loss_criterion, compute_batch_loss, sum_batch_losses
+from parrot.uncertainties import model_error_of
+
+# Sequences run through the network at once by default (parrot-predict's --batch, and Predictor.predict_batch()).
+# Padding is masked, so the batch changes the predictions only by float32 rounding (it changes the order of the
+# floating-point operations); mainly it sets speed and memory, so a network that only fit in memory with a smaller
+# batch when it was trained may need a smaller batch here too.
+DEFAULT_PREDICTION_BATCH = 64
+
+# By default, progress is printed every this many sequences
+DEFAULT_PRINT_FREQUENCY = 1000
 
 
 @dataclass
@@ -50,6 +61,12 @@ class LabeledPredictions:
         (classification outputs are logits)
     loss : float
         Average loss per sequence, computed with the training loss function
+    uncertainties : list of numpy arrays or None
+        With uncertainties, the SD of each true value (in the same form as
+        true_values, NaN where a value is missing); otherwise None
+    model_error : float
+        With uncertainties, the network's model error s (see
+        parrot/uncertainties.py); otherwise NaN
     """
 
     names: list[str]
@@ -57,6 +74,8 @@ class LabeledPredictions:
     true_values: list[np.ndarray]
     outputs: list[np.ndarray]
     loss: float
+    uncertainties: list[np.ndarray] | None = None
+    model_error: float = math.nan
 
 
 def unpad_outputs(outputs: torch.Tensor, lengths: torch.Tensor, task: Task) -> list[np.ndarray]:
@@ -103,14 +122,15 @@ def predict_labeled(network: nn.Module, dataset: pid.SequenceDataset, task: Task
     device : str or torch.device
         Device the network lives on
     batch_size : int, optional
-        Number of sequences evaluated at once (does not affect the results)
+        Number of sequences evaluated at once (changes the results only by
+        float32 rounding)
 
     Returns
     -------
     LabeledPredictions
     """
 
-    # Sequences are batched by length (which only affects speed), so the outputs come
+    # Sequences are batched by length (for speed), so the outputs come
     # out in the batch sampler's order and are put back into dataset order at the end
     loader = pid.make_dataloader(dataset, task, batch_size, shuffle=False, batching='length')
     assert loader.batch_sampler is not None
@@ -130,14 +150,17 @@ def predict_labeled(network: nn.Module, dataset: pid.SequenceDataset, task: Task
     for index, output in zip(loader_order, outputs_in_loader_order, strict=True):
         outputs[index] = output
 
+    sds = dataset.uncertainties if task.uncertainties else None
     return LabeledPredictions(names=dataset.names, sequences=dataset.sequences,
                               true_values=[np.asarray(value) for value in dataset.values],
-                              outputs=outputs, loss=sum_batch_losses(batch_losses) / len(dataset))
+                              outputs=outputs, loss=sum_batch_losses(batch_losses) / len(dataset),
+                              uncertainties=None if sds is None else [np.asarray(sd) for sd in sds],
+                              model_error=float(model_error_of(network)) if task.uncertainties else math.nan)
 
 
 @full_float32_precision()
 def predict_sequences(network: ParrotArchitecture, sequences: list[str], encoder: SequenceEncoder,
-                      device: str | torch.device, batch_size: int = 64,
+                      device: str | torch.device, batch_size: int = DEFAULT_PREDICTION_BATCH,
                       print_frequency: int | None = None) -> dict[str, np.ndarray]:
     """Run a trained network over unlabeled sequences
 
@@ -152,8 +175,9 @@ def predict_sequences(network: ParrotArchitecture, sequences: list[str], encoder
     device : str or torch.device
         Device the network lives on
     batch_size : int, optional
-        Number of sequences run through the network at once (does not affect
-        the results, since padding is masked)
+        Number of sequences run through the network at once. Padding is
+        masked, so it changes the results only by float32 rounding (it changes
+        the order of the floating-point operations).
     print_frequency : int, optional
         If given, print a progress update every `print_frequency` sequences
 

@@ -58,7 +58,6 @@ Licensed under the MIT license.
 
 import os
 import re
-import time
 import warnings
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -67,7 +66,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from parrot.plm import EmbeddingCache, write_cache_readme
+from parrot.plm import EmbeddingCache, progress_bar, write_cache_readme
 from parrot.sequence_encoder import STANDARD_AMINO_ACIDS, SequenceEncoder
 from parrot.tasks import Task
 
@@ -288,8 +287,14 @@ class NardiniEncoder(SequenceEncoder):
                 'patterning_backend': PATTERNING_BACKEND, 'feature_names': feature_names(),
                 'sparrow_version': self.trained_with_sparrow or sparrow_version()}
 
-    def use_cache(self, directory: str | Path) -> None:
-        """Store and read features in `directory` (an embedding cache)."""
+    def use_cache(self, directory: str | Path | None) -> None:
+        """Store and read features in `directory` (an embedding cache), or, if it is None, in no cache (closing any
+        cache in use, which is left as it is on disk; features already read stay in memory)."""
+        if self.cache is not None:
+            self.cache.close()
+        if directory is None:
+            self.cache = None
+            return
         self.cache = EmbeddingCache(directory, self.cache_name, NUM_FEATURES, per_residue=False,
                                     storage_dtype=FEATURE_DTYPE)
 
@@ -355,12 +360,12 @@ class NardiniEncoder(SequenceEncoder):
                 processes = NUM_PROCESSES if len(missing) >= MIN_SEQUENCES_FOR_PARALLEL else 1
                 print(f'Computing {len(missing):,} sequences on {processes} CPU core(s)')
 
-        start = time.monotonic()
-        for first in range(0, len(missing), SEQUENCES_PER_CACHE_WRITE):
-            group = missing[first:first + SEQUENCES_PER_CACHE_WRITE]
-            self.cache.write(compute_features(group, self.num_scrambles, self.seed))
-            if not silent and len(missing) > SEQUENCES_PER_CACHE_WRITE:
-                print_progress(first + len(group), len(missing), time.monotonic() - start)
+        if missing:
+            with progress_bar(len(missing), 'sequences', 'Computing NARDINI+ features', silent) as progress:
+                for first in range(0, len(missing), SEQUENCES_PER_CACHE_WRITE):
+                    group = missing[first:first + SEQUENCES_PER_CACHE_WRITE]
+                    self.cache.write(compute_features(group, self.num_scrambles, self.seed))
+                    progress.update(len(group))
 
         write_cache_readme(self.cache.directory, program)
 
@@ -445,22 +450,6 @@ def check_task(encoder: SequenceEncoder, task: Task) -> None:
     if isinstance(encoder, NardiniEncoder) and task.datatype != 'sequence':
         raise ValueError(f"NARDINI+ features describe whole sequences, so --encode {encoder.name} is for "
                          f"sequence-mapped data (-d sequence), not '{task.datatype}' data")
-
-
-def print_progress(done: int, total: int, elapsed_seconds: float) -> None:
-    """Print how many sequences' features have been computed, and roughly how long the rest will take
-
-    Parameters
-    ----------
-    done, total : int
-        Sequences computed so far, and in total
-    elapsed_seconds : float
-    """
-    message = f'  computed {done:,} of {total:,} sequences'
-    if elapsed_seconds > 0:
-        remaining_minutes = (total - done) * elapsed_seconds / done / 60
-        message += f' (about {remaining_minutes:.1f} min left)'
-    print(message)
 
 
 def encoder_from_nardini_config(config: dict[str, Any], residue_encoder: SequenceEncoder | None) -> NardiniEncoder:

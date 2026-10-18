@@ -10,6 +10,7 @@ Welcome to PARROT's documentation!
    usage/parrot-train
    usage/architectures
    usage/matrix_data
+   usage/uncertainties
    usage/plm_encodings
    usage/nardini_encoding
    usage/parrot-optimize

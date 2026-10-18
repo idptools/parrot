@@ -24,6 +24,7 @@ dependencies = [
     "torch>=2.8",
     "scikit-learn",
     "matplotlib",
+    "tqdm",
 ]
 
 [project.optional-dependencies]
@@ -79,7 +80,7 @@ files = ["parrot"]
 
 # These packages do not ship type information
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "h5py", "transformers", "esm.*", "versioningit", "sparrow", "sparrow.*"]
+module = ["sklearn.*", "h5py", "transformers", "esm.*", "versioningit", "sparrow", "sparrow.*", "tqdm"]
 ignore_missing_imports = true
 
 [tool.versioningit]

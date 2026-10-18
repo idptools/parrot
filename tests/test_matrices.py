@@ -463,8 +463,14 @@ def test_predict_refuses_repeated_matrix_ids_before_predicting(run_cli, tmp_path
 def test_predictor_returns_a_matrix(run_cli, tmp_path):
     datafile, matrix_file = write_command_data(tmp_path)
     train_matrix(run_cli, datafile, matrix_file, tmp_path / 'net.pt', 1, '--symmetric')
-    predicted = Predictor(tmp_path / 'net.pt').predict('ACDEFG')
+    predictor = Predictor(tmp_path / 'net.pt')
+    predicted = predictor.predict('ACDEFG')
     assert predicted.shape == (6, 6) and np.allclose(predicted, predicted.T)
+
+    # predict_batch() gives each sequence's matrix (up to float32 rounding) when batched with other lengths
+    batch = predictor.predict_batch(['ACDEFG', 'KLMNPQRSTV', 'WY'], batch_size=2)
+    assert [matrix.shape for matrix in batch] == [(6, 6), (10, 10), (2, 2)]
+    np.testing.assert_allclose(batch[0], predicted, rtol=1e-5, atol=1e-6)
 
 
 def test_preprocess_splits_matrix_data(run_cli, tmp_path):

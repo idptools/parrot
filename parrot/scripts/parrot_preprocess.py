@@ -9,10 +9,14 @@ data into training, validation and test sets without leakage between them
 k-mer search; or at random, keeping identical sequences together), and balance
 the classes (of the training set only, if the data were split). It writes the
 processed datafile, a matching split-file (if the data were split) and a report
-of everything it did.
+of everything it did. It can also compute a protein language model or NARDINI
+encoding of every sequence of the output ahead of time, into the embedding
+cache that parrot-train, parrot-optimize and parrot-predict read (protein
+language model embeddings optionally within the full-length proteins the
+sequences were cut from, with --embedding-context).
 
 Each step is one function below, run in this order by run(): read, clean,
-recode, deduplicate, split, balance, write.
+recode, deduplicate, split, balance, write, encode.
 
 For more information on usage, use the '-h' flag.
 
@@ -34,15 +38,23 @@ from datetime import datetime
 from typing import Any
 
 import numpy as np
+import torch
 
-from parrot import process_input_data
+from parrot import nardini, plm, process_input_data
+from parrot.encode_sequence import get_encoder
 from parrot.matrices.data import read_matrix_file
 from parrot.package_version import PARROT_VERSION
 from parrot.reproducibility import random_generator, set_random_seed
 from parrot.scripts import arguments
 from parrot.scripts.examples import add_examples_argument
-from parrot.scripts.common import COMMAND_LINE_DATATYPES, LEGACY_NOTE
-from parrot.tasks import Task
+from parrot.embedding_context import ContextAssignment
+from parrot.scripts.common import (COMMAND_LINE_DATATYPES, LEGACY_NOTE, add_device_arguments, add_embedding_cache_argument,
+                                   add_embed_mean_subtraction_argument, add_embedding_context_arguments,
+                                   add_nardini_scrambles_argument,
+                                   check_embedding_context_arguments, place_in_context, prepare_encoding,
+                                   select_device, write_context_table)
+from parrot.sequence_encoder import SequenceEncoder
+from parrot.tasks import UNCERTAINTY_SEPARATOR, Task
 from parrot.tools import class_balancing, kmer_similarity, mmseqs_search, preproc, splitting
 from parrot.tools.preproc import Line, ProcessingReport
 
@@ -64,6 +76,12 @@ MANY_CLASSES = 100
 # The fewest classes PARROT trains on (as parrot-train's --num-classes requires), used when checking the output
 MIN_CLASSES = 2
 
+# The report is written to <output prefix> + this
+REPORT_SUFFIX = '_preprocess_report.txt'
+
+# --device's default (see common.add_device_arguments)
+DEFAULT_DEVICE = 'auto'
+
 
 # .................................................................
 # Arguments
@@ -78,7 +96,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=PROGRAM_NAME, description='parrot-preprocess cleans, deduplicates, splits (without leakage between sets) and class-balances '
                     'a PARROT datafile, writing a processed datafile, a matching split-file (with --split) and a '
-                    'report.')
+                    'report. With --encode, it also computes a protein language model or NARDINI encoding of every '
+                    'sequence of the output ahead of time, into the embedding cache parrot-train reads.')
     add_examples_argument(parser, PROGRAM_NAME)
     add_input_arguments(parser)
     add_cleaning_arguments(parser)
@@ -86,6 +105,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_splitting_arguments(parser)
     add_balancing_arguments(parser)
     add_matrix_arguments(parser)
+    add_encoding_arguments(parser)
     return parser
 
 
@@ -102,6 +122,10 @@ def add_input_arguments(parser: argparse.ArgumentParser) -> None:
                         help="REQUIRED. 'classification' (the values are class labels) or 'regression'")
     parser.add_argument('--delimiter', type=str, metavar='character',
                         help='the character separating the columns of the datafile (default: any whitespace)')
+    parser.add_argument('--uncertainties', action='store_true',
+                        help="regression: every value is written as 'value,SD', where SD is the standard deviation "
+                             "of its measurement error (a missing residue value is still 'nan'); --deduplicate merge "
+                             'then weights each copy by 1 / SD^2 and gives the merged value its own SD')
     parser.add_argument('-v', '--verbose', action='store_true', help='print the report of what was done as it happens')
     parser.add_argument('--seed', type=int, default=None, metavar='seed',
                         help='random seed, for a reproducible split and class balancing (default: not seeded)')
@@ -212,6 +236,22 @@ def add_matrix_arguments(parser: argparse.ArgumentParser) -> None:
                        help='every matrix has N columns (default: one per residue); used when checking the output')
 
 
+def add_encoding_arguments(parser: argparse.ArgumentParser) -> None:
+    """Encoding every sequence of the output ahead of time, into the embedding cache the other commands read."""
+    group = parser.add_argument_group('encoding ahead of time (protein language model and NARDINI encodings)')
+    group.add_argument('--encode', metavar='encoding_scheme',
+                       help="compute this encoding of every sequence of the output, into the embedding cache, so "
+                            "that parrot-train, parrot-optimize and parrot-predict given the same --embedding-cache "
+                            "read it instead of computing it: a protein language model (e.g. 'esm2_t33_650M_UR50D') "
+                            "or, for sequence data, a NARDINI encoding (e.g. 'nardini' or 'onehot+nardini'). Other "
+                            "encodings are quick to compute, so they are never stored")
+    add_nardini_scrambles_argument(group)
+    add_embedding_cache_argument(group, plm.TRAIN_CACHE_DIRECTORY)
+    add_embedding_context_arguments(group)
+    add_embed_mean_subtraction_argument(group)
+    add_device_arguments(group)
+
+
 def check_arguments(args: argparse.Namespace) -> None:
     """Check the options before reading any data
 
@@ -230,6 +270,12 @@ def check_arguments(args: argparse.Namespace) -> None:
         If the input datafile, the --groups file or the --matrix-file does not exist
     """
     arguments.check_file_exists(args.input_data_file, 'Datafile')
+    if args.uncertainties:
+        if args.mode != 'regression' or args.datatype == 'matrix':
+            raise ValueError('--uncertainties applies to sequence and residue regression only (-m regression)')
+        if args.delimiter == UNCERTAINTY_SEPARATOR:
+            raise ValueError(f"With --uncertainties each value is written as 'value{UNCERTAINTY_SEPARATOR}SD', so the "
+                             f"columns cannot also be separated by '{UNCERTAINTY_SEPARATOR}' (--delimiter)")
     if args.recode_classes and args.mode != 'classification':
         raise ValueError('--recode-classes only applies to classification data (-m classification)')
     if args.class_balance and args.mode != 'classification':
@@ -295,6 +341,55 @@ def check_matrix_options(args: argparse.Namespace) -> None:
                              'matrix file); cleaning, removing duplicates and splitting do')
     if args.matrix_file is not None:
         arguments.check_file_exists(args.matrix_file, 'Matrix file')
+
+
+def encoder_from_arguments(args: argparse.Namespace) -> SequenceEncoder | None:
+    """The encoding to compute ahead of time (--encode), after checking the options that go with it
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed arguments
+
+    Returns
+    -------
+    SequenceEncoder or None
+        A protein language model or NARDINI encoder, or None if --encode was not given
+
+    Raises
+    ------
+    ValueError
+        If an encoding option is given without --encode, --encode names an encoding that is never stored in an
+        embedding cache, or an option does not apply to the encoding or the datatype
+    FileNotFoundError
+        If --encode is neither a built-in encoding nor a file
+    """
+    device_options = (('--device', args.device != DEFAULT_DEVICE), ('--gpu-id', args.gpu_id is not None))
+    if args.encode is None:
+        for flag, given in (('--embedding-cache', args.embedding_cache is not None),
+                            ('--nardini-scrambles', args.nardini_scrambles is not None),
+                            ('--embedding-context', args.embedding_context is not None),
+                            ('--embedding-context-map', args.embedding_context_map is not None),
+                            ('--embed-mean-subtraction', args.embed_mean_subtraction), *device_options):
+            if given:
+                raise ValueError(f'{flag} only applies with --encode, which computes an encoding ahead of time')
+        return None
+
+    encoder = get_encoder(args.encode, nardini_scrambles=args.nardini_scrambles,
+                          mean_subtracted=args.embed_mean_subtraction)
+    if not isinstance(encoder, plm.PLMEncoder | nardini.NardiniEncoder):
+        raise ValueError(f"--encode {args.encode} is quick to compute, so PARROT computes it as it is needed and never "
+                         'stores it: only protein language model and NARDINI encodings are computed ahead of time')
+
+    # NARDINI features describe whole sequences; only the datatype matters to this check
+    nardini.check_task(encoder, Task(args.datatype, 1))
+    check_embedding_context_arguments(args, encoder)
+    if isinstance(encoder, nardini.NardiniEncoder):
+        for flag, given in device_options:
+            if given:
+                raise ValueError(f'{flag} only applies to protein language model encodings: NARDINI features are '
+                                 'computed on the CPU')
+    return encoder
 
 
 def check_options_match_split_method(args: argparse.Namespace) -> None:
@@ -374,6 +469,9 @@ def run() -> None:
     args = build_parser().parse_args()
     arguments.print_header(PROGRAM_NAME, silent=False)
     check_arguments(args)
+    encoder = encoder_from_arguments(args)
+    # Resolved now, so that a device that is not available stops the command before any work is done
+    device = select_device(args) if isinstance(encoder, plm.PLMEncoder) else torch.device('cpu')
     set_random_seed(args.seed)
     rng = random_generator()
 
@@ -382,7 +480,8 @@ def run() -> None:
     classification = args.mode == 'classification'
     report = ProcessingReport(verbose=args.verbose)
     report.add(f'{PROGRAM_NAME} (PARROT {PARROT_VERSION}), {datetime.now().isoformat(timespec="seconds")}')
-    report.add(f'Input: {os.path.abspath(args.input_data_file)} ({args.datatype}-mapped {args.mode})')
+    report.add(f'Input: {os.path.abspath(args.input_data_file)} ({args.datatype}-mapped {args.mode}'
+               + (', with uncertainties)' if args.uncertainties else ')'))
 
     lines = read_lines(args, report)
     lines = clean(lines, args, report)
@@ -391,7 +490,15 @@ def run() -> None:
     lines = remove_duplicates(lines, args, classification, report)
     lines, splits = split(lines, before_deduplication, args, rng, report)
     lines, splits = balance_classes(lines, splits, args, output_prefix, report)
+    context = None
+    if encoder is not None:
+        # A sequence the encoding cannot read, or one that cannot be placed in its full-length protein, stops the
+        # command before anything is written
+        encoder.check_sequences(line[1] for line in lines)
+        context = place_in_context(args, encoder, [line[0] for line in lines], [line[1] for line in lines])
     write_outputs(lines, splits, args, output, output_prefix, classification, report)
+    if encoder is not None:
+        encode_ahead_of_time(lines, encoder, device, args, output, output_prefix, report, context)
 
 
 def read_lines(args: argparse.Namespace, report: ProcessingReport) -> list[Line]:
@@ -583,7 +690,7 @@ def remove_duplicates(lines: list[Line], args: argparse.Namespace, classificatio
     if deduplication is not None:
         report.section(f'Duplicate sequences ({deduplication})')
         first_report_line = len(report.lines)
-        lines = preproc.deduplicate(lines, deduplication, args.datatype, classification, report)
+        lines = preproc.deduplicate(lines, deduplication, args.datatype, classification, report, args.uncertainties)
         check_lines_remain(lines, 'Removing duplicates', report.lines[first_report_line:])
     return lines
 
@@ -900,16 +1007,81 @@ def write_outputs(lines: list[Line], splits: list[str] | None, args: argparse.Na
     if args.datatype == 'matrix':
         check_matrix_output(output, split_file if splits is not None else None, args, report)
     else:
-        check_output(output, split_file if splits is not None else None, args.datatype, classification, report)
+        check_output(output, split_file if splits is not None else None, args.datatype, classification, report,
+                     args.uncertainties)
 
-    report_file = output_prefix + '_preprocess_report.txt'
+    report_file = output_prefix + REPORT_SUFFIX
     report.write(report_file)
     if not args.verbose:
         print(f'Wrote {output}' + (f', {split_file}' if splits is not None else '') + f' and {report_file}')
 
 
+def encode_ahead_of_time(lines: list[Line], encoder: SequenceEncoder, device: torch.device, args: argparse.Namespace,
+                         output: str, output_prefix: str, report: ProcessingReport,
+                         context: ContextAssignment | None = None) -> None:
+    """Compute the encoding of every sequence of the output into the embedding cache, and add this to the report
+
+    With --embedding-context, the table of where each sequence is embedded
+    (<output>_embedded_context.tsv) is written first.
+
+    The encoding is computed exactly as parrot-train computes it before training (common.prepare_encoding()), so
+    parrot-train, parrot-optimize and parrot-predict given the same --embedding-cache find every sequence already
+    there. It runs after the output is written, so that a long encoding that stops part of the way (e.g. when the
+    disk fills) loses none of the preprocessing; the cache keeps what was computed. The report, which
+    write_outputs() has already written, is written again with this step added.
+
+    Parameters
+    ----------
+    lines : list
+        The lines written to the output
+    encoder : SequenceEncoder
+        A protein language model or NARDINI encoder
+    device : torch.device
+        Device to run a protein language model on
+    args : argparse.Namespace
+    output : str
+        The processed datafile
+    output_prefix : str
+    report : ProcessingReport
+    context : ContextAssignment, optional
+        With --embedding-context, where each sequence is embedded (already given to the encoder)
+    """
+    sequences = [line[1] for line in lines]
+    default_directory = os.path.join(os.path.dirname(output), plm.TRAIN_CACHE_DIRECTORY)
+    directory = os.path.abspath(args.embedding_cache if args.embedding_cache is not None else default_directory)
+    table_file = write_context_table(context, output_prefix, silent=False) if context is not None else None
+    prepare_encoding(encoder, sequences, args.embedding_cache, default_directory, device, PROGRAM_NAME, silent=False)
+
+    # The options parrot-train needs to find these encodings in the cache
+    encode_flags = f'--encode {args.encode}'
+    if args.nardini_scrambles is not None:
+        encode_flags += f' --nardini-scrambles {args.nardini_scrambles}'
+    if args.embed_mean_subtraction:
+        encode_flags += ' --embed-mean-subtraction'
+    encoding = f'{encoder.name} (mean-subtracted)' if args.embed_mean_subtraction else encoder.name
+
+    report.section('Encoding ahead of time')
+    if context is None:
+        report.add(f'Every sequence of the output ({len(set(sequences)):,} unique) has its {encoding} encoding in '
+                   f'the embedding cache {directory}')
+        report.add(f'To use it, give parrot-train or parrot-optimize {encode_flags} --embedding-cache {directory} '
+                   '(parrot-predict needs only --embedding-cache)')
+    else:
+        context_flags = (f'--embedding-context {args.embedding_context} --embedding-context-map '
+                         f'{args.embedding_context_map}')
+        report.add(f'Every sequence of the output ({len(set(sequences)):,} unique) has its {encoding} embedding '
+                   f'in the embedding cache {directory}: {context.describe()}')
+        report.add(f'Where each sequence is embedded is written to {table_file}')
+        report.add(f'To use it, give parrot-train or parrot-optimize {encode_flags} --embedding-cache {directory} '
+                   f'{context_flags} (parrot-predict needs --embedding-cache and the same two --embedding-context '
+                   'options)')
+    report.write(output_prefix + REPORT_SUFFIX)
+    if not args.verbose:
+        print('\n' + report.lines[-1])
+
+
 def check_output(datafile: str, split_file: str | None, datatype: str, classification: bool,
-                 report: ProcessingReport) -> None:
+                 report: ProcessingReport, uncertainties: bool = False) -> None:
     """Check PARROT can read what was written, recording the result (a warning, not an error, if it cannot)
 
     Parameters
@@ -919,6 +1091,8 @@ def check_output(datafile: str, split_file: str | None, datatype: str, classific
     datatype : str
     classification : bool
     report : ProcessingReport
+    uncertainties : bool, optional
+        True if every value is written as 'value,SD' (regression only)
     """
     lines = process_input_data.read_tsv_raw(datafile)
     try:
@@ -931,7 +1105,8 @@ def check_output(datafile: str, split_file: str | None, datatype: str, classific
             num_classes = max(int(largest) + 1, MIN_CLASSES)
         else:
             num_classes = 1
-        data = process_input_data.parse_file(datafile, Task(datatype, num_classes), ignore_warnings=True)
+        data = process_input_data.parse_file(datafile, Task(datatype, num_classes, uncertainties=uncertainties),
+                                             ignore_warnings=True)
         if split_file is not None:
             process_input_data.read_split_file(split_file, num_samples=len(data))
     except ValueError as error:
@@ -941,7 +1116,8 @@ def check_output(datafile: str, split_file: str | None, datatype: str, classific
         print(report.lines[-1])
         return
     report.add(f'Checked: PARROT reads the output as {datatype}-mapped '
-               + (f'classification data with {num_classes} classes' if classification else 'regression data')
+               + (f'classification data with {num_classes} classes' if classification else
+                  'regression data with uncertainties' if uncertainties else 'regression data')
                + (', and the split-file matches it' if split_file is not None else ''))
 
 

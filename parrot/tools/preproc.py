@@ -27,6 +27,7 @@ import numpy as np
 from parrot import process_input_data as pid
 from parrot.sequence_encoder import STANDARD_AMINO_ACIDS
 from parrot.tools.splitting import SET_NAMES
+from parrot.uncertainties import combine_measurements
 
 # A datafile line, split into fields: [ID, sequence, value, value, ...]
 Line = list[str]
@@ -217,7 +218,7 @@ class MergeSummary:
 
 
 def deduplicate(lines: list[Line], mode: str, datatype: str, classification: bool,
-                report: ProcessingReport) -> list[Line]:
+                report: ProcessingReport, uncertainties: bool = False) -> list[Line]:
     """Deal with sequences that appear more than once, keeping one line per unique sequence (or none)
 
     Parameters
@@ -226,7 +227,9 @@ def deduplicate(lines: list[Line], mode: str, datatype: str, classification: boo
         Parsed datafile lines ([id, sequence, value(s)...])
     mode : str
         'merge': combine the copies' values. Regression values are averaged
-        (residue by residue for residue data, ignoring missing labels).
+        (residue by residue for residue data, ignoring missing labels); with
+        uncertainties, each value is the copies' inverse-variance weighted
+        mean, with the SD of that mean (see uncertainties.combine_measurements).
         Classification copies are kept (once) only if their labels agree
         (labels that are the same number, such as '1' and '1.0', agree); for
         residue data each residue keeps its label if every labelled copy
@@ -240,6 +243,8 @@ def deduplicate(lines: list[Line], mode: str, datatype: str, classification: boo
         True if the values are class labels
     report : ProcessingReport
         Where to record what was done
+    uncertainties : bool, optional
+        Regression only: True if every value is written as 'value,SD'
 
     Returns
     -------
@@ -249,8 +254,9 @@ def deduplicate(lines: list[Line], mode: str, datatype: str, classification: boo
     Raises
     ------
     ValueError
-        If the mode is unknown, or (merging residue data) copies of a sequence
-        have different numbers of values
+        If the mode is unknown, (merging residue data) copies of a sequence
+        have different numbers of values, or (merging regression values) a
+        value is not a number (or, with uncertainties, not 'value,SD')
     """
     if mode not in DEDUPLICATION_MODES:
         raise ValueError(f"Unknown deduplication mode '{mode}': choose from {', '.join(DEDUPLICATION_MODES)}")
@@ -263,7 +269,7 @@ def deduplicate(lines: list[Line], mode: str, datatype: str, classification: boo
                f'({sum(len(copies) for copies in duplicated.values()) - len(duplicated):,} extra copies)')
 
     summary = MergeSummary()
-    merged = {sequence: merge_copies(copies, mode, datatype, classification, summary)
+    merged = {sequence: merge_copies(copies, mode, datatype, classification, summary, uncertainties)
               for sequence, copies in duplicated.items()}
 
     # Each duplicated sequence's merged line (if any) takes the place of its first copy
@@ -278,20 +284,20 @@ def deduplicate(lines: list[Line], mode: str, datatype: str, classification: boo
                 kept.append(merged_line)
 
     if duplicated:
-        report.add(describe_merge(mode, datatype, classification, summary))
+        report.add(describe_merge(mode, datatype, classification, summary, uncertainties))
     report.add(f'{len(kept):,} lines remain')
     return kept
 
 
 def merge_copies(copies: list[Line], mode: str, datatype: str, classification: bool,
-                 summary: MergeSummary) -> Line | None:
+                 summary: MergeSummary, uncertainties: bool = False) -> Line | None:
     """The one line that replaces the copies of a duplicated sequence, or None to remove them all
 
     Parameters
     ----------
     copies : list
         Every line with this sequence, in order
-    mode, datatype, classification
+    mode, datatype, classification, uncertainties
         See deduplicate()
     summary : MergeSummary
         Updated with what was done
@@ -303,7 +309,8 @@ def merge_copies(copies: list[Line], mode: str, datatype: str, classification: b
     Raises
     ------
     ValueError
-        If merging residue data whose copies have different numbers of values
+        If merging residue data whose copies have different numbers of values,
+        or regression values that cannot be read (see value_numbers())
     """
     if mode == 'first':
         return copies[0]
@@ -311,11 +318,13 @@ def merge_copies(copies: list[Line], mode: str, datatype: str, classification: b
         return None
 
     if datatype == 'sequence':
-        return merge_sequence_labels(copies, summary) if classification else merge_sequence_values(copies, summary)
+        if classification:
+            return merge_sequence_labels(copies, summary)
+        return merge_sequence_values(copies, summary, uncertainties)
 
     if any(len(copy) != len(copies[0]) for copy in copies):
         raise ValueError(f'Copies of {copies[0][0]} have different numbers of values')
-    return merge_residue_labels(copies, summary) if classification else merge_residue_values(copies)
+    return merge_residue_labels(copies, summary) if classification else merge_residue_values(copies, uncertainties)
 
 
 def merge_sequence_labels(copies: list[Line], summary: MergeSummary) -> Line | None:
@@ -342,8 +351,11 @@ def merge_sequence_labels(copies: list[Line], summary: MergeSummary) -> Line | N
     return labelled[0] if labelled else copies[0]
 
 
-def merge_sequence_values(copies: list[Line], summary: MergeSummary) -> Line:
+def merge_sequence_values(copies: list[Line], summary: MergeSummary, uncertainties: bool = False) -> Line:
     """Sequence regression: one line with the average of the copies' values (missing values ignored)
+
+    With uncertainties, the average is weighted by 1 / SD^2 and written with
+    its own SD (see merge_value_tokens()).
 
     Parameters
     ----------
@@ -351,16 +363,17 @@ def merge_sequence_values(copies: list[Line], summary: MergeSummary) -> Line:
         Every line with this sequence
     summary : MergeSummary
         Records the range of the copies' values
+    uncertainties : bool, optional
+        True if each value is written as 'value,SD'
 
     Returns
     -------
     list
     """
-    numbers = np.array([copy[2] for copy in copies], dtype=float)
+    numbers, _ = value_numbers([copy[2] for copy in copies], uncertainties)
     labelled = ~np.isnan(numbers)
     summary.spreads.append(float(np.nanmax(numbers) - np.nanmin(numbers)) if labelled.any() else 0.0)
-    mean = np.nanmean(numbers) if labelled.any() else np.nan
-    return [copies[0][0], copies[0][1], format_number(mean)]
+    return [copies[0][0], copies[0][1], merge_value_tokens([copy[2] for copy in copies], uncertainties)]
 
 
 def merge_residue_labels(copies: list[Line], summary: MergeSummary) -> Line | None:
@@ -399,31 +412,99 @@ def merge_residue_labels(copies: list[Line], summary: MergeSummary) -> Line | No
     return [first[0], first[1]] + labels
 
 
-def merge_residue_values(copies: list[Line]) -> Line:
+def merge_residue_values(copies: list[Line], uncertainties: bool = False) -> Line:
     """Residue regression: each residue gets the average of its labelled copies (missing if none is labelled)
+
+    With uncertainties, each average is weighted by 1 / SD^2 and written with
+    its own SD (see merge_value_tokens()).
 
     Parameters
     ----------
     copies : list
         Every line with this sequence (all with the same number of values)
+    uncertainties : bool, optional
+        True if each value is written as 'value,SD'
 
     Returns
     -------
     list
     """
-    numbers = np.array([copy[2:] for copy in copies], dtype=float)
+    positions = range(2, len(copies[0]))
+    return [copies[0][0], copies[0][1]] + [merge_value_tokens([copy[position] for copy in copies], uncertainties)
+                                           for position in positions]
+
+
+def value_numbers(tokens: list[str], uncertainties: bool) -> tuple[np.ndarray, np.ndarray | None]:
+    """Read regression values (and, with uncertainties, their SDs) from datafile tokens
+
+    Parameters
+    ----------
+    tokens : list of str
+        Values as written in a datafile: numbers or 'nan', or with
+        uncertainties 'value,SD' (or 'nan')
+    uncertainties : bool
+        True if each value is written as 'value,SD'
+
+    Returns
+    -------
+    numpy array
+        The values (NaN where missing)
+    numpy array or None
+        With uncertainties, their SDs (NaN where missing); otherwise None
+
+    Raises
+    ------
+    ValueError
+        If a value is not a number (or, with uncertainties, not 'value,SD')
+    """
+    if uncertainties:
+        values, sds = pid.split_uncertainties(tokens)
+        return np.array(values, dtype=float), np.array(sds, dtype=float)
+    try:
+        return np.array(tokens, dtype=float), None
+    except ValueError:
+        with_separator = [token for token in tokens if pid.UNCERTAINTY_SEPARATOR in token]
+        if with_separator:
+            raise ValueError(f"Values such as '{with_separator[0]}' are not numbers; if each is a value and its SD, "
+                             'give --uncertainties') from None
+        raise
+
+
+def merge_value_tokens(tokens: list[str], uncertainties: bool) -> str:
+    """Combine the copies of one regression value into one token: their mean, ignoring missing ones ('nan' if all are)
+
+    Without uncertainties the mean is plain. With uncertainties it is the
+    inverse-variance weighted mean, written with its SD as 'value,SD' (see
+    uncertainties.combine_measurements).
+
+    Parameters
+    ----------
+    tokens : list of str
+        The copies' values, as written
+    uncertainties : bool
+        True if each value is written as 'value,SD'
+
+    Returns
+    -------
+    str
+    """
+    numbers, sds = value_numbers(tokens, uncertainties)
     labelled = ~np.isnan(numbers)
-    with np.errstate(invalid='ignore'):
-        means = np.where(labelled.any(axis=0), np.nansum(numbers, axis=0) / labelled.sum(axis=0), np.nan)
-    return [copies[0][0], copies[0][1]] + [format_number(value) for value in means]
+    if not labelled.any():
+        return pid.MISSING_LABEL_TEXT
+    if sds is None:
+        return format_number(float(numbers[labelled].mean()))
+    value, sd = combine_measurements(numbers[labelled], sds[labelled])
+    return f'{format_number(value)}{pid.UNCERTAINTY_SEPARATOR}{format_number(sd)}'
 
 
-def describe_merge(mode: str, datatype: str, classification: bool, summary: MergeSummary) -> str:
+def describe_merge(mode: str, datatype: str, classification: bool, summary: MergeSummary,
+                   uncertainties: bool = False) -> str:
     """The report line describing how the copies of duplicated sequences were dealt with
 
     Parameters
     ----------
-    mode, datatype, classification
+    mode, datatype, classification, uncertainties
         See deduplicate()
     summary : MergeSummary
 
@@ -438,14 +519,16 @@ def describe_merge(mode: str, datatype: str, classification: bool, summary: Merg
     if datatype == 'sequence' and classification:
         return (f'Removed {summary.conflicting_sequences:,} of them whose copies had different labels; kept one '
                 'copy of the rest')
+    averaging = (' (each weighted by 1 / SD^2, and given the SD of that mean, 1 / sqrt(sum of 1 / SD^2))'
+                 if uncertainties else '')
     if datatype == 'sequence':
-        return (f'Merged the copies of each by averaging their values (median range between copies '
+        return (f'Merged the copies of each by averaging their values{averaging} (median range between copies '
                 f'{np.median(summary.spreads):.3g}, largest {np.max(summary.spreads):.3g})')
     if classification:
         return (f'Merged the copies of each residue by residue; {summary.disagreeing_residues:,} residues whose '
                 'labelled copies disagreed became missing (nan), and '
                 f'{summary.unlabelled_sequences:,} sequences left with no labelled residue were removed')
-    return 'Merged the copies of each residue by residue, averaging their labelled values'
+    return f'Merged the copies of each residue by residue, averaging their labelled values{averaging}'
 
 
 # .................................................................
