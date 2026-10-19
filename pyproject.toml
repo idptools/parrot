@@ -26,6 +26,8 @@ dependencies = [
     "scikit-learn>=1.4",
     "matplotlib",
     "tqdm",
+    # The embedding cache of protein language model and NARDINI+ encodings is an HDF5 file
+    "h5py>=3.10",
 ]
 
 [project.optional-dependencies]
@@ -36,11 +38,8 @@ test = [
 optimize = []
 # Protein language model encodings: ESM-2 (e.g. --encode esm2_t12_35M_UR50D) and ESM C (--encode esmc_300m).
 # Do not also install Meta's fair-esm alongside esm: both use the import name `esm`.
-plm = ["transformers>=4.40", "h5py>=3.10"]
-esmc = ["esm>=3.1", "h5py>=3.10"]
-# NARDINI+ sequence features (--encode nardini) also need SPARROW, which is installed from GitHub:
-# pip install git+https://github.com/idptools/sparrow.git
-nardini = ["h5py>=3.10"]
+plm = ["transformers>=4.40"]
+esmc = ["esm>=3.1"]
 
 # The command-line tools
 [project.scripts]

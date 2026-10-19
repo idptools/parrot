@@ -32,8 +32,7 @@ Two families of models are supported:
 
 The model weights are not stored in PARROT's network files: a saved network
 records which model and settings produced its embeddings, and the model is
-loaded by name. Model libraries and h5py are only imported when a PLM encoding
-is used (h5py also for NARDINI encodings, which share the embedding cache);
+loaded by name. Model libraries are only imported when a PLM encoding is used;
 install them with `pip install idptools-parrot[plm]` (ESM-2) or
 `pip install idptools-parrot[esmc]` (ESM C). Do not install Meta's fair-esm in
 the same environment as EvolutionaryScale's esm: both use the import name `esm`.
@@ -1129,7 +1128,7 @@ class PLMEncoder(SequenceEncoder):
         try:
             from transformers import AutoTokenizer, EsmModel
         except ImportError:
-            raise ImportError('ESM-2 encodings need the transformers and h5py packages: '
+            raise ImportError('ESM-2 encodings need the transformers package: '
                               'pip install idptools-parrot[plm]') from None
         identifier = f'{HUGGINGFACE_ORGANISATION}/{self.name}'
         model = EsmModel.from_pretrained(identifier, add_pooling_layer=False)

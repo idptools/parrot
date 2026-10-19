@@ -3,16 +3,15 @@ NARDINI features
 
 NARDINI asks whether the residues of an intrinsically disordered region are arranged non-randomly (Cohan et al. 2022). It groups the amino acids into eight types (polar, hydrophobic, positive, negative, aromatic, alanine, proline and glycine) and, for each type and each pair of types, compares how segregated they are along the sequence with scrambles of that same sequence, giving 36 patterning z-scores. NARDINI+ (King et al. 2024) adds 54 compositional z-scores, which compare what the sequence is made of with the human IDRome (Ruff et al. 2025). PARROT can use these 90 NARDINI+ features, as computed by SPARROW, as an encoding for sequence-mapped data.
 
-The features need SPARROW, and the cache they are stored in (see below) needs ``h5py``:
+The features need SPARROW:
 
 .. code-block:: bash
 
     pip install git+https://github.com/idptools/sparrow.git
-    pip install idptools-parrot[nardini]
 
 NARDINI+ features describe a whole sequence, while PARROT's encodings give one vector per residue, so every residue is given its sequence's 90 features. There are two ways to use them:
 
-* ``--encode nardini``: the features alone. With the ``composition`` baseline or the simple models (``linear``, ``svm``, ``random_forest``, ``knn``), which average over the residues of a sequence, this gives exactly a model of the NARDINI+ features and the sequence length. The order-aware networks (``brnn``, ``cnn``, ``unet``, ``transformer``) would see the same input at every residue, so use the combined form with them.
+* ``--encode nardini``: the features alone. With the ``composition`` baseline or the simple models (``linear``, ``svm``, ``random_forest``, ``knn``, ``gbrt``), which average over the residues of a sequence, this gives exactly a model of the NARDINI+ features and the sequence length. The order-aware networks (``brnn``, ``cnn``, ``unet``, ``transformer``) would see the same input at every residue, so use the combined form with them.
 * ``--encode onehot+nardini`` (or ``biophysics+nardini``, or ``<encoding file>+nardini``): each residue's own encoding, followed by its sequence's 90 features, so a network sees which residue is where as well as the sequence's NARDINI+ features. ``--standardize-encoding`` standardizes the per-residue part (it cannot be used with ``nardini`` alone, whose features are already z-scores). Protein language model embeddings cannot be combined with NARDINI features.
 
 The simple models' ``dipeptides`` feature set needs an encoding of at most 32 values per residue, so with NARDINI features only ``composition`` (the average encoding over the sequence and the log of its length) can be used: ``--features dipeptides`` is an error, and ``parrot-optimize`` does not search it.

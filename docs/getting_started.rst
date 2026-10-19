@@ -36,7 +36,7 @@ These encodings need packages that are not installed by default:
 
 * ESM-2 embeddings (e.g. ``--encode esm2_t12_35M_UR50D``): ``pip install idptools-parrot[plm]``.
 * ESM C embeddings (``--encode esmc_300m`` or ``esmc_600m``): ``pip install idptools-parrot[esmc]``. Do not install Meta's ``fair-esm`` in the same environment, as both use the import name ``esm``.
-* NARDINI+ features (``--encode nardini``): ``pip install git+https://github.com/idptools/sparrow.git`` and ``pip install idptools-parrot[nardini]``.
+* NARDINI+ features (``--encode nardini``): SPARROW, ``pip install git+https://github.com/idptools/sparrow.git``.
 
 See :doc:`usage/plm_encodings` and :doc:`usage/nardini_encoding`.
 
