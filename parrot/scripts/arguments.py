@@ -30,13 +30,14 @@ from parrot.package_version import PARROT_VERSION
 # Separator line printed under headings
 RULE = '...................................'
 
-# The logo at the top of every command's header ('PARROT' in figlet's standard font)
+# The logo at the top of every command's header ('PARROT-2' in figlet's standard font, each character at full width).
+# The second row keeps its trailing space, as a raw string cannot end in a backslash.
 LOGO = (
-    r' ____      _     ____   ____    ___   _____',
-    r'|  _ \    / \   |  _ \ |  _ \  / _ \ |_   _|',
-    r'| |_) |  / _ \  | |_) || |_) || | | |  | |',
-    r'|  __/  / ___ \ |  _ < |  _ < | |_| |  | |',
-    r'|_|    /_/   \_\|_| \_\|_| \_\ \___/   |_|',
+    r' ____      _     ____   ____    ___   _____         ____',
+    r'|  _ \    / \   |  _ \ |  _ \  / _ \ |_   _|       |___ \ ',
+    r'| |_) |  / _ \  | |_) || |_) || | | |  | |   _____   __) |',
+    r'|  __/  / ___ \ |  _ < |  _ < | |_| |  | |  |_____| / __/',
+    r'|_|    /_/   \_\|_| \_\|_| \_\ \___/   |_|         |_____|',
 )
 
 DOCUMENTATION_URL = 'https://idptools-parrot.readthedocs.io'

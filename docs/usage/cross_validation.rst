@@ -30,11 +30,11 @@ If you like, you can also use the ``--include-figs`` flag to assess how each of 
 
     parrot-train brnn --input-file data/seq_regress_dataset.tsv --output-network cv_test/network0.pt -d sequence --regression -nl 2 -hs 15 -lr 0.001 -b 16 -e 250 --split cv_test/cv_example_splits_cv0.txt 
 
-     ____      _     ____   ____    ___   _____
-    |  _ \    / \   |  _ \ |  _ \  / _ \ |_   _|
-    | |_) |  / _ \  | |_) || |_) || | | |  | |
-    |  __/  / ___ \ |  _ < |  _ < | |_| |  | |
-    |_|    /_/   \_\|_| \_\|_| \_\ \___/   |_|
+     ____      _     ____   ____    ___   _____         ____
+    |  _ \    / \   |  _ \ |  _ \  / _ \ |_   _|       |___ \
+    | |_) |  / _ \  | |_) || |_) || | | |  | |   _____   __) |
+    |  __/  / ___ \ |  _ < |  _ < | |_| |  | |  |_____| / __/
+    |_|    /_/   \_\|_| \_\|_| \_\ \___/   |_|         |_____|
 
     ===========================================================================
      parrot-train  |  PARROT <version>  |  <date> <time>
