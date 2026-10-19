@@ -40,6 +40,6 @@ Every sequence is checked against the network's encoding before anything is pred
 
 With ``--embedding-context``, a table of where each sequence is embedded is also written next to the predictions, as ``<output>_embedded_context.tsv`` (see "Protein language model encodings").
 
-A network trained with ``--embed-mean-subtraction`` records this, so the sequences being predicted are mean-subtracted in the same way automatically: ``parrot-predict`` has no option for it, and their embeddings go in their own files of the embedding cache.
+A network trained with ``--embed-mean-subtraction`` records this, so the sequences being predicted are mean-subtracted in the same way automatically: ``parrot-predict`` has no option for it, and their embeddings go in their own files of the embedding cache. Likewise, a network trained with ``--embedding-layer`` embeds the sequences being predicted from the same layer.
 
 For networks trained on matrix data, the predictions are instead written as a NumPy ``.npz`` archive with one predicted matrix per sequence, named by its sequence ID, or with ``--exclude-seq-id`` by its number among the sequences (``1``, ``2``, ...; blank and comment lines are not counted) (``.npz`` is added to `output_file` if it does not end with it); see the "Matrix data" page.

@@ -157,7 +157,8 @@ How it works
    --embedding-cache). With --embedding-context and --embedding-context-map,
    a protein language model embeds each sequence within the full-length
    protein it was cut from, rather than on its own. --embed-mean-subtraction
-   subtracts each embedding's mean over its residues before it is stored.
+   subtracts each embedding's mean over its residues before it is stored, and
+   --embedding-layer embeds from an earlier layer of the model.
 4. The network is trained for -e epochs (100 by default). After every epoch
    its loss on the validation set is measured, and the network from the epoch
    with the lowest validation loss is the one kept, so training for too long
@@ -364,7 +365,8 @@ How it works
    same two options (or --embed-in-isolation), so each sequence is embedded
    within its full-length protein, as the training sequences were. A network
    trained with --embed-mean-subtraction subtracts each embedding's mean
-   automatically.
+   automatically, and one trained with --embedding-layer embeds from the same
+   layer.
 3. Sequences are predicted in batches of similar length (up to --batch, 64
    by default), and each unique sequence is predicted once.
 4. The output has one line per sequence of the sequence file, in the same
@@ -456,8 +458,9 @@ The steps always run in this order, and each is optional:
    language model and NARDINI encodings), into the embedding cache that
    parrot-train reads with --embedding-cache; with --embedding-context, within
    each sequence's full-length protein (where each one is embedded is written
-   to <output>_embedded_context.tsv), and with --embed-mean-subtraction, with
-   each embedding's mean over its residues subtracted.
+   to <output>_embedded_context.tsv), with --embed-mean-subtraction, with
+   each embedding's mean over its residues subtracted, and with
+   --embedding-layer, from an earlier layer of the model.
 
 Every step is recorded in <output>_preprocess_report.txt (-v also prints it),
 including per-round removals, set retention and example cross-set conflicts.

@@ -10,6 +10,7 @@ downloaded (tests never download anything).
 import importlib.util
 import inspect
 import io
+import re
 import subprocess
 import sys
 import tempfile
@@ -399,6 +400,121 @@ def test_dipeptide_features_need_a_small_encoding():
 
 
 # ..........................................................................................
+# Layers
+
+NUM_LAYERS = plm.PLM_MODELS[MODEL].num_layers
+
+
+@pytest.mark.parametrize('layer, expected', [(None, NUM_LAYERS), (-1, NUM_LAYERS), (NUM_LAYERS, NUM_LAYERS),
+                                             (1, 1), (3, 3), (-2, NUM_LAYERS - 1), (-NUM_LAYERS, 1)])
+def test_layers_are_numbered_from_the_first_transformer_layer(layer, expected):
+    encoder = plm.PLMEncoder(MODEL, layer=layer)
+    assert encoder.layer == expected and encoder.final_layer == (expected == NUM_LAYERS)
+
+
+@pytest.mark.parametrize('layer', [0, NUM_LAYERS + 1, -NUM_LAYERS - 1, 2.5, True])
+def test_layers_the_model_does_not_have_are_refused(layer):
+    with pytest.raises(ValueError, match='embedding layer must be'):
+        plm.PLMEncoder(MODEL, layer=layer)
+
+
+def test_earlier_layers_have_cache_files_of_their_own():
+    assert plm.PLMEncoder(MODEL, layer=NUM_LAYERS).cache_name == MODEL
+    assert plm.PLMEncoder(MODEL, layer=3).cache_name == f'{MODEL}.layer3'
+    assert plm.PLMEncoder(MODEL, layer=3, mean_subtracted=True).cache_name == f'{MODEL}.layer3.mean_subtracted'
+
+
+def test_earlier_layer_embeddings_never_mix_with_final_layer_ones(fake_plm, tmp_path):
+    earlier = plm.PLMEncoder(MODEL, layer=3)
+    earlier.use_cache(tmp_path)
+    earlier.prepare(['ACDEF'], 'test', silent=True)
+
+    final = plm.PLMEncoder(MODEL)
+    final.use_cache(tmp_path)
+    assert final.cache.missing(['ACDEF']) == ['ACDEF']
+    assert (tmp_path / f'{MODEL}.layer3.h5').is_file() and not (tmp_path / f'{MODEL}.h5').exists()
+
+
+def test_the_layer_is_saved_with_the_network_only_if_it_is_not_the_final_one():
+    final = plm.PLMEncoder(MODEL).to_config()
+    assert plm.LAYER_CONFIG_KEY not in final and final['representation'].startswith('final layer')
+
+    config = plm.PLMEncoder(MODEL, layer=3).to_config()
+    assert config[plm.LAYER_CONFIG_KEY] == 3 and 'hidden_states[3]' in config['representation']
+    assert encode_sequence.encoder_from_config(config).layer == 3
+    # Networks saved before --embedding-layer existed used the final layer
+    assert encode_sequence.encoder_from_config(final).layer == NUM_LAYERS
+
+
+def test_get_encoder_takes_a_layer_for_plms_only():
+    assert encode_sequence.get_encoder(MODEL, embedding_layer=2).layer == 2
+    with pytest.raises(ValueError, match='--embedding-layer only applies to protein language model'):
+        encode_sequence.get_encoder('onehot', embedding_layer=2)
+
+
+def test_embeddings_too_large_to_store_are_refused():
+    encoder = plm.PLMEncoder(MODEL, layer=3)
+    largest = float(np.finfo(plm.STORAGE_DTYPE).max)
+    assert encoder.to_storage(np.full((2, 4), largest, dtype=np.float32), 'AC').dtype == plm.STORAGE_DTYPE
+    with pytest.raises(ValueError, match='beyond the largest float16'):
+        encoder.to_storage(np.full((2, 4), 2 * largest, dtype=np.float32), 'AC')
+
+
+def tiny_esm2_model(num_layers: int) -> torch.nn.Module:
+    """A small, randomly initialised ESM-2 model (transformers' EsmModel), built without downloading anything."""
+    transformers = pytest.importorskip('transformers')
+    config = transformers.EsmConfig(vocab_size=33, hidden_size=16, num_hidden_layers=num_layers, num_attention_heads=2,
+                                    intermediate_size=32, pad_token_id=1, mask_token_id=32,
+                                    position_embedding_type='rotary', token_dropout=True, emb_layer_norm_before=False)
+    torch.manual_seed(0)
+    return transformers.EsmModel(config, add_pooling_layer=False).eval()
+
+
+@pytest.mark.parametrize('layer', [1, 2, 3])
+def test_an_esm2_model_kept_to_a_layer_gives_that_layers_hidden_state(layer):
+    full = tiny_esm2_model(3)
+    tokens = torch.tensor([[0, 5, 8, 11, 6, 2]])
+    with torch.no_grad():
+        hidden_states = full(input_ids=tokens, output_hidden_states=True).hidden_states
+
+    truncated = tiny_esm2_model(3)
+    plm.truncate_to_layer(truncated, plm.ESM2_FAMILY, layer)
+    with torch.no_grad():
+        output = truncated(input_ids=tokens).last_hidden_state
+
+    assert len(truncated.encoder.layer) == layer
+    # The final layer's hidden state is after the final layer norm, as the model's own output is
+    torch.testing.assert_close(output, hidden_states[layer], rtol=0, atol=0)
+
+
+def tiny_esmc_model(num_layers: int) -> torch.nn.Module:
+    """A small, randomly initialised ESM C model, built without downloading anything."""
+    pytest.importorskip('esm.models.esmc')
+    from esm.models.esmc import ESMC
+    from esm.tokenization import get_esmc_model_tokenizers
+    torch.manual_seed(0)
+    return ESMC(d_model=64, n_heads=2, n_layers=num_layers, tokenizer=get_esmc_model_tokenizers(),
+                use_flash_attn=False).eval()
+
+
+@pytest.mark.parametrize('layer', [1, 2, 3])
+def test_an_esmc_model_kept_to_a_layer_gives_that_layers_hidden_state(layer):
+    full = tiny_esmc_model(3)
+    tokens = torch.tensor([[0, 5, 8, 11, 6, 2]])
+    with torch.no_grad():
+        output = full(sequence_tokens=tokens)
+    expected = output.embeddings if layer == 3 else output.hidden_states[layer - 1]
+
+    truncated = tiny_esmc_model(3)
+    plm.truncate_to_layer(truncated, plm.ESMC_FAMILY, layer)
+    with torch.no_grad():
+        embeddings = truncated(sequence_tokens=tokens).embeddings
+
+    assert len(truncated.transformer.blocks) == layer
+    torch.testing.assert_close(embeddings, expected, rtol=0, atol=0)
+
+
+# ..........................................................................................
 # Commands
 
 def train(run_cli, network_file, *extra):
@@ -558,6 +674,54 @@ def test_preprocess_cache_is_where_training_looks_by_default(fake_plm, run_cli, 
     assert fake_run_model.calls == calls
 
 
+def test_train_and_predict_with_an_earlier_layer(fake_plm, run_cli, tmp_path):
+    (tmp_path / 'train').mkdir()
+    train(run_cli, tmp_path / 'train' / 'net.pt', '--embedding-layer', '3')
+
+    assert (tmp_path / 'train' / plm.TRAIN_CACHE_DIRECTORY / f'{MODEL}.layer3.h5').is_file()
+    _, encoder = load_network(str(tmp_path / 'train' / 'net.pt'))
+    assert encoder.layer == 3
+    assert re.search(r'^layer +: 3$', (tmp_path / 'train' / 'net_info.txt').read_text(), re.MULTILINE)
+
+    # parrot-predict embeds from the network's layer, and --encode need not give it
+    seq_file = tmp_path / 'sequences.txt'
+    seq_file.write_text('s1 ACDEFGHIK\n')
+    run_cli(parrot_predict.main, ['parrot-predict', seq_file, tmp_path / 'train' / 'net.pt', tmp_path / 'out.txt',
+                                  '--silent', '--encode', MODEL])
+    assert (tmp_path / plm.PREDICT_CACHE_DIRECTORY / f'{MODEL}.layer3.h5').is_file()
+
+
+def test_the_embedding_layer_needs_a_plm(run_cli, tmp_path):
+    filename, datatype, num_classes = EXAMPLE_TASKS['res_regress']
+    with pytest.raises(ValueError, match='--embedding-layer only applies to protein language model'):
+        run_cli(parrot_train.main, training_command('parrot-train', 'brnn', data_path(filename), tmp_path / 'net.pt',
+                                                    datatype, num_classes, '-e', '1', '--silent',
+                                                    '--embedding-layer', '2'))
+
+
+def test_preprocess_embeds_from_an_earlier_layer(fake_plm, run_cli, tmp_path):
+    output_file = tmp_path / 'clean.tsv'
+    cache = tmp_path / 'cache'
+    preprocess(run_cli, output_file, '--embedding-cache', cache, '--embedding-layer', '-2')
+
+    assert (cache / f'{MODEL}.layer{NUM_LAYERS - 1}.h5').is_file()
+    report = (tmp_path / 'clean_preprocess_report.txt').read_text()
+    assert f'--embedding-layer {NUM_LAYERS - 1}' in report and f'(layer {NUM_LAYERS - 1} of {NUM_LAYERS})' in report
+
+    # Training from the same layer finds every sequence in the cache
+    calls = fake_run_model.calls
+    train_on_preprocessed(run_cli, output_file, tmp_path / 'net.pt', '--embedding-cache', cache,
+                          '--embedding-layer', str(NUM_LAYERS - 1))
+    assert fake_run_model.calls == calls
+
+
+def test_preprocess_needs_encode_for_an_embedding_layer(run_cli, tmp_path):
+    filename, datatype, _ = EXAMPLE_TASKS['res_regress']
+    with pytest.raises(ValueError, match='--embedding-layer only applies with --encode'):
+        run_cli(parrot_preprocess.main, ['parrot-preprocess', data_path(filename), tmp_path / 'out.tsv', '-d',
+                                         datatype, '-m', 'regression', '--embedding-layer', '2'])
+
+
 def test_preprocess_checks_sequences_before_writing_anything(fake_plm, run_cli, tmp_path, write_lines):
     data_file = write_lines('data.tsv', ['a ACDEF 1.0', 'b acdef 2.0'])
     with pytest.raises(ValueError, match='upper case'):
@@ -622,6 +786,14 @@ def test_real_esm2_model(monkeypatch):
     alone = encoder.embed(['ACDEFGHIKLMNPQRSTVWY'])['ACDEFGHIKLMNPQRSTVWY'].astype(np.float32)
     np.testing.assert_allclose(alone, embeddings['ACDEFGHIKLMNPQRSTVWY'].astype(np.float32), atol=2e-2)
 
+    # An earlier layer's embeddings are the full model's hidden state after that layer
+    model, tokenizer = encoder._load_model()
+    tokens = tokenizer(['ACDEFGHIKLMNPQRSTVWY'], return_tensors='pt')['input_ids']
+    with torch.no_grad():
+        hidden_states = model(input_ids=tokens, output_hidden_states=True).hidden_states
+    earlier = plm.PLMEncoder(MODEL, layer=3).embed(['ACDEFGHIKLMNPQRSTVWY'])['ACDEFGHIKLMNPQRSTVWY']
+    np.testing.assert_allclose(earlier.astype(np.float32), hidden_states[3][0, 1:21].numpy(), rtol=1e-3, atol=1e-3)
+
 
 def esmc_available() -> bool:
     """True if EvolutionaryScale's esm package is installed and ESM C 300M is already downloaded."""
@@ -649,4 +821,11 @@ def test_real_esmc_model(monkeypatch):
         with torch.no_grad():
             alone = model(sequence_tokens=tokens).embeddings[0, 1:len(sequence) + 1].numpy()
         np.testing.assert_allclose(embeddings[sequence].astype(np.float32), alone, rtol=1e-2, atol=2e-2)
+
+    # An earlier layer's embeddings are the full model's hidden state after that layer
+    tokens = tokenizer([short], return_tensors='pt')['input_ids']
+    with torch.no_grad():
+        hidden_states = model(sequence_tokens=tokens).hidden_states
+    earlier = plm.PLMEncoder('esmc_300m', layer=10).embed([short])[short]
+    np.testing.assert_allclose(earlier.astype(np.float32), hidden_states[9][0, 1:21].numpy(), rtol=1e-2, atol=2e-2)
 

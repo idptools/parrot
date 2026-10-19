@@ -63,7 +63,7 @@ from parrot.architectures import (HyperParameter, HyperParameterValue, ParrotArc
 from parrot.scripts.arguments import EXAMPLES_FLAG, RetiredOption
 from parrot.scripts.common import (DEFAULT_MAX_MATRIX_LENGTH, add_device_arguments, add_embedding_cache_argument,
                                    add_embed_mean_subtraction_argument, add_embedding_context_arguments,
-                                   add_nardini_scrambles_argument)
+                                   add_embedding_layer_argument, add_nardini_scrambles_argument)
 from parrot.scripts.data_split import SPLIT_METHODS
 from parrot.scripts.examples import add_examples_argument
 from parrot.training_control import LR_SCHEDULES, TrainingOptions
@@ -336,6 +336,7 @@ def data_options(architecture: type[ParrotArchitecture]) -> argparse.ArgumentPar
     add_embedding_cache_argument(group, plm.TRAIN_CACHE_DIRECTORY)
     add_embedding_context_arguments(group)
     add_embed_mean_subtraction_argument(group)
+    add_embedding_layer_argument(group)
     return options
 
 

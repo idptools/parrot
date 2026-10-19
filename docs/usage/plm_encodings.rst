@@ -24,18 +24,18 @@ Sequences must be written in uppercase one-letter codes. Besides the 20 standard
 Choosing a model
 ----------------
 
-========================  ===================  ======================  ====================================
-``--encode``              Values per residue   Embedding speed*        Cache size per million residues
-========================  ===================  ======================  ====================================
-``esm2_t6_8M_UR50D``      320                  ~47,000 residues/s      ~0.64 GB
-``esm2_t12_35M_UR50D``    480                  ~23,000 residues/s      ~0.96 GB
-``esm2_t30_150M_UR50D``   640                  ~7,300 residues/s       ~1.3 GB
-``esm2_t33_650M_UR50D``   1,280                ~2,200 residues/s       ~2.6 GB
-``esm2_t36_3B_UR50D``     2,560                much slower             ~5.1 GB
-``esm2_t48_15B_UR50D``    5,120                much slower             ~10 GB
-``esmc_300m``             960                  ~5,400 residues/s       ~1.9 GB
-``esmc_600m``             1,152                ~2,500 residues/s       ~2.3 GB
-========================  ===================  ======================  ====================================
+========================  ===================  ======  ======================  ====================================
+``--encode``              Values per residue   Layers  Embedding speed*        Cache size per million residues
+========================  ===================  ======  ======================  ====================================
+``esm2_t6_8M_UR50D``      320                  6       ~47,000 residues/s      ~0.64 GB
+``esm2_t12_35M_UR50D``    480                  12      ~23,000 residues/s      ~0.96 GB
+``esm2_t30_150M_UR50D``   640                  30      ~7,300 residues/s       ~1.3 GB
+``esm2_t33_650M_UR50D``   1,280                33      ~2,200 residues/s       ~2.6 GB
+``esm2_t36_3B_UR50D``     2,560                36      much slower             ~5.1 GB
+``esm2_t48_15B_UR50D``    5,120                48      much slower             ~10 GB
+``esmc_300m``             960                  30      ~5,400 residues/s       ~1.9 GB
+``esmc_600m``             1,152                36      ~2,500 residues/s       ~2.3 GB
+========================  ===================  ======  ======================  ====================================
 
 \* Measured with PARROT on an Apple-silicon Mac GPU (MPS), for proteins of median length ~350 residues; an NVIDIA GPU is typically faster, and a CPU much slower.
 
@@ -67,15 +67,16 @@ Each cache directory contains a ``README.md`` describing what is in it (models, 
 * Caches are only created for PLM encodings and NARDINI features (see "NARDINI features"). ``--embedding-cache`` is an error with any other encoding.
 * Fragments embedded within their full-length proteins (see below) are stored in a separate file of the cache.
 * Mean-subtracted embeddings (``--embed-mean-subtraction``; see below) are also stored in files of their own.
+* So are embeddings from a layer before the final one (``--embedding-layer``; see below).
 
 How residues are embedded
 -------------------------
 
-* Each residue's embedding is the PLM's final-layer representation of that residue, after the model's last layer norm (the start and end tokens the model adds are removed).
+* Each residue's embedding is the PLM's final-layer representation of that residue, after the model's last layer norm (the start and end tokens the model adds are removed). ``--embedding-layer`` uses an earlier layer's output instead (see below).
 * ESM-2 was trained on sequences of up to 1,022 residues, and ESM C on up to 2,046. Longer sequences are embedded in overlapping windows of that length (consecutive windows share at least 256 residues, and the last window ends at the end of the sequence), and residues covered by more than one window get the average of their embeddings.
 * Models always run in 32-bit precision. (EvolutionaryScale's own loader switches ESM C to 16-bit "bfloat16" on a GPU, which would make embeddings depend on the device.)
 * Embeddings are rounded to 16-bit floats, whether or not they go through a cache, so a sequence is encoded at the same precision either way. (The model's own output can differ by float32 rounding with the other sequences it is run with, since padding a batch changes the order of the floating-point operations, and this can move a stored value by one step of the 16-bit rounding.)
-* The trained network file records the model, the windowing, the storage precision and whether the embeddings were made in context or mean-subtracted (see below), so ``parrot-predict`` and ``Predictor`` embed new sequences in the same way as the training sequences.
+* The trained network file records the model, the layer, the windowing, the storage precision and whether the embeddings were made in context or mean-subtracted (see below), so ``parrot-predict`` and ``Predictor`` embed new sequences in the same way as the training sequences.
 * The PLM runs on the same device as training or prediction (see ``--device``). Use a GPU if you can: on a CPU, embedding is many times slower.
 
 Embedding fragments within their full-length proteins
@@ -126,6 +127,22 @@ Some practical points:
 * **Training and predicting.** A network trained with ``--embedding-context`` records this. ``parrot-predict`` then needs ``--embedding-context`` and ``--embedding-context-map`` too, matching the sequences to predict to the map by their IDs (so not with ``--exclude-seq-id``). Without them it stops, unless given ``--embed-in-isolation``, which embeds each sequence on its own (for example, new peptides with no full-length protein). Those embeddings differ from the ones the network was trained on, so predictions may be less accurate. Both options are errors for a network trained without ``--embedding-context``.
 * **In Python**, ``Predictor.predict(fragment, full_length=protein)`` embeds the fragment within ``protein``, and ``start=`` gives its 1-based start if it occurs more than once. ``Predictor.predict_batch(fragments, full_lengths=proteins)`` does the same for a list of fragments (one protein per fragment, and ``starts=`` if needed), embedding each protein once. ``Predictor(path, embed_in_isolation=True)`` embeds a sequence predicted without ``full_length`` on its own instead of raising an error.
 * **Splitting.** Embedded in context, a fragment's embedding carries information from the rest of its protein, including from neighbouring fragments. Keep all the fragments of a protein in the same set (e.g. with a split-file), or similar fragments in the training and test sets will make the test results look better than they are.
+
+Choosing the layer
+------------------
+
+By default, each residue's embedding is the model's final-layer representation of it. ``--embedding-layer N`` uses the output of layer N instead, counting from 1 (the first transformer layer) to the model's number of layers (see the table above). Negative numbers count back from the final layer, so ``-1`` is the final layer and ``-2`` the one before it. The final layer is the one closest to the model's training task, predicting masked amino acids, and for some property-prediction tasks an earlier layer gives better features, so the layer is worth comparing on your own task.
+
+.. code-block:: bash
+
+    parrot-train cnn --input-file clean.tsv --output-network net.pt --split clean_split_file.txt -d residues \
+        --regression --encode esm2_t33_650M_UR50D --embedding-cache embeddings --embedding-layer 20
+
+* **Only the layers needed are run.** The model stops after layer N, so an earlier layer is also quicker to embed with.
+* **No final layer norm.** The model's final layer norm follows only its final layer, so an earlier layer's output is used as the model computes it. Its values are on a different scale from the final layer's, and in places much larger (over a thousand in ESM C's later layers). Networks see them as they are (``--standardize-encoding`` cannot be used with PLM encodings). PARROT stops with an error if a value is too large to store as a 16-bit float (above 65,504).
+* **The cache.** Embeddings from layer N are stored in files of their own, ``<model>.layerN.h5`` (with ``.mean_subtracted`` and ``.context`` added as for the final layer), so they never mix with other layers' embeddings. Giving the final layer (its number, or ``-1``) is the same as leaving the option out, and uses the usual files. To embed ahead of time, give ``parrot-preprocess --encode`` the same option.
+* **Training and predicting.** The network records its layer, so ``parrot-predict`` and ``Predictor`` embed new sequences from the same layer automatically.
+* ``--embedding-layer`` combines with ``--embedding-context`` and ``--embed-mean-subtraction``.
 
 Subtracting each embedding's mean
 ---------------------------------

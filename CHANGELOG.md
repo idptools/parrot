@@ -178,6 +178,9 @@
 - Table of where each sequence was embedded written next to the output.
 - Networks trained this way record it, so `parrot-predict` and `Predictor` embed new sequences the same way (or on their own, with `--embed-in-isolation`).
 - `--embed-mean-subtraction` (`parrot-preprocess`, `parrot-train`, `parrot-optimize`; recorded in the network for `parrot-predict`): each embedding's mean over its residues (in context, the full-length protein's) subtracted before it is stored.
+- `--embedding-layer` (`parrot-preprocess`, `parrot-train`, `parrot-optimize`; recorded in the network for `parrot-predict`): embeddings from an earlier layer of the model, numbered from 1; negative numbers count back from the final layer (the default).
+- Earlier layers: model run only up to that layer; output without the final layer norm; own cache files (`<model>.layerN.h5`).
+- Embeddings too large to store as float16 refused, rather than stored as infinities.
 - Several runs can share one `--embedding-cache`: a run reading the cache no longer stops another adding to it (HDF5's file lock gave a raw locking error), and a run that wants to write waits for one that is writing.
 - NARDINI features cached per SPARROW version; features from an older SPARROW not reused after an upgrade.
 - Progress bar (tqdm) while embedding and computing NARDINI+ features, redrawn every 30 s when the output goes to a file (e.g. a `nohup` log).

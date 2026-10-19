@@ -259,8 +259,9 @@ def comparable_config(encoder: SequenceEncoder) -> dict[str, Any]:
     NARDINI encoding by its per-residue encoding alone (its number of scrambles,
     seed and SPARROW version are settings of the saved network), and a protein
     language model without whether it embeds in context (which
-    --embedding-context, not --encode, says) or subtracts each embedding's
-    mean (a setting of the saved network).
+    --embedding-context, not --encode, says), subtracts each embedding's mean
+    or uses an earlier layer (settings of the saved network, as is the
+    description of the layer's output).
 
     Parameters
     ----------
@@ -277,8 +278,8 @@ def comparable_config(encoder: SequenceEncoder) -> dict[str, Any]:
         return {'name': nardini.NARDINI_ENCODING,
                 'residue_encoding': comparable_config(residue) if residue is not None else None}
     config = encoder.to_config()
-    config.pop(plm.IN_CONTEXT_CONFIG_KEY, None)
-    config.pop(plm.MEAN_SUBTRACTED_CONFIG_KEY, None)
+    for setting in (plm.IN_CONTEXT_CONFIG_KEY, plm.MEAN_SUBTRACTED_CONFIG_KEY, plm.LAYER_CONFIG_KEY, 'representation'):
+        config.pop(setting, None)
     return config
 
 

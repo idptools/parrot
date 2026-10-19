@@ -13,8 +13,9 @@ of everything it did. It can also compute a protein language model or NARDINI
 encoding of every sequence of the output ahead of time, into the embedding
 cache that parrot-train, parrot-optimize and parrot-predict read (protein
 language model embeddings optionally within the full-length proteins the
-sequences were cut from, with --embedding-context, and with each embedding's
-mean subtracted, with --embed-mean-subtraction).
+sequences were cut from, with --embedding-context, with each embedding's mean
+subtracted, with --embed-mean-subtraction, and from an earlier layer of the
+model, with --embedding-layer).
 
 Each step is one function below, run in this order by run(): read, clean,
 recode, deduplicate, split, balance, write, encode.
@@ -51,7 +52,7 @@ from parrot.scripts.examples import add_examples_argument
 from parrot.embedding_context import ContextAssignment
 from parrot.scripts.common import (COMMAND_LINE_DATATYPES, LEGACY_NOTE, add_device_arguments, add_embedding_cache_argument,
                                    add_embed_mean_subtraction_argument, add_embedding_context_arguments,
-                                   add_nardini_scrambles_argument,
+                                   add_embedding_layer_argument, add_nardini_scrambles_argument,
                                    check_embedding_context_arguments, place_in_context, prepare_encoding,
                                    select_device, write_context_table)
 from parrot.sequence_encoder import SequenceEncoder
@@ -255,6 +256,7 @@ def add_encoding_arguments(parser: argparse.ArgumentParser) -> None:
     add_embedding_cache_argument(group, plm.TRAIN_CACHE_DIRECTORY)
     add_embedding_context_arguments(group)
     add_embed_mean_subtraction_argument(group)
+    add_embedding_layer_argument(group)
     add_device_arguments(group)
 
 
@@ -383,13 +385,14 @@ def encoder_from_arguments(args: argparse.Namespace) -> SequenceEncoder | None:
                             ('--nardini-scrambles', args.nardini_scrambles is not None),
                             ('--embedding-context', args.embedding_context is not None),
                             ('--embedding-context-map', args.embedding_context_map is not None),
-                            ('--embed-mean-subtraction', args.embed_mean_subtraction), *device_options):
+                            ('--embed-mean-subtraction', args.embed_mean_subtraction),
+                            ('--embedding-layer', args.embedding_layer is not None), *device_options):
             if given:
                 raise ValueError(f'{flag} only applies with --encode, which computes an encoding ahead of time')
         return None
 
     encoder = get_encoder(args.encode, nardini_scrambles=args.nardini_scrambles,
-                          mean_subtracted=args.embed_mean_subtraction)
+                          mean_subtracted=args.embed_mean_subtraction, embedding_layer=args.embedding_layer)
     if not isinstance(encoder, plm.PLMEncoder | nardini.NardiniEncoder):
         raise ValueError(f"--encode {args.encode} is quick to compute, so PARROT computes it as it is needed and never "
                          'stores it: only protein language model and NARDINI encodings are computed ahead of time')
@@ -1122,7 +1125,11 @@ def encode_ahead_of_time(lines: list[Line], encoder: SequenceEncoder, device: to
         encode_flags += f' --nardini-scrambles {args.nardini_scrambles}'
     if args.embed_mean_subtraction:
         encode_flags += ' --embed-mean-subtraction'
-    encoding = f'{encoder.name} (mean-subtracted)' if args.embed_mean_subtraction else encoder.name
+    encoding = encoder.name
+    if isinstance(encoder, plm.PLMEncoder):
+        if not encoder.final_layer:
+            encode_flags += f' --embedding-layer {encoder.layer}'
+        encoding += encoder.variant
 
     report.section('Encoding ahead of time')
     if context is None:

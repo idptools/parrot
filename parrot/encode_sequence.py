@@ -560,7 +560,7 @@ BUILT_IN_ENCODERS: dict[str, type[SequenceEncoder]] = {OneHotEncoder.name: OneHo
 
 
 def get_encoder(encoding: str, standardize: bool = False, nardini_scrambles: int | None = None,
-                mean_subtracted: bool = False) -> SequenceEncoder:
+                mean_subtracted: bool = False, embedding_layer: int | None = None) -> SequenceEncoder:
     """Build the encoder described by a command-line style encoding string
 
     Parameters
@@ -582,6 +582,9 @@ def get_encoder(encoding: str, standardize: bool = False, nardini_scrambles: int
     mean_subtracted : bool, optional
         Protein language models only: subtract each embedding's mean over its
         residues from every residue (see plm.PLMEncoder)
+    embedding_layer : int, optional
+        Protein language models only: the layer whose output is each residue's
+        embedding (default: the final layer; see plm.resolve_layer())
 
     Returns
     -------
@@ -594,13 +597,16 @@ def get_encoder(encoding: str, standardize: bool = False, nardini_scrambles: int
     ValueError
         If the options do not apply to the encoding, `nardini_scrambles` is
         less than 1, NARDINI features are given more than once or combined
-        with a protein language model, or the encoding file is not valid (see
-        parse_encode_file())
+        with a protein language model, the model has no such layer, or the
+        encoding file is not valid (see parse_encode_file())
     """
 
     if mean_subtracted and not plm.is_plm_encoding(encoding):
         raise ValueError('--embed-mean-subtraction only applies to protein language model encodings (it subtracts '
                          f"each embedding's mean over its residues), not '{encoding}'")
+    if embedding_layer is not None and not plm.is_plm_encoding(encoding):
+        raise ValueError('--embedding-layer only applies to protein language model encodings (it chooses the layer '
+                         f"of the model each embedding comes from), not '{encoding}'")
 
     if nardini.is_nardini_encoding(encoding):
         return get_nardini_encoder(encoding, standardize, nardini_scrambles)
@@ -613,7 +619,7 @@ def get_encoder(encoding: str, standardize: bool = False, nardini_scrambles: int
             raise ValueError('--standardize-encoding cannot be used with a protein language model encoding: '
                              'PLM embeddings depend on each residue\'s context, so there is no per-amino-acid '
                              'table to standardize')
-        return plm.PLMEncoder(encoding, mean_subtracted=mean_subtracted)
+        return plm.PLMEncoder(encoding, mean_subtracted=mean_subtracted, layer=embedding_layer)
 
     encoder: SequenceEncoder
     if encoding in BUILT_IN_ENCODERS:

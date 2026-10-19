@@ -4,7 +4,7 @@ saving and reporting, that parrot-train and parrot-optimize share (their
 command line is built in training_parser.py); the device, embedding-cache and
 embedding-context options and the encoding of sequences ahead of time, which
 parrot-predict and parrot-preprocess also use (parrot-preprocess also shares
---nardini-scrambles and --embed-mean-subtraction); the check of
+--nardini-scrambles, --embed-mean-subtraction and --embedding-layer); the check of
 --probabilistic-classification, which
 parrot-predict also uses; and the datatypes and legacy-option note that
 parrot-predict and parrot-preprocess also use.
@@ -197,6 +197,24 @@ def add_embed_mean_subtraction_argument(parser: 'argparse._ActionsContainer') ->
                              '--embedding-context, from the whole full-length protein). Stored in their own files in '
                              'the embedding cache; recorded in a network trained with it, so parrot-predict applies '
                              'it automatically')
+
+
+def add_embedding_layer_argument(parser: 'argparse._ActionsContainer') -> None:
+    """Add --embedding-layer, which only applies to protein language model encodings
+
+    Parameters
+    ----------
+    parser : argparse.ArgumentParser or argument group
+        Where to add the argument
+    """
+
+    parser.add_argument('--embedding-layer', dest='embedding_layer', type=int, metavar='layer',
+                        help="protein language model encodings only: the layer of the model whose output is each "
+                             "residue's embedding, from 1 (the first transformer layer) to the model's number of "
+                             'layers (the final layer, the default); negative numbers count back from the final layer '
+                             '(-1 is the final layer). Earlier layers lack the final layer norm. Stored in their own '
+                             'files in the embedding cache; recorded in a network trained with it, so parrot-predict '
+                             'uses the same layer')
 
 
 def check_mean_subtraction_applies(args: argparse.Namespace, encoder: SequenceEncoder) -> None:
@@ -690,7 +708,7 @@ def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: i
         save_splits_output = output_prefix + '_split_file.txt'
 
     encoder = get_encoder(args.encode, standardize=args.standardize_encoding, nardini_scrambles=args.nardini_scrambles,
-                          mean_subtracted=args.embed_mean_subtraction)
+                          mean_subtracted=args.embed_mean_subtraction, embedding_layer=args.embedding_layer)
     check_embedding_cache_applies(encoder, args.embedding_cache)
     check_embedding_context_arguments(args, encoder)
     check_mean_subtraction_applies(args, encoder)

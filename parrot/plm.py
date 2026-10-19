@@ -23,6 +23,11 @@ of its embedding. These in-context embeddings are kept in a file of their own
 in the cache (see InContextEmbeddingCache), so they are never mistaken for
 embeddings of sequences on their own.
 
+Each residue's embedding is, by default, the model's final-layer representation
+of it. The output of an earlier layer can be used instead (--embedding-layer):
+the model is then run only up to that layer, and these embeddings, too, are kept
+in files of their own in the cache.
+
 Two families of models are supported:
 
 - ESM-2 (Lin et al. 2023, Science 379:1123, doi:10.1126/science.ade2574), loaded
@@ -86,16 +91,22 @@ class PLMModel:
         Longest stretch of residues the model was trained on. Longer sequences
         are embedded in overlapping windows of this many residues, and each
         residue's embedding is the average over the windows that contain it.
+    num_layers : int
+        Transformer layers in the model
     """
 
     family: str
     embedding_size: int
     max_window: int
+    num_layers: int
 
     def __post_init__(self) -> None:
-        """Check the family is one PARROT can load, so a mistake in the model list fails as soon as it is read."""
+        """Check the family is one PARROT can load and the model has layers, so a mistake in the model list fails as
+        soon as it is read."""
         if self.family not in PLM_FAMILIES:
             raise ValueError(f"Unknown protein language model family '{self.family}': must be one of {PLM_FAMILIES}")
+        if self.num_layers < 1:
+            raise ValueError(f'A protein language model needs at least 1 layer, not {self.num_layers}')
 
 
 # ESM-2 was trained on crops of 1,024 tokens: up to 1,022 residues plus the start and
@@ -106,17 +117,17 @@ ESM2_MAX_WINDOW = 1022
 # (EvolutionaryScale 2024, ESM Cambrian blog): up to 2,046 residues plus start and end
 ESMC_MAX_WINDOW = 2046
 
-# Every supported model. ESM-2 embedding sizes: Lin et al. 2023, Table S1; ESM C
-# widths: the ESM Cambrian blog.
+# Every supported model. ESM-2 embedding sizes and layers (the t<number> in each name): Lin et al. 2023, Table S1;
+# ESM C widths: the ESM Cambrian blog, and layers: EvolutionaryScale's esm package (esm/pretrained.py).
 PLM_MODELS = {
-    'esm2_t6_8M_UR50D': PLMModel(ESM2_FAMILY, 320, ESM2_MAX_WINDOW),
-    'esm2_t12_35M_UR50D': PLMModel(ESM2_FAMILY, 480, ESM2_MAX_WINDOW),
-    'esm2_t30_150M_UR50D': PLMModel(ESM2_FAMILY, 640, ESM2_MAX_WINDOW),
-    'esm2_t33_650M_UR50D': PLMModel(ESM2_FAMILY, 1280, ESM2_MAX_WINDOW),
-    'esm2_t36_3B_UR50D': PLMModel(ESM2_FAMILY, 2560, ESM2_MAX_WINDOW),
-    'esm2_t48_15B_UR50D': PLMModel(ESM2_FAMILY, 5120, ESM2_MAX_WINDOW),
-    'esmc_300m': PLMModel(ESMC_FAMILY, 960, ESMC_MAX_WINDOW),
-    'esmc_600m': PLMModel(ESMC_FAMILY, 1152, ESMC_MAX_WINDOW),
+    'esm2_t6_8M_UR50D': PLMModel(ESM2_FAMILY, 320, ESM2_MAX_WINDOW, 6),
+    'esm2_t12_35M_UR50D': PLMModel(ESM2_FAMILY, 480, ESM2_MAX_WINDOW, 12),
+    'esm2_t30_150M_UR50D': PLMModel(ESM2_FAMILY, 640, ESM2_MAX_WINDOW, 30),
+    'esm2_t33_650M_UR50D': PLMModel(ESM2_FAMILY, 1280, ESM2_MAX_WINDOW, 33),
+    'esm2_t36_3B_UR50D': PLMModel(ESM2_FAMILY, 2560, ESM2_MAX_WINDOW, 36),
+    'esm2_t48_15B_UR50D': PLMModel(ESM2_FAMILY, 5120, ESM2_MAX_WINDOW, 48),
+    'esmc_300m': PLMModel(ESMC_FAMILY, 960, ESMC_MAX_WINDOW, 30),
+    'esmc_600m': PLMModel(ESMC_FAMILY, 1152, ESMC_MAX_WINDOW, 36),
 }
 
 # Hugging Face organisation that publishes the ESM-2 models
@@ -189,6 +200,13 @@ MEAN_SUBTRACTED_CACHE_SUFFIX = '.mean_subtracted'
 # Recorded in a saved network's encoding config when each embedding had its mean over the residues subtracted
 MEAN_SUBTRACTED_CONFIG_KEY = 'mean_subtracted'
 
+# Embeddings from a layer before the final one (--embedding-layer) differ from the others, so they are kept in the
+# cache as <model><suffix><layer>.h5, e.g. esm2_t33_650M_UR50D.layer20.h5 (mean subtraction and context add theirs)
+LAYER_CACHE_SUFFIX = '.layer'
+
+# Recorded in a saved network's encoding config when its embeddings came from a layer before the final one
+LAYER_CONFIG_KEY = 'layer'
+
 
 @dataclass(frozen=True)
 class FragmentContext:
@@ -209,6 +227,70 @@ class FragmentContext:
 def is_plm_encoding(encoding: str) -> bool:
     """True if `encoding` names a protein language model PARROT can embed with."""
     return encoding in PLM_MODELS
+
+
+def resolve_layer(model_name: str, layer: int | None) -> int:
+    """The layer of a model, numbered from 1 (the first transformer layer) to its number of layers, that `layer` names
+
+    Parameters
+    ----------
+    model_name : str
+        A key of PLM_MODELS
+    layer : int or None
+        1 to the model's number of layers, or a negative number counting back
+        from the final layer (-1 is the final layer); None is the final layer
+
+    Returns
+    -------
+    int
+
+    Raises
+    ------
+    ValueError
+        If the model has no such layer
+    """
+    num_layers = PLM_MODELS[model_name].num_layers
+    if layer is None:
+        return num_layers
+    if isinstance(layer, bool) or not isinstance(layer, (int, np.integer)):
+        raise ValueError(f'The embedding layer must be a whole number, not {layer!r}')
+    if not (1 <= layer <= num_layers or -num_layers <= layer <= -1):
+        raise ValueError(f'{model_name} has {num_layers} layers, so the embedding layer must be 1 to {num_layers} '
+                         f'(the final layer), or -1 (the final layer) to -{num_layers} counting back from it, not '
+                         f'{layer}')
+    return int(layer) if layer > 0 else num_layers + 1 + int(layer)
+
+
+def truncate_to_layer(model: Any, family: str, layer: int) -> None:
+    """Remove the layers of a loaded model after `layer`, so that its output is that layer's
+
+    The model's final layer norm follows only its last layer, so it is removed
+    too when later layers are: the output is then exactly the model's hidden
+    state after `layer` (Hugging Face's hidden_states[layer] for ESM-2,
+    ESMCOutput.hidden_states[layer - 1] for ESM C), and the layers after it
+    are never run. A model kept to its last layer is left as it is.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        An ESM-2 model (transformers' EsmModel) or an ESM C model, changed in place
+    family : str
+        ESM2_FAMILY or ESMC_FAMILY
+    layer : int
+        The layer to keep the model to (1 to its number of layers)
+    """
+    if family == ESM2_FAMILY:
+        encoder = model.encoder
+        if layer < len(encoder.layer):
+            encoder.layer = encoder.layer[:layer]
+            # transformers' EsmEncoder applies its final layer norm only if it has one
+            encoder.emb_layer_norm_after = None
+        return
+
+    stack = model.transformer  # ESM C, the only other family (see PLMModel)
+    if layer < len(stack.blocks):
+        stack.blocks = stack.blocks[:layer]
+        stack.norm = torch.nn.Identity()
 
 
 def human_size(num_bytes: float) -> str:
@@ -651,6 +733,7 @@ Each file is an HDF5 file with one dataset per sequence. Datasets are named by t
 - **PLM embeddings** (`<model>.h5`): each dataset has shape [sequence length X values per residue], stored as 16-bit floats. Each value is the model's final-layer representation of that residue (after the model's last layer norm), computed with the whole sequence as context. Sequences longer than the model was trained on ({ESM2_MAX_WINDOW:,} residues for ESM-2, {ESMC_MAX_WINDOW:,} for ESM C) are embedded in overlapping windows of that length, and residues covered by more than one window get the average. The size is about (number of residues) x (values per residue) x 2 bytes.
 - **PLM embeddings in context** (`<model>{CONTEXT_CACHE_SUFFIX}.h5`, from `--embedding-context`): the same, but each fragment's embedding was cut out of the embedding of the full-length protein it comes from, so it differs from the fragment's embedding on its own. Datasets are named by the SHA-256 hash of the full-length sequence, the fragment's start in it and the fragment, and each records the fragment, its start (0-based) and the SHA-256 hash of the full-length sequence.
 - **Mean-subtracted PLM embeddings** (`<model>{MEAN_SUBTRACTED_CACHE_SUFFIX}.h5`, and `<model>{MEAN_SUBTRACTED_CACHE_SUFFIX}{CONTEXT_CACHE_SUFFIX}.h5` in context, from `--embed-mean-subtraction`): the same, but the mean of each embedding over its residues (its mean pool) was subtracted from every residue's embedding before it was stored. In context, this is the mean over the whole full-length protein, subtracted before the fragment was cut out.
+- **PLM embeddings from an earlier layer** (`<model>{LAYER_CACHE_SUFFIX}<layer>.h5`, from `--embedding-layer`, with `{MEAN_SUBTRACTED_CACHE_SUFFIX}` and `{CONTEXT_CACHE_SUFFIX}` added as above): the same, but each value is the output of that layer of the model (numbered from 1, the first transformer layer) rather than of the final layer, without the final layer norm, which follows only the final layer.
 - **NARDINI+ features** (`nardini_*.h5`): each dataset is one vector of NARDINI+ z-scores for the whole sequence, stored as 32-bit floats, computed by SPARROW with the settings in the file name (the compositional background, the number of scrambles, the random seed and the SPARROW version). See PARROT's documentation on NARDINI encodings.
 
 ## Reusing or deleting this cache
@@ -694,6 +777,12 @@ class PLMEncoder(SequenceEncoder):
     network trained on them records this, so that predictions embed new
     sequences in the same way.
 
+    With a layer before the final one (--embedding-layer), each residue's
+    embedding is that layer's output instead of the final layer's: the model
+    is run only up to it (see truncate_to_layer()). These embeddings, too, are
+    kept in their own cache files, and a network trained on them records the
+    layer, so that predictions embed new sequences from the same one.
+
     Attributes
     ----------
     name : str
@@ -716,10 +805,13 @@ class PLMEncoder(SequenceEncoder):
         Sequence -> its FragmentContext, or None for a sequence embedded on its own
     mean_subtracted : bool
         True if each embedding has its mean over the residues subtracted
+    layer : int
+        The layer whose output is each residue's embedding, from 1 (the first
+        transformer layer) to model_info.num_layers (the final layer, the default)
     """
 
-    def __init__(self, model_name: str, window: int | None = None,
-                 overlap: int = WINDOW_OVERLAP_RESIDUES, mean_subtracted: bool = False) -> None:
+    def __init__(self, model_name: str, window: int | None = None, overlap: int = WINDOW_OVERLAP_RESIDUES,
+                 mean_subtracted: bool = False, layer: int | None = None) -> None:
         """
         Parameters
         ----------
@@ -731,11 +823,14 @@ class PLMEncoder(SequenceEncoder):
             Residues shared by consecutive windows (default WINDOW_OVERLAP_RESIDUES)
         mean_subtracted : bool, optional
             Subtract each embedding's mean over its residues from every residue (default False)
+        layer : int, optional
+            The layer whose output is each residue's embedding: 1 to the model's number of layers, or a negative
+            number counting back from the final layer (default: the final layer; see resolve_layer())
 
         Raises
         ------
         ValueError
-            If model_name is not a key of PLM_MODELS
+            If model_name is not a key of PLM_MODELS, or the model has no such layer
         """
         if not is_plm_encoding(model_name):
             raise ValueError(f"Unknown protein language model '{model_name}': choose from "
@@ -751,13 +846,36 @@ class PLMEncoder(SequenceEncoder):
         self.in_context = False
         self.contexts: dict[str, FragmentContext | None] = {}
         self.mean_subtracted = mean_subtracted
+        self.layer = resolve_layer(model_name, layer)
         self._model: Any = None
         self._tokenizer: Any = None
 
     @property
+    def final_layer(self) -> bool:
+        """True if the embeddings are the model's final-layer representations (the default)."""
+        return self.layer == self.model_info.num_layers
+
+    @property
     def cache_name(self) -> str:
-        """The name of this encoder's cache files: the model, marked if the embeddings are mean-subtracted."""
-        return self.name + (MEAN_SUBTRACTED_CACHE_SUFFIX if self.mean_subtracted else '')
+        """The name of this encoder's cache files: the model, marked with the layer if it is not the final one and
+        if the embeddings are mean-subtracted."""
+        name = self.name
+        if not self.final_layer:
+            name += f'{LAYER_CACHE_SUFFIX}{self.layer}'
+        if self.mean_subtracted:
+            name += MEAN_SUBTRACTED_CACHE_SUFFIX
+        return name
+
+    @property
+    def variant(self) -> str:
+        """How these embeddings differ from the model's usual final-layer ones, for messages: e.g.
+        ' (layer 6 of 12, mean-subtracted)', or '' if they do not."""
+        notes = []
+        if not self.final_layer:
+            notes.append(f'layer {self.layer} of {self.model_info.num_layers}')
+        if self.mean_subtracted:
+            notes.append('mean-subtracted')
+        return f' ({", ".join(notes)})' if notes else ''
 
     @property
     def alphabet(self) -> str:
@@ -768,12 +886,19 @@ class PLMEncoder(SequenceEncoder):
         """Everything needed to embed new sequences in the same way as the training sequences"""
         if self.model_info.family == ESM2_FAMILY:
             source = f'huggingface:{HUGGINGFACE_ORGANISATION}/{self.name}'
-            representation = 'final layer after the final layer norm (last_hidden_state), start and end tokens removed'
+            final_output, layer_output = 'last_hidden_state', f'hidden_states[{self.layer}]'
         else:  # ESM C, the only other family (see PLMModel)
             source = f'evolutionaryscale-esm:{self.name}'
-            representation = 'final layer after the final layer norm (ESMCOutput.embeddings), start and end tokens removed'
+            final_output, layer_output = 'ESMCOutput.embeddings', f'ESMCOutput.hidden_states[{self.layer - 1}]'
+        if self.final_layer:
+            representation = f'final layer after the final layer norm ({final_output}), start and end tokens removed'
+        else:
+            representation = (f'output of layer {self.layer} of {self.model_info.num_layers} ({layer_output}; the '
+                              'final layer norm follows only the final layer), start and end tokens removed')
         config = {'name': PLM_CONFIG_NAME, 'model': self.name, 'source': source, 'representation': representation,
                   'window': self.window, 'overlap': self.overlap, 'storage_dtype': np.dtype(STORAGE_DTYPE).name}
+        if not self.final_layer:
+            config[LAYER_CONFIG_KEY] = self.layer
         if self.in_context:
             config[IN_CONTEXT_CONFIG_KEY] = True
         if self.mean_subtracted:
@@ -787,8 +912,9 @@ class PLMEncoder(SequenceEncoder):
             self._model.to(device)
 
     def use_cache(self, directory: str | Path | None) -> None:
-        """Store and read embeddings in `directory` (in files of their own if they are mean-subtracted), or, if it is
-        None, in no cache (closing any cache in use, which is left as it is on disk)."""
+        """Store and read embeddings in `directory` (in files of their own if they are from a layer before the final
+        one or mean-subtracted; see cache_name), or, if it is None, in no cache (closing any cache in use, which is
+        left as it is on disk)."""
         for cache in (self.cache, self.context_cache):
             if cache is not None:
                 cache.close()
@@ -905,8 +1031,7 @@ class PLMEncoder(SequenceEncoder):
         if not silent:
             placed = (f' ({len(in_context):,} within their full-length proteins, {len(on_own):,} on their own)'
                       if self.in_context else '')
-            mean_subtracted = ' (mean-subtracted)' if self.mean_subtracted else ''
-            print(f'\nPLM encoding {self.name}{mean_subtracted}: {len(unique):,} unique sequences{placed}, '
+            print(f'\nPLM encoding {self.name}{self.variant}: {len(unique):,} unique sequences{placed}, '
                   f'{len(unique) - len(missing):,} already in the embedding cache at {self.cache.directory}')
             if missing:
                 print(f'Embedding {len(missing):,} sequences ({new_residues:,} residues x {self.input_size} values x '
@@ -1052,7 +1177,8 @@ class PLMEncoder(SequenceEncoder):
         Raises
         ------
         ValueError
-            If a sequence has a character the model cannot read as one residue (see PLM_RESIDUES)
+            If a sequence has a character the model cannot read as one residue (see PLM_RESIDUES), or an embedding
+            has a value too large to store (see to_storage())
         """
         self.check_sequences(sequences)
         unique = list(dict.fromkeys(sequences))
@@ -1081,11 +1207,47 @@ class PLMEncoder(SequenceEncoder):
             if self.mean_subtracted:
                 # Subtract the mean pool (at full precision, before rounding for storage)
                 embedding -= embedding.mean(axis=0)
-            embeddings[sequence] = embedding.astype(STORAGE_DTYPE)
+            embeddings[sequence] = self.to_storage(embedding, sequence)
         return embeddings
 
+    def to_storage(self, embedding: np.ndarray, sequence: str) -> np.ndarray:
+        """An embedding rounded to STORAGE_DTYPE, checked to fit in it
+
+        Without the final layer norm, the outputs of a model's earlier layers
+        are much larger than its final layer's (up to a few thousand in ESM C's
+        later layers), so a value could exceed the largest float16 (65,504).
+
+        Parameters
+        ----------
+        embedding : numpy array
+            float32 [length X input_size]
+        sequence : str
+            The sequence embedded (named in the error)
+
+        Returns
+        -------
+        numpy array
+            The embedding as STORAGE_DTYPE
+
+        Raises
+        ------
+        ValueError
+            If a value is too large to store
+        """
+        largest_storable = float(np.finfo(STORAGE_DTYPE).max)
+        largest = float(np.abs(embedding).max(initial=0.0))
+        if not largest <= largest_storable:
+            raise ValueError(f'The {self.name}{self.variant} embedding of {sequence} has a value of magnitude '
+                             f'{largest:.3g}, beyond the largest {np.dtype(STORAGE_DTYPE).name} the embedding cache '
+                             f'can store ({largest_storable:,.0f}); try another --embedding-layer')
+        stored: np.ndarray = embedding.astype(STORAGE_DTYPE)
+        return stored
+
     def _run_model(self, chunks: list[str]) -> list[np.ndarray]:
-        """Final-layer embeddings of a batch of sequences (each at most `window` residues)
+        """Embeddings of a batch of sequences (each at most `window` residues), from the encoder's layer
+
+        The model is kept to that layer when it is loaded (see _load_model()),
+        so its output is that layer's.
 
         Parameters
         ----------
@@ -1114,12 +1276,13 @@ class PLMEncoder(SequenceEncoder):
         return outputs
 
     def _load_model(self) -> tuple[Any, Any]:
-        """Load the PLM and its tokenizer (once)."""
+        """Load the PLM and its tokenizer (once), with the model kept to the encoder's layer (see truncate_to_layer())."""
         if self._model is None:
             if self.model_info.family == ESM2_FAMILY:
                 self._model, self._tokenizer = self._load_esm2()
             else:  # ESM C, the only other family (see PLMModel)
                 self._model, self._tokenizer = self._load_esmc()
+            truncate_to_layer(self._model, self.model_info.family, self.layer)
             self._model = self._model.float().to(self.device).eval()
         return self._model, self._tokenizer
 
@@ -1134,6 +1297,9 @@ class PLMEncoder(SequenceEncoder):
         model = EsmModel.from_pretrained(identifier, add_pooling_layer=False)
         if model.config.hidden_size != self.input_size:
             raise ValueError(f'{identifier} has embedding size {model.config.hidden_size}, expected {self.input_size}')
+        if model.config.num_hidden_layers != self.model_info.num_layers:
+            raise ValueError(f'{identifier} has {model.config.num_hidden_layers} layers, expected '
+                             f'{self.model_info.num_layers}')
         return model, AutoTokenizer.from_pretrained(identifier)
 
     def _load_esmc(self) -> tuple[Any, Any]:
@@ -1150,6 +1316,9 @@ class PLMEncoder(SequenceEncoder):
         width = model.embed.embedding_dim
         if width != self.input_size:
             raise ValueError(f'{self.name} has embedding size {width}, expected {self.input_size}')
+        if len(model.transformer.blocks) != self.model_info.num_layers:
+            raise ValueError(f'{self.name} has {len(model.transformer.blocks)} layers, expected '
+                             f'{self.model_info.num_layers}')
         return model, model.tokenizer
 
 
@@ -1267,7 +1436,7 @@ def encoder_from_plm_config(config: dict[str, Any]) -> PLMEncoder:
     Returns
     -------
     PLMEncoder
-        With the network's model, windows and mean subtraction, and embedding in context if the network was
+        With the network's model, layer, windows and mean subtraction, and embedding in context if the network was
         trained so (each sequence's context is then given later; see PLMEncoder.add_contexts())
 
     Raises
@@ -1280,9 +1449,11 @@ def encoder_from_plm_config(config: dict[str, Any]) -> PLMEncoder:
     if stored_dtype != np.dtype(STORAGE_DTYPE).name:
         raise ValueError(f'This network was trained on {stored_dtype} embeddings, which this version of PARROT '
                          'does not produce')
-    # Networks saved before --embed-mean-subtraction existed used embeddings as the model gives them
+    # Networks saved before --embed-mean-subtraction and --embedding-layer existed used the final layer's embeddings as
+    # the model gives them
     encoder = PLMEncoder(config['model'], window=config['window'], overlap=config['overlap'],
-                         mean_subtracted=bool(config.get(MEAN_SUBTRACTED_CONFIG_KEY, False)))
+                         mean_subtracted=bool(config.get(MEAN_SUBTRACTED_CONFIG_KEY, False)),
+                         layer=config.get(LAYER_CONFIG_KEY))
     # Networks saved before --embedding-context existed embedded every sequence on its own
     encoder.in_context = bool(config.get(IN_CONTEXT_CONFIG_KEY, False))
     return encoder
