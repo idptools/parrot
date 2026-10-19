@@ -13,7 +13,8 @@ of everything it did. It can also compute a protein language model or NARDINI
 encoding of every sequence of the output ahead of time, into the embedding
 cache that parrot-train, parrot-optimize and parrot-predict read (protein
 language model embeddings optionally within the full-length proteins the
-sequences were cut from, with --embedding-context).
+sequences were cut from, with --embedding-context, and with each embedding's
+mean subtracted, with --embed-mean-subtraction).
 
 Each step is one function below, run in this order by run(): read, clean,
 recode, deduplicate, split, balance, write, encode.
@@ -233,7 +234,8 @@ def add_matrix_arguments(parser: argparse.ArgumentParser) -> None:
                             'output is checked against it (the file itself is not changed, and works with the output '
                             'as it is, since every sequence keeps its ID)')
     group.add_argument('--matrix-width', dest='matrix_width', type=int, metavar='N',
-                       help='every matrix has N columns (default: one per residue); used when checking the output')
+                       help='every matrix has N columns (default: one per residue); used when checking the output '
+                            'against --matrix-file, so it needs --matrix-file')
 
 
 def add_encoding_arguments(parser: argparse.ArgumentParser) -> None:
@@ -312,8 +314,9 @@ def check_arguments(args: argparse.Namespace) -> None:
 
 
 def check_matrix_options(args: argparse.Namespace) -> None:
-    """Check the options make sense for the datatype: matrix options only for matrix data, and no option that
-    changes values for it (its values are in the matrix file, which preprocessing does not change)
+    """Check the options make sense for the datatype: matrix options only for matrix data, --matrix-width only
+    with the --matrix-file it describes, and no option that changes values for matrix data (its values are in the
+    matrix file, which preprocessing does not change)
 
     Parameters
     ----------
@@ -339,6 +342,10 @@ def check_matrix_options(args: argparse.Namespace) -> None:
         if given:
             raise ValueError(f'{flag} changes values, so it does not apply to matrix data (whose values are in the '
                              'matrix file); cleaning, removing duplicates and splitting do')
+    # The width is used only to check the output against the matrix file, so on its own it would do nothing
+    if args.matrix_width is not None and args.matrix_file is None:
+        raise ValueError('--matrix-width is used only to check the output against the matrices, so it needs '
+                         '--matrix-file too')
     if args.matrix_file is not None:
         arguments.check_file_exists(args.matrix_file, 'Matrix file')
 
@@ -360,9 +367,11 @@ def encoder_from_arguments(args: argparse.Namespace) -> SequenceEncoder | None:
     ------
     ValueError
         If an encoding option is given without --encode, --encode names an encoding that is never stored in an
-        embedding cache, or an option does not apply to the encoding or the datatype
+        embedding cache, an option does not apply to the encoding or the datatype, or only one of
+        --embedding-context and --embedding-context-map is given
     FileNotFoundError
-        If --encode is neither a built-in encoding nor a file
+        If --encode is neither a built-in encoding nor a file, or a file given with --embedding-context or
+        --embedding-context-map does not exist
     """
     device_options = (('--device', args.device != DEFAULT_DEVICE), ('--gpu-id', args.gpu_id is not None))
     if args.encode is None:
@@ -465,7 +474,8 @@ def main() -> None:
 
 
 def run() -> None:
-    """Process a datafile, step by step, and write the result, a split-file (if split) and a report."""
+    """Process a datafile, step by step, and write the result, a split-file (if split) and a report, then (with
+    --encode) compute the encoding of every sequence of the result into the embedding cache."""
     args = build_parser().parse_args()
     arguments.print_header(PROGRAM_NAME, silent=False)
     check_arguments(args)
@@ -493,7 +503,8 @@ def run() -> None:
     context = None
     if encoder is not None:
         # A sequence the encoding cannot read, or one that cannot be placed in its full-length protein, stops the
-        # command before anything is written
+        # command before the output is written (only an earlier step's class mapping or class balance trace may
+        # already be written)
         encoder.check_sequences(line[1] for line in lines)
         context = place_in_context(args, encoder, [line[0] for line in lines], [line[1] for line in lines])
     write_outputs(lines, splits, args, output, output_prefix, classification, report)
@@ -674,7 +685,8 @@ def remove_duplicates(lines: list[Line], args: argparse.Namespace, classificatio
     Raises
     ------
     ValueError
-        If dealing with duplicated sequences removes every line
+        If dealing with duplicated sequences removes every line, or the copies' values cannot be merged (see
+        preproc.deduplicate)
     """
     if args.remove_line_duplicates:
         report.section('Duplicate lines')
@@ -1024,11 +1036,11 @@ def encode_ahead_of_time(lines: list[Line], encoder: SequenceEncoder, device: to
     With --embedding-context, the table of where each sequence is embedded
     (<output>_embedded_context.tsv) is written first.
 
-    The encoding is computed exactly as parrot-train computes it before training (common.prepare_encoding()), so
-    parrot-train, parrot-optimize and parrot-predict given the same --embedding-cache find every sequence already
+    The encoding is computed in the same way as parrot-train computes it before training (common.prepare_encoding()),
+    so parrot-train, parrot-optimize and parrot-predict given the same --embedding-cache find every sequence already
     there. It runs after the output is written, so that a long encoding that stops part of the way (e.g. when the
-    disk fills) loses none of the preprocessing; the cache keeps what was computed. The report, which
-    write_outputs() has already written, is written again with this step added.
+    disk fills) loses none of the preprocessing; the cache keeps every encoding already written to it. The report,
+    which write_outputs() has already written, is written again with this step added.
 
     Parameters
     ----------
@@ -1045,6 +1057,11 @@ def encode_ahead_of_time(lines: list[Line], encoder: SequenceEncoder, device: to
     report : ProcessingReport
     context : ContextAssignment, optional
         With --embedding-context, where each sequence is embedded (already given to the encoder)
+
+    Raises
+    ------
+    RuntimeError
+        If the disk does not have room for the protein language model embeddings (checked before any is computed)
     """
     sequences = [line[1] for line in lines]
     default_directory = os.path.join(os.path.dirname(output), plm.TRAIN_CACHE_DIRECTORY)

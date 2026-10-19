@@ -8,6 +8,7 @@ downloaded (tests never download anything).
 """
 
 import importlib.util
+import inspect
 import io
 import subprocess
 import sys
@@ -262,6 +263,30 @@ def test_the_progress_bar_reaches_its_total_when_embedding_into_the_cache(fake_p
 
     assert len(bars) == 1
     assert bars[0].total == 40 + 6 + 3 and bars[0].n == bars[0].total
+
+
+class FakeStderr(io.StringIO):
+    """Stands in for stderr, on a terminal or not."""
+
+    def __init__(self, on_terminal: bool) -> None:
+        super().__init__()
+        self.on_terminal = on_terminal
+
+    def isatty(self) -> bool:
+        return self.on_terminal
+
+
+@pytest.mark.parametrize('on_terminal, interval', [(True, plm.TERMINAL_PROGRESS_INTERVAL_SECONDS),
+                                                   (False, plm.LOG_PROGRESS_INTERVAL_SECONDS)])
+def test_the_progress_bar_is_redrawn_every_half_minute_in_a_log(monkeypatch, on_terminal, interval):
+    # tqdm's monitor thread redraws a bar that has not been redrawn for maxinterval seconds (10 by default), so in a
+    # log the bar used to be redrawn every 10-30 seconds rather than every 30
+    assert inspect.signature(tqdm.__init__).parameters['maxinterval'].default == plm.TQDM_DEFAULT_MAXINTERVAL_SECONDS
+    monkeypatch.setattr(sys, 'stderr', FakeStderr(on_terminal))
+    bar = plm.progress_bar(10, 'residues', 'Embedding', silent=False)
+    bar.close()
+    assert bar.mininterval == interval
+    assert bar.maxinterval == max(interval, plm.TQDM_DEFAULT_MAXINTERVAL_SECONDS)
 
 
 def test_the_progress_bar_is_shown_unless_silent(fake_plm, tmp_path, capsys):

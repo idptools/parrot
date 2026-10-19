@@ -4,7 +4,8 @@ saving and reporting, that parrot-train and parrot-optimize share (their
 command line is built in training_parser.py); the device, embedding-cache and
 embedding-context options and the encoding of sequences ahead of time, which
 parrot-predict and parrot-preprocess also use (parrot-preprocess also shares
---nardini-scrambles); the check of --probabilistic-classification, which
+--nardini-scrambles and --embed-mean-subtraction); the check of
+--probabilistic-classification, which
 parrot-predict also uses; and the datatypes and legacy-option note that
 parrot-predict and parrot-preprocess also use.
 
@@ -152,7 +153,8 @@ def add_nardini_scrambles_argument(parser: 'argparse._ActionsContainer') -> None
 
     parser.add_argument('--nardini-scrambles', dest='nardini_scrambles', type=int, metavar='num_scrambles',
                         help='NARDINI encodings only: scrambles of each sequence used for its patterning z-scores '
-                             f'(default {nardini.DEFAULT_NUM_SCRAMBLES:,}; the cost grows in proportion)')
+                             f'(default {nardini.DEFAULT_NUM_SCRAMBLES:,}; more take longer: 10,000 take about '
+                             'three to four times as long as 1,000)')
 
 
 def add_embedding_context_arguments(parser: 'argparse._ActionsContainer') -> None:
@@ -167,7 +169,8 @@ def add_embedding_context_arguments(parser: 'argparse._ActionsContainer') -> Non
     parser.add_argument('--embedding-context', dest='embedding_context', metavar='fasta_file',
                         help='protein language model encodings only: a FASTA file of the full-length proteins the '
                              'sequences were cut from. Each sequence is then embedded within its full-length protein '
-                             '(named in --embedding-context-map), rather than on its own')
+                             '(named in --embedding-context-map), rather than on its own. A network trained with it '
+                             'needs it again in parrot-predict (or --embed-in-isolation)')
     parser.add_argument('--embedding-context-map', dest='embedding_context_map', metavar='map_file',
                         help="with --embedding-context: one '<sequence ID> <full-length ID> [start]' line per "
                              'sequence, naming the protein it was cut from (by the first word of its FASTA header '
@@ -190,7 +193,8 @@ def add_embed_mean_subtraction_argument(parser: 'argparse._ActionsContainer') ->
                              "(its mean pool) from every residue's embedding before it is stored, so that what is "
                              'left is how each residue differs from the sequence as a whole (with '
                              '--embedding-context, from the whole full-length protein). Stored in their own files in '
-                             'the embedding cache; saved with the network and applied automatically when predicting')
+                             'the embedding cache; recorded in a network trained with it, so parrot-predict applies '
+                             'it automatically')
 
 
 def check_mean_subtraction_applies(args: argparse.Namespace, encoder: SequenceEncoder) -> None:
@@ -341,7 +345,10 @@ def prepare_encoding(encoder: SequenceEncoder, sequences: list[str], cache_direc
     Raises
     ------
     ValueError
-        If --embedding-cache was given for an encoding that does not use the cache
+        If --embedding-cache was given for an encoding that does not use the cache, or the encoder cannot encode
+        the sequences (see PLMEncoder.prepare() and NardiniEncoder.prepare())
+    RuntimeError
+        If the disk does not have room for the protein language model embeddings
     """
     directory = cache_directory if cache_directory is not None else default_directory
     check_embedding_cache_applies(encoder, cache_directory)
@@ -363,7 +370,7 @@ def prepare_encoding(encoder: SequenceEncoder, sequences: list[str], cache_direc
 
 
 def add_device_arguments(parser: 'argparse._ActionsContainer') -> None:
-    """Add the arguments that choose the device (shared by every command that runs a network)
+    """Add the arguments that choose the device (shared by every command that runs a network or a language model)
 
     Parameters
     ----------
@@ -375,7 +382,8 @@ def add_device_arguments(parser: 'argparse._ActionsContainer') -> None:
                         help="device to run on: 'auto' (default) uses a CUDA GPU if available, else an "
                              "Apple-silicon GPU (MPS) if available, else the CPU")
     parser.add_argument('--gpu-id', dest='gpu_id', type=int, metavar='index',
-                        help='index of the CUDA device to use, on machines with more than one NVIDIA GPU')
+                        help='index of the CUDA device to use, on machines with more than one NVIDIA GPU (this asks '
+                             'for CUDA, so it cannot be combined with --device cpu or mps)')
     parser.add_argument('--force-cpu', action=arguments.RetiredOption, replacement='use --device cpu')
 
 
@@ -657,12 +665,13 @@ def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: i
     Raises
     ------
     FileNotFoundError
-        If the datafile, matrix file, encoding file or output directory does not exist
+        If the datafile, matrix file, encoding file, --embedding-context files or output directory does not exist
     ValueError
-        If any argument is invalid (including a --split that is neither a file nor a method), or the datafile does
-        not match the task
+        If any argument is invalid (including a --split that is neither a file nor a method), the datafile does
+        not match the task, or a sequence cannot be placed in its full-length protein (--embedding-context)
     RuntimeError
-        If the requested device is not available, or --split mmseqs is asked for but MMseqs2 cannot be found
+        If the requested device is not available, --split mmseqs is asked for but MMseqs2 cannot be found, or the
+        disk does not have room for the protein language model embeddings
     """
 
     set_random_seed(args.seed)

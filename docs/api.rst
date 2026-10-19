@@ -12,11 +12,13 @@ To predict with a network trained by ``parrot-train`` or ``parrot-optimize``, lo
 
     from parrot import Predictor
 
-    predictor = Predictor('network.pt')    # Predictor('network.pt', device='auto') uses a GPU if there is one
+    predictor = Predictor('network.pt')    # on a GPU if there is one; device='cpu' for the CPU
     values = predictor.predict('MKVLAAGIVGLLLA')
     all_values = predictor.predict_batch(['MKVLAAGIVGLLLA', 'MSDNEEGQSKRRQ'])
 
-``predict`` takes one sequence at a time and returns a NumPy array: for regression, the predicted value (or one value per residue, or the predicted matrix); for classification, the probability of each class (for every residue or matrix cell, for residue and matrix networks). ``predict_batch`` takes a list of sequences and returns a list of these arrays, one per sequence in the same order. It predicts the sequences together, as ``parrot-predict`` does (every sequence is encoded first, then the network runs over batches of similar length), so for more than a handful of sequences it is much faster than ``predict`` on each. Its predictions match those of ``predict`` up to float32 rounding, not exactly: which sequences share a batch changes the order of the floating-point operations.
+``predict`` takes one sequence at a time and returns a NumPy array: for regression, the predicted value (or one value per residue, or the predicted matrix); for classification, the probability of each class (for every residue or matrix cell, for residue and matrix networks). ``predict_batch`` takes a list of sequences and returns a list of these arrays, one per sequence in the same order. It predicts the sequences together, as ``parrot-predict`` does (every sequence is encoded first, then the network runs over batches of similar length), so for more than a handful of sequences it is much faster than ``predict`` on each. Its predictions match those of ``predict`` up to float32 rounding, not exactly: which sequences share a batch changes the order of the floating-point operations. For a network trained on protein language model embeddings, the model also runs in batches, and its float32 rounding can move a value of the stored (16-bit) embeddings by one step, so the predictions can differ by more.
+
+Predictions run on a GPU if there is one (CUDA, else Apple-silicon MPS) and otherwise on the CPU, as ``parrot-predict``'s do. ``device='cpu'`` uses the CPU anyway, which can be faster for a few sequences at a time and is needed inside forked worker processes (where MPS cannot be used); on a machine with several NVIDIA GPUs, ``Predictor('network.pt', gpu_id=1)`` runs on the second, as ``parrot-predict --gpu-id 1`` does.
 
 Networks can also be built, trained and saved in Python, with the same functions the command-line tools use. For example, to train a CNN on one of the example datasets in the **/data** folder, split by the example split-file:
 

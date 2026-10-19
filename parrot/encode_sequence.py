@@ -433,7 +433,8 @@ class UserEncoder(SequenceEncoder):
 STANDARDIZED_NAME = 'standardized'
 
 # A feature whose standard deviation across the alphabet is at most this fraction of
-# its typical magnitude is treated as constant (it carries no information)
+# its largest absolute value (or of 1, for a feature whose values are all smaller than 1) is treated as constant (it
+# carries no information)
 CONSTANT_FEATURE_TOLERANCE = 1e-12
 
 
@@ -591,7 +592,10 @@ def get_encoder(encoding: str, standardize: bool = False, nardini_scrambles: int
     FileNotFoundError
         If `encoding` is not a built-in name and no such file exists
     ValueError
-        If the options do not apply to the encoding
+        If the options do not apply to the encoding, `nardini_scrambles` is
+        less than 1, NARDINI features are given more than once or combined
+        with a protein language model, or the encoding file is not valid (see
+        parse_encode_file())
     """
 
     if mean_subtracted and not plm.is_plm_encoding(encoding):
@@ -646,10 +650,15 @@ def get_nardini_encoder(encoding: str, standardize: bool, num_scrambles: int | N
     FileNotFoundError
         If the per-residue encoding is not a built-in name and no such file exists
     ValueError
-        If 'nardini' alone is standardized, or combined with a protein language model
+        If 'nardini' alone is standardized, the per-residue encoding is a
+        NARDINI encoding itself (e.g. 'nardini+nardini'), a protein language
+        model or not a valid encoding file, or `num_scrambles` is less than 1
     """
     residue_name = nardini.residue_encoding_name(encoding)
     residue_encoder = None
+    if residue_name is not None and nardini.is_nardini_encoding(residue_name):
+        raise ValueError(f"NARDINI features can only be added once ('{encoding}'); combine them with 'onehot', "
+                         "'biophysics' or an encoding file")
     if residue_name is None:
         if standardize:
             raise ValueError("--standardize-encoding does not apply to 'nardini' alone: the NARDINI+ features are "
@@ -679,7 +688,9 @@ def encoder_from_config(config: dict[str, Any]) -> SequenceEncoder:
     Raises
     ------
     ValueError
-        If the saved encoding is not one PARROT knows
+        If the saved encoding is not one PARROT knows, or was computed with
+        settings this version of PARROT does not use (see
+        plm.encoder_from_plm_config() and nardini.encoder_from_nardini_config())
     """
 
     if config['name'] == plm.PLM_CONFIG_NAME:

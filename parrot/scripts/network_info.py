@@ -40,7 +40,7 @@ from parrot.package_version import PARROT_VERSION
 from parrot.sequence_encoder import SequenceEncoder
 from parrot.tasks import IGNORED_CLASS_LABEL, Task
 from parrot.train_network import TrainingTiming
-from parrot.uncertainties import model_error_of
+from parrot.uncertainties import MODEL_ERROR_SIGNIFICANT_FIGURES, model_error_of
 
 if TYPE_CHECKING:
     from parrot.scripts.common import TrainingRun
@@ -118,7 +118,7 @@ def info_sections(run: 'TrainingRun', network: ParrotArchitecture, training: Map
     -------
     list of Section
     """
-    sections = [provenance_section(run),
+    sections = [provenance_section(run, network),
                 data_section(run),
                 encoding_section(run.encoder),
                 architecture_section(network),
@@ -133,12 +133,14 @@ def info_sections(run: 'TrainingRun', network: ParrotArchitecture, training: Map
     return sections
 
 
-def provenance_section(run: 'TrainingRun') -> Section:
-    """Where the network came from: when, the exact command, the software versions and the device
+def provenance_section(run: 'TrainingRun', network: ParrotArchitecture) -> Section:
+    """Where the network came from: when, the exact command, the software versions, the device and the precision
 
     Parameters
     ----------
     run : TrainingRun
+    network : ParrotArchitecture
+        The trained network
 
     Returns
     -------
@@ -151,10 +153,40 @@ def provenance_section(run: 'TrainingRun') -> Section:
                ('Python version', platform.python_version())]
     entries += [(f'{package} version', version) for package, version in installed_versions(RECORDED_PACKAGES)]
     entries += [('device', devices.describe_device(run.device)),
-                ('precision', 'float32 throughout (TF32 turned off on NVIDIA GPUs)'),
+                ('precision', describe_precision(network, run.encoder)),
                 ('random seed', str(run.seed) if run.seed is not None else 'not set, so training again will '
                                                                            'not give exactly the same network')]
     return Section('Provenance', entries)
+
+
+def describe_precision(network: ParrotArchitecture, encoder: SequenceEncoder) -> str:
+    """The floating-point precision the network was trained in, and its encoding computed and stored in
+
+    Networks trained by gradient descent run in float32, with TF32 turned off on
+    NVIDIA GPUs (see devices.full_float32_precision). Models fitted in one step
+    compute their features in float32 and are fitted and run in float64 by
+    scikit-learn (see architectures/classical.py). Protein language models run
+    in float32, and their embeddings are stored as float16 (see
+    plm.STORAGE_DTYPE).
+
+    Parameters
+    ----------
+    network : ParrotArchitecture
+        The trained network
+    encoder : SequenceEncoder
+        Its encoding
+
+    Returns
+    -------
+    str
+    """
+    if network.trained_by_gradient_descent:
+        description = 'float32 (TF32 turned off on NVIDIA GPUs)'
+    else:
+        description = 'features in float32, model fitted and run in float64 by scikit-learn'
+    if isinstance(encoder, plm.PLMEncoder):
+        description += '; protein language model run in float32, its embeddings stored as float16'
+    return description
 
 
 def installed_versions(packages: Sequence[str]) -> list[tuple[str, str]]:
@@ -181,6 +213,10 @@ def installed_versions(packages: Sequence[str]) -> list[tuple[str, str]]:
 
 def data_section(run: 'TrainingRun') -> Section:
     """The data: the file (and its checksum), the task, the split and a summary of the sequences and values
+
+    With uncertainties, the SDs are summarized too, and with --embedding-context
+    the FASTA file and map (with their checksums) and how many sequences were
+    embedded within their full-length proteins are recorded.
 
     Parameters
     ----------
@@ -379,6 +415,8 @@ def training_section(network: ParrotArchitecture, run: 'TrainingRun', training: 
                      train_losses: Sequence[float], val_losses: Sequence[float]) -> Section:
     """How the network was trained: the loss, the optimizer, the batches, the epochs and which epoch was kept
 
+    With uncertainties, the network's model error s is recorded too.
+
     Parameters
     ----------
     network : ParrotArchitecture
@@ -437,9 +475,11 @@ def model_error_entry(network: ParrotArchitecture) -> tuple[str, str]:
     -------
     (str, str)
     """
-    return ('model error', f"s = {float(model_error_of(network)):.4g}: the SD of the error in the network's "
-                           "predictions beyond each value's own SD, fitted by maximum likelihood to the residuals "
-                           'on the validation set (after every epoch, for networks trained by gradient descent)')
+    model_error = float(model_error_of(network))
+    return ('model error', f"s = {model_error:.{MODEL_ERROR_SIGNIFICANT_FIGURES}g}: the SD of the error in the "
+                           "network's predictions beyond each value's own SD, fitted by maximum likelihood to the "
+                           'residuals on the validation set (after every epoch, for networks trained by gradient '
+                           'descent)')
 
 
 def best_epoch(val_losses: Sequence[float]) -> int | None:

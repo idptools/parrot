@@ -56,9 +56,9 @@ class ParrotArchitecture(nn.Module):
     shape [batch_dim X num_classes] for sequence-mapped tasks,
     [batch_dim X padded_length X num_classes] for residue-mapped tasks, or
     [batch_dim X padded_length X width X num_classes] for matrix tasks (see
-    parrot/matrices/base.py), and the output for a sequence must not depend on
-    how much padding it was given. For classification the outputs are
-    unnormalised logits.
+    parrot/matrices/base.py), and the output for a sequence must not depend,
+    beyond float32 rounding, on how much padding it was given. For
+    classification the outputs are unnormalised logits.
 
     Attributes
     ----------
@@ -165,11 +165,12 @@ class ParrotArchitecture(nn.Module):
     @classmethod
     def unused_hyperparameters(cls, task: Task, input_size: int) -> dict[str, str]:
         """Hyperparameters that have no effect, or cannot be used, for a task and encoding (parrot-optimize does not
-        search them). An architecture overrides this if it has any; by default there are none.
+        search them). An architecture overrides this to declare them; by default none are declared.
 
         Parameters
         ----------
         task : Task
+            The task the network is for
         input_size : int
             Length of the per-residue encoding vectors
 
@@ -194,6 +195,7 @@ class ParrotArchitecture(nn.Module):
         Returns
         -------
         set of str
+            The names of the hyperparameters that have no effect
         """
         return set()
 

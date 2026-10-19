@@ -18,14 +18,17 @@ so each value is weighted by 1 / (sigma_i^2 + s^2): precise values pull the
 network harder than noisy ones, but no value counts for more than 1 / s^2,
 however small its SD (and an SD of 0 is allowed).
 
-s is not a network weight. After every epoch it is set to its maximum-likelihood
-value given the network's residuals on the validation set (see
-fit_model_error()), so it always matches the network as it is, and describes
-how far the network's predictions are from the true values on data it was not
-trained on. This is the likelihood estimate of the between-study variance in a
-random-effects meta-analysis with known within-study variances (Hardy &
-Thompson 1996, Statistics in Medicine 15:619-629), with the predictions in
-place of the pooled mean.
+s is not a network weight. Before training and after every epoch it is set to
+its maximum-likelihood value given the network's residuals on the validation
+set (see fit_model_error() and train_network.refit_model_error()), so it matches
+the network at the end of each epoch (and the network kept from training keeps
+the s of its epoch), and describes how far the network's predictions are from
+the true values on data it was not trained on. Models fitted in one step
+instead alternate between fitting their weights and s (see
+train_network.fit_with_model_error()). This is the likelihood estimate of the
+between-study variance in a random-effects meta-analysis with known
+within-study variances (Hardy & Thompson 1996, Statistics in Medicine
+15:619-629), with the predictions in place of the pooled mean.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -62,6 +65,10 @@ MIN_MODEL_ERROR_FRACTION = 1e-6
 # error of exactly 0) gives a finite loss rather than log(0)
 MIN_VARIANCE = float(torch.finfo(torch.float32).tiny)
 
+# Significant figures the model error s is reported to (it is in the units of the values, so decimal places would
+# suit some datasets and not others)
+MODEL_ERROR_SIGNIFICANT_FIGURES = 4
+
 
 def gaussian_nll(predicted: torch.Tensor, values: torch.Tensor, sds: torch.Tensor,
                  model_error: torch.Tensor) -> torch.Tensor:
@@ -82,7 +89,8 @@ def gaussian_nll(predicted: torch.Tensor, values: torch.Tensor, sds: torch.Tenso
     -------
     torch.Tensor
         A scalar: the sum over every value of
-        1/2 [log(2 pi (sigma^2 + s^2)) + (y - mu)^2 / (sigma^2 + s^2)]
+        1/2 [log(2 pi (sigma^2 + s^2)) + (y - mu)^2 / (sigma^2 + s^2)],
+        with sigma^2 + s^2 taken to be at least MIN_VARIANCE
     """
     variance = torch.clamp(sds ** 2 + model_error ** 2, min=MIN_VARIANCE)
     return 0.5 * torch.sum(LOG_2PI + torch.log(variance) + (values - predicted) ** 2 / variance)
@@ -97,8 +105,8 @@ def fit_model_error(residuals: np.ndarray, sds: np.ndarray) -> float:
         sum over i of (r_i^2 - sigma_i^2 - t) / (sigma_i^2 + t)^2,
 
     is zero, so s is found by bisecting on the sign of that sum. If the
-    measurement errors alone explain the residuals (the sum is negative even
-    at t = 0), s is 0. If some SDs are 0, s is kept above
+    measurement errors alone explain the residuals (the sum is not positive
+    even at t = 0), s is 0. If some SDs are 0, s is not taken below
     MIN_MODEL_ERROR_FRACTION of the largest residual.
 
     Parameters
@@ -136,7 +144,7 @@ def fit_model_error(residuals: np.ndarray, sds: np.ndarray) -> float:
     highest = float(squared_residuals.max())
     if highest == 0:
         return 0.0
-    # The slope is negative at the largest squared residual (every term is), so the maximum lies below it
+    # The slope is not positive at the largest squared residual (no term is), so the maximum lies at or below it
     lowest = 0.0 if np.all(variances > 0) else (MIN_MODEL_ERROR_FRACTION ** 2) * highest
     if slope(lowest) <= 0:
         return math.sqrt(lowest)
@@ -161,6 +169,7 @@ def model_error_of(network: nn.Module) -> torch.Tensor:
     Returns
     -------
     torch.Tensor
+        The buffer itself (so filling it changes the network's model error),
         NaN until the model error has first been fitted
 
     Raises

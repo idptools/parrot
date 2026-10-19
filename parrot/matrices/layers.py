@@ -5,9 +5,10 @@ Matrix networks work on channels-first grids, [batch_dim X channels X rows X
 columns], with one row per residue and either one column per residue (square
 maps) or a fixed number of columns. Sequences are zero-padded at the end, so a
 grid has padded rows (and, for square maps, padded columns), and, as in every
-PARROT network, a sequence's output must not depend on how much padding it was
-given. The masks here mark the real cells; re-applying them after any layer
-that could write into padding keeps the padding at zero.
+PARROT network, a sequence's output must not depend, beyond float32 rounding,
+on how much padding it was given. The masks here mark the real cells;
+re-applying them after any layer that could write into padding keeps the
+padding at zero.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab

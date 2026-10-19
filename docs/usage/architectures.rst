@@ -34,7 +34,7 @@ Three options are on by default in the networks they apply to, and each has a fl
 * **Attention pooling** (``brnn``, ``cnn``, ``unet``, ``transformer``; sequence data only; ``--attention-pooling-off``). To turn per-residue features into one vector per sequence, each residue gets a learned score and the features are averaged with softmax weights over the sequence's real residues (Ilse et al. 2018), so the network learns which residues matter. With it off, ``--pooling`` (``mean`` or ``max``) is used instead, or, for the BRNN, the final hidden states of its two directions (the forward state after the last residue and the reverse state after the first), as PARROT's BRNN always did. Those two states must carry everything the network knows about the sequence, and an LSTM's memory of residues fades over hundreds of steps; attention pooling instead lets the LSTM output at every residue contribute directly (a bidirectional LSTM with attention pooling is, for example, the architecture of DeepLoc; Almagro Armenteros et al. 2017).
 * **log(length) for the output layer** (``brnn``, ``cnn``, ``unet``, ``transformer``; sequence data only; ``--loglength-feedforward-off``). The final layer sees the log of the sequence length as well as the network's summary of the sequence, as the ``composition`` baseline and the simple models always do. Averaged or attention-pooled features carry no direct information about length, which networks otherwise have to infer; on length-dominated properties such as the radius of gyration, networks without it under-predicted the longest sequences.
 
-The saved network records each option, so ``parrot-predict`` and ``Predictor`` need no flags. Networks saved by earlier versions of PARROT, which did not have these options, are loaded with them off and predict exactly as before.
+The saved network records each option, so ``parrot-predict`` and ``Predictor`` need no flags. Networks saved by earlier versions of PARROT, which did not have these options, are loaded with them off and predict as before, up to float32 rounding.
 
 composition
 -----------
@@ -60,7 +60,7 @@ Bidirectional LSTM followed by a fully connected layer. For sequence data the LS
 cnn
 ---
 
-Dilated residual 1D convolutional network, following the ByteNet design (Kalchbrenner et al. 2016) that CARP showed to be competitive with transformers for protein sequences (Yang et al. 2022). Each block normalizes its input, applies a convolution and adds the result back; the spacing between the residues each convolution looks at doubles from block to block (1, 2, 4, 8, then repeating). With the defaults (4 blocks, width 5) each residue's output depends on the 61 residues centred on it.
+Dilated residual 1D convolutional network, a simplified form of the ByteNet design (Kalchbrenner et al. 2016, whose blocks also have a 1x1 convolution either side of the dilated one) that CARP showed to be competitive with transformers for protein sequences (Yang et al. 2022). Each block normalizes its input, applies a convolution and adds the result back; the spacing between the residues each convolution looks at doubles from block to block (1, 2, 4, 8, then repeating). With the defaults (4 blocks, width 5) each residue's output depends on the 61 residues centred on it.
 
 	*  ``--channels`` : number of convolutional channels (default 64; searched over 16-128).
 	*  ``--num-blocks`` : number of residual convolution blocks (default 4; searched over 1-8).
@@ -82,12 +82,12 @@ unet
 	*  ``--pooling`` : sequence data with attention pooling off; ``mean`` or ``max`` (default mean).
 	*  ``--global-context-off``, ``--attention-pooling-off``, ``--loglength-feedforward-off`` : see above.
 
-Compared with the 2D original, the network runs along the sequence, uses layer normalization instead of batch normalization, and upsamples with a transposed convolution or nearest-neighbour repetition instead of bilinear interpolation. These changes make each sequence's output independent of how much padding it is given when batched with longer sequences.
+Compared with the 2D original, the network runs along the sequence, uses layer normalization instead of batch normalization, and upsamples with a transposed convolution or nearest-neighbour repetition instead of bilinear interpolation. These changes make each sequence's output independent of how much padding it is given when batched with longer sequences (up to float32 rounding).
 
 transformer
 -----------
 
-Transformer encoder (Vaswani et al. 2017). Each residue's encoding is projected to the model width (``--num-heads`` x ``--head-size``, 64 by default) and passed through a stack of pre-norm transformer blocks, each a multi-head self-attention layer followed by a feed-forward network, both with residual connections. Padded residues are masked out of attention, so each sequence's output does not depend on how it is batched. The width is set per head so that any number of heads gives a valid model.
+Transformer encoder (Vaswani et al. 2017). Each residue's encoding is projected to the model width (``--num-heads`` x ``--head-size``, 64 by default) and passed through a stack of pre-norm transformer blocks, each a multi-head self-attention layer followed by a feed-forward network, both with residual connections. Padded residues are masked out of attention, so each sequence's output depends on how it is batched only through float32 rounding. The width is set per head so that any number of heads gives a valid model.
 
 Attention itself ignores residue order, so positions are added by a positional encoding:
 

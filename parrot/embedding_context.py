@@ -16,6 +16,7 @@ Which protein each fragment comes from is given explicitly, never guessed:
 Every problem (a fragment missing from the map, a protein missing from the library, a fragment that does not match
 its protein, or one that occurs more than once in it without a start) stops the command before anything is
 embedded. Embeddings are looked up by sequence, so a sequence must have the same context under every ID it has.
+Where each fragment was placed is written to a table next to the command's output (see write_context_table()).
 
 The embedding itself is done by PLMEncoder (parrot/plm.py), which keeps in-context embeddings in a file of their
 own in the embedding cache.
@@ -366,7 +367,7 @@ def assign_contexts(ids: Sequence[str], sequences: Sequence[str], library_file: 
     Raises
     ------
     ValueError
-        If either file cannot be read (see read_library() and read_context_map()); if any fragment cannot be placed
+        If either file is not valid (see read_library() and read_context_map()); if any fragment cannot be placed
         (its ID is not in the map, its protein is not in the library, or locate_fragment() fails); if a sequence
         has different contexts under different IDs; or if a full-length protein has a character a protein language
         model cannot read. Every fragment is checked first, and the message lists the first few of each problem.

@@ -5,7 +5,9 @@ Code written against earlier versions of PARROT (e.g. SPARROW) builds networks
 with `BRNN_MtO(input_size, hidden_size, num_layers, num_classes, device)` or
 `BRNN_MtM(...)` and loads saved weights into them. Both are now thin wrappers
 around parrot.architectures.brnn.BRNN, with identical parameter names, so that
-code keeps working. New code should use parrot.architectures.build_network().
+code keeps working, and build the original network (no dropout, attention
+pooling or log-length input). New code should use
+parrot.architectures.build_network().
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab

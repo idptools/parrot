@@ -8,6 +8,8 @@ Skipped if SPARROW is not installed. Features use few scrambles, to keep the
 tests fast.
 """
 
+import sys
+
 import numpy as np
 import pytest
 import torch
@@ -95,12 +97,24 @@ def test_standardizing_a_combined_encoding_standardizes_its_per_residue_part():
 @pytest.mark.parametrize('encoding, options, message', [
     ('nardini', dict(standardize=True), "does not apply to 'nardini' alone"),
     ('esm2_t6_8M_UR50D+nardini', {}, 'cannot be combined with a protein language model'),
+    # These used to give the features twice
+    ('nardini+nardini', {}, 'can only be added once'),
+    ('onehot+nardini+nardini', {}, 'can only be added once'),
     ('onehot', dict(nardini_scrambles=100), 'only applies to NARDINI encodings'),
     ('nardini', dict(nardini_scrambles=0), 'at least 1'),
 ])
 def test_invalid_nardini_options(encoding, options, message):
     with pytest.raises(ValueError, match=message):
         get_encoder(encoding, **options)
+
+
+def test_a_missing_sparrow_explains_how_to_install_it(monkeypatch):
+    # sparrow_version() used to give a bare "No module named 'sparrow'"
+    monkeypatch.setitem(sys.modules, 'sparrow', None)
+    monkeypatch.setitem(sys.modules, 'sparrow.nardini', None)
+    for needs_sparrow in (nardini.sparrow_version, nardini.feature_names):
+        with pytest.raises(ImportError, match='NARDINI encodings need SPARROW, which is not installed: pip install'):
+            needs_sparrow()
 
 
 # ..........................................................................................

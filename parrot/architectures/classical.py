@@ -15,7 +15,7 @@ penalty behave consistently across datasets.
 With uncertainties (see parrot/uncertainties.py), each sequence is weighted by
 1 / (SD^2 + s^2), where s is the model error: the linear, SVM and random-forest
 models are fitted with these as scikit-learn sample weights, refitted as s is
-re-estimated (see train_network.fit_in_one_step). k-nearest neighbours cannot
+re-estimated (see train_network.fit_with_model_error). k-nearest neighbours cannot
 weight its training sequences, so it does not support uncertainties.
 
 The models behave like any other PARROT architecture: forward() maps a padded
@@ -123,8 +123,10 @@ class ClassicalModel(ParrotArchitecture):
         Raises
         ------
         ValueError
-            If the task is not sequence-mapped, a hyperparameter is missing,
-            undeclared or not allowed, or 'dipeptides' features are asked for
+            If the task is not sequence-mapped, has uncertainties the model
+            cannot use (k-nearest neighbours; see supports_uncertainties), a
+            hyperparameter is missing, undeclared or not allowed, or
+            'dipeptides' features are asked for
             with an encoding of more than MAX_DIPEPTIDE_ENCODING_SIZE values per
             residue
         """
@@ -195,6 +197,12 @@ class ClassicalModel(ParrotArchitecture):
         ----------
         loader : DataLoader
             Batches of the training data (process_input_data.Batch)
+
+        Raises
+        ------
+        ValueError
+            If the estimator cannot be built for this many training sequences
+            (k-nearest neighbours with more neighbours than sequences)
         """
         features, targets = [], []
         for batch in loader:

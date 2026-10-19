@@ -2,10 +2,11 @@
 Building blocks shared by several architectures, mostly for handling padding.
 
 PARROT batches sequences of different lengths by zero-padding them at the end,
-and every architecture must give the same output for a sequence however much
-padding it was given. The helpers here make that easy: build a mask of the real
-residues, re-zero the padding after any layer that could write into it,
-normalise each position independently, and pool only over real residues.
+and every architecture must give the same output for a sequence, up to float32
+rounding, however much padding it was given. The helpers here make that easy:
+build a mask of the real residues, re-zero the padding after any layer that
+could write into it, normalise each position independently, and pool only over
+real residues.
 
 Tensor layouts. Batches are [batch_dim X padded_length X features]
 ("residues-first"), as PARROT's data loaders produce them and as linear layers,

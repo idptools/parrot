@@ -10,7 +10,9 @@ import numpy as np
 import pytest
 import torch
 
+from parrot import plm
 from parrot.architectures import build_network
+from parrot.encode_sequence import get_encoder
 from parrot.scripts import network_info, parrot_optimize
 from parrot.tasks import IGNORED_CLASS_LABEL, Task
 from parrot.train_network import TrainingTiming
@@ -126,6 +128,17 @@ def test_prediction_speed_says_when_embeddings_were_computed_before_training():
     section = network_info.timing_section(make_network('sequence', 1), torch.device('cpu'), None, 2.0, 500,
                                           embeddings_precomputed=True)
     assert 'from embeddings computed before training' in dict(section.entries)['prediction speed']
+
+
+def test_precision_describes_the_model_and_its_encoding():
+    # It used to say 'float32 throughout' for every network, though scikit-learn models run in float64 and PLM
+    # embeddings are stored at 16 bits
+    onehot, esm = get_encoder('onehot'), plm.PLMEncoder('esm2_t6_8M_UR50D')
+    network = make_network('sequence', 1)
+    model = build_network('linear', 20, Task('sequence', 1), {})
+    assert network_info.describe_precision(network, onehot) == 'float32 (TF32 turned off on NVIDIA GPUs)'
+    assert 'float64 by scikit-learn' in network_info.describe_precision(model, onehot)
+    assert network_info.describe_precision(network, esm).endswith('its embeddings stored as float16')
 
 
 def test_architecture_section_marks_settings_that_had_no_effect():

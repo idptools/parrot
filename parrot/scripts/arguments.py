@@ -52,7 +52,7 @@ HEADER_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 # traceback. Any other error is a bug in PARROT, and keeps its traceback.
 INPUT_ERRORS = (ValueError, OSError, ImportError, RuntimeError)
 
-# Set this environment variable (to anything) to see the full traceback of input errors as well
+# Set this environment variable (to anything but an empty string) to see the full traceback of input errors as well
 TRACEBACK_VARIABLE = 'PARROT_TRACEBACK'
 
 # Exit codes: an error in the input, and a command stopped with Ctrl-C (the shell convention, 128 + SIGINT)
@@ -66,8 +66,8 @@ INTERRUPTED_EXIT_CODE = 130
 def run_command(program_name: str, command: Callable[[], None]) -> None:
     """Run a command, reporting mistakes in its input as a one-line message rather than a traceback
 
-    If the PARROT_TRACEBACK environment variable (TRACEBACK_VARIABLE) is set, input errors and
-    Ctrl-C are raised as they are instead, with their traceback.
+    If the PARROT_TRACEBACK environment variable (TRACEBACK_VARIABLE) is set and not empty, input
+    errors and Ctrl-C are raised as they are instead, with their traceback.
 
     Parameters
     ----------
@@ -163,7 +163,7 @@ def print_header(program_name: str, silent: bool) -> None:
 
 
 def print_settings(silent: bool, **settings: Any) -> None:
-    """Print each setting as 'name : value' on its own line (unless `silent`)
+    """Print each setting as 'name : value' on its own line, under a 'Settings:' heading (unless `silent`)
 
     Parameters
     ----------

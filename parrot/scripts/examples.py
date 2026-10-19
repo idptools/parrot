@@ -97,9 +97,9 @@ How it works
 1. The datafile (--input-file) has '<ID> <sequence> <value(s)>' on each line:
    one value per sequence (-d sequence) or one per residue (-d residues). For
    matrix data (unet2d) it has '<ID> <sequence>', and each sequence's matrix
-   is in --matrix-file. The values are numbers to predict (--regression) or
-   classes labelled 0, 1, ... (--classification, with --num-classes). Every
-   line is checked first.
+   is in --matrix-file. The values are numbers to predict (--regression; with
+   --uncertainties, each written as 'value,SD') or classes labelled 0, 1, ...
+   (--classification, with --num-classes). Every line is checked first.
 2. The data are divided into training, validation and test sets (--split),
    as a split-file says or by one of parrot-preprocess's methods: 'mmseqs' or
    'kmer' put similar sequences (found by MMseqs2, or by PARROT's own k-mer
@@ -125,7 +125,9 @@ How it works
    models (linear, svm, random_forest, knn) are fitted in one step instead.
    With --uncertainties, each value is weighted by 1 / (SD^2 + s^2), where
    the model error s, the error of the predictions beyond the values' own, is
-   fitted on the validation set after every epoch.
+   fitted on the validation set after every epoch (the simple models are
+   refitted as it is re-estimated, and knn does not support --uncertainties),
+   and --stop auto counts the 0.5% as a gain in likelihood per labelled value.
 5. The kept network is saved as --output-network (with '.pt' added if the
    name does not end with it); the file records its architecture,
    hyperparameters, task and encoding, so parrot-predict needs only the file.
@@ -223,7 +225,8 @@ What it does
 ------------
 parrot-predict uses a network trained by parrot-train or parrot-optimize to
 predict values for new sequences. The network file records how the network was
-trained (its architecture, task and encoding), so no other options are needed.
+trained (its architecture, task and encoding), so no other options are needed,
+except for a network trained with --embedding-context (see below).
 
 Examples
 --------
@@ -240,6 +243,13 @@ likely one (for residue networks, each residue's probabilities are written as
 one comma-separated token, e.g. 0.9100,0.0600,0.0300):
 
     parrot-predict sequences.txt network.pt predictions.txt --probabilistic-classification
+
+For a network trained with --embedding-context, the full-length proteins the
+sequences were cut from, and which one each was cut from, as for training (or
+--embed-in-isolation to embed each on its own, which may make the predictions
+less accurate):
+
+    parrot-predict sequences.txt network.pt predictions.txt --embedding-context proteome.fasta --embedding-context-map map.tsv
 
 On the CPU, printing nothing (e.g. in a script):
 
@@ -270,10 +280,11 @@ How it works
 3. Sequences are predicted in batches of similar length (up to --batch, 64
    by default), and each unique sequence is predicted once.
 4. The output has one line per sequence of the sequence file, in the same
-   order (blank lines and lines starting with '#' are skipped): the ID, the
-   sequence, and its predicted value(s), one per sequence or one per residue.
-   Networks for matrix data write a NumPy .npz archive instead, with one
-   matrix per sequence ID.
+   order (blank lines and lines starting with '#' are skipped): the ID (unless
+   --exclude-seq-id), the sequence, and its predicted value(s), one per
+   sequence or one per residue. Networks for matrix data write a NumPy .npz
+   archive instead, with one matrix per sequence, named by its ID (or 1, 2, ...
+   with --exclude-seq-id).
 '''
 
 PREPROCESS_GUIDE = '''
@@ -328,7 +339,8 @@ output ahead of time, so that training on it starts straight away:
 Embed each peptide of a tiling library within the full-length protein it was
 cut from, rather than on its own. proteome.fasta holds the full-length
 proteins, and tile_map.tsv has a '<peptide ID> <protein ID> [start]' line per
-peptide. Give parrot-train the same two options:
+peptide. parrot-train then needs the same --encode, --embedding-cache,
+--embedding-context and --embedding-context-map:
 
     parrot-preprocess tiles.tsv clean.tsv -d sequence -m regression --split kmer --encode esm2_t33_650M_UR50D --embedding-cache embeddings --embedding-context proteome.fasta --embedding-context-map tile_map.tsv
 
@@ -354,7 +366,8 @@ The steps always run in this order, and each is optional:
    each embedding's mean over its residues subtracted.
 
 Every step is recorded in <output>_preprocess_report.txt (-v also prints it),
-which ends by checking that parrot-train can read the output.
+which then checks that parrot-train can read the output (and, with --encode,
+ends with the options parrot-train needs to use the encodings).
 '''
 
 CVSPLIT_GUIDE = '''

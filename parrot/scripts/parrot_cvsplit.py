@@ -6,9 +6,9 @@ Driver script for creating PARROT-usable "split-files" for K-fold cross-validati
 on a given dataset. Assumes datafile is already properly formatted for use in PARROT.
 For more information on usage, use the '-h' flag.
 
-Each fold's test set is one Kth of the data (every sequence is in exactly one
-test set), and the rest of the data is divided at random between that fold's
-training and validation sets. Identical sequences are always in the same set
+Each fold's test set is about one Kth of the data (every sequence is in exactly
+one test set), and the rest of the data is divided at random between that
+fold's training and validation sets. Identical sequences are always in the same set
 of every fold. To keep similar sequences apart as well, make the split with
 parrot-preprocess --split homology or kmer instead.
 
@@ -55,7 +55,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
                                      description='Write one split-file per fold for k-fold cross-validation.')
     add_examples_argument(parser, PROGRAM_NAME)
-    parser.add_argument('data_file', help="the datafile: '<ID> <sequence> <value(s)>' on each line")
+    parser.add_argument('data_file', help="the datafile: '<ID> <sequence> <value(s)>' on each line (for matrix data, "
+                                          "'<ID> <sequence>')")
     parser.add_argument('output_splitfiles',
                         help="path and name prefix of the split-files, written as '<output_splitfiles>_cv<fold>.txt'")
     parser.add_argument('-k', '--k-folds', default=DEFAULT_FOLDS, type=int, metavar='folds', dest='num_folds',

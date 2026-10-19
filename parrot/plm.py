@@ -11,7 +11,10 @@ once and the result is kept in an on-disk cache (see EmbeddingCache):
 
 - parrot-train and parrot-optimize embed every sequence in the datafile before
   training starts, and every epoch then reads the cached embeddings;
-- parrot-predict embeds the sequences to predict before predicting.
+- parrot-predict (and Predictor.predict_batch()) embeds the sequences to
+  predict before predicting;
+- parrot-preprocess --encode embeds every sequence of its output ahead of time,
+  so any number of networks can then be trained on them without embedding again.
 
 Fragments cut out of larger proteins can instead be embedded within their
 full-length proteins (--embedding-context; see parrot/embedding_context.py):
@@ -152,6 +155,10 @@ DISK_SPACE_SAFETY_FACTOR = 1.25
 # does not fill its log with updates
 TERMINAL_PROGRESS_INTERVAL_SECONDS = 0.1
 LOG_PROGRESS_INTERVAL_SECONDS = 30
+
+# tqdm also redraws, from a monitor thread, any bar not redrawn for this many seconds (its default maxinterval); a bar
+# that is redrawn less often than this raises it to its own interval, or the monitor would redraw it in between
+TQDM_DEFAULT_MAXINTERVAL_SECONDS = 10
 
 # Progress bars with at least this many units count in thousands and millions (e.g. 5.01M residues), and smaller ones
 # in whole units (tqdm's scaling would show 3 sequences as 3.00)
@@ -482,11 +489,13 @@ class EmbeddingCache:
 class InContextEmbeddingCache(EmbeddingCache):
     """On-disk store of the embeddings of fragments cut out of their full-length proteins' embeddings
 
-    Embeddings live in <directory>/<model name>.context.h5 (see
-    CONTEXT_CACHE_SUFFIX), apart from the embeddings of sequences on their own,
-    which are different. The cache is used through each fragment's sequence,
-    like EmbeddingCache, but each dataset is named by the SHA-256 hash of the
-    full-length sequence, the fragment's start in it and the fragment. So the
+    Embeddings live in <directory>/<cache name>.context.h5 (see
+    CONTEXT_CACHE_SUFFIX; the cache name is the model's, marked if the
+    embeddings are mean-subtracted, as PLMEncoder.cache_name gives it), apart
+    from the embeddings of sequences on their own, which are different. The
+    cache is used through each fragment's sequence, like EmbeddingCache, but
+    each dataset is named by the SHA-256 hash of the full-length sequence, the
+    fragment's start in it and the fragment. So the
     same fragment within two proteins (or at two places in one) has two entries,
     and adding fragments or proteins never makes what is stored wrong. Each
     dataset also stores the fragment, the SHA-256 hash of its full-length
@@ -507,7 +516,7 @@ class InContextEmbeddingCache(EmbeddingCache):
         directory : str or Path
             The cache directory (created when the cache is first written)
         model_name : str
-            The PLM; the file is named after it, with CONTEXT_CACHE_SUFFIX
+            The PLM's cache name (see PLMEncoder.cache_name); the file is named after it, with CONTEXT_CACHE_SUFFIX
         embedding_size : int
             Length of each residue's embedding
         contexts : mapping
@@ -661,10 +670,14 @@ class PLMEncoder(SequenceEncoder):
     """Encode residues by their embeddings from a protein language model (ESM-2 or ESM C)
 
     Before sequences are encoded in bulk, prepare() embeds every sequence not
-    yet in the cache. encode() then reads embeddings from the cache, or, with no
-    cache, runs the model on the spot (as Predictor does for single sequences).
-    Embeddings are always rounded to float16, so a sequence is encoded the same
-    way whether or not it went through the cache.
+    yet in the cache. encode() then reads embeddings from the cache, or runs the
+    model on the spot for a sequence that is not there (or for every sequence,
+    with no cache; as Predictor.predict() does by default). Embeddings are
+    always rounded to float16, so storing one in the cache does not change it.
+    The model's output does depend, through float32 rounding, on which other
+    sequences it is batched with, so a sequence's embedding alone and its
+    embedding in a batch can differ by one float16 step in a small fraction of
+    its values.
 
     Once given contexts (add_contexts(), from --embedding-context), the encoder
     embeds sequences within their full-length proteins: it embeds each
@@ -686,6 +699,8 @@ class PLMEncoder(SequenceEncoder):
     ----------
     name : str
         The model name, e.g. 'esm2_t12_35M_UR50D'
+    model_info : PLMModel
+        The model's family, embedding size and maximum window
     input_size : int
         Values per residue
     window, overlap : int
@@ -714,7 +729,7 @@ class PLMEncoder(SequenceEncoder):
         window : int, optional
             Window length for long sequences (default: the model's max_window)
         overlap : int, optional
-            Residues shared by consecutive windows
+            Residues shared by consecutive windows (default WINDOW_OVERLAP_RESIDUES)
         mean_subtracted : bool, optional
             Subtract each embedding's mean over its residues from every residue (default False)
 
@@ -751,7 +766,7 @@ class PLMEncoder(SequenceEncoder):
         raise NotImplementedError('A PLM embeds each residue in context, so it has no per-character table')
 
     def to_config(self) -> dict[str, Any]:
-        """Everything needed to embed new sequences exactly as the training sequences were"""
+        """Everything needed to embed new sequences in the same way as the training sequences"""
         if self.model_info.family == ESM2_FAMILY:
             source = f'huggingface:{HUGGINGFACE_ORGANISATION}/{self.name}'
             representation = 'final layer after the final layer norm (last_hidden_state), start and end tokens removed'
@@ -864,10 +879,13 @@ class PLMEncoder(SequenceEncoder):
         Raises
         ------
         RuntimeError
-            If no cache has been set, or the disk does not have room for the cache
+            If no cache has been set, the disk does not have room for the cache, or another process's lock file is
+            still there after CACHE_WAIT_SECONDS (see wait_for_lock_file())
         ValueError
-            If a sequence has a character the model cannot read as one residue, or the encoder embeds in context
-            and a sequence was not given a context
+            If a sequence has a character the model cannot read as one residue, the encoder embeds in context
+            and a sequence was not given a context, or a cache file holds embeddings from a different model
+        ImportError
+            If the packages the model (or the cache) needs are not installed
         """
         if self.cache is None or self.context_cache is None:
             raise RuntimeError('Call use_cache() before prepare()')
@@ -909,7 +927,8 @@ class PLMEncoder(SequenceEncoder):
             if new_bytes * DISK_SPACE_SAFETY_FACTOR > free:
                 raise RuntimeError(f'Not enough disk space for the embedding cache: about {human_size(new_bytes)} '
                                    f'needed, {human_size(free)} free in {self.cache.directory}. Use '
-                                   '--embedding-cache to put the cache somewhere with more space.')
+                                   '--embedding-cache (embedding_cache= for Predictor) to put the cache somewhere '
+                                   'with more space.')
         if missing_on_own:
             self._embed_into_cache(missing_on_own, silent)
         if missing_in_context:
@@ -1030,6 +1049,11 @@ class PLMEncoder(SequenceEncoder):
         dict
             Sequence -> float16 [length X input_size] embedding; if mean_subtracted, with the embedding's mean over
             its residues subtracted from every residue (a single residue's embedding is then all zeros)
+
+        Raises
+        ------
+        ValueError
+            If a sequence has a character the model cannot read as one residue (see PLM_RESIDUES)
         """
         self.check_sequences(sequences)
         unique = list(dict.fromkeys(sequences))
@@ -1202,7 +1226,7 @@ def progress_bar(total: int, unit: str, description: str, silent: bool) -> tqdm:
     """
     interval = TERMINAL_PROGRESS_INTERVAL_SECONDS if sys.stderr.isatty() else LOG_PROGRESS_INTERVAL_SECONDS
     return tqdm(total=total, unit=f' {unit}', unit_scale=total >= PROGRESS_UNIT_SCALE_FROM, desc=description,
-                disable=silent, mininterval=interval)
+                disable=silent, mininterval=interval, maxinterval=max(interval, TQDM_DEFAULT_MAXINTERVAL_SECONDS))
 
 
 def token_batches(pieces: list[tuple[str, int, str]], max_tokens: int) -> list[list[tuple[str, int, str]]]:
@@ -1234,7 +1258,25 @@ def token_batches(pieces: list[tuple[str, int, str]], max_tokens: int) -> list[l
 
 
 def encoder_from_plm_config(config: dict[str, Any]) -> PLMEncoder:
-    """Rebuild a PLMEncoder from the config stored in a saved network."""
+    """Rebuild a PLMEncoder from the config stored in a saved network
+
+    Parameters
+    ----------
+    config : dict
+        Written by PLMEncoder.to_config()
+
+    Returns
+    -------
+    PLMEncoder
+        With the network's model, windows and mean subtraction, and embedding in context if the network was
+        trained so (each sequence's context is then given later; see PLMEncoder.add_contexts())
+
+    Raises
+    ------
+    ValueError
+        If the network was trained on embeddings stored at a precision this version of PARROT does not produce,
+        or with a model it does not know
+    """
     stored_dtype = config.get('storage_dtype', np.dtype(STORAGE_DTYPE).name)
     if stored_dtype != np.dtype(STORAGE_DTYPE).name:
         raise ValueError(f'This network was trained on {stored_dtype} embeddings, which this version of PARROT '

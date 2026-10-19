@@ -202,7 +202,13 @@ def test_predict_batch_runs_the_network_in_batches_of_distinct_sequences(tmp_pat
 
 def test_predict_batch_of_no_sequences_is_empty(tmp_path):
     _, _, path = save_checkpoint(tmp_path, Task('sequence', 1))
-    assert py_predictor.Predictor(path).predict_batch([]) == []
+    predictor = py_predictor.Predictor(path)
+    assert predictor.predict_batch([]) == []
+    # Its other arguments are still checked (they used to be skipped when there were no sequences)
+    with pytest.raises(ValueError, match='full_lengths only applies'):
+        predictor.predict_batch([], full_lengths=[])
+    with pytest.raises(ValueError, match='starts only applies with full_lengths'):
+        predictor.predict_batch([], starts=[])
 
 
 def test_predict_batch_needs_a_list_of_sequences(tmp_path):

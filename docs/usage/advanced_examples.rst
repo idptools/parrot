@@ -47,6 +47,7 @@ This flag determines the stop condition for network training. Currently, there a
     architecture          : brnn
     hidden_size           : 20
     num_layers            : 2
+    dropout               : 0.0
     attention_pooling     : True
     loglength_feedforward : True
     learning_rate         : 0.001
@@ -192,7 +193,7 @@ Output:
     e5 GREPCCMLLYILILAAAQRDESSSSST 0.0465 0.0118 0.9418
     f6 PGDEADLGHRSLVWADD 0.0645 0.2576 0.6780
 
-The three numbers following each sequence represent the probability that the sequence belongs to each of the three classes. Notice the numbers in each row sum to 1.
+The three numbers following each sequence represent the probability that the sequence belongs to each of the three classes. Notice the numbers in each row sum to 1 (up to rounding to four decimal places).
 
 Probabilistic classification also works for *residue classification*, where each sequence has num_classes x seq_len values. So that there is still one value per residue in the output files, each residue's class probabilities are written as one comma-separated token. For example, with the residue classification network from the basic examples:
 
@@ -252,7 +253,7 @@ The search first describes what it will try, then reports each configuration's v
       trial  20 (model  )  epochs   10  val loss 10.4     learning_rate=0.00843449  hidden_size=8  num_layers=1
       trial  20 (model  )  epochs   30  val loss 9.917    learning_rate=0.00843449  hidden_size=8  num_layers=1
     Best configuration (trial 14, validation loss 9.902):
-      learning_rate=0.00864999  hidden_size=5  num_layers=1  attention_pooling=True  loglength_feedforward=True
+      learning_rate=0.00864999  hidden_size=5  num_layers=1  dropout=0  attention_pooling=True  loglength_feedforward=True
     ...
 
 With ``--epochs 30`` there are three stages: every configuration is trained for 3 epochs, the best third of them continue to 10 epochs, and the best third of those to 30. Trial 1 is PARROT's default hyperparameters, trials 2-9 are spread evenly over the search space, and from trial 10 the search mostly suggests configurations near the best so far ("model"), with some drawn at random. Configurations that are clearly worse, such as those with very small learning rates, are stopped after 3 epochs. The best configuration has already been trained for the full 30 epochs, so it becomes the final network, which is then tested on the held-out test set exactly as in ``parrot-train``.
@@ -280,13 +281,13 @@ We added the option for users to create a predictor object in Python using their
 
     >>> from parrot import Predictor
 
-To use a saved network, you need to create a Predictor() object. Initializing this object only requires the path to the saved network: the network file records its architecture, hyperparameters, datatype, number of classes and encoding (including any standardization, protein language model or NARDINI settings), so new sequences are encoded exactly as the training sequences were. (Networks saved by earlier versions of PARROT only record their weights; for those, also give ``dtype='sequence'`` or ``dtype='residues'``. For newer networks, ``dtype``, if given, is checked against the network.)
+To use a saved network, you need to create a Predictor() object. Initializing this object only requires the path to the saved network: the network file records its architecture, hyperparameters, datatype, number of classes and encoding (including any standardization, protein language model or NARDINI settings), so new sequences are encoded in the same way as the training sequences. (Networks saved by earlier versions of PARROT only record their weights; for those, also give ``dtype='sequence'`` or ``dtype='residues'``. For newer networks, ``dtype``, if given, is checked against the network.)
 
 .. code-block:: python
 
     >>> my_predictor = Predictor('/path/to/network.pt')
 
-Now we're ready to make predictions! Once a network is loaded, the time to make predictions is negligible, so your predictor can be applied to as many sequences as you want. Just feed in amino acid sequences to the predict() function one at a time (each is converted to upper case first) and predicted values will be output as a NumPy array.
+Now we're ready to make predictions! Once a network is loaded, the time to make predictions is small (for networks trained on protein language model embeddings or NARDINI features, encoding each new sequence is the slow step; see below), so your predictor can be applied to as many sequences as you want. Just feed in amino acid sequences to the predict() function one at a time (each is converted to upper case first) and predicted values will be output as a NumPy array.
 
 .. code-block:: python
 
@@ -300,9 +301,9 @@ To predict many sequences, give them all to predict_batch(), which returns a lis
 
     >>> values = my_predictor.predict_batch(['MYTESTAMINACIDSEQ', 'MSDNEEGQSKRRQ', 'MKVLAAGIVGLLLA'])
 
-This predicts the sequences together, as ``parrot-predict`` does, which for more than a handful of sequences is much faster than calling predict() on each. Every sequence is encoded first: for a protein language model, the model runs over many sequences at once, and NARDINI+ features are computed on several CPU cores. The network then runs over batches of ``batch_size`` sequences of similar length (default 64; a smaller batch uses less memory, which a large matrix network may need). Each distinct sequence is predicted once. The predictions match predict()'s up to float32 rounding, not exactly: which sequences share a batch, and so ``batch_size``, changes the order of the floating-point operations, giving differences of the order of 1e-7 relative. ``show_progress=True`` prints what is being encoded, with a progress bar.
+This predicts the sequences together, as ``parrot-predict`` does, which for more than a handful of sequences is much faster than calling predict() on each. Every sequence is encoded first: for a protein language model, the model runs over many sequences at once, and NARDINI+ features are computed on several CPU cores. The network then runs over batches of ``batch_size`` sequences of similar length (default 64; a smaller batch uses less memory, which a large matrix network may need). Each distinct sequence is predicted once. The predictions match predict()'s up to float32 rounding, not exactly: which sequences share a batch, and so ``batch_size``, changes the order of the floating-point operations, giving differences of the order of 1e-7 relative. For a network trained on protein language model embeddings, the model also runs in batches, and its float32 rounding can move a value of the stored (16-bit) embeddings by one step, so the predictions can differ by more. ``show_progress=True`` prints what is being encoded, with a progress bar.
 
-Predictions run on the CPU by default, which is usually fastest for a few sequences at a time; ``Predictor('/path/to/network.pt', device='auto')`` uses a GPU (CUDA or Apple-silicon MPS) if one is available, and ``gpu_id=`` chooses which NVIDIA GPU, as ``--gpu-id`` does for ``parrot-predict``. For networks trained on protein language model embeddings or NARDINI features, each new sequence must be encoded first, which is the slow step; ``embedding_cache='<directory>'`` stores these encodings so that sequences predicted again are not encoded again (see :doc:`plm_encodings`). Without it, predict() keeps nothing, and predict_batch() encodes its sequences into a temporary cache (in the system's temporary directory) that is deleted once they are predicted. Either way, the encodings take about (number of residues) x (values per residue) x 2 bytes of disk while they are there.
+Predictions run on a GPU (CUDA, else Apple-silicon MPS) if one is available and otherwise on the CPU, as ``parrot-predict``'s do; ``Predictor('/path/to/network.pt', device='cpu')`` uses the CPU anyway, which can be faster for a few sequences at a time and is needed inside forked worker processes (where MPS cannot be used), and ``gpu_id=`` chooses which NVIDIA GPU, as ``--gpu-id`` does for ``parrot-predict``. For networks trained on protein language model embeddings or NARDINI features, each new sequence must be encoded first, which is the slow step; ``embedding_cache='<directory>'`` stores these encodings so that sequences predicted again are not encoded again (see :doc:`plm_encodings`). Without it, predict() writes nothing to disk, and predict_batch() encodes its sequences into a temporary cache (in the system's temporary directory) that is deleted once they are predicted. Either way, protein language model embeddings take about (number of residues) x (values per residue) x 2 bytes of disk while they are there (NARDINI+ features far less: 90 values per sequence).
 
 A network trained with ``--embedding-context`` embeds each sequence within the full-length protein it was cut from, so ``predict()`` needs that protein too, and finds the sequence in it (``start=`` gives its 1-based start if it occurs more than once). ``predict_batch()`` takes one full-length protein per sequence (``full_lengths=``, and ``starts=`` if needed), and embeds each protein once, however many of the sequences come from it. ``Predictor('/path/to/network.pt', embed_in_isolation=True)`` embeds a sequence given without its full-length protein (or with None in ``full_lengths``) on its own instead of raising an error.
 

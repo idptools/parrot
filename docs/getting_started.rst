@@ -10,6 +10,8 @@ PARROT needs Python 3.11 or newer. It is available through GitHub or the Python 
 
 	$ pip install idptools-parrot
 
+**PARROT2 has not yet been released.** These pages describe PARROT2 (version 2.0.0.dev0), which is developed on the ``parrot2`` branch on GitHub. Until it is released, ``pip install idptools-parrot`` installs the latest release of PARROT 1 (1.7.5), and a clone of the repository gives PARROT 1 unless you run ``git checkout parrot2`` before installing it. To install PARROT2 directly from GitHub, run ``pip install "git+https://github.com/idptools/parrot.git@parrot2"`` (and, for an extra such as ``plm`` below, ``pip install "idptools-parrot[plm] @ git+https://github.com/idptools/parrot.git@parrot2"``).
+
 To clone the GitHub repository and gain the ability to modify a local copy of the code, run
 
 .. code-block:: bash
@@ -53,7 +55,7 @@ Then, you can run the unit tests included in the package by navigating to the to
 
 	$ pytest -v
 
-The tests always run against the source code in the repository you are in. The full suite (over 2,000 tests) takes a few minutes; on a machine with an NVIDIA or Apple-silicon GPU it also checks that every architecture gives the same results on the GPU as on the CPU.
+The tests always run against the source code in the repository you are in. The full suite (over 2,000 tests) takes a few minutes; on a machine with an NVIDIA or Apple-silicon GPU it also checks that every architecture gives the same results on the GPU as on the CPU, up to float32 rounding.
 
 Note that this only works if the package is installed as a repository via GitHub. Installation through PyPI does not include the necessary datafiles to run the tests.
 
@@ -67,13 +69,13 @@ Using the commands
 
 PARROT has five commands:
 
-* ``parrot-preprocess`` gets a datafile ready for training: it cleans it, deals with duplicate sequences, splits it into training, validation and test sets (keeping homologous sequences in the same set, if you choose), and balances classes (:doc:`usage/parrot-preprocess`).
+* ``parrot-preprocess`` gets a datafile ready for training: it cleans it, deals with duplicate sequences, splits it into training, validation and test sets (keeping homologous sequences in the same set, if you choose), balances classes, and can compute protein language model or NARDINI encodings ahead of time (:doc:`usage/parrot-preprocess`).
 * ``parrot-train`` trains a network of the architecture you choose, with the hyperparameters you give, and tests it (:doc:`usage/parrot-train`, :doc:`usage/architectures`).
 * ``parrot-optimize`` searches for good hyperparameters, then trains and tests a network with them (:doc:`usage/parrot-optimize`).
 * ``parrot-predict`` predicts new sequences with a trained network (:doc:`usage/parrot-predict`).
 * ``parrot-cvsplit`` writes split-files for k-fold cross-validation (:doc:`usage/parrot-cvsplit`).
 
-Every command starts by printing a header with PARROT's version and the date and time, which records in any saved output which version produced it. Each command has two options for finding your way around it:
+Every command starts by printing a header with PARROT's version and the date and time (unless given ``--silent``), which records in any saved output which version produced it. Each command has two options for finding your way around it:
 
 * ``-h`` / ``--help`` lists the command's options (for ``parrot-train`` and ``parrot-optimize``, ``-h`` lists the architectures, and ``parrot-train <architecture> -h`` an architecture's options).
 * ``--show-examples`` prints a longer guide: what the command does, worked examples of how to use it, and how it works, step by step.

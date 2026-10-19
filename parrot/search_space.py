@@ -188,7 +188,7 @@ class SearchSpace:
 
         Parameters
         ----------
-        point : numpy array
+        point : numpy array or sequence of float
             One coordinate per searched hyperparameter
 
         Returns

@@ -52,7 +52,7 @@ The flags for matrix data are:
     *  ``--symmetric`` : the maps are symmetric (square maps only).
     *  ``--max-matrix-length`` : square maps only; the longest sequence allowed (default 512). A square map takes memory in proportion to the square of the sequence length: a 512-residue map has about 262,000 cells, and the 2D U-Net with its default settings keeps roughly 1-3 kB per cell while training, so one such sequence needs up to about 1 GB. Longer sequences are an error rather than a crash part-way through training; remove them (e.g. ``parrot-preprocess --max-length``), or raise the limit if your GPU has the memory. Lower ``--batch`` as well when sequences are long.
 
-All other ``parrot-train`` flags work as usual, except ``--exclude-seq-id`` (see above) and ``--probabilistic-classification``, which ``unet2d`` does not offer (``Predictor`` gives class probabilities; see "Predicting" below). ``parrot-optimize`` takes the same flags and searches the 2D U-Net's hyperparameters (below), including with ``--cv-folds``.
+All other ``parrot-train`` flags work as usual, except ``--exclude-seq-id`` (see above), ``--probabilistic-classification``, which ``unet2d`` does not offer (``Predictor`` gives class probabilities; see "Predicting" below), and ``--uncertainties``, which it does not offer either (matrix data cannot have uncertainties yet). ``parrot-optimize`` takes the same flags and searches the 2D U-Net's hyperparameters (below), including with ``--cv-folds``.
 
 The unet2d architecture
 -----------------------

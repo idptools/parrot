@@ -11,7 +11,7 @@ configuration is scored by its best validation loss (or, with cross-validation,
 the average over folds of each fold's best validation loss), exactly as
 parrot-train chooses its best epoch.
 
-Two ideas make the search efficient, and need nothing beyond NumPy:
+Two ideas make the search efficient, and need nothing beyond NumPy and SciPy:
 
 - Successive halving (Jamieson & Talwalkar 2016, AISTATS; in its asynchronous
   form ASHA, Li et al. 2020, MLSys). Every configuration is first trained for a
@@ -315,6 +315,8 @@ class TrialTrainer:
             (inf if any fold failed to improve on infinity, e.g. after diverging)
         """
         if not trial.folds:
+            # Training starts from scratch, so it must also be counted from epoch 0
+            assert trial.epochs == 0, f'Trial {trial.number} has no training state but {trial.epochs} epochs trained'
             trial.folds = [FoldProgress() for _ in self.loaders]
 
         for progress, (train_loader, val_loader) in zip(trial.folds, self.loaders):
@@ -613,6 +615,9 @@ class HyperparameterSearch:
                     print(f'  trial {best.number} was stopped earlier, but every configuration trained further has '
                           'failed, so it is trained again from the start')
                 best.status = WAITING
+                # Its training state was dropped when it was stopped, so it is trained from epoch 0, not from the
+                # epoch it reached
+                best.epochs = 0
             self._train_stage(best)
 
     def _train_stage(self, trial: Trial) -> None:

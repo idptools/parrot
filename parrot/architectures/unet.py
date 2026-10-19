@@ -13,8 +13,8 @@ layers.GlobalContext), so every residue sees the whole sequence however long it
 is (--global-context-off removes it).
 
 Differences from the 2D original, all made so that the network fits PARROT's
-sequence and residue tasks and gives the same output for a sequence however
-much padding it is given:
+sequence and residue tasks and gives the same output for a sequence (up to
+float32 rounding) however much padding it is given:
 
 - convolutions and pooling run along the sequence (1D) instead of over an n x n map;
 - layer normalisation over channels replaces batch normalisation, whose

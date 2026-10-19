@@ -44,27 +44,35 @@ class Predictor():
     >>> values = my_predictor.predict_batch([AA_sequence_1, AA_sequence_2, ...])
 
     predict_batch() predicts the sequences together, as parrot-predict does:
-    every sequence is encoded first (running a protein language model over many
-    sequences at once), then the network runs over batches of similar length.
-    For more than a handful of sequences, it is much faster. Its predictions
-    match predict()'s up to float32 rounding, not exactly: which sequences
-    share a batch changes the order of the floating-point operations.
+    protein language model (PLM) embeddings or NARDINI features are computed
+    for every sequence first (the PLM running over many sequences at once),
+    then the network runs over batches of similar length. For more than a
+    handful of sequences, it is much faster. Its predictions match predict()'s
+    up to rounding, not exactly: which sequences share a batch changes the
+    order of the floating-point operations. For a PLM network this includes
+    the PLM, whose float32 rounding can move a value of the stored (16-bit)
+    embeddings by one step.
 
     Networks saved by this version of PARROT record their architecture, task and
     encoding, so only the path is needed. Networks saved by earlier versions
     (which must be one-hot BRNNs) also need `dtype`.
 
-    Predictions run on the CPU unless another device is requested, e.g.
-    Predictor(path, device='auto') to use a GPU (CUDA or Apple-silicon MPS) when
-    one is available, or Predictor(path, device='cuda', gpu_id=1) to use the
-    second NVIDIA GPU.
-    The CPU is the default because a GPU only pays off for
-    many sequences at once, and MPS cannot be used inside forked worker
-    processes (e.g. multiprocessing on macOS with the 'fork' start method).
+    Predictions run on a GPU (CUDA, else Apple-silicon MPS) if one is
+    available and otherwise on the CPU, as parrot-predict's do. Give
+    device='cpu' to use the CPU anyway, which can be faster for a few sequences
+    at a time and is needed inside forked worker processes (e.g.
+    multiprocessing on macOS with the 'fork' start method, where MPS cannot be
+    used), or Predictor(path, gpu_id=1) to use the second NVIDIA GPU.
+
+    For a network trained on PLM embeddings or NARDINI features,
+    Predictor(path, embedding_cache='/path/to/cache') keeps each sequence's
+    encoding on disk, so a sequence predicted again (by this Predictor or a
+    later one) is not encoded again.
 
     A network trained with --embedding-context embeds each sequence within the
     full-length protein it was cut from, so predict() needs that protein too
-    (and predict_batch() one per sequence):
+    (and predict_batch() one per sequence), unless the Predictor was created
+    with embed_in_isolation=True:
     >>> value = my_predictor.predict(fragment, full_length=protein_sequence)
     >>> values = my_predictor.predict_batch(fragments, full_lengths=protein_sequences)
 
@@ -101,7 +109,7 @@ class Predictor():
         embedded on its own (networks trained with --embedding-context only).
     """
 
-    def __init__(self, saved_weights: str | Path, dtype: str | None = None, device: str = 'cpu',
+    def __init__(self, saved_weights: str | Path, dtype: str | None = None, device: str = 'auto',
                  embedding_cache: str | Path | None = None, embed_in_isolation: bool = False,
                  gpu_id: int | None = None) -> None:
         """
@@ -115,16 +123,18 @@ class Predictor():
             networks); for newer networks, if given, it must match the saved
             network.
         device : str, optional
-            'cpu' (default), 'cuda', 'mps', or 'auto' (CUDA if available, else
-            MPS if available, else the CPU). For networks trained on protein
+            'auto' (default: CUDA if available, else MPS if available, else the
+            CPU), 'cpu', 'cuda' or 'mps'. For networks trained on protein
             language model (PLM) embeddings, the PLM also runs here, so a GPU
-            ('auto') is much faster.
+            makes encoding new sequences much faster.
         embedding_cache : str or Path, optional
             PLM and NARDINI networks only: a directory in which to store each
             sequence's encoding, so sequences predicted again are not encoded
-            again. By default nothing is kept: predict() encodes each sequence
-            when it is predicted, and predict_batch() encodes its sequences
-            into a temporary cache, deleted once they are predicted.
+            again. By default no encoding is kept on disk: predict() encodes
+            each sequence when it is predicted (a NARDINI network keeps each
+            sequence's features in memory for the Predictor's lifetime), and
+            predict_batch() encodes its sequences into a temporary cache,
+            deleted once they are predicted.
         embed_in_isolation : bool, optional
             Networks trained with --embedding-context only: embed a sequence
             predicted without its full-length protein on its own, rather than
@@ -220,9 +230,11 @@ class Predictor():
         ValueError
             If `full_length` is missing for a network trained with
             --embedding-context (without embed_in_isolation), or given for one
-            trained without it; if `start` is given without `full_length`; or
-            if `seq` cannot be placed in `full_length` (see
-            embedding_context.locate_fragment())
+            trained without it; if `start` is given without `full_length`; if
+            `seq` cannot be placed in `full_length` (see
+            embedding_context.locate_fragment()); or if `seq` cannot be encoded
+            (it has a residue the network's encoding cannot read or, for
+            NARDINI features, is too short)
         """
 
         seq = seq.upper()
@@ -241,17 +253,22 @@ class Predictor():
         on each. The predictions match predict()'s up to float32 rounding, not
         exactly: which sequences share a batch (and so the batch size) changes
         the order of the floating-point operations, giving differences of the
-        order of 1e-7 relative.
+        order of 1e-7 relative. For networks trained on PLM embeddings, the PLM
+        also runs in batches, and its float32 rounding can move a value of the
+        stored (16-bit) embeddings by one step, so their predictions can differ
+        by more.
 
         1. Networks trained on protein language model (PLM) embeddings or
            NARDINI features: every sequence is encoded first, the PLM running
            over many sequences at once (and over each full-length protein once,
            for a network trained with --embedding-context) and NARDINI features
-           being computed on several CPU cores. The encodings go into the
-           Predictor's embedding_cache or, without one, into a temporary cache
-           (in the system's temporary directory), deleted once the sequences
-           are predicted. Either way, they need about (number of residues) x
-           (values per residue) x 2 bytes of disk.
+           being computed on several CPU cores (for at least
+           nardini.MIN_SEQUENCES_FOR_PARALLEL sequences). The encodings go into
+           the Predictor's embedding_cache or, without one, into a temporary
+           cache (in the system's temporary directory), deleted once the
+           sequences are predicted. Either way, PLM embeddings need about
+           (number of residues) x (values per residue) x 2 bytes of disk, and
+           NARDINI features 90 x 4 bytes per sequence.
         2. The network runs over batches of `batch_size` sequences of similar
            length. Each distinct sequence is predicted once.
 
@@ -276,8 +293,10 @@ class Predictor():
             smaller batch), and changes the predictions only by float32
             rounding.
         show_progress : bool, optional
-            Print what is encoded, with a progress bar, and how many sequences
-            have been predicted (default False: print nothing)
+            Print what is encoded, with a progress bar (PLM and NARDINI
+            networks), and how many sequences have been predicted every
+            prediction.DEFAULT_PRINT_FREQUENCY sequences (default False: print
+            nothing)
 
         Returns
         -------
@@ -291,12 +310,15 @@ class Predictor():
         TypeError
             If `sequences`, `full_lengths` or `starts` is a single string rather than a list
         ValueError
-            If `batch_size` is less than 1; `full_lengths` or `starts` does not have one entry per sequence; a
-            sequence has a residue the network's encoding cannot read; a sequence cannot be embedded as predict()
-            would embed it (the message gives its position in `sequences`); or a sequence given more than once is
-            given different full-length contexts (its embedding is computed once, so it needs one context)
+            If `batch_size` is less than 1; `full_lengths` is missing for a network trained with --embedding-context
+            (without embed_in_isolation) or given for one trained without it, or `starts` is given without
+            `full_lengths`; `full_lengths` or `starts` does not have one entry per sequence; a sequence cannot be
+            encoded (it has a residue the network's encoding cannot read or, for NARDINI features, is too short); a
+            sequence cannot be embedded as predict() would embed it (the message gives its position in `sequences`);
+            or a sequence given more than once is given different full-length contexts (its embedding is computed
+            once, so it needs one context)
         RuntimeError
-            If the disk does not have room for the encodings (see PLMEncoder.prepare())
+            If the disk does not have room for the PLM embeddings (see PLMEncoder.prepare())
         """
 
         if isinstance(sequences, str):
@@ -305,13 +327,14 @@ class Predictor():
             raise ValueError(f'batch_size must be at least 1, got {batch_size}')
 
         uppercase_sequences = [seq.upper() for seq in sequences]
-        if not uppercase_sequences:
-            return []
 
         # Every sequence is checked and placed before anything is encoded or predicted, so a mistake in any of them
-        # stops the batch at once
+        # stops the batch at once (and a mistake in the other arguments is found even when there are no sequences)
         self.encoder.check_sequences(uppercase_sequences)
-        self._use_contexts(self._contexts_of_batch(uppercase_sequences, full_lengths, starts))
+        contexts = self._contexts_of_batch(uppercase_sequences, full_lengths, starts)
+        if not uppercase_sequences:
+            return []
+        self._use_contexts(contexts)
 
         outputs = self._encode_and_predict(uppercase_sequences, batch_size, show_progress)
         return [self._prediction_from_output(outputs[seq]) for seq in uppercase_sequences]
@@ -344,7 +367,7 @@ class Predictor():
             return self._run_network(sequences, batch_size, show_progress)
 
         # Without an embedding cache, the encodings go into a temporary one: computed in bulk, as parrot-predict
-        # computes them, and never all held in memory at once, however many sequences there are
+        # computes them, and (for a PLM) never all held in memory at once, however many sequences there are
         with tempfile.TemporaryDirectory(prefix=TEMPORARY_CACHE_PREFIX) as directory:
             encoder.use_cache(directory)
             try:
@@ -363,7 +386,7 @@ class Predictor():
         batch_size : int
             Number of sequences run through the network at once
         show_progress : bool
-            If True, print how many sequences have been predicted every DEFAULT_PRINT_FREQUENCY sequences
+            If True, print how many sequences have been predicted every prediction.DEFAULT_PRINT_FREQUENCY sequences
 
         Returns
         -------
@@ -417,8 +440,9 @@ class Predictor():
         TypeError
             If `full_lengths` or `starts` is a single string
         ValueError
-            If `full_lengths` or `starts` does not have one entry per sequence, a sequence cannot be placed (see
-            _context_of(); the message gives its position), or a sequence given more than once is given different
+            If `full_lengths` or `starts` is given where it does not apply or missing where it is needed (see
+            _check_batch_contexts()), or does not have one entry per sequence; a sequence cannot be placed (see
+            _context_of(); the message gives its position); or a sequence given more than once is given different
             contexts
         """
         self._check_batch_contexts(full_lengths, starts)

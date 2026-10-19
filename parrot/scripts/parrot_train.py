@@ -58,7 +58,10 @@ def learning_options() -> argparse.ArgumentParser:
     group.add_argument('--stop', default='iter', choices=train_network.STOP_CONDITIONS,
                        help="training stop condition: 'iter' trains for --epochs epochs (default); 'auto' trains "
                             "until --epochs epochs in a row have not lowered the validation loss by at least "
-                            f"{100 * train_network.AUTO_STOP_RELATIVE_IMPROVEMENT:g}%%")
+                            f"{100 * train_network.AUTO_STOP_RELATIVE_IMPROVEMENT:g}%% (with --uncertainties, whose "
+                            'loss can be negative, by at least '
+                            f'{train_network.AUTO_STOP_LOG_LIKELIHOOD_IMPROVEMENT:.2g} per labelled value, a '
+                            f'{100 * train_network.AUTO_STOP_RELATIVE_IMPROVEMENT:g}%% gain in likelihood)')
     return options
 
 

@@ -465,8 +465,9 @@ def regression_density_plot(true_values: np.ndarray, predicted_values: np.ndarra
 def plot_roc_curve(true_classes: np.ndarray, class_probabilities: np.ndarray, output_path: str) -> None:
     """ROC curve(s) for a probabilistic classifier
 
-    For two classes a single curve is drawn (both classes give the same curve);
-    for more classes, the micro-average (black) and one curve per class. The
+    For two classes a single curve is drawn, class 1's (class 0's is its mirror
+    image in the line from (0, 1) to (1, 0), with the same area); for more
+    classes, the micro-average (black) and one curve per class. The
     thin diagonal is a classifier that guesses at random.
 
     Parameters

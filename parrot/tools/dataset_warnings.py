@@ -51,7 +51,8 @@ def warn_about_dataset(data: list[list[Any]], task: Task) -> None:
     ----------
     data : list
         Parsed [seqID, sequence, value(s)] samples, before class labels are
-        converted to integers (so missing labels are NaN)
+        converted to integers (so missing labels are NaN). With uncertainties
+        each sample ends with the SD(s), which are not checked.
     task : Task
         The task the data is for
     """

@@ -1,6 +1,8 @@
 """
 Core training module of PARROT: the loss functions, and training any registered
-architecture (or fitting it, for models fitted in one step).
+architecture (or fitting it, for models fitted in one step), including fitting
+the model error of a network trained on values with uncertainties (see
+uncertainties.py).
 
 Nothing in this module depends on which architecture is being used; networks
 only need to follow the ParrotArchitecture interface (see
@@ -33,7 +35,8 @@ from parrot.architectures import HyperParameter, ParrotArchitecture
 from parrot.architectures.layers import padding_mask
 from parrot.devices import cpu_copy, full_float32_precision
 from parrot.tasks import Task
-from parrot.uncertainties import fit_model_error, gaussian_nll, model_error_of, set_model_error
+from parrot.uncertainties import (MODEL_ERROR_SIGNIFICANT_FIGURES, fit_model_error, gaussian_nll, model_error_of,
+                                  set_model_error)
 
 # The learning rate is the one hyperparameter shared by every architecture
 LEARNING_RATE = HyperParameter('learning_rate', float, default=0.001,
@@ -48,7 +51,7 @@ STOP_CONDITIONS = ('iter', 'auto')
 AUTO_STOP_RELATIVE_IMPROVEMENT = 0.005
 
 # With uncertainties the loss is a negative log-likelihood, which can be negative, so a relative fall means nothing.
-# Instead it must fall by this much per labelled value: the same 0.5% improvement, measured in likelihood
+# Instead it must fall by this much (in nats) per labelled value: the same 0.5% improvement, measured in likelihood
 # (a likelihood 1/(1 - 0.005) times as large lowers its negative log by log(1/(1 - 0.005)))
 AUTO_STOP_LOG_LIKELIHOOD_IMPROVEMENT = -math.log(1 - AUTO_STOP_RELATIVE_IMPROVEMENT)
 
@@ -210,8 +213,9 @@ def sum_batch_losses(batch_losses: list[torch.Tensor]) -> float:
 
     Calling .item() on every batch's loss would make the CPU wait for the GPU
     after every batch. Keeping the losses on the device and adding them up once
-    gives the same total (each loss is the same float32 value .item() would
-    return, summed in float64 on the CPU) without those waits.
+    gives the same total up to float64 rounding (each loss is the same float32
+    value .item() would return, summed in float64 on the CPU) without those
+    waits.
 
     Parameters
     ----------
@@ -276,7 +280,9 @@ def refit_model_error(network: ParrotArchitecture, loader: DataLoader, task: Tas
     The model error is set to its maximum-likelihood value given the
     network's predictions of the dataset (see uncertainties.fit_model_error),
     and the loss is then computed with it. Training does this on the
-    validation set after every epoch.
+    validation set before the first epoch and after every epoch. If any
+    prediction is not finite (the network has diverged), the model error is
+    left as it is, and the loss is not finite.
 
     Parameters
     ----------
@@ -364,7 +370,7 @@ class TrainingHistory:
     val_losses : list of float
         Average validation loss per sequence, one per epoch
     best_loss : float
-        The lowest validation loss so far (inf before the first epoch)
+        The lowest validation loss so far (inf until an epoch's loss is finite)
     best_epoch : int
         The epoch (counting from 0) with that loss (0 until an epoch's loss is finite)
     best_weights : dict or None
@@ -638,8 +644,9 @@ def print_model_error(network: ParrotArchitecture) -> None:
     network : ParrotArchitecture
         A network built for a task with uncertainties
     """
-    print(f'Model error s = {float(model_error_of(network)):.4g}: the SD of the error in its predictions, beyond each '
-          "value's own SD (fitted on the validation set)")
+    model_error = float(model_error_of(network))
+    print(f'Model error s = {model_error:.{MODEL_ERROR_SIGNIFICANT_FIGURES}g}: the SD of the error in its predictions, '
+          "beyond each value's own SD (fitted on the validation set)")
 
 
 @full_float32_precision()
@@ -690,6 +697,9 @@ def fit_in_one_step(network: ParrotArchitecture, train_loader: DataLoader, val_l
                     on_improvement: Callable[[ParrotArchitecture], None] | None = None,
                     silent: bool = False, timing: TrainingTiming | None = None) -> tuple[list[float], list[float]]:
     """Fit a model that is not trained by gradient descent, and report its losses
+
+    With uncertainties, the model is refitted as its model error is
+    re-estimated (see fit_with_model_error()).
 
     Parameters
     ----------
@@ -748,9 +758,9 @@ def fit_with_model_error(network: ParrotArchitecture, train_loader: DataLoader, 
     The model is first fitted with every sequence weighted equally. Then, in
     turn, the model error is fitted to the validation set (see
     refit_model_error()) and the model refitted with weights
-    1 / (SD^2 + s^2), until the model error changes by less than
-    MODEL_ERROR_TOLERANCE (or after MAX_MODEL_ERROR_REFITS refits). The
-    model error is left fitted to the final model.
+    1 / (SD^2 + s^2), until the model error changes by less than the fraction
+    MODEL_ERROR_TOLERANCE of its value (or after MAX_MODEL_ERROR_REFITS
+    refits). The model error is left fitted to the final model.
 
     Parameters
     ----------

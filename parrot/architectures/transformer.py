@@ -21,8 +21,8 @@ Residue order enters only through the positional encoding:
 Both encodings are computed on the fly for any length, so there is no maximum
 sequence length and nothing position-related is stored in saved networks.
 
-Padded positions are masked out of attention as keys, so a sequence's output
-never depends on how much padding it was given.
+Padded positions are masked out of attention as keys, so how much padding a
+sequence was given changes its output only by float32 rounding.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab

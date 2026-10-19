@@ -3,8 +3,9 @@ The steps of parrot-preprocess that clean, deduplicate and recode a datafile,
 and write the processed datafile.
 
 Every function here works on parsed datafile lines ([ID, sequence, value(s)],
-all as text, as read by process_input_data.read_tsv_raw()), and none prints:
-those that report what they did record it in a ProcessingReport. Splitting is
+all as text, as read by process_input_data.read_tsv_raw()), and none prints
+directly: those that report what they did record it in a ProcessingReport
+(which prints each line as it is added, if verbose). Splitting is
 in splitting.py and class balancing in class_balancing.py.
 
 .............................................................................
@@ -35,7 +36,9 @@ Line = list[str]
 # How identical sequences are deduplicated (see deduplicate())
 DEDUPLICATION_MODES = ('merge', 'first', 'drop')
 
-# Whole numbers smaller than this are written without a decimal point (larger ones lose precision as integers)
+# Whole numbers smaller than this are written without a decimal point. Larger ones are written as floats (e.g.
+# 1e+20): beyond 2^53 (about 9e15) a float cannot hold every whole number, so not every digit of one written out in
+# full would be meaningful
 LARGEST_EXACT_WHOLE_NUMBER = 1e15
 
 
@@ -92,9 +95,9 @@ def clean_sequences(lines: list[Line], report: ProcessingReport, uppercase: bool
         Parsed datafile lines ([id, sequence, value(s)...])
     report : ProcessingReport
         Where to record what was changed
-    uppercase : bool
+    uppercase : bool, optional
         Convert every sequence to upper case
-    remove_nonstandard : bool
+    remove_nonstandard : bool, optional
         Remove sequences containing anything other than the 20 standard amino acids
     min_length, max_length : int, optional
         Remove sequences shorter or longer than these
@@ -249,14 +252,17 @@ def deduplicate(lines: list[Line], mode: str, datatype: str, classification: boo
     Returns
     -------
     list
-        One line per kept sequence, in order of first appearance, with the first copy's ID
+        One line per kept sequence, in order of first appearance, with the first copy's ID (merging sequence
+        classification copies, the first labelled copy's)
 
     Raises
     ------
     ValueError
         If the mode is unknown, (merging residue data) copies of a sequence
         have different numbers of values, or (merging regression values) a
-        value is not a number (or, with uncertainties, not 'value,SD')
+        value is not a number (or, with uncertainties, not 'value,SD' with an
+        SD that is a finite number of at least 0); the message names the
+        first copy's ID
     """
     if mode not in DEDUPLICATION_MODES:
         raise ValueError(f"Unknown deduplication mode '{mode}': choose from {', '.join(DEDUPLICATION_MODES)}")
@@ -269,8 +275,12 @@ def deduplicate(lines: list[Line], mode: str, datatype: str, classification: boo
                f'({sum(len(copies) for copies in duplicated.values()) - len(duplicated):,} extra copies)')
 
     summary = MergeSummary()
-    merged = {sequence: merge_copies(copies, mode, datatype, classification, summary, uncertainties)
-              for sequence, copies in duplicated.items()}
+    merged = {}
+    for sequence, copies in duplicated.items():
+        try:
+            merged[sequence] = merge_copies(copies, mode, datatype, classification, summary, uncertainties)
+        except ValueError as error:
+            raise ValueError(f'Cannot merge the copies of {copies[0][0]}: {error}') from error
 
     # Each duplicated sequence's merged line (if any) takes the place of its first copy
     kept = []
@@ -323,7 +333,7 @@ def merge_copies(copies: list[Line], mode: str, datatype: str, classification: b
         return merge_sequence_values(copies, summary, uncertainties)
 
     if any(len(copy) != len(copies[0]) for copy in copies):
-        raise ValueError(f'Copies of {copies[0][0]} have different numbers of values')
+        raise ValueError('they have different numbers of values')
     return merge_residue_labels(copies, summary) if classification else merge_residue_values(copies, uncertainties)
 
 
@@ -369,6 +379,11 @@ def merge_sequence_values(copies: list[Line], summary: MergeSummary, uncertainti
     Returns
     -------
     list
+
+    Raises
+    ------
+    ValueError
+        If a value cannot be read (see value_numbers())
     """
     numbers, _ = value_numbers([copy[2] for copy in copies], uncertainties)
     labelled = ~np.isnan(numbers)
@@ -428,6 +443,11 @@ def merge_residue_values(copies: list[Line], uncertainties: bool = False) -> Lin
     Returns
     -------
     list
+
+    Raises
+    ------
+    ValueError
+        If a value cannot be read (see value_numbers())
     """
     positions = range(2, len(copies[0]))
     return [copies[0][0], copies[0][1]] + [merge_value_tokens([copy[position] for copy in copies], uncertainties)
@@ -450,16 +470,21 @@ def value_numbers(tokens: list[str], uncertainties: bool) -> tuple[np.ndarray, n
     numpy array
         The values (NaN where missing)
     numpy array or None
-        With uncertainties, their SDs (NaN where missing); otherwise None
+        With uncertainties, their SDs (NaN where the value is missing); otherwise None
 
     Raises
     ------
     ValueError
-        If a value is not a number (or, with uncertainties, not 'value,SD')
+        If a value is not a number (or, with uncertainties, not 'value,SD', or
+        a value's SD is not a finite number of at least 0; see
+        process_input_data.check_sds)
     """
     if uncertainties:
         values, sds = pid.split_uncertainties(tokens)
-        return np.array(values, dtype=float), np.array(sds, dtype=float)
+        numbers = np.array(values, dtype=float)
+        # A negative SD would be merged as if positive (only its square counts), and a missing one would make the
+        # merged value missing, so both are errors here, as they are when parrot-train reads the datafile
+        return numbers, pid.check_sds(sds, numbers)
     try:
         return np.array(tokens, dtype=float), None
     except ValueError:
@@ -487,6 +512,11 @@ def merge_value_tokens(tokens: list[str], uncertainties: bool) -> str:
     Returns
     -------
     str
+
+    Raises
+    ------
+    ValueError
+        If a value cannot be read (see value_numbers())
     """
     numbers, sds = value_numbers(tokens, uncertainties)
     labelled = ~np.isnan(numbers)

@@ -79,12 +79,13 @@ def cpu_state_dict(network: torch.nn.Module) -> dict[str, Any]:
     Parameters
     ----------
     network : torch.nn.Module
+        The network
 
     Returns
     -------
     dict
-        Parameter name -> CPU tensor (non-tensor entries, such as the pickled
-        scikit-learn model of a classical network, are kept as they are)
+        Parameter or buffer name -> CPU tensor (non-tensor entries, such as the
+        pickled scikit-learn model of a classical network, are kept as they are)
     """
     state: dict[str, Any] = cpu_copy(network.state_dict())
     return state

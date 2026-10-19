@@ -74,8 +74,8 @@ How residues are embedded
 * Each residue's embedding is the PLM's final-layer representation of that residue, after the model's last layer norm (the start and end tokens the model adds are removed).
 * ESM-2 was trained on sequences of up to 1,022 residues, and ESM C on up to 2,046. Longer sequences are embedded in overlapping windows of that length (consecutive windows share at least 256 residues, and the last window ends at the end of the sequence), and residues covered by more than one window get the average of their embeddings.
 * Models always run in 32-bit precision. (EvolutionaryScale's own loader switches ESM C to 16-bit "bfloat16" on a GPU, which would make embeddings depend on the device.)
-* Embeddings are rounded to 16-bit floats, whether or not they go through a cache, so a sequence is always encoded the same way.
-* The trained network file records the model, the windowing and the storage precision, so ``parrot-predict`` and ``Predictor`` embed new sequences exactly as the training sequences were.
+* Embeddings are rounded to 16-bit floats, whether or not they go through a cache, so a sequence is encoded at the same precision either way. (The model's own output can differ by float32 rounding with the other sequences it is run with, since padding a batch changes the order of the floating-point operations, and this can move a stored value by one step of the 16-bit rounding.)
+* The trained network file records the model, the windowing, the storage precision and whether the embeddings were made in context or mean-subtracted (see below), so ``parrot-predict`` and ``Predictor`` embed new sequences in the same way as the training sequences.
 * The PLM runs on the same device as training or prediction (see ``--device``). Use a GPU if you can: on a CPU, embedding is many times slower.
 
 Embedding fragments within their full-length proteins
@@ -143,7 +143,7 @@ With ``--embedding-context``, the sequence embedded is the full-length protein. 
 * **The cache.** Mean-subtracted embeddings are stored in files of their own, ``<model>.mean_subtracted.h5`` (and ``<model>.mean_subtracted.context.h5`` in context), so they never mix with the embeddings the model gives. Using it for the first time means embedding every sequence again. To embed ahead of time, give ``parrot-preprocess --encode`` the same option.
 * **Training and predicting.** The network records that its embeddings were mean-subtracted, so ``parrot-predict`` and ``Predictor`` subtract the mean from new sequences' embeddings automatically.
 * **The scikit-learn models** (``linear``, ``svm``, ``random_forest``, ``knn``) use each sequence's mean embedding as their features. Mean subtraction makes that zero for a sequence embedded on its own, so these models only accept ``--embed-mean-subtraction`` with ``--embedding-context``. Even then, any sequence mapped to ``-`` has a mean embedding of zero.
-* The mean is subtracted at full precision, before rounding to 16-bit floats, so the stored embeddings average to zero only to within that rounding.
+* The mean is subtracted at full precision, before rounding to 16-bit floats, so the stored embedding of a sequence embedded on its own averages to zero only to within that rounding.
 
 Things to know
 --------------

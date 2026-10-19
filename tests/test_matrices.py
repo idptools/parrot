@@ -493,6 +493,8 @@ def test_preprocess_splits_matrix_data(run_cli, tmp_path):
     (['-d', 'matrix', '-m', 'classification', '--recode-classes'], 'does not apply to matrix data'),
     (['-d', 'matrix', '-m', 'regression', '--deduplicate', 'merge'], 'does not apply to matrix data'),
     (['-d', 'sequence', '-m', 'regression', '--matrix-width', 4], 'only applies to matrix data'),
+    # The width is only used to check the output against the matrix file, so without one it used to be ignored
+    (['-d', 'matrix', '-m', 'regression', '--matrix-width', 4], 'needs --matrix-file'),
 ])
 def test_preprocess_rejects_options_that_do_not_suit_matrix_data(run_cli, tmp_path, arguments, message):
     datafile, _ = write_command_data(tmp_path)

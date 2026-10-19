@@ -356,6 +356,19 @@ def test_preprocess_merges_copies_by_their_sds(run_cli, tmp_path, write_lines):
     assert 'regression data with uncertainties' in (tmp_path / 'out_preprocess_report.txt').read_text()
 
 
+@pytest.mark.parametrize('datatype, lines', [
+    ('sequence', ['a ACDE 1.0,1.0', 'b ACDE 3.0,-0.5']),
+    ('sequence', ['a ACDE 1.0,1.0', 'b ACDE 3.0,nan']),
+    ('residues', ['a AC 1.0,1.0 nan', 'b AC 3.0,0.5 2.0,-0.1']),
+])
+def test_preprocess_refuses_to_merge_copies_with_invalid_sds(run_cli, tmp_path, write_lines, datatype, lines):
+    # A negative SD used to be merged as if it were positive, and a missing one made the merged value missing
+    with pytest.raises(ValueError, match='Cannot merge the copies of a: the SD of every value must be a finite'):
+        run_cli(parrot_preprocess.main, ['parrot-preprocess', write_lines('data.tsv', lines), tmp_path / 'out.tsv',
+                                         '-d', datatype, '-m', 'regression', '--uncertainties', '--deduplicate',
+                                         'merge'])
+
+
 def test_preprocess_merges_residue_values_by_their_sds(run_cli, tmp_path, write_lines):
     input_file = write_lines('residues.tsv', ['a AC 1.0,1.0 nan', 'b AC 3.0,0.5 2.0,0.1', 'c AC 5.0,0 nan'])
     output_file = tmp_path / 'out.tsv'

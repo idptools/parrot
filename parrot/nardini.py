@@ -12,7 +12,7 @@ These describe a whole sequence, while PARROT's encodings give one vector per
 residue, so this encoding gives every residue its sequence's 90 features:
 
 - `--encode nardini`: the features alone. With the composition baseline or the
-  simple models, which average over residues, this is exactly a model of the
+  simple models, which average over residues, this amounts to a model of the
   NARDINI+ vector and the sequence length; order-aware networks see the same
   input at every residue.
 - `--encode onehot+nardini` (or any per-residue encoding but a protein language
@@ -23,12 +23,13 @@ The features describe whole sequences, so only sequence-mapped data can use them
 
 The patterning z-scores are computed by scrambling each sequence (1,000 times by
 default), which takes about 35-100 ms per sequence. So, as for protein language
-models, every sequence is computed once before training (or predicting), in
-parallel across CPU cores, and stored in the embedding cache (see
-plm.EmbeddingCache). SPARROW
-derives each sequence's scrambles from the sequence and a fixed seed, which is
-saved with the network, so a sequence always gets the same features: when
-training and when predicting, and whether or not they came from the cache.
+models, every sequence is computed once before training (or predicting, or
+ahead of time with parrot-preprocess --encode), in parallel across CPU cores,
+and stored in the embedding cache (see plm.EmbeddingCache). SPARROW derives
+each sequence's scrambles from the sequence and a fixed seed, which is saved
+with the network, so with the same version of SPARROW a sequence always gets
+the same features: when training and when predicting, alone or with other
+sequences, and whether or not they came from the cache.
 
 SPARROW is only imported when this encoding is used. Install it with
 `pip install git+https://github.com/idptools/sparrow.git`.
@@ -75,7 +76,8 @@ NARDINI_ENCODING = 'nardini'
 COMBINATION_SEPARATOR = '+'
 
 # Scrambles per sequence for the patterning z-scores. The NARDINI paper uses 100,000 and SPARROW defaults to 10,000;
-# 1,000 is about ten times faster, and SPARROW notes it is usually adequate for low-complexity sequences.
+# 1,000 is three to four times faster than 10,000 (timed with SPARROW on sequences of 40-600 residues), and SPARROW
+# notes it is usually adequate for low-complexity sequences.
 DEFAULT_NUM_SCRAMBLES = 1000
 
 # SPARROW derives each sequence's scrambles from this seed and the sequence, so features never depend on the batch
@@ -152,7 +154,19 @@ def import_sparrow_nardini() -> Any:
 
 
 def sparrow_version() -> str:
-    """The installed SPARROW's version."""
+    """The installed SPARROW's version
+
+    Returns
+    -------
+    str
+
+    Raises
+    ------
+    ImportError
+        If SPARROW is not installed (see import_sparrow_nardini())
+    """
+    # Importing sparrow.nardini first explains how to install SPARROW if it is missing
+    import_sparrow_nardini()
     import sparrow
 
     return str(getattr(sparrow, '__version__', 'unknown'))
@@ -203,7 +217,8 @@ class NardiniEncoder(SequenceEncoder):
 
     Before sequences are encoded in bulk, prepare() computes every sequence not
     yet in the cache. encode() then reads features from memory or the cache,
-    or computes them on the spot (as Predictor does for single sequences).
+    or computes them on the spot (as Predictor.predict() does for a sequence
+    not in its cache, or with no cache).
     Features are always 32-bit floats, so a sequence is encoded the same way
     whichever way its features were found.
 
@@ -341,10 +356,13 @@ class NardiniEncoder(SequenceEncoder):
         Raises
         ------
         RuntimeError
-            If no cache has been set
+            If no cache has been set, or another process's lock file is still
+            there after plm.CACHE_WAIT_SECONDS
         ValueError
             If a sequence cannot be scored (see check_sequences()), or the
             installed SPARROW's features differ from a saved network's
+        ImportError
+            If SPARROW is not installed
         """
         if self.cache is None:
             raise RuntimeError('Call use_cache() before prepare()')
@@ -400,6 +418,13 @@ class NardiniEncoder(SequenceEncoder):
         Returns
         -------
         numpy array of float32
+
+        Raises
+        ------
+        ValueError
+            If the features have to be computed and the sequence cannot be
+            scored (see check_sequences()), or the installed SPARROW's features
+            differ from a saved network's
         """
         if sequence in self._features:
             return self._features[sequence]

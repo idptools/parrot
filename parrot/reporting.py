@@ -29,12 +29,10 @@ from parrot.metrics import METRIC_DECIMALS, performance_metrics, uncertainty_met
 from parrot.prediction import LabeledPredictions, output_to_prediction
 from parrot.process_input_data import missing_label_mask
 from parrot.tasks import Task
+from parrot.uncertainties import MODEL_ERROR_SIGNIFICANT_FIGURES
 
 # Number of decimal places used when writing class probabilities
 PROBABILITY_DECIMALS = 4
-
-# Significant figures of the model error s (with uncertainties), which is in the units of the values
-MODEL_ERROR_SIGNIFICANT_FIGURES = 4
 
 
 def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: str, probabilistic: bool = False,
@@ -51,8 +49,9 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
     "<output_prefix>_matrix_examples.png", heatmaps of a few test sequences).
     Warns if the network's output for any test sequence is not finite (see
     warn_about_non_finite_outputs()). With uncertainties, the metrics include
-    how well the error model fits (see metrics.uncertainty_metrics), and the
-    statistics file also gives the model error s.
+    how well the error model fits and the noise ceiling (see
+    metrics.uncertainty_metrics), and the statistics file also gives the model
+    error s.
 
     Parameters
     ----------
@@ -258,7 +257,8 @@ def write_unlabeled_predictions(names: Sequence[str] | None, sequences: Sequence
 
     For matrix tasks the predictions are instead written as a .npz archive
     with one matrix per input sequence, named by its sequence ID (or, without
-    names, by its line number, counting from 1); '.npz' is added to
+    names, by its number among the sequences: 1, 2, ..., not counting blank
+    or comment lines); '.npz' is added to
     `output_path` if it does not end with it.
 
     Parameters
@@ -312,7 +312,8 @@ def write_performance_metrics(metrics: dict[str, float], output_path: str, model
     Parameters
     ----------
     metrics : dict
-        Metric names and values (see metrics.performance_metrics())
+        Metric names and values (see metrics.performance_metrics() and, with
+        uncertainties, metrics.uncertainty_metrics())
     output_path : str
         File to write
     model_error : float, optional

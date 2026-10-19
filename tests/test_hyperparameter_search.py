@@ -311,6 +311,34 @@ def test_a_stopped_configuration_is_trained_again_when_the_promoted_one_fails():
     assert search.trials[0].status == hs.FAILED and search.trials[2].status == hs.STOPPED
 
 
+class FirstPromotionFailsTrainer(hs.TrialTrainer):
+    """Trains for real, but the first configuration to reach its second stage fails there."""
+
+    first_stage_epochs = 1
+    failed = False
+
+    def train_to(self, trial, epochs):
+        if epochs > self.first_stage_epochs and not self.failed:
+            self.failed = True
+            raise ValueError('pretend this configuration ran out of memory at its second stage')
+        return super().train_to(trial, epochs)
+
+
+def test_a_stopped_configuration_trained_again_is_trained_for_every_epoch():
+    # Its training state was dropped when it was stopped, but its epochs were not reset, so it was trained again
+    # for only the epochs after the stage it had reached (8 of 9 here), though recorded as trained for all 9
+    space = hs.SearchSpace('brnn')
+    torch.manual_seed(0)
+    trainer = FirstPromotionFailsTrainer(space, make_loaders(), 20, TASK, 'cpu')
+    search = make_search(trainer=trainer, n_trials=3, max_epochs=9, min_epochs=1)
+    trainer.first_stage_epochs = search.stages[0]
+    best = search.run()
+
+    _, train_losses, val_losses = trainer.trained_network(best)
+    assert trainer.failed and best.status == hs.COMPLETED
+    assert best.epochs == len(train_losses) == len(val_losses) == 9
+
+
 def test_too_few_trials_still_train_one_configuration_fully():
     search = make_search(n_trials=2, max_epochs=27, min_epochs=3)
     best = search.run()

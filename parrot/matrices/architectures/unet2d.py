@@ -11,7 +11,8 @@ combine fine local detail with context from a large part of the map.
 
 Differences from Nick's original, made so that the network works on padded
 batches of sequences of any length and gives the same output for a sequence
-however much padding it was given (as the 1D U-Net in architectures/unet.py):
+(up to float32 rounding) however much padding it was given (as the 1D U-Net in
+architectures/unet.py):
 
 - the input grid is built from per-residue encodings by MatrixArchitecture
   (see matrices/base.py) rather than read from a one-hot code of residue pairs;

@@ -322,8 +322,8 @@ def data_options(architecture: type[ParrotArchitecture]) -> argparse.ArgumentPar
     group.add_argument('--encode', default='onehot', type=str, metavar='encoding_scheme',
                        help="'onehot' (default), 'biophysics', a protein language model (e.g. "
                             "'esm2_t12_35M_UR50D'), a path to a user-created scheme, or (sequence data only) "
-                            "'nardini', the NARDINI+ features of the whole sequence, alone or after another "
-                            "encoding (e.g. 'onehot+nardini')")
+                            "'nardini', the NARDINI+ features of the whole sequence, alone or after 'onehot', "
+                            "'biophysics' or a user-created scheme (e.g. 'onehot+nardini')")
     group.add_argument('--standardize-encoding', dest='standardize_encoding', action='store_true',
                        help='standardize every feature of the encoding to mean 0 and standard deviation 1 across '
                             'the amino acids (or other characters) it defines, so that features on different '
@@ -481,8 +481,8 @@ def uncertainty_options() -> argparse.ArgumentParser:
     group.add_argument('--uncertainties', action='store_true',
                        help="regression: every value in the datafile is written as 'value,SD', where SD is the "
                             "standard deviation of its measurement error (a missing residue value is still 'nan'); "
-                            'training weights each value by its SD, and fits the error of the predictions beyond '
-                            "the values' own errors (the model error)")
+                            'training weights each value by 1 / (SD^2 + s^2), where s, the model error, is the error '
+                            "of the predictions beyond the values' own errors, fitted on the validation set")
     return options
 
 
@@ -511,9 +511,12 @@ def output_options() -> argparse.ArgumentParser:
     options = argparse.ArgumentParser(add_help=False)
     group = options.add_argument_group('output')
     group.add_argument('--include-figs', dest='include_figs', action='store_true',
-                       help='save figures of the training and of the test-set performance next to the network '
-                            '(for regression, a scatterplot and a density plot; for residue data, also example '
-                            'profiles of true and predicted values along test sequences)')
+                       help='save figures next to the network: the training and validation loss per epoch (networks '
+                            'trained epoch by epoch), and the test-set performance (for regression, a scatterplot '
+                            'and a density plot; for classification, a confusion matrix, or with '
+                            '--probabilistic-classification ROC and precision-recall curves; for residue data, also '
+                            'example profiles of true and predicted values along test sequences, and for matrix '
+                            'data, heatmaps of example test sequences)')
     group.add_argument('--no-stats', dest='no_stats', action='store_true',
                        help='do not write the test-set performance statistics file')
     group.add_argument('--verbose', '-v', action='store_true',

@@ -198,6 +198,11 @@ class MMseqsSearch:
             Threads for MMseqs2 (default: every CPU)
         workdir : str or Path, optional
             Where MMseqs2's temporary files go (default: the system's temporary directory)
+
+        Raises
+        ------
+        RuntimeError
+            If MMseqs2 cannot be found (see find_mmseqs())
         """
         self.executable = find_mmseqs(executable)
         self.criteria = criteria or HomologyCriteria()

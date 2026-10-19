@@ -22,9 +22,9 @@ split-file with parrot-preprocess.
 
 Cross-validation folds (parrot-optimize --cv-folds) are made from the training
 and validation sequences in the same spirit: identical sequences are always in
-the same fold, and with 'kmer' or 'mmseqs' so are clusters of similar
-sequences, and each fold is scored only on its held-out sequences that are not
-similar to any of its training sequences.
+the same fold; with 'kmer' or 'mmseqs', so are clusters of similar sequences,
+and each fold is scored only on its held-out sequences that are not similar to
+any of its training sequences.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -65,8 +65,9 @@ METHOD_DESCRIPTIONS = {
 class DataSplit:
     """How the data are divided into sets: a split-file or a method, applied when the data are read
 
-    Passed to process_input_data.split_data() as `assign_sets`, which calls it
-    with the parsed data; it then records what it did, for describing the run.
+    Passed to process_input_data.split_data() (or split_data_cv()) as
+    `assign_sets`, which calls it with the parsed data; it then records what it
+    did, for describing the run.
 
     Attributes
     ----------

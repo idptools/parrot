@@ -79,9 +79,9 @@ The predictions themselves are single values, as without ``--uncertainties``; "_
 Training details
 ----------------
 
-* The validation loss is the same negative log-likelihood, so its values cannot be compared with those of a run without ``--uncertainties``, and it can be negative. ``--stop auto`` therefore asks for the validation loss to fall by 0.005 per labelled value (rather than by 0.5%): the same 0.5% improvement, measured in likelihood.
+* The validation loss is the same negative log-likelihood, so its values cannot be compared with those of a run without ``--uncertainties``, and it can be negative. ``--stop auto`` therefore asks for the validation loss to fall by about 0.005 per labelled value (rather than by 0.5%): the same 0.5% improvement, measured in likelihood.
 * ``parrot-optimize`` scores configurations by the same validation loss, with *s* refitted for each configuration (and each cross-validation fold).
-* ``parrot-preprocess --uncertainties --deduplicate merge`` combines the copies of a sequence (or of a residue) by their inverse-variance weighted mean, Σ(*y*/σ²)/Σ(1/σ²), with SD 1/√Σ(1/σ²): the standard way to combine independent estimates of one quantity. If a copy has an SD of 0, the merged value is the mean of the exact copies, with SD 0.
+* ``parrot-preprocess --uncertainties --deduplicate merge`` combines the copies of a sequence (or of a residue) by their inverse-variance weighted mean, Σ(*y*/σ²)/Σ(1/σ²), with SD 1/√Σ(1/σ²): the standard way to combine independent estimates of one quantity. If a copy has an SD of 0, the merged value is the mean of the exact copies, with SD 0. Every labelled copy must have an SD that is a finite number of at least 0, or merging stops with a message naming the sequence.
 
 Limitations
 -----------

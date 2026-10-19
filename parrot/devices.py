@@ -2,14 +2,18 @@
 Choosing the device PARROT runs on: the CPU, an NVIDIA GPU (CUDA) or an
 Apple-silicon GPU (MPS).
 
-Every command that trains or predicts takes the same choice ('auto', 'cpu',
-'cuda' or 'mps'). 'auto' uses the fastest device available, in the order CUDA,
-then MPS, then CPU. Asking for a device that is not available is an error rather
-than a silent fallback, because training on the CPU instead of a GPU can be an
-order of magnitude slower.
+Every command that trains, predicts or computes embeddings (parrot-preprocess
+--encode) takes the same choice ('auto', 'cpu', 'cuda' or 'mps'), as does
+Predictor (whose default is 'cpu'). 'auto' uses the fastest device available,
+in the order CUDA, then MPS, then CPU. Asking for a device that is not
+available is an error rather than a silent fallback, because training on the
+CPU instead of a GPU can be an order of magnitude slower. On a machine with
+several NVIDIA GPUs, --gpu-id (Predictor's gpu_id) chooses the one to run on.
 
 PARROT always computes in full float32 precision, so a network gives the same
-results (to float32 precision) on every device; see full_float32_precision().
+results on every device up to float32 rounding (differences of up to ~1e-4
+between CUDA and the CPU, in the units of the predicted values); see
+full_float32_precision().
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -54,7 +58,8 @@ def resolve_device(requested: str = 'auto', gpu_id: int | None = None) -> torch.
         'auto' (default: CUDA if available, else MPS if available, else the
         CPU), 'cpu', 'cuda' or 'mps'
     gpu_id : int, optional
-        Index of the CUDA device to use. Only valid when running on CUDA.
+        Index of the CUDA device to use. Giving one asks for CUDA, so
+        `requested` must then be 'cuda' or 'auto'.
 
     Returns
     -------
@@ -63,8 +68,8 @@ def resolve_device(requested: str = 'auto', gpu_id: int | None = None) -> torch.
     Raises
     ------
     ValueError
-        If `requested` is not a valid choice, or `gpu_id` is given for a
-        device other than CUDA or is not a valid CUDA device index
+        If `requested` is not a valid choice, or `gpu_id` is given with 'cpu'
+        or 'mps' or is not a valid CUDA device index
     RuntimeError
         If the requested device (or the CUDA device implied by `gpu_id`) is not
         available on this machine
@@ -75,7 +80,8 @@ def resolve_device(requested: str = 'auto', gpu_id: int | None = None) -> torch.
     # A GPU index is an explicit request for CUDA
     if gpu_id is not None:
         if requested in ('cpu', 'mps'):
-            raise ValueError(f"A CUDA device index (--gpu-id {gpu_id}) cannot be combined with device '{requested}'")
+            raise ValueError(f"A CUDA device index ({gpu_id}, from --gpu-id or gpu_id) cannot be combined with device "
+                             f"'{requested}': it asks for CUDA, so the device must be 'cuda' or 'auto'")
         requested = 'cuda'
 
     if requested == 'cpu':

@@ -29,8 +29,8 @@ from parrot.encode_sequence import OneHotEncoder
 from parrot.matrices import data as matrix_data
 from parrot.sequence_encoder import SequenceEncoder
 
-# MISSING_LABEL_TEXT is imported only so that other modules (e.g. tools/preproc.py) can read it from here
-from parrot.tasks import (IGNORED_CLASS_LABEL, MISSING_LABEL_TEXT, UNCERTAINTY_SEPARATOR,  # noqa: F401
+# Other modules (e.g. tools/preproc.py) also read MISSING_LABEL_TEXT and UNCERTAINTY_SEPARATOR from here
+from parrot.tasks import (IGNORED_CLASS_LABEL, MISSING_LABEL_TEXT, UNCERTAINTY_SEPARATOR,
                           VALID_DATATYPES, Task)
 from parrot.tools import dataset_warnings
 
@@ -390,7 +390,8 @@ def parse_file(tsvfile: str, task: Task, exclude_seq_id: bool = False, ignore_wa
         One [seqID, sequence, value(s)] list per data line. Classification labels
         are ints (or lists of ints for residue-mapped data, or int matrices for
         matrix data, with missing labels set to IGNORED_CLASS_LABEL). Missing
-        regression values are NaN.
+        regression values are NaN. With uncertainties, each list ends with the
+        SD(s) (see parse_line()).
 
     Raises
     ------
@@ -524,7 +525,8 @@ class SequenceDataset(Dataset):
     Attributes
     ----------
     data : list
-        Each item is a [seqID, sequence, value(s)] list
+        Each item is a [seqID, sequence, value(s)] list (with uncertainties,
+        followed by the SD(s))
     encoder : SequenceEncoder
         Converts sequences to numeric vectors
     """
@@ -535,7 +537,8 @@ class SequenceDataset(Dataset):
         Parameters
         ----------
         data : list
-            Each item is a [seqID, sequence, value(s)] list
+            Each item is a [seqID, sequence, value(s)] list (with uncertainties,
+            followed by the SD(s))
         subset : numpy int array, optional
             Indices of `data` to include. None (default) includes all of
             `data`; an empty array gives an empty dataset.
@@ -575,7 +578,7 @@ class SequenceDataset(Dataset):
 
     @property
     def values(self) -> list[Any]:
-        """The value(s) of every sequence (a number, or one per residue), in dataset order."""
+        """The value(s) of every sequence (a number, one per residue, or a matrix), in dataset order."""
         return [sample[2] for sample in self.data]
 
     @property
@@ -618,9 +621,9 @@ def padded_batch_length(longest: int) -> int:
 def pad_sequence_vectors(seq_vectors: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
     """Zero-pad a list of encoded sequences to a common length
 
-    Every PARROT architecture masks padding, so the amount of padding does not
-    change any result; batches are padded slightly beyond their longest
-    sequence (see padded_batch_length) because that is faster on GPUs.
+    Every PARROT architecture masks padding, so the amount of padding changes
+    results only by float32 rounding; batches are padded slightly beyond their
+    longest sequence (see padded_batch_length) because that is faster on GPUs.
 
     Parameters
     ----------
@@ -768,9 +771,10 @@ class LengthBatchSampler(Sampler[list[int]]):
     large for memory fails immediately.
 
     Without shuffling (for evaluation) the whole dataset is sorted by length.
-    Because every PARROT architecture's output for a sequence does not depend
-    on what it is batched with, this changes how fast evaluation runs but not
-    its results.
+    Because every PARROT architecture masks padding, a sequence's output
+    depends on what it is batched with only through float32 rounding, so this
+    changes how fast evaluation runs but not its results (beyond that
+    rounding).
 
     Attributes
     ----------
@@ -1192,6 +1196,13 @@ def split_data(data_file: str, task: Task, encoder: SequenceEncoder | None = Non
     -------
     tuple of SequenceDataset
         (training set, validation set, test set)
+
+    Raises
+    ------
+    IOExceptionParrot
+        If the datafile cannot be parsed (see load_and_split())
+    ValueError
+        If the split is not usable (see load_and_split())
     """
 
     data, training_samples, val_samples, test_samples = load_and_split(

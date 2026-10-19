@@ -3,9 +3,10 @@ Measures of how well a trained network performs on labeled data (e.g. the
 held-out test set).
 
 Everything here takes plain numpy arrays: the true and predicted value(s) of
-each sequence (see prediction.output_to_prediction), so it works the same for
-every architecture. Writing the results to files is in reporting.py, and
-plotting them in figures.py.
+each sequence (see prediction.output_to_prediction), and, with uncertainties,
+the SDs of the true values, so it works the same for every architecture.
+Writing the results to files is in reporting.py, and plotting them in
+figures.py.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -297,7 +298,8 @@ def uncertainty_metrics(true_values: Sequence[np.ndarray], sds: Sequence[np.ndar
         (assuming the errors are independent of the true values; 0 if the
         measurement errors account for all the spread of the values, NaN for
         fewer than two values or values that are all the same). Values are
-        rounded to METRIC_DECIMALS places, and are NaN if any prediction is not
+        rounded to METRIC_DECIMALS places. All but the noise ceiling (which
+        does not depend on the predictions) are NaN if any prediction is not
         finite.
     """
     values, value_sds, predicted = (flatten(arrays) for arrays in (true_values, sds, predictions))

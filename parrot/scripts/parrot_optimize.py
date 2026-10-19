@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
-Usage: $ parrot-optimize <architecture> --input-file <datafile> --output-network <name> --split <split> <flags>
+Usage: $ parrot-optimize <architecture> --input-file <datafile> --output-network <name>
+       --split <method or split-file> (--regression | --classification --num-classes N) <flags>
 
 Search for good hyperparameters for a network architecture on a dataset, then
 train and test a network with the best ones. See parrot/hyperparameter_search.py

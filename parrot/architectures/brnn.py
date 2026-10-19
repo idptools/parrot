@@ -9,7 +9,7 @@ passed through a linear layer ("many-to-one").
 For residue-mapped tasks the linear layer is applied to the LSTM output at
 every residue ("many-to-many"). With --dropout, dropout is applied to what the
 LSTM passes on: between stacked LSTM layers, and to the LSTM output (or final
-hidden states) the output layer sees.
+hidden states) before it is pooled or passed to the output layer.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -39,11 +39,12 @@ BRNN_ATTENTION_POOLING = dataclasses.replace(
     help='sequence tasks only: summarise each sequence by pooling the LSTM output at every residue with learned '
          'attention weights (when off, by the final hidden states of the two directions, as PARROT always did)')
 
-# Dropout, as for the other networks, but not searched by parrot-optimize unless it is given, so that a search of the
-# BRNN tries the same configurations as before the BRNN had dropout
+# Dropout, as for the other networks, but never searched by parrot-optimize (it keeps its default of 0, or the value
+# it is given), so that a search of the BRNN tries the same configurations as before the BRNN had dropout
 BRNN_DROPOUT = dataclasses.replace(
     DROPOUT, search_range=None,
-    help='dropout probability (at least 0, below 1), applied to the LSTM output and between stacked LSTM layers')
+    help='dropout probability (at least 0, below 1), applied to the LSTM output (or final hidden states) and between '
+         'stacked LSTM layers')
 
 
 def run_lstm(lstm: nn.LSTM, x: torch.Tensor,
@@ -99,8 +100,11 @@ def run_lstm_unpacked(lstm: nn.LSTM, x: torch.Tensor, lengths: torch.Tensor) -> 
     after every real residue. For the reverse direction, each sequence is
     reversed within its own length (the padding stays at the end), run forwards,
     and reversed back. Layers are computed one at a time because each layer's
-    input is both directions of the layer below. The result equals running the
-    bidirectional LSTM on packed sequences.
+    input is both directions of the layer below. Between layers, the LSTM's
+    dropout is applied as torch.nn.LSTM applies it (in training only, to the
+    output of every layer but the last). The result matches running the
+    bidirectional LSTM on packed sequences up to float32 rounding (except that,
+    in training with dropout, different values are dropped).
 
     The weights are always the bidirectional `lstm`'s own parameters, so saved
     networks are unaffected; each direction is computed by calling a weightless
@@ -208,8 +212,8 @@ class BRNN(ParrotArchitecture):
     lstm : torch.nn.LSTM
         The bidirectional LSTM layer(s)
     dropout : torch.nn.Dropout
-        Dropout applied to the LSTM output (or final hidden states) before the
-        output layer
+        Dropout applied to the LSTM output (or final hidden states) before it
+        is pooled or passed to the output layer
     attention_pool : AttentionPool or None
         Sequence-mapped tasks with attention pooling: pools the LSTM output at
         every residue into one vector per sequence. None means the final hidden
@@ -251,9 +255,10 @@ class BRNN(ParrotArchitecture):
         loglength_feedforward : bool
             Sequence tasks: also give the output layer log(sequence length)
         dropout : float, optional
-            Dropout probability, applied to the LSTM output and between stacked
-            LSTM layers (default 0, no dropout). It comes last, with a default,
-            so that code which built a BRNN before it existed still works.
+            Dropout probability, applied to the LSTM output (or final hidden
+            states) and between stacked LSTM layers (default 0, no dropout).
+            It comes last, with a default, so that code which built a BRNN
+            before it existed still works.
         """
         super().__init__(input_size, task, {'hidden_size': hidden_size, 'num_layers': num_layers, 'dropout': dropout,
                                             'attention_pooling': attention_pooling,

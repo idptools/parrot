@@ -139,10 +139,26 @@ def test_predictor_chooses_a_gpu_id_as_the_command_line_does(monkeypatch, tmp_pa
 
     # the device is resolved as resolve_device() resolves it, so a bad choice fails before the network is loaded
     with pytest.raises(ValueError, match='cannot be combined'):
-        Predictor(network_file, gpu_id=0)  # the default device is the CPU
+        Predictor(network_file, device='cpu', gpu_id=0)
+    # The default device is 'auto', as on the command line, so gpu_id alone asks for CUDA (it used to be the CPU,
+    # which gpu_id cannot be combined with)
     fake_availability(monkeypatch, cuda=False, mps=True)
     with pytest.raises(RuntimeError, match='CUDA'):
-        Predictor(network_file, device='auto', gpu_id=0)
+        Predictor(network_file, gpu_id=0)
+
+
+def test_predictor_uses_a_gpu_by_default(monkeypatch, tmp_path):
+    network_file = tmp_path / 'net.pt'
+    save_network(str(network_file), make_network('residues', 1), get_encoder('onehot'))
+    requested = []
+
+    def record_request(device, gpu_id):
+        requested.append((device, gpu_id))
+        return torch.device('cpu')
+
+    monkeypatch.setattr(devices, 'resolve_device', record_request)
+    Predictor(network_file)
+    assert requested == [('auto', None)]
 
 
 @pytest.mark.parametrize('main_function, arguments', [
