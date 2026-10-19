@@ -192,6 +192,10 @@ def add_splitting_arguments(parser: argparse.ArgumentParser) -> None:
     group.add_argument('--no-masking', dest='no_masking', action='store_true',
                        help='homology and kmer: do not mask low-complexity regions, so similarity in them also links '
                             'sequences (even more stringent)')
+    group.add_argument('--max-separation-rounds', type=int, metavar='rounds',
+                       help='homology and kmer: maximum cleanup rounds that remove cross-set matches '
+                            f'(default {splitting.MAX_SEPARATION_ROUNDS}; at least 1). A final verification '
+                            'search checks the last removal; increasing this limit keeps the similarity criteria')
     group.add_argument('--mmseqs', metavar='path', help='homology: MMseqs2 executable (default: mmseqs on the PATH)')
     group.add_argument('--threads', type=int, metavar='threads', help='homology: threads for MMseqs2 (default: every CPU)')
     group.add_argument('--mmseqs-sensitivity', dest='mmseqs_sensitivity', type=float, metavar='sensitivity',
@@ -421,6 +425,8 @@ def check_options_match_split_method(args: argparse.Namespace) -> None:
                                  ('--homology-evalue', args.homology_evalue is not None, similarity_methods),
                                  ('--homology-coverage', args.homology_coverage is not None, similarity_methods),
                                  ('--no-masking', args.no_masking, similarity_methods),
+                                 ('--max-separation-rounds', args.max_separation_rounds is not None,
+                                  similarity_methods),
                                  ('--mmseqs', args.mmseqs is not None, ('homology',)),
                                  ('--threads', args.threads is not None, ('homology',)),
                                  ('--mmseqs-sensitivity', args.mmseqs_sensitivity is not None, ('homology',)),
@@ -447,6 +453,8 @@ def check_split_settings(args: argparse.Namespace) -> None:
         If the --groups file does not exist
     """
     arguments.check_set_fractions(args.set_fractions)
+    if args.max_separation_rounds is not None and args.max_separation_rounds < 1:
+        raise ValueError(f'--max-separation-rounds must be at least 1, got {args.max_separation_rounds}')
     if args.groups is not None:
         arguments.check_file_exists(args.groups, 'Groups file')
     if args.split_method == 'homology':
@@ -492,24 +500,56 @@ def run() -> None:
     report.add(f'{PROGRAM_NAME} (PARROT {PARROT_VERSION}), {datetime.now().isoformat(timespec="seconds")}')
     report.add(f'Input: {os.path.abspath(args.input_data_file)} ({args.datatype}-mapped {args.mode}'
                + (', with uncertainties)' if args.uncertainties else ')'))
+    report.add(f'Random seed: {args.seed}' if args.seed is not None else
+               'Random seed: not set (use --seed for reproducible comparisons)')
 
-    lines = read_lines(args, report)
-    lines = clean(lines, args, report)
-    lines = recode(lines, args, output_prefix, report)
-    before_deduplication = lines
-    lines = remove_duplicates(lines, args, classification, report)
-    lines, splits = split(lines, before_deduplication, args, rng, report)
-    lines, splits = balance_classes(lines, splits, args, output_prefix, report)
-    context = None
-    if encoder is not None:
-        # A sequence the encoding cannot read, or one that cannot be placed in its full-length protein, stops the
-        # command before the output is written (only an earlier step's class mapping or class balance trace may
-        # already be written)
-        encoder.check_sequences(line[1] for line in lines)
-        context = place_in_context(args, encoder, [line[0] for line in lines], [line[1] for line in lines])
+    try:
+        lines = read_lines(args, report)
+        lines = clean(lines, args, report)
+        lines = recode(lines, args, output_prefix, report)
+        before_deduplication = lines
+        lines = remove_duplicates(lines, args, classification, report)
+        lines, splits = split(lines, before_deduplication, args, rng, report)
+        lines, splits = balance_classes(lines, splits, args, output_prefix, report)
+        context = None
+        if encoder is not None:
+            # Check sequences and full-length placements before writing the processed data and split-file.
+            encoder.check_sequences(line[1] for line in lines)
+            context = place_in_context(args, encoder, [line[0] for line in lines], [line[1] for line in lines])
+    except (ValueError, RuntimeError, OSError, ImportError, KeyboardInterrupt) as error:
+        save_failure_report(report, output_prefix, error)
+        raise
     write_outputs(lines, splits, args, output, output_prefix, classification, report)
     if encoder is not None:
-        encode_ahead_of_time(lines, encoder, device, args, output, output_prefix, report, context)
+        try:
+            encode_ahead_of_time(lines, encoder, device, args, output, output_prefix, report, context)
+        except (ValueError, RuntimeError, OSError, ImportError, KeyboardInterrupt) as error:
+            save_failure_report(report, output_prefix, error, encoding=True)
+            raise
+        report.add('COMPLETED: preprocessing and encoding finished; review any warnings above before training.')
+        report.write(output_prefix + REPORT_SUFFIX)
+
+
+def save_failure_report(report: ProcessingReport, output_prefix: str, error: BaseException, *,
+                        encoding: bool = False) -> None:
+    """Save available diagnostics without hiding the original preparation or encoding error."""
+    report.section('FAILED: encoding did not complete' if encoding else 'FAILED: preprocessing did not complete')
+    report.add(str(error) or 'Interrupted by the user')
+    if encoding:
+        report.add('The processed datafile and split-file (if requested) have already been written. The embedding '
+                   'cache retains encodings already stored. Resolve the encoding error, then rerun with the same '
+                   'input, options, --seed and --embedding-cache to reuse completed encodings; an unseeded run '
+                   'may produce a different split.')
+    else:
+        report.add('No processed datafile or split-file was written by this run. Any existing files at those '
+                   'paths are from an earlier run.')
+    report_file = output_prefix + REPORT_SUFFIX
+    try:
+        report.write(report_file)
+    except OSError as report_error:
+        print(f'Could not save the preprocessing report to {report_file}: {report_error}')
+    else:
+        print(f'Saved failure diagnostics to {report_file}')
 
 
 def read_lines(args: argparse.Namespace, report: ProcessingReport) -> list[Line]:
@@ -735,14 +775,14 @@ def split(lines: list[Line], before_deduplication: list[Line], args: argparse.Na
     ValueError
         If a line of the --groups file does not have two fields, or any set ends up empty
     RuntimeError
-        If MMseqs2 fails, or the sets are still not separated after splitting.MAX_SEPARATION_ROUNDS searches
+        If MMseqs2 fails, or the sets are still not separated after the removal budget and final verification
     """
     if args.split_method is None:
         return lines, None
 
     report.section(f'Splitting into training, validation and test sets ({args.split_method})')
     groups = read_groups(args.groups) if args.groups is not None else {}
-    items = [splitting.SplitItem(index, line[1], groups.get(line[0], f'line {index}'))
+    items = [splitting.SplitItem(index, line[1], groups.get(line[0], f'line {index}'), sequence_id=line[0])
              for index, line in enumerate(lines)]
     if groups:
         report.add(f'{sum(line[0] in groups for line in lines):,} of {len(lines):,} lines belong to a group from '
@@ -759,7 +799,10 @@ def split(lines: list[Line], before_deduplication: list[Line], args: argparse.Na
     if args.split_method == 'random':
         kept = splitting.random_split(items, fractions, rng, report.add)
     else:
-        kept = splitting.similarity_split(items, fractions, rng, report.add, similarity_search(args))
+        max_rounds = (args.max_separation_rounds if args.max_separation_rounds is not None
+                      else splitting.MAX_SEPARATION_ROUNDS)
+        kept = splitting.similarity_split(items, fractions, rng, report.add, similarity_search(args),
+                                          max_rounds=max_rounds)
 
     kept.sort(key=lambda item: item.index)
     report_final_sets(kept, len(lines), report)
@@ -858,7 +901,9 @@ def report_final_sets(kept: list[splitting.SplitItem], num_lines: int, report: P
     training, validation, test = (np.array([item.index for item in kept if item.split == name])
                                   for name in splitting.SET_NAMES)
     process_input_data.check_sets_not_empty(training, validation, test,
-                                            'after splitting. Use more data or larger fractions.')
+                                            'after splitting. Inspect the group/cluster sizes and retention above; '
+                                            'use more independent data or revise --set-fractions. Increasing '
+                                            '--max-separation-rounds cannot restore an empty set.')
 
 
 def read_groups(path: str) -> dict[str, str]:
@@ -1023,6 +1068,8 @@ def write_outputs(lines: list[Line], splits: list[str] | None, args: argparse.Na
                      args.uncertainties)
 
     report_file = output_prefix + REPORT_SUFFIX
+    report.add('PREPROCESSED: data preparation finished; encoding is still pending.' if args.encode is not None else
+               'COMPLETED: preprocessing finished; review any warnings above before training.')
     report.write(report_file)
     if not args.verbose:
         print(f'Wrote {output}' + (f', {split_file}' if splits is not None else '') + f' and {report_file}')

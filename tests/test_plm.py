@@ -538,6 +538,8 @@ def test_preprocess_embeds_every_sequence_of_its_output_for_training(fake_plm, r
     assert 'parrot-preprocess' in (cache / 'README.md').read_text()
     report = (tmp_path / 'clean_preprocess_report.txt').read_text()
     assert 'Encoding ahead of time' in report and f'--embedding-cache {cache}' in report
+    assert report.rstrip().endswith('COMPLETED: preprocessing and encoding finished; '
+                                   'review any warnings above before training.')
 
     # Training on the output finds every sequence in the cache, so embeds nothing
     calls = fake_run_model.calls
@@ -565,6 +567,32 @@ def test_preprocess_checks_sequences_before_writing_anything(fake_plm, run_cli, 
     assert not (tmp_path / 'out.tsv').exists()
     assert not (tmp_path / plm.TRAIN_CACHE_DIRECTORY).exists()
     assert fake_run_model.calls == 0
+    report = (tmp_path / 'out_preprocess_report.txt').read_text()
+    assert 'FAILED: preprocessing did not complete' in report and 'upper case' in report
+    assert 'No processed datafile or split-file was written by this run' in report
+
+
+@pytest.mark.parametrize('error_type', [RuntimeError, KeyboardInterrupt])
+def test_encoding_failure_report_preserves_written_preprocessing(fake_plm, run_cli, tmp_path, monkeypatch,
+                                                                error_type):
+    output = tmp_path / 'clean.tsv'
+    report_file = tmp_path / 'clean_preprocess_report.txt'
+    split_file = tmp_path / 'clean_split_file.txt'
+
+    def fail_encoding(*args, **kwargs):
+        assert output.exists() and split_file.exists()
+        pending_report = report_file.read_text()
+        assert 'PREPROCESSED:' in pending_report and 'COMPLETED:' not in pending_report
+        raise error_type('encoding stopped for test')
+
+    monkeypatch.setattr(parrot_preprocess, 'prepare_encoding', fail_encoding)
+    with pytest.raises(error_type, match='encoding stopped for test'):
+        preprocess(run_cli, output, '--embedding-cache', tmp_path / 'cache')
+    report = report_file.read_text()
+    assert 'FAILED: encoding did not complete' in report and 'encoding stopped for test' in report
+    assert 'have already been written' in report and 'cache retains encodings already stored' in report
+    assert 'COMPLETED:' not in report and 'No processed datafile' not in report
+    assert output.exists() and split_file.exists()
 
 
 # ..........................................................................................

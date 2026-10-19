@@ -46,6 +46,7 @@ Licensed under the MIT license.
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
+from itertools import islice
 from typing import Protocol
 
 import numpy as np
@@ -62,7 +63,7 @@ SET_LABELS = {'train': 'training', 'val': 'validation', 'test': 'test'}
 # known before the validation set is searched against the training set (see cross_set_matches).
 SEPARATED_SET_PAIRS = (('test', 'train'), ('test', 'val'), ('val', 'train'))
 
-# Search the sets against each other at most this many times (see enforce_separation)
+# Default maximum removal rounds, followed by a final verification search
 MAX_SEPARATION_ROUNDS = 5
 
 # Identity bins for reports: (lowest identity, label), highest first
@@ -119,12 +120,15 @@ class SplitItem:
     split : str or None
         'train', 'val' or 'test' once assigned (or the name of another set given
         to assign_clusters, such as a cross-validation fold)
+    sequence_id : str or None
+        Input ID, when available, for examples in the report
     """
 
     index: int
     sequence: str
     group: str
     split: str | None = None
+    sequence_id: str | None = None
 
 
 def identity_summary(identities: Iterable[float]) -> str:
@@ -346,8 +350,23 @@ def random_split(items: Sequence[SplitItem], fractions: dict[str, float], rng: n
     return list(items)
 
 
+def report_retention(items: Sequence[SplitItem], initial_counts: Counter[str],
+                     report: Callable[[str], None]) -> None:
+    """Report cumulative removals and retention relative to the initially assigned sets."""
+    total = initial_counts.total()
+    removed = total - len(items)
+    report(f'Cumulative removals: {removed:,} of {total:,} records '
+           f'({100 * removed / total:.1f}%)' if total else 'Cumulative removals: 0 of 0 records')
+    counts = Counter(item.split for item in items)
+    parts = []
+    for name in SET_NAMES:
+        retention = f'{100 * counts[name] / initial_counts[name]:.1f}% retained' if initial_counts[name] else 'n/a'
+        parts.append(f'{SET_LABELS[name]} {counts[name]:,} of {initial_counts[name]:,} ({retention})')
+    report('Set retention: ' + ', '.join(parts))
+
+
 def enforce_separation(items: Sequence[SplitItem], search: SimilaritySearch,
-                       report: Callable[[str], None]) -> list[SplitItem]:
+                       report: Callable[[str], None], *, max_rounds: int = MAX_SEPARATION_ROUNDS) -> list[SplitItem]:
     """Search each set against the others, removing records similar to a higher-priority set, until none remain
 
     Parameters
@@ -358,6 +377,9 @@ def enforce_separation(items: Sequence[SplitItem], search: SimilaritySearch,
         Finds similar sequences
     report : callable
         Receives report lines
+    max_rounds : int
+        Maximum removal rounds (at least 1), followed by a final verification
+        search. At most max_rounds + 1 cross-set checks are made.
 
     Returns
     -------
@@ -367,22 +389,60 @@ def enforce_separation(items: Sequence[SplitItem], search: SimilaritySearch,
     Raises
     ------
     RuntimeError
-        If the sets are still not separated after MAX_SEPARATION_ROUNDS rounds
+        If the sets are still not separated after max_rounds removal rounds
+    ValueError
+        If max_rounds is less than 1
     """
+    if max_rounds < 1:
+        raise ValueError(f'max_rounds must be at least 1, got {max_rounds}')
     kept = list(items)
-    for round_number in range(1, MAX_SEPARATION_ROUNDS + 1):
+    initial_counts = Counter(str(item.split) for item in items)
+    budget_text = f'{max_rounds} removal round' + ('s' if max_rounds != 1 else '')
+    report(f'Separation budget: {budget_text}, plus a final verification check')
+    report('Retention is relative to the sets assigned after cleaning and deduplication, before separation.')
+    report_retention(kept, initial_counts, report)
+    for rounds_done in range(max_rounds + 1):
+        rounds_text = f'{rounds_done} removal round' + ('s' if rounds_done != 1 else '')
+        checks_text = f'{rounds_done + 1} check' + ('s' if rounds_done else '')
+        report(f'Separation check {rounds_done + 1} (after {rounds_text})')
         offending = cross_set_matches(kept, search, report)
         if not offending:
+            report(f'Separation completed after {rounds_text} and {checks_text}.')
+            report_retention(kept, initial_counts, report)
+            report('Review the retained set sizes and their label/target distributions before training; '
+                   'passing separation only establishes the absence of cross-set matches detected by this search.')
             report('PASSED: no sequence in one set is identical or similar (by the criterion above) to a sequence '
                    'in another set')
             return kept
 
+        if rounds_done == max_rounds:
+            pending = Counter(str(item.split) for item in kept if item.group in offending)
+            conflicts_text = f'{len(offending):,} conflicting group' + ('s' if len(offending) != 1 else '')
+            records_text = f'{pending.total():,} record' + ('s' if pending.total() != 1 else '')
+            report(f'FAILED separation: {conflicts_text} remaining; another removal round would '
+                   f'remove {records_text} ('
+                   + ', '.join(f'{SET_LABELS[name]} {pending[name]:,}' for name in SET_NAMES) + ').')
+            report_retention(kept, initial_counts, report)
+            report(f'Next step: if the cumulative data loss and remaining set sizes are acceptable, rerun with '
+                   f'--max-separation-rounds {max_rounds * 2}. Use the same --seed to compare the same initial '
+                   'assignment; adding a seed to an unseeded run changes the assignment. This restarts '
+                   'preprocessing; there is no separation checkpoint to resume.')
+            report('If too much data is lost, inspect the example pairs and group/cluster sizes above. Check '
+                   'that --groups reflects real dependencies, and consider more independent sequences or '
+                   'revised --set-fractions. More rounds cannot guarantee sufficiently large sets. Changing '
+                   'the similarity thresholds or using a random split changes what leakage is excluded.')
+            raise RuntimeError(f'The sets were still not separated after {budget_text} '
+                               f'({conflicts_text} remaining). See the separation diagnostics; '
+                               'increase --max-separation-rounds if the reported data loss is acceptable.')
+
         before = len(kept)
         kept = [item for item in kept if item.group not in offending]
-        report(f'Round {round_number}: removed {before - len(kept):,} records ({len(offending):,} groups) similar '
-               'to a higher-priority set; searching again')
+        report(f'Round {rounds_done + 1}: removed {before - len(kept):,} records ({len(offending):,} groups) similar '
+               f'to a higher-priority set ({100 * (before - len(kept)) / before:.1f}% of records entering this '
+               'round); searching again')
+        report_retention(kept, initial_counts, report)
 
-    raise RuntimeError(f'The sets were still not separated after {MAX_SEPARATION_ROUNDS} rounds')
+    raise AssertionError('Separation loop ended without a result')
 
 
 def similar_to(items: Sequence[SplitItem], others: Sequence[SplitItem],
@@ -452,11 +512,43 @@ def cross_set_matches(items: Sequence[SplitItem], search: SimilaritySearch,
                f'{len({match.query for match in matches}):,} of {len(queries):,} {SET_LABELS[query_set]} sequences '
                f'({search.summarise(matches)}); {len(linked):,} meet the criterion; {len(identical):,} '
                f'{SET_LABELS[target_set]} sequences are identical to a {SET_LABELS[query_set]} sequence')
+        shared_sequences = query_sequences.intersection(item.sequence for item in targets)
+        linked_queries = {match.query for match in linked}
+        linked_queries.update(i for i, item in enumerate(queries) if item.sequence in shared_sequences)
+        linked_targets = {match.target for match in linked}
+        linked_targets.update(i for i, item in enumerate(targets) if item.sequence in shared_sequences)
+        report(f'  Conflicts involve {len(linked_queries):,} of {len(queries):,} '
+               f'{SET_LABELS[query_set]} records ({100 * len(linked_queries) / len(queries):.1f}%) and '
+               f'{len(linked_targets):,} of {len(targets):,} {SET_LABELS[target_set]} records '
+               f'({100 * len(linked_targets) / len(targets):.1f}%); counts include exact duplicates.')
+        if linked:
+            strengths = [(f'identity {min(match.identity for match in linked):.1%} to '
+                          f'{max(match.identity for match in linked):.1%}')]
+            # Search engines may provide extra metrics beyond the Match interface.
+            evalues = [value for match in linked if (value := getattr(match, 'evalue', None)) is not None]
+            coverage = [value for match in linked
+                        if (value := getattr(match, 'shorter_coverage', getattr(match, 'coverage', None))) is not None]
+            if evalues:
+                strengths.append(f'E-value {min(evalues):.3g} to {max(evalues):.3g}')
+            if coverage:
+                strengths.append(f'shorter-sequence coverage {min(coverage):.1%} to {max(coverage):.1%}')
+            report('  Linked match ranges: ' + '; '.join(strengths))
+            examples = [(queries[match.query], targets[match.target]) for match in linked[:3]]
+        else:
+            # Exact copies can be missed by the search, e.g. because of masking.
+            query_by_sequence = {item.sequence: item for item in queries}
+            examples = list(islice(((query_by_sequence[item.sequence], item) for item in targets
+                                    if item.sequence in shared_sequences), 3))
+        if examples:
+            report('  Example conflicting pairs (up to 3; input IDs or record numbers): ' + '; '.join(
+                f'{first.sequence_id or f"record {first.index + 1}"} -> '
+                f'{second.sequence_id or f"record {second.index + 1}"}' for first, second in examples))
     return offending
 
 
 def similarity_split(items: Sequence[SplitItem], fractions: dict[str, float], rng: np.random.Generator,
-                     report: Callable[[str], None], search: SimilaritySearch) -> list[SplitItem]:
+                     report: Callable[[str], None], search: SimilaritySearch, *,
+                     max_rounds: int = MAX_SEPARATION_ROUNDS) -> list[SplitItem]:
     """Split items into sets so that no set contains a sequence similar to one in another set
 
     Parameters
@@ -470,6 +562,8 @@ def similarity_split(items: Sequence[SplitItem], fractions: dict[str, float], rn
         Receives report lines
     search : SimilaritySearch
         Finds similar sequences, e.g. mmseqs_search.MMseqsSearch or kmer_similarity.KmerSearch
+    max_rounds : int
+        Maximum removal rounds, followed by a final verification search
 
     Returns
     -------
@@ -481,10 +575,10 @@ def similarity_split(items: Sequence[SplitItem], fractions: dict[str, float], rn
     ValueError
         If the fractions do not sum to 1
     RuntimeError
-        If the sets are still not separated after MAX_SEPARATION_ROUNDS rounds
+        If the sets are still not separated after max_rounds removal rounds
     """
     report(f'Similarity criterion: {search.describe()}')
     merge_groups(items, identical_sequence_links(items))
     clusters = similarity_clusters(items, search, report)
     assign_clusters(items, clusters, fractions, rng, report)
-    return enforce_separation(items, search, report)
+    return enforce_separation(items, search, report, max_rounds=max_rounds)

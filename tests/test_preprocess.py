@@ -13,6 +13,7 @@ import shutil
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -223,6 +224,29 @@ class PairSearch(FamilySearch):
                 if (query, target) in self.pairs]
 
 
+class CascadingSearch(FamilySearch):
+    """Expose one more conflict after each removal, as a shrinking database can do."""
+
+    def __init__(self) -> None:
+        super().__init__({})
+
+    def __call__(self, queries, targets=None, weaker=False):
+        if targets is None or 'TEST' not in queries:
+            return []
+        for position, target in enumerate(targets):
+            if target.startswith('DDD'):
+                return [make_alignment(queries.index('TEST'), position, (1, 4), 4, (1, 4), len(target),
+                                       1e-5, linked=True)]
+        return []
+
+
+def cascading_items(removals: int) -> list[splitting.SplitItem]:
+    sequences = ['TEST', 'VAL', 'KEEP'] + [f'DDD{letter}' for letter in AMINO_ACIDS[:removals]]
+    return [splitting.SplitItem(index, sequence, f'g{index}',
+                                'test' if index == 0 else 'val' if index == 1 else 'train',
+                                sequence_id=f'id{index}') for index, sequence in enumerate(sequences)]
+
+
 def make_family_items(n_families: int, members: int) -> tuple[list[splitting.SplitItem], dict[str, str]]:
     items, families = [], {}
     for family in range(n_families):
@@ -295,6 +319,83 @@ def test_enforce_separation_gives_up_after_too_many_rounds():
     items += [splitting.SplitItem(i, f'C{i}', f'g{i}', 'train') for i in range(2, 2 + splitting.MAX_SEPARATION_ROUNDS)]
     with pytest.raises(RuntimeError, match='still not separated'):
         splitting.enforce_separation(items, FixedSearch([always]), lambda line: None)
+
+
+@pytest.mark.parametrize('budget', [1, splitting.MAX_SEPARATION_ROUNDS, 8])
+def test_last_allowed_removal_is_verified_before_succeeding(budget):
+    lines = []
+    kept = splitting.enforce_separation(cascading_items(budget), CascadingSearch(), lines.append,
+                                        max_rounds=budget)
+    assert [item.sequence for item in kept] == ['TEST', 'VAL', 'KEEP']
+    rounds_text = f'{budget} removal round' + ('s' if budget != 1 else '')
+    assert f'Separation completed after {rounds_text} and {budget + 1} checks.' in lines
+    assert f'Cumulative removals: {budget} of {budget + 3} records ' in '\n'.join(lines)
+    assert any(line.startswith('PASSED:') for line in lines)
+
+
+def test_round_limit_reports_current_conflicts_without_an_extra_removal():
+    lines = []
+    with pytest.raises(RuntimeError, match='after 2 removal rounds'):
+        splitting.enforce_separation(cascading_items(3), CascadingSearch(), lines.append, max_rounds=2)
+    text = '\n'.join(lines)
+    assert '1 conflicting group remaining; another removal round would remove 1 record' in text
+    assert 'training 1, validation 0, test 0' in text
+    assert 'training 2 of 4 (50.0% retained)' in text
+    assert 'Cumulative removals: 2 of 6 records (33.3%)' in text
+    assert '--max-separation-rounds 4' in text
+    assert 'PASSED' not in text and 'Round 3: removed' not in text
+
+
+def test_retention_includes_whole_group_removals():
+    items = cascading_items(1)
+    items.append(splitting.SplitItem(4, 'OTHER', items[-1].group, 'train'))
+    lines = []
+    kept = splitting.enforce_separation(items, CascadingSearch(), lines.append, max_rounds=1)
+    assert [item.sequence for item in kept] == ['TEST', 'VAL', 'KEEP']
+    assert 'Round 1: removed 2 records (1 groups)' in '\n'.join(lines)
+    assert 'training 1 of 3 (33.3% retained)' in '\n'.join(lines)
+
+
+@pytest.mark.parametrize('budget', [0, -1])
+def test_separation_rejects_nonpositive_budgets(budget):
+    with pytest.raises(ValueError, match='must be at least 1'):
+        splitting.enforce_separation(cascading_items(1), CascadingSearch(), lambda line: None, max_rounds=budget)
+
+
+def test_conflict_report_includes_strengths_and_input_ids():
+    lines = []
+    offending = splitting.cross_set_matches(cascading_items(1), CascadingSearch(), lines.append)
+    text = '\n'.join(lines)
+    assert offending == {'g3'}
+    assert '1 of 1 test records (100.0%) and 1 of 2 training records (50.0%)' in text
+    assert 'identity 50.0% to 50.0%' in text
+    assert 'E-value 1e-05 to 1e-05' in text
+    assert 'shorter-sequence coverage 100.0% to 100.0%' in text
+    assert 'id0 -> id3' in text
+
+
+def test_conflict_fractions_count_each_record_once_including_unaligned_exact_copies():
+    items = [splitting.SplitItem(i, sequence, f'g{i}', split, sequence_id=f'id{i}')
+             for i, (sequence, split) in enumerate([('SAME', 'test'), ('SAME', 'test'), ('OTHER', 'test'),
+                                                    ('SAME', 'train'), ('SAME', 'train'), ('TRAIN', 'train')])]
+    lines = []
+    offending = splitting.cross_set_matches(items, FixedSearch([]), lines.append)
+    text = '\n'.join(lines)
+    assert offending == {'g3', 'g4'}
+    assert '2 of 3 test records (66.7%) and 2 of 3 training records (66.7%)' in text
+    assert 'id1 -> id3' in text and 'id1 -> id4' in text
+
+
+@pytest.mark.parametrize('linked', [False, True])
+def test_conflict_reporting_supports_minimal_matches_and_excludes_weaker_hits(linked):
+    items = [splitting.SplitItem(0, 'TEST', 'test', 'test'), splitting.SplitItem(1, 'TRAIN', 'train', 'train')]
+    match = SimpleNamespace(query=0, target=0, identity=0.7, linked=linked)
+    lines = []
+    offending = splitting.cross_set_matches(items, FixedSearch([match]), lines.append)
+    assert offending == ({'train'} if linked else set())
+    assert ('Linked match ranges: identity 70.0% to 70.0%' in '\n'.join(lines)) == linked
+    assert 'E-value' not in '\n'.join(lines)
+    assert ('record 1 -> record 2' in '\n'.join(lines)) == linked
 
 
 def test_alignment_homology_criteria():
@@ -463,6 +564,117 @@ def test_preprocess_writes_a_report(run_cli, tmp_path, write_lines, capsys):
     assert 'out_preprocess_report.txt' in capsys.readouterr().out
 
 
+@pytest.fixture
+def cascading_preprocess_input(monkeypatch, write_lines):
+    """Control only search and assignment, leaving the remaining CLI path intact."""
+    items = cascading_items(2)
+    input_file = write_lines('cascade.tsv', [f'{item.sequence_id} {item.sequence} '
+                                            + ' '.join(['0.5'] * len(item.sequence)) for item in items])
+
+    def assign(items, clusters, fractions, rng, report):
+        for item in items:
+            item.split = 'test' if item.sequence == 'TEST' else 'val' if item.sequence == 'VAL' else 'train'
+
+    monkeypatch.setattr(splitting, 'assign_clusters', assign)
+    monkeypatch.setattr(mmseqs_search, 'find_mmseqs', lambda path=None: '/test/mmseqs')
+    monkeypatch.setattr(parrot_preprocess, 'similarity_search', lambda args: CascadingSearch())
+    return input_file
+
+
+@pytest.mark.parametrize('existing_outputs', [False, True])
+def test_cli_saves_failure_diagnostics_without_writing_dataset(run_cli, tmp_path, cascading_preprocess_input,
+                                                             capsys, existing_outputs):
+    output = tmp_path / 'out.tsv'
+    split_file = tmp_path / 'out_split_file.txt'
+    if existing_outputs:
+        output.write_text('previous data')
+        split_file.write_text('previous split')
+    with pytest.raises(RuntimeError, match='after 1 removal round'):
+        run_preprocess(run_cli, cascading_preprocess_input, output, 'residues', 'regression', '--split', 'kmer',
+                       '--max-separation-rounds', '1', '--seed', '42')
+    report = (tmp_path / 'out_preprocess_report.txt').read_text()
+    assert 'Separation budget: 1 removal round,' in report
+    assert 'Random seed: 42' in report and 'id0 -> id4' in report
+    assert 'another removal round would remove 1 record' in report
+    assert 'Cumulative removals: 1 of 5 records (20.0%)' in report
+    assert 'FAILED: preprocessing did not complete' in report
+    assert 'Any existing files at those paths are from an earlier run' in report
+    assert 'COMPLETED:' not in report and 'PASSED:' not in report
+    assert 'Saved failure diagnostics to' in capsys.readouterr().out
+    if existing_outputs:
+        assert output.read_text() == 'previous data' and split_file.read_text() == 'previous split'
+    else:
+        assert not output.exists() and not split_file.exists()
+
+
+@pytest.mark.parametrize('method', ['kmer', 'homology'])
+@pytest.mark.parametrize('uncertainties', [False, True])
+def test_cli_accepts_more_cleanup_rounds_and_saves_success_metrics(run_cli, tmp_path, cascading_preprocess_input,
+                                                                method, uncertainties):
+    output = tmp_path / 'out.tsv'
+    extra = []
+    if uncertainties:
+        input_path = Path(cascading_preprocess_input)
+        input_path.write_text(input_path.read_text().replace('0.5', '0.5,0.1'))
+        extra = ['--uncertainties']
+    run_preprocess(run_cli, cascading_preprocess_input, output, 'residues', 'regression', '--split', method,
+                   '--max-separation-rounds', '2', '--seed', '42', *extra)
+    assert {name: len(lines) for name, lines in read_split_output(output).items()} == {'train': 1, 'val': 1, 'test': 1}
+    report = (tmp_path / 'out_preprocess_report.txt').read_text()
+    assert 'Separation completed after 2 removal rounds and 3 checks' in report
+    assert 'training 1 of 3 (33.3% retained)' in report
+    assert 'Cumulative removals: 2 of 5 records (40.0%)' in report
+    assert 'PASSED:' in report and 'COMPLETED:' in report and 'FAILED:' not in report
+    assert 'the split-file matches it' in report
+    if uncertainties:
+        assert 'with uncertainties' in report
+
+
+def test_report_write_failure_preserves_the_original_split_error(run_cli, tmp_path, cascading_preprocess_input,
+                                                                monkeypatch, capsys):
+    def cannot_write(self, path):
+        raise PermissionError('read-only report location')
+
+    monkeypatch.setattr(preproc.ProcessingReport, 'write', cannot_write)
+    with pytest.raises(RuntimeError, match='after 1 removal round'):
+        run_preprocess(run_cli, cascading_preprocess_input, tmp_path / 'out.tsv', 'residues', 'regression',
+                       '--split', 'kmer', '--max-separation-rounds', '1')
+    assert 'Could not save the preprocessing report' in capsys.readouterr().out
+
+
+def test_empty_set_failure_is_saved_with_recovery_advice(run_cli, tmp_path, write_lines):
+    input_file = write_lines('small.tsv', ['a ACD 1', 'b EFG 2'])
+    with pytest.raises(ValueError, match='empty after splitting'):
+        run_preprocess(run_cli, input_file, tmp_path / 'out.tsv', 'sequence', 'regression', '--split', 'random')
+    report = (tmp_path / 'out_preprocess_report.txt').read_text()
+    assert 'Final sets:' in report and 'FAILED:' in report
+    assert 'cannot restore an empty set' in report
+
+
+def test_search_failure_is_saved_without_hiding_the_engine_error(run_cli, tmp_path, monkeypatch, capsys):
+    class BrokenSearch(FixedSearch):
+        def __call__(self, queries, targets=None, weaker=False):
+            raise RuntimeError('MMseqs2 failed: test engine error')
+
+    monkeypatch.setattr(parrot_preprocess, 'similarity_search', lambda args: BrokenSearch([]))
+    output = tmp_path / 'out.tsv'
+    with pytest.raises(RuntimeError, match='MMseqs2 failed: test engine error'):
+        run_preprocess(run_cli, data_path('seq_regress_dataset.tsv'), output, 'sequence', 'regression',
+                       '--split', 'kmer')
+    report = (tmp_path / 'out_preprocess_report.txt').read_text()
+    assert 'FAILED:' in report and 'MMseqs2 failed: test engine error' in report
+    assert 'Random seed: not set' in report
+    assert 'Saved failure diagnostics to' in capsys.readouterr().out
+    assert not output.exists() and not (tmp_path / 'out_split_file.txt').exists()
+
+
+def test_round_budget_requires_an_integer(run_cli, tmp_path):
+    with pytest.raises(SystemExit) as error:
+        run_preprocess(run_cli, data_path('seq_regress_dataset.tsv'), tmp_path / 'out.tsv', 'sequence', 'regression',
+                       '--split', 'kmer', '--max-separation-rounds', '1.5')
+    assert error.value.code == 2
+
+
 @pytest.mark.parametrize('extra_arguments, message', [
     (['--groups', 'groups.tsv'], 'only applies to --split'),
     (['--set-fractions', '0.8', '0.1', '0.1'], 'only applies to --split'),
@@ -477,6 +689,10 @@ def test_preprocess_writes_a_report(run_cli, tmp_path, write_lines, capsys):
     (['--min-length', '10', '--max-length', '5'], 'cannot be larger'),
     (['--remove-sequence-duplicates', '--deduplicate', 'merge'], 'same as --deduplicate drop'),
     (['--split', 'homology', '--threads', '0'], '--threads must be at least 1'),
+    (['--max-separation-rounds', '5'], 'only applies to --split homology or kmer'),
+    (['--split', 'random', '--max-separation-rounds', '5'], 'only applies to --split homology or kmer'),
+    (['--split', 'kmer', '--max-separation-rounds', '0'], '--max-separation-rounds must be at least 1'),
+    (['--split', 'kmer', '--max-separation-rounds', '-1'], '--max-separation-rounds must be at least 1'),
     (['--encode', 'onehot'], 'quick to compute'),
     (['--encode', 'biophysics'], 'quick to compute'),
     (['--encode', 'esm2_t6_8M_UR50D', '--nardini-scrambles', '10'], 'only applies to NARDINI encodings'),

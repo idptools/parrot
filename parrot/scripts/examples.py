@@ -315,6 +315,12 @@ The most thorough split, which also finds distant homologues with MMseqs2
 
     parrot-preprocess data.tsv clean.tsv -d sequence -m regression --split homology
 
+If separation reaches its cleanup limit, inspect the saved report's removal
+totals and remaining set sizes. To allow more rounds with the same similarity
+criteria (use the same seed as the earlier run, if it had one):
+
+    parrot-preprocess data.tsv clean_retry.tsv -d sequence -m regression --split homology --max-separation-rounds 25 --seed 42 --verbose
+
 Clean a classification dataset: convert sequences to upper case, remove those
 with non-standard residues or fewer than 10 residues, merge duplicate
 sequences, split at random and balance the classes of the training set:
@@ -367,8 +373,12 @@ The steps always run in this order, and each is optional:
    each embedding's mean over its residues subtracted.
 
 Every step is recorded in <output>_preprocess_report.txt (-v also prints it),
-which then checks that parrot-train can read the output (and, with --encode,
-ends with the options parrot-train needs to use the encodings).
+including per-round removals, set retention and example cross-set conflicts.
+The report is saved on data-preparation, splitting or encoding failure too,
+with the error and available recovery advice. It distinguishes failures before
+the data files are written from encoding failures afterwards. Successful runs
+check that parrot-train can read the output and, with --encode, record the
+options parrot-train needs to use the encodings, ending with COMPLETED.
 '''
 
 CVSPLIT_GUIDE = '''
