@@ -13,10 +13,11 @@ standardisation is undone when predicting), so hyperparameters such as the SVM
 penalty behave consistently across datasets.
 
 With uncertainties (see parrot/uncertainties.py), each sequence is weighted by
-1 / (SD^2 + s^2), where s is the model error: the linear, SVM and random-forest
-models are fitted with these as scikit-learn sample weights, refitted as s is
-re-estimated (see train_network.fit_with_model_error). k-nearest neighbours cannot
-weight its training sequences, so it does not support uncertainties.
+1 / (SD^2 + s^2), where s is the model error: the linear, SVM, random-forest and
+gradient-boosted tree models are fitted with these as scikit-learn sample
+weights, refitted as s is re-estimated (see train_network.fit_with_model_error).
+k-nearest neighbours cannot weight its training sequences, so it does not
+support uncertainties.
 
 The models behave like any other PARROT architecture: forward() maps a padded
 batch to outputs (for classification, the log of the predicted class
@@ -40,12 +41,13 @@ Licensed under the MIT license.
 
 import pickle
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import torch
 from sklearn.compose import TransformedTargetRegressor
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.ensemble import (HistGradientBoostingClassifier, HistGradientBoostingRegressor, RandomForestClassifier,
+                              RandomForestRegressor)
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.pipeline import make_pipeline
@@ -82,6 +84,18 @@ MAX_RANDOM_STATE = 2**31 - 1
 # much memory, so only 'composition' features are allowed.
 MAX_DIPEPTIDE_ENCODING_SIZE = 32
 
+# Settings of scikit-learn's gradient-boosted trees that PARROT does not expose, given explicitly so that a model
+# does not change if scikit-learn's defaults do. Trees are limited by their number of leaves (max_leaf_nodes) rather
+# than their depth, and grown from histograms of each feature in 255 bins (scikit-learn's maximum). Early stopping is
+# off: scikit-learn's default ('auto') turns it on above 10,000 training sequences, holding out 10% of them to decide
+# when to stop, so the number of trees would silently depend on the size of the dataset. Every feature is numerical
+# and unconstrained.
+GBRT_FIXED_SETTINGS: dict[str, Any] = {'max_depth': None, 'max_bins': 255, 'early_stopping': False,
+                                       'categorical_features': None, 'interaction_cst': None, 'monotonic_cst': None}
+
+# A classifier needs at least this many classes in its training data
+MIN_TRAINING_CLASSES = 2
+
 FEATURES_HYPERPARAMETER = HyperParameter(
     'features', str, default='composition', choices=FEATURE_SETS, search_choices=FEATURE_SETS,
     help="sequence features: 'composition' (composition and log length) or 'dipeptides' (also dipeptide composition)")
@@ -108,6 +122,8 @@ class ClassicalModel(ParrotArchitecture):
 
     supported_datatypes = ('sequence',)
     trained_by_gradient_descent = False
+    # How the model computes, as recorded in _info.txt (the features themselves are computed in float32)
+    estimator_precision: ClassVar[str] = 'fitted and run in float64 by scikit-learn'
 
     def __init__(self, input_size: int, task: Task, hyperparameter_values: dict[str, HyperParameterValue]) -> None:
         """
@@ -506,3 +522,114 @@ class KNearestNeighbors(ClassicalModel):
 
         neighbours = KNeighborsClassifier if self.task.is_classification else KNeighborsRegressor
         return neighbours(n_neighbors=self.num_neighbors, weights=self.neighbor_weights)
+
+
+@register_architecture
+class GradientBoostedTrees(ClassicalModel):
+    """Gradient-boosted regression trees (Friedman 2001, "Greedy function approximation: a gradient boosting
+    machine", Annals of Statistics 29:1189-1232), fitted by scikit-learn's histogram-based implementation
+
+    Each tree is fitted to the errors of the trees before it, and its
+    contribution is shrunk by a factor (the shrinkage). scikit-learn fits each
+    tree using the first and second derivatives of the loss, with an optional
+    L2 penalty on the leaf values, as XGBoost and LightGBM do. Every setting
+    that changes the fitted model is given to scikit-learn explicitly (see
+    GBRT_FIXED_SETTINGS).
+    """
+
+    name = 'gbrt'
+    description = 'gradient-boosted regression trees on sequence features'
+    # scikit-learn stores each sequence's gradient and hessian (the first and second derivatives of the loss) as
+    # float32 to save memory, but sums them, and computes the thresholds, leaf values and predictions, in float64
+    # (sklearn/ensemble/_hist_gradient_boosting/common.pyx)
+    estimator_precision = ('fitted in float64 by scikit-learn (with each sequence\'s gradient and hessian stored as float32) '
+                           'and run in float64')
+    hyperparameters = (
+        HyperParameter('num_trees', int, default=100, minimum=1, search_range=(50, 1000), log_scale=True,
+                       help='number of trees (boosting iterations)'),
+        HyperParameter('shrinkage', float, default=0.1, minimum=0, maximum=1, exclusive_minimum=True,
+                       search_range=(0.01, 0.3), log_scale=True,
+                       help="how much each tree's contribution is shrunk (scikit-learn's learning_rate, which has "
+                            'nothing to do with the learning rate of networks); smaller values need more trees'),
+        HyperParameter('max_leaf_nodes', int, default=31, minimum=2, search_range=(4, 64), log_scale=True,
+                       help='maximum number of leaves in each tree'),
+        HyperParameter('min_samples_leaf', int, default=20, minimum=1, search_range=(1, 50), log_scale=True,
+                       help='minimum number of training sequences in each leaf; larger values give smoother predictions'),
+        HyperParameter('l2_regularization', float, default=0.0, minimum=0, search_range=(1e-3, 100), log_scale=True,
+                       help='strength of the L2 penalty on the leaf values'),
+        HyperParameter('max_features', float, default=1.0, minimum=0, maximum=1, exclusive_minimum=True,
+                       search_range=(0.5, 1.0), help='fraction of the features considered at each split'),
+        FEATURES_HYPERPARAMETER,
+    )
+
+    def __init__(self, input_size: int, task: Task, num_trees: int, shrinkage: float, max_leaf_nodes: int,
+                 min_samples_leaf: int, l2_regularization: float, max_features: float, features: str) -> None:
+        """
+        Parameters
+        ----------
+        input_size : int
+            Length of the per-residue encoding vectors
+        task : Task
+            The task the model is for
+        num_trees : int
+            Number of trees
+        shrinkage : float
+            Shrinkage of each tree's contribution (0 < shrinkage <= 1)
+        max_leaf_nodes : int
+            Maximum number of leaves in each tree (at least 2)
+        min_samples_leaf : int
+            Minimum number of training sequences in each leaf
+        l2_regularization : float
+            Strength of the L2 penalty on the leaf values
+        max_features : float
+            Fraction of the features considered at each split (0 < max_features <= 1)
+        features : str
+            'composition' or 'dipeptides'
+        """
+        super().__init__(input_size, task, {'num_trees': num_trees, 'shrinkage': shrinkage,
+                                            'max_leaf_nodes': max_leaf_nodes, 'min_samples_leaf': min_samples_leaf,
+                                            'l2_regularization': l2_regularization, 'max_features': max_features,
+                                            'features': features})
+        self.num_trees = num_trees
+        self.shrinkage = shrinkage
+        self.max_leaf_nodes = max_leaf_nodes
+        self.min_samples_leaf = min_samples_leaf
+        self.l2_regularization = l2_regularization
+        self.max_features = max_features
+
+    def make_estimator(self, num_samples: int, num_features: int) -> Any:
+        """Gradient-boosted trees for regression (squared error) or classification (log loss) (see
+        ClassicalModel.make_estimator)."""
+        settings = dict(GBRT_FIXED_SETTINGS, max_iter=self.num_trees, learning_rate=self.shrinkage,
+                        max_leaf_nodes=self.max_leaf_nodes, min_samples_leaf=self.min_samples_leaf,
+                        l2_regularization=self.l2_regularization, max_features=self.max_features,
+                        random_state=random_state())
+        if self.task.is_classification:
+            return HistGradientBoostingClassifier(loss='log_loss', class_weight=None, **settings)
+        return HistGradientBoostingRegressor(loss='squared_error', **settings)
+
+    def fit(self, loader: DataLoader[Any]) -> None:
+        """Fit the model as ClassicalModel.fit does, refusing classification data with a single class
+
+        scikit-learn fits gradient-boosted trees to a single class, but then
+        predicts probabilities for two, so the model could not be used.
+
+        Parameters
+        ----------
+        loader : DataLoader
+            Batches of the training data (process_input_data.Batch)
+
+        Raises
+        ------
+        ValueError
+            If every training sequence is in the same class
+        """
+        super().fit(loader)
+        if not self.task.is_classification:
+            return
+
+        classes = self.estimator.classes_
+        if len(classes) < MIN_TRAINING_CLASSES:
+            self.estimator = None
+            raise ValueError(f'A classifier needs at least {MIN_TRAINING_CLASSES} classes in its training data, but '
+                             f'every training sequence is in class {classes[0]}')

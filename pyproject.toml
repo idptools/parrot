@@ -22,7 +22,8 @@ dependencies = [
     "numpy>=2.3",
     "scipy",
     "torch>=2.8",
-    "scikit-learn",
+    # 1.4 added max_features to the gradient-boosted trees (gbrt)
+    "scikit-learn>=1.4",
     "matplotlib",
     "tqdm",
 ]

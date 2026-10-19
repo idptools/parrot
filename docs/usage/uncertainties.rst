@@ -63,7 +63,7 @@ The model error
 
 PARROT prints *s* at the end of training (in the units of the values), and records it in "_info.txt" and "_performance_stats.txt". It is useful on its own: it says how much of the error is the network's rather than the measurements'. For a new sequence, the prediction is the network's best estimate of the true value, and *s* is a rough guide to how far off it may be (rough because it is one number for every sequence, and was measured on the validation set).
 
-The simple models (``linear``, ``svm`` and ``random_forest``) are fitted with weights 1/(σ² + *s*\ ²) as scikit-learn sample weights, scaled to average 1 so that their regularisation keeps its strength. They are first fitted with equal weights, then refitted as *s* is re-estimated on the validation set, until it changes by less than 1% (at most five refits).
+The simple models (``linear``, ``svm``, ``random_forest`` and ``gbrt``) are fitted with weights 1/(σ² + *s*\ ²) as scikit-learn sample weights, scaled to average 1 so that their regularisation keeps its strength. They are first fitted with equal weights, then refitted as *s* is re-estimated on the validation set, until it changes by less than 1% (at most five refits).
 
 Results
 -------

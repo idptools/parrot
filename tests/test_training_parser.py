@@ -218,8 +218,8 @@ def test_command_help_lists_architectures_by_kind(capsys):
     listing = help_text(parrot_train, ['-h'], capsys)
     positions = {name: listing.index(f'    {name} ') for name in BUILT_IN_ARCHITECTURES}
     assert max(positions[name] for name in ('brnn', 'cnn', 'composition', 'transformer', 'unet')) < \
-        min(positions[name] for name in ('knn', 'linear', 'random_forest', 'svm')) and \
-        max(positions[name] for name in ('knn', 'linear', 'random_forest', 'svm')) < positions['unet2d']
+        min(positions[name] for name in ('gbrt', 'knn', 'linear', 'random_forest', 'svm')) and \
+        max(positions[name] for name in ('gbrt', 'knn', 'linear', 'random_forest', 'svm')) < positions['unet2d']
 
 
 def test_only_optimize_help_describes_the_search(capsys):

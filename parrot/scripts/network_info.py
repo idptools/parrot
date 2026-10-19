@@ -35,6 +35,7 @@ import torch
 
 from parrot import devices, nardini, plm, train_network
 from parrot.architectures import ParrotArchitecture
+from parrot.architectures.classical import ClassicalModel
 from parrot.metrics import METRIC_DECIMALS
 from parrot.package_version import PARROT_VERSION
 from parrot.sequence_encoder import SequenceEncoder
@@ -164,10 +165,10 @@ def describe_precision(network: ParrotArchitecture, encoder: SequenceEncoder) ->
 
     Networks trained by gradient descent run in float32, with TF32 turned off on
     NVIDIA GPUs (see devices.full_float32_precision). Models fitted in one step
-    compute their features in float32 and are fitted and run in float64 by
-    scikit-learn (see architectures/classical.py). Protein language models run
-    in float32, and their embeddings are stored as float16 (see
-    plm.STORAGE_DTYPE).
+    compute their features in float32, and are then fitted and run by
+    scikit-learn, mostly in float64 (see ClassicalModel.estimator_precision).
+    Protein language models run in float32, and their embeddings are stored as
+    float16 (see plm.STORAGE_DTYPE).
 
     Parameters
     ----------
@@ -180,10 +181,10 @@ def describe_precision(network: ParrotArchitecture, encoder: SequenceEncoder) ->
     -------
     str
     """
-    if network.trained_by_gradient_descent:
-        description = 'float32 (TF32 turned off on NVIDIA GPUs)'
+    if isinstance(network, ClassicalModel):
+        description = f'features in float32, model {network.estimator_precision}'
     else:
-        description = 'features in float32, model fitted and run in float64 by scikit-learn'
+        description = 'float32 (TF32 turned off on NVIDIA GPUs)'
     if isinstance(encoder, plm.PLMEncoder):
         description += '; protein language model run in float32, its embeddings stored as float16'
     return description

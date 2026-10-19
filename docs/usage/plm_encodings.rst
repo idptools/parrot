@@ -142,14 +142,14 @@ With ``--embedding-context``, the sequence embedded is the full-length protein. 
 
 * **The cache.** Mean-subtracted embeddings are stored in files of their own, ``<model>.mean_subtracted.h5`` (and ``<model>.mean_subtracted.context.h5`` in context), so they never mix with the embeddings the model gives. Using it for the first time means embedding every sequence again. To embed ahead of time, give ``parrot-preprocess --encode`` the same option.
 * **Training and predicting.** The network records that its embeddings were mean-subtracted, so ``parrot-predict`` and ``Predictor`` subtract the mean from new sequences' embeddings automatically.
-* **The scikit-learn models** (``linear``, ``svm``, ``random_forest``, ``knn``) use each sequence's mean embedding as their features. Mean subtraction makes that zero for a sequence embedded on its own, so these models only accept ``--embed-mean-subtraction`` with ``--embedding-context``. Even then, any sequence mapped to ``-`` has a mean embedding of zero.
+* **The simple models** (``linear``, ``svm``, ``random_forest``, ``knn``, ``gbrt``) use each sequence's mean embedding as their features. Mean subtraction makes that zero for a sequence embedded on its own, so these models only accept ``--embed-mean-subtraction`` with ``--embedding-context``. Even then, any sequence mapped to ``-`` has a mean embedding of zero.
 * The mean is subtracted at full precision, before rounding to 16-bit floats, so the stored embedding of a sequence embedded on its own averages to zero only to within that rounding.
 
 Things to know
 --------------
 
 * ``--standardize-encoding`` cannot be used with PLM encodings: an embedding depends on the residue's context, so there is no per-amino-acid table to standardize.
-* The scikit-learn models (``linear``, ``svm``, ``random_forest``, ``knn``) use the average embedding over the sequence (plus the log of its length) as their features: the standard "mean-pooled embedding" baseline. Their ``dipeptides`` feature set is not available (it needs an encoding of at most 32 values per residue), because it would need over a hundred thousand features; ``parrot-optimize`` does not search it.
+* The simple models (``linear``, ``svm``, ``random_forest``, ``knn``, ``gbrt``) use the average embedding over the sequence (plus the log of its length) as their features: the standard "mean-pooled embedding" baseline. Their ``dipeptides`` feature set is not available (it needs an encoding of at most 32 values per residue), because it would need over a hundred thousand features; ``parrot-optimize`` does not search it.
 * Protein language model embeddings cannot be combined with NARDINI features.
 * Prediction with a PLM network is much slower than with a one-hot network, because every new sequence has to be embedded. For large-scale prediction, choose the smallest model that is accurate enough, use a GPU, and reuse caches when predicting the same sequences again.
 * The PLM is never trained (fine-tuned). Fine-tuning would make every epoch as slow as embedding the whole dataset, and is not supported.

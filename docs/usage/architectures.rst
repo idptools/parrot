@@ -5,7 +5,7 @@
 PARROT can train several kinds of model on the same data. Each is a subcommand of ``parrot-train`` and ``parrot-optimize`` (e.g. ``parrot-train cnn --input-file data.tsv --output-network network.pt --split kmer -d residues --regression``), and every command must name one: to train the network earlier versions of PARROT trained, use ``brnn``. There are two families:
 
 * **neural networks** (``brnn``, ``cnn``, ``unet``, ``transformer``, ``composition``), trained epoch by epoch, which work for all four task types (sequence or residue data, regression or classification);
-* **simple models** (``linear``, ``svm``, ``random_forest``, ``knn``) from scikit-learn, fitted in one step to a fixed summary of each sequence, which work for sequence-mapped data only.
+* **simple models** (``linear``, ``svm``, ``random_forest``, ``knn``, ``gbrt``) from scikit-learn, fitted in one step to a fixed summary of each sequence, which work for sequence-mapped data only.
 
 Matrix data (a matrix of values per sequence) has its own architecture, ``unet2d``, a 2D U-Net described on the "Matrix data" page.
 
@@ -21,7 +21,7 @@ Which architecture should I use?
 * **cnn** is a dilated residual convolutional network. All positions are computed in parallel, so it trains quickly on a GPU, and stacking blocks lets it see long stretches of sequence. It is a strong choice for residue-level tasks.
 * **unet** is a 1D U-Net. It combines fine local detail with broad context by repeatedly halving and then restoring the sequence length, with skip connections between matching resolutions.
 * **transformer** is a transformer encoder: every residue attends to every other residue of its sequence, so even one block sees the whole sequence. It is the architecture behind protein language models such as ESM-2, here trained from scratch on your data; transformers usually need more data than the BRNN or CNN to do well.
-* **linear**, **svm**, **random_forest** and **knn** are classic machine-learning models on sequence features (composition and length, optionally dipeptides). They fit in about a second and are strong baselines for sequence-level properties, especially with small datasets.
+* **linear**, **svm**, **random_forest**, **knn** and **gbrt** are classic machine-learning models on sequence features (composition and length, optionally dipeptides). They fit in about a second and are strong baselines for sequence-level properties, especially with small datasets.
 
 As always, compare architectures on the same data split (save one with ``--save-splits`` and give that split-file to every run with ``--split``) and judge them on the validation set, not the test set.
 
@@ -138,5 +138,14 @@ Every simple model takes ``--features`` (``composition`` (default) or ``dipeptid
 
 	*  ``--num-neighbors`` : number of neighbours used for each prediction; must not exceed the number of training sequences (default 5; searched over 1-50).
 	*  ``--neighbor-weights`` : ``uniform`` (default; each neighbour counts equally) or ``distance`` (closer neighbours count more); both are searched.
+
+**gbrt**: gradient-boosted regression trees (Friedman 2001), fitted by scikit-learn's histogram-based implementation (``HistGradientBoostingRegressor`` and ``HistGradientBoostingClassifier``). Each tree is fitted to the errors of the trees before it, and its contribution is shrunk by ``--shrinkage``. Trees cannot extrapolate beyond the values they were trained on. The defaults are scikit-learn's, given to it explicitly (as are the settings PARROT does not expose: trees limited by their number of leaves rather than their depth, grown from histograms of each feature in 255 bins), so a model does not change if scikit-learn's defaults do. scikit-learn's early stopping is turned off: by default it holds out 10% of the training sequences of datasets with more than 10,000 of them to decide when to stop, so ``--num-trees`` trees are always fitted, to every training sequence. A class missing from the training data (e.g. from a cross-validation fold) gets a probability close to 0, as with the other models. With fewer than 40 training sequences, the default minimum of 20 sequences per leaf leaves the trees unable to split, so lower ``--min-samples-leaf`` for very small datasets.
+
+	*  ``--num-trees`` : number of trees, or boosting iterations (default 100; searched over 50-1000 on a log scale).
+	*  ``--shrinkage`` : how much each tree's contribution is shrunk (scikit-learn's ``learning_rate``, unrelated to the learning rate of the networks); smaller values need more trees; between 0 (not included) and 1 (default 0.1; searched over 0.01-0.3 on a log scale).
+	*  ``--max-leaf-nodes`` : maximum number of leaves in each tree; at least 2 (default 31; searched over 4-64 on a log scale).
+	*  ``--min-samples-leaf`` : minimum number of training sequences in each leaf; larger values give smoother predictions (default 20; searched over 1-50 on a log scale).
+	*  ``--l2-regularization`` : strength of the L2 penalty on the leaf values (default 0; searched over 0.001-100 on a log scale).
+	*  ``--max-features`` : fraction of the features considered at each split; between 0 (not included) and 1 (default 1; searched over 0.5-1).
 
 Saved simple models contain the fitted scikit-learn model as a Python pickle. Loading a pickle can run arbitrary code, so only load saved models from sources you trust.

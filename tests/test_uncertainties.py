@@ -11,7 +11,7 @@ import torch
 
 from parrot import process_input_data as pid
 from parrot import train_network
-from parrot.architectures import build_network
+from parrot.architectures import build_network, get_architecture
 from parrot.checkpoint import load_network, save_network
 from parrot.encode_sequence import get_encoder
 from parrot.metrics import uncertainty_metrics
@@ -271,6 +271,21 @@ def test_simple_models_are_weighted_by_their_sds_and_refitted():
     assert not np.allclose(weighted, unweighted.estimator.predict(np.eye(21)))
 
 
+def test_gbrt_is_weighted_by_the_sds():
+    data, train_loader, val_loader = loaders_with_uncertainties(SEQUENCE_TASK, 'seq_regress_dataset.tsv')
+    values = {'num_trees': 20, 'max_leaf_nodes': 8}
+    weighted = build_network('gbrt', 20, SEQUENCE_TASK, values)
+    train_network.fit_in_one_step(weighted, train_loader, val_loader, SEQUENCE_TASK, 'cpu', silent=True)
+    assert float(model_error_of(weighted)) > 0
+
+    unweighted = build_network('gbrt', 20, Task('sequence', 1), values)
+    plain_data = [sample[:3] for sample in data]
+    unweighted.fit(pid.make_dataloader(pid.SequenceDataset(plain_data, np.arange(int(0.75 * len(data)))),
+                                       Task('sequence', 1), 16))
+    features = np.eye(21)
+    assert not np.allclose(weighted.estimator.predict(features), unweighted.estimator.predict(features))
+
+
 # ..........................................................................................
 # Metrics
 
@@ -302,10 +317,11 @@ def test_uncertainty_metrics_of_non_finite_predictions_are_nan():
     ('brnn', 'seq_regress_dataset.tsv', 'sequence'),
     ('cnn', 'res_regress_dataset.tsv', 'residues'),
     ('linear', 'seq_regress_dataset.tsv', None),
+    ('gbrt', 'seq_regress_dataset.tsv', None),
 ])
 def test_train_with_uncertainties(run_cli, tmp_path, uncertain_dataset, architecture, filename, datatype, capsys):
     network_file = tmp_path / 'net.pt'
-    epochs = ['-e', '2'] if architecture != 'linear' else []
+    epochs = ['-e', '2'] if get_architecture(architecture).trained_by_gradient_descent else []
     run_cli(parrot_train.main, training_command('parrot-train', architecture, uncertain_dataset(filename),
                                                 network_file, datatype, 1, '--uncertainties', *epochs))
 

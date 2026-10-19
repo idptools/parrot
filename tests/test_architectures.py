@@ -55,6 +55,8 @@ CONFIGURATIONS = [(architecture, {}) for architecture in ARCHITECTURES_UNDER_TES
     ('svm', {'kernel': 'poly', 'features': 'dipeptides'}),
     ('random_forest', {'num_trees': 10, 'min_samples_leaf': 3}),
     ('knn', {'num_neighbors': 3, 'neighbor_weights': 'distance'}),
+    ('gbrt', {'num_trees': 20, 'max_leaf_nodes': 8, 'min_samples_leaf': 5, 'max_features': 0.8,
+              'features': 'dipeptides'}),
 ]
 
 

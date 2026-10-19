@@ -1,6 +1,6 @@
 """
 Tests for parrot.architectures.classical: the simple models fitted in one step
-(linear, svm, random_forest, knn).
+(linear, svm, random_forest, knn, gbrt).
 """
 
 import warnings
@@ -13,14 +13,14 @@ from scipy.stats import pearsonr
 from parrot import process_input_data as pid
 from parrot import prediction
 from parrot.architectures import build_network
-from parrot.architectures.classical import MINIMUM_PROBABILITY, ClassicalModel
+from parrot.architectures.classical import GBRT_FIXED_SETTINGS, MINIMUM_PROBABILITY, ClassicalModel
 from parrot.architectures.layers import adjacent_pair_composition, mean_over_residues
 from parrot.tasks import Task
 from parrot.reproducibility import set_random_seed
 
 from tests.helpers import data_path, encode_batch, ready_network
 
-ONE_STEP_ARCHITECTURES = ['linear', 'svm', 'random_forest', 'knn']
+ONE_STEP_ARCHITECTURES = ['linear', 'svm', 'random_forest', 'knn', 'gbrt']
 
 
 
@@ -124,17 +124,49 @@ def test_classification_outputs_are_log_probabilities(architecture):
     torch.testing.assert_close(probabilities.sum(dim=1), torch.ones(3), rtol=1e-4, atol=1e-4)
 
 
-def test_classes_missing_from_training_get_small_probability():
+@pytest.mark.parametrize('architecture, classes, missing', [('linear', (0, 1), 2), ('gbrt', (0, 1), 2),
+                                                             ('gbrt', (0, 2), 1)])
+def test_classes_missing_from_training_get_small_probability(architecture, classes, missing):
+    # A missing class between two others (1) as well as after them (2)
     task = Task('sequence', 3)
-    data = [[f's{i}', sequence, i % 2] for i, sequence in enumerate(['AAAA', 'KKKK', 'AAAC', 'KKKR', 'AACA', 'KKRK'])]
-    network = build_network('linear', 20, task)
+    data = [[f's{i}', sequence, classes[i % 2]]
+            for i, sequence in enumerate(['AAAA', 'KKKK', 'AAAC', 'KKKR', 'AACA', 'KKRK'])]
+    network = build_network(architecture, 20, task)
     network.fit(pid.make_dataloader(pid.SequenceDataset(data), task, batch_size=4))
 
     with torch.no_grad():
         log_probabilities = network(*encode_batch(['AAAA']))
 
     assert torch.isfinite(log_probabilities).all()
-    assert log_probabilities[0, 2] == pytest.approx(np.log(MINIMUM_PROBABILITY))
+    assert log_probabilities[0, missing] == pytest.approx(np.log(MINIMUM_PROBABILITY))
+    present = [label for label in range(3) if label != missing]
+    assert torch.exp(log_probabilities[0, present]).sum() == pytest.approx(1.0, abs=1e-4)
+
+
+def test_gbrt_needs_two_classes_to_fit():
+    # scikit-learn fits a single class, but then predicts the probabilities of two
+    task = Task('sequence', 3)
+    data = [[f's{i}', sequence, 1] for i, sequence in enumerate(['AAAA', 'KKKK', 'AAAC', 'KKKR'])]
+    network = build_network('gbrt', 20, task)
+    with pytest.raises(ValueError, match='at least 2 classes'):
+        network.fit(pid.make_dataloader(pid.SequenceDataset(data), task, batch_size=4))
+    assert network.estimator is None
+
+
+def test_gbrt_is_given_every_setting():
+    # Settings left to scikit-learn would change with its defaults. Those not given only matter with early stopping
+    # (which is off) or the quantile loss, or do not change a new model.
+    not_given = {'n_iter_no_change', 'scoring', 'tol', 'validation_fraction', 'quantile', 'verbose', 'warm_start'}
+    values = {'num_trees': 7, 'shrinkage': 0.05, 'max_leaf_nodes': 8, 'min_samples_leaf': 3,
+              'l2_regularization': 0.5, 'max_features': 0.7}
+    for task, loss in ((Task('sequence', 1), 'squared_error'), (Task('sequence', 3), 'log_loss')):
+        settings = build_network('gbrt', 20, task, values).make_estimator(10, 21).get_params()
+        expected = dict(GBRT_FIXED_SETTINGS, max_iter=7, learning_rate=0.05, max_leaf_nodes=8, min_samples_leaf=3,
+                        l2_regularization=0.5, max_features=0.7, loss=loss)
+        assert {name: settings[name] for name in expected} == expected
+        assert settings['random_state'] is not None
+        given = set(expected) | {'random_state', 'class_weight'}
+        assert set(settings) - given <= not_given
 
 
 @pytest.mark.parametrize('architecture', ONE_STEP_ARCHITECTURES)
@@ -144,15 +176,16 @@ def test_unfitted_model_cannot_predict(architecture):
         network(*encode_batch(['ACDEF']))
 
 
-@pytest.mark.parametrize('architecture', ['svm', 'random_forest'])
-def test_fitting_is_reproducible_with_seed(architecture):
+@pytest.mark.parametrize('architecture, values', [('svm', {}), ('random_forest', {}),
+                                                  ('gbrt', {'max_features': 0.6})])
+def test_fitting_is_reproducible_with_seed(architecture, values):
     task = Task('sequence', 3)
     train_loader, _ = example_loaders('seq_class_dataset.tsv', task)
     batch, lengths = encode_batch(['ACDEFGHIK', 'KKRRKDE'])
     outputs = []
     for _ in range(2):
         set_random_seed(5)
-        network = build_network(architecture, 20, task)
+        network = build_network(architecture, 20, task, values)
         network.fit(train_loader)
         with torch.no_grad():
             outputs.append(network(batch, lengths))
@@ -160,9 +193,11 @@ def test_fitting_is_reproducible_with_seed(architecture):
     torch.testing.assert_close(outputs[0], outputs[1])
 
 
-def test_fitted_model_survives_state_dict_round_trip():
-    network = ready_network('random_forest', Task('sequence', 1))
-    copy = build_network('random_forest', 20, Task('sequence', 1))
+@pytest.mark.parametrize('architecture, task', [('random_forest', Task('sequence', 1)),
+                                                ('gbrt', Task('sequence', 1)), ('gbrt', Task('sequence', 3))])
+def test_fitted_model_survives_state_dict_round_trip(architecture, task):
+    network = ready_network(architecture, task)
+    copy = build_network(architecture, 20, task)
     copy.load_state_dict(network.state_dict())
 
     batch, lengths = encode_batch(['ACDEF', 'W'])
@@ -181,10 +216,17 @@ def test_one_step_models_have_no_parameters_to_train():
 # Input checks
 
 @pytest.mark.parametrize('architecture, values', [('linear', {'alpha': 0.0}), ('svm', {'svm_c': 0.0}),
-                                                  ('svm', {'relative_gamma': -1.0})])
+                                                  ('svm', {'relative_gamma': -1.0}), ('gbrt', {'shrinkage': 0.0}),
+                                                  ('gbrt', {'max_features': 0.0})])
 def test_positive_hyperparameters(architecture, values):
     with pytest.raises(ValueError, match='greater than 0'):
         build_network(architecture, 20, Task('sequence', 1), values)
+
+
+@pytest.mark.parametrize('name', ['shrinkage', 'max_features'])
+def test_gbrt_fractions_are_at_most_1(name):
+    with pytest.raises(ValueError, match='at most 1'):
+        build_network('gbrt', 20, Task('sequence', 1), {name: 1.5})
 
 
 def test_knn_needs_enough_training_sequences():

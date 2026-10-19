@@ -64,6 +64,8 @@ EXTRA_CONFIGURATIONS = [
     ('composition', {'window_radius': 0}),
     ('composition', {'num_hidden_layers': 0}),
     ('brnn', {'num_layers': 2}),
+    # With the default minimum of 20 sequences per leaf, the snapshot's few training sequences give trees with no splits
+    ('gbrt', {'min_samples_leaf': 2}),
 ]
 
 

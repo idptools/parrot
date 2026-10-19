@@ -138,6 +138,8 @@ def test_precision_describes_the_model_and_its_encoding():
     model = build_network('linear', 20, Task('sequence', 1), {})
     assert network_info.describe_precision(network, onehot) == 'float32 (TF32 turned off on NVIDIA GPUs)'
     assert 'float64 by scikit-learn' in network_info.describe_precision(model, onehot)
+    boosted = build_network('gbrt', 20, Task('sequence', 1), {})
+    assert 'stored as float32' in network_info.describe_precision(boosted, onehot)
     assert network_info.describe_precision(network, esm).endswith('its embeddings stored as float16')
 
 

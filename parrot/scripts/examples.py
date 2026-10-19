@@ -122,7 +122,8 @@ How it works
    with the lowest validation loss is the one kept, so training for too long
    does no harm. With --stop auto, training instead ends once -e epochs in a
    row have not lowered the validation loss by at least 0.5%. The simple
-   models (linear, svm, random_forest, knn) are fitted in one step instead.
+   models (linear, svm, random_forest, knn, gbrt) are fitted in one step
+   instead.
    With --uncertainties, each value is weighted by 1 / (SD^2 + s^2), where
    the model error s, the error of the predictions beyond the values' own, is
    fitted on the validation set after every epoch (the simple models are
@@ -192,10 +193,10 @@ How it works
    only the best third of each stage continue, for three times as many epochs
    (--reduction-factor, 3 by default), up to --epochs (with -e 30, the stages
    are 3, 10 and 30 epochs). Poor configurations are dropped early. The simple
-   models (linear, svm, random_forest, knn) are fitted in one step, so each of
-   their configurations is simply fitted once. Hyperparameters that have no
-   effect on your data (e.g. the composition window for sequence data) are
-   not searched.
+   models (linear, svm, random_forest, knn, gbrt) are fitted in one step, so
+   each of their configurations is simply fitted once. Hyperparameters that
+   have no effect on your data (e.g. the composition window for sequence
+   data) are not searched.
 4. Each configuration is scored by its lowest validation loss, exactly as
    parrot-train chooses its best epoch (with --cv-folds, by its average over
    the folds, which keep identical sequences together, and with --split kmer
