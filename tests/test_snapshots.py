@@ -20,7 +20,7 @@ files from the repository root with
 
     python -m tests.test_snapshots
 
-and say in the change log what changed and why. Never regenerate them to make a
+and say in CHANGELOG.md what changed and why. Never regenerate them to make a
 refactor pass: a refactor should leave every snapshot unchanged.
 """
 
