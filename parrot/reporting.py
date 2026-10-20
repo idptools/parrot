@@ -17,6 +17,7 @@ https://github.com/idptools/parrot
 Licensed under the MIT license.
 """
 
+import csv
 import warnings
 from collections.abc import Mapping, Sequence
 
@@ -25,7 +26,7 @@ import numpy as np
 from parrot import figures
 from parrot.matrices import figures as matrix_figures
 from parrot.matrices.output import name_matrices, write_matrix_predictions
-from parrot.metrics import METRIC_DECIMALS, performance_metrics, uncertainty_metrics
+from parrot.metrics import METRIC_DECIMALS, labelled_values, performance_metrics, uncertainty_metrics
 from parrot.prediction import LabeledPredictions, output_to_prediction
 from parrot.process_input_data import missing_label_mask
 from parrot.tasks import Task
@@ -99,6 +100,7 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
         written.append(output_prefix + '_performance_stats.txt')
         write_performance_metrics(metrics, written[-1],
                                   model_error=labeled.model_error if task.uncertainties else None)
+        written += write_evaluation_tables(labeled, predictions, task, output_prefix, probabilistic)
 
     if include_figs:
         # Regression figures show the Pearson r of the metrics, so the two always agree
@@ -112,6 +114,46 @@ def report_test_results(labeled: LabeledPredictions, task: Task, output_prefix: 
             matrix_figures.plot_matrix_examples(labeled.names, labeled.true_values, predictions, task, written[-1])
 
     return metrics, written
+
+
+def write_evaluation_tables(labeled: LabeledPredictions, predictions: Sequence[np.ndarray], task: Task,
+                            output_prefix: str, probabilistic: bool = False) -> list[str]:
+    """Per-protein and length-stratified test metrics with labelled counts.
+
+    Fixed length bins refer to the input sequence, not its number of labels.
+    Symmetric cells, missing values and probability outputs use the same masks
+    as the pooled metrics. These tables never influence training or selection.
+    """
+    rows = []
+    for name, sequence, true, predicted in zip(labeled.names, labeled.sequences, labeled.true_values, predictions):
+        present, _ = labelled_values([true], [predicted], task, probabilistic)
+        per_protein = {key: value for key, value in performance_metrics([true], [predicted], task, probabilistic).items()
+                       if not key.startswith('Mean protein ')}
+        rows.append({'ID': name, 'length': len(sequence), 'labelled_values': len(present), **per_protein})
+    grouped = []
+    edges = (0, 50, 100, 200, 400, 800)
+    for lower, upper in zip(edges, (*edges[1:], None)):
+        indices = [i for i, sequence in enumerate(labeled.sequences)
+                   if len(sequence) >= lower and (upper is None or len(sequence) < upper)]
+        if not indices:
+            continue
+        group_true = [labeled.true_values[i] for i in indices]
+        group_predicted = [predictions[i] for i in indices]
+        present, _ = labelled_values(group_true, group_predicted, task, probabilistic)
+        grouped.append({'length_bin': f'{lower}+' if upper is None else f'{lower}-{upper - 1}',
+                        'proteins': len(indices), 'labelled_values': len(present),
+                        **performance_metrics(group_true, group_predicted, task, probabilistic)})
+    paths = []
+    for suffix, records in (('_per_protein_metrics.tsv', rows), ('_length_metrics.tsv', grouped)):
+        if not records:
+            continue
+        path = output_prefix + suffix
+        with open(path, 'w', newline='', encoding='utf-8') as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(records[0]), delimiter='\t')
+            writer.writeheader()
+            writer.writerows(records)
+        paths.append(path)
+    return paths
 
 
 # .................................................................

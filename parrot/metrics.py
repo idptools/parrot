@@ -236,8 +236,11 @@ def performance_metrics(true_values: Sequence[np.ndarray], predictions: Sequence
     Returns
     -------
     dict
-        Regression: Pearson R and Spearman R (NaN where undefined; see
-        correlation()). Classification: Matthews correlation coefficient,
+        Regression: Pearson R, Spearman R, MAE, RMSE, mean signed error
+        (prediction minus truth) and coefficient of determination R2. Residue
+        and matrix tasks also report mean per-protein absolute and signed
+        errors. Undefined statistics are NaN (see correlation() and
+        regression_errors()). Classification: Matthews correlation coefficient,
         weighted F1 score and accuracy, plus (if probabilistic) the areas under
         the ROC curve (see roc_area()) and the micro-averaged precision-recall
         curve (NaN if any probability is not a finite number). Values are
@@ -250,6 +253,12 @@ def performance_metrics(true_values: Sequence[np.ndarray], predictions: Sequence
     if not task.is_classification:
         metrics['Pearson R'] = correlation(pearsonr, true_flat, predicted_flat)
         metrics['Spearman R'] = correlation(spearmanr, true_flat, predicted_flat)
+        metrics.update(regression_errors(true_flat, predicted_flat))
+        if task.per_residue or task.is_matrix:
+            per_protein = [regression_errors(*labelled_values([true], [predicted], task))
+                           for true, predicted in zip(true_values, predictions)]
+            for name in ('MAE', 'RMSE', 'Mean error'):
+                metrics[f'Mean protein {name}'] = float(np.mean([row[name] for row in per_protein]))
 
     else:
         if probabilistic:
@@ -263,11 +272,29 @@ def performance_metrics(true_values: Sequence[np.ndarray], predictions: Sequence
                 metrics['Area under Precision-Recall curve'] = metrics['Area under ROC'] = math.nan
             predicted_flat = np.argmax(probabilities, axis=1)
 
-        metrics['Matthews Correlation Coef'] = matthews_corrcoef(true_flat, predicted_flat)
+        single_label = len(np.unique(np.concatenate((true_flat, predicted_flat)))) == 1
+        metrics['Matthews Correlation Coef'] = 0.0 if single_label else matthews_corrcoef(true_flat, predicted_flat)
         metrics['F1 Score'] = f1_score(true_flat, predicted_flat, average='weighted')
         metrics['Accuracy'] = accuracy_score(true_flat, predicted_flat)
 
     return {name: round(float(value), METRIC_DECIMALS) for name, value in metrics.items()}
+
+
+def regression_errors(true_values: np.ndarray, predictions: np.ndarray) -> dict[str, float]:
+    """Absolute errors in target units; signed error is prediction minus measurement.
+
+    Undefined values (empty input, nonfinite predictions, constant-target R2)
+    are NaN. Float64 arithmetic avoids squaring overflow for float32 outputs.
+    """
+    names = ('MAE', 'RMSE', 'Mean error', 'R2')
+    if not len(true_values) or not np.isfinite(predictions).all() or not np.isfinite(true_values).all():
+        return dict.fromkeys(names, math.nan)
+    actual, predicted = np.asarray(true_values, dtype=np.float64), np.asarray(predictions, dtype=np.float64)
+    errors = predicted - actual
+    squared = float(np.sum(errors ** 2))
+    total = float(np.sum((actual - actual.mean()) ** 2))
+    return {'MAE': float(np.mean(np.abs(errors))), 'RMSE': math.sqrt(squared / len(errors)),
+            'Mean error': float(np.mean(errors)), 'R2': 1 - squared / total if len(errors) > 1 and total > 0 else math.nan}
 
 
 def uncertainty_metrics(true_values: Sequence[np.ndarray], sds: Sequence[np.ndarray],

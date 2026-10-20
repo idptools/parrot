@@ -20,6 +20,8 @@ Licensed under the MIT license.
 """
 
 import argparse
+import csv
+import json
 import math
 import os
 import time
@@ -507,6 +509,7 @@ class TrainingRun:
     silent: bool
     context: embedding_context.ContextAssignment | None = None
     context_table: str | None = None
+    split_state: dict[str, Any] | None = None
 
     def loader(self, dataset: pid.SequenceDataset, shuffle: bool = False) -> DataLoader:
         """Wrap one of this run's datasets in a DataLoader."""
@@ -695,7 +698,8 @@ def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: i
     if args.uncertainties and not args.regression:
         raise ValueError("--uncertainties applies to regression only: the SDs are of the values' measurement errors")
     task = Task(args.datatype, number_of_classes(args), width=args.matrix_width, symmetric=args.symmetric,
-                uncertainties=args.uncertainties)
+                uncertainties=args.uncertainties, regression_loss=args.regression_loss or 'auto',
+                huber_delta=args.huber_delta if args.huber_delta is not None else 1.0)
     nardini.check_task(encoder, task)
 
     arguments.check_positive(args.epochs, 'Number of epochs')
@@ -704,6 +708,23 @@ def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: i
 
     ignore_warnings = args.ignore_warnings or args.silent
     device = select_device(args)
+    from parrot.training_precision import resolve_amp
+    amp_dtype = resolve_amp(args.amp, device)
+    resumed = getattr(args, '_resume_payload', None)
+    if resumed is not None:
+        if device.type != resumed['random_state']['device_type']:
+            raise ValueError('Resume requires the same device type as the checkpoint')
+        if str(torch.__version__) != resumed['signature']['torch_version']:
+            raise ValueError('Resume requires the same PyTorch version as the checkpoint')
+        if resumed['kind'] == 'train':
+            controls = [resumed['control_state']]
+        else:
+            controls = [fold['training_control'] for trial in resumed['search_state']['trials']
+                        for fold in trial['folds'] if fold['training_control'] is not None]
+        used_dtypes = {control['precision_state']['dtype'] for control in controls
+                       if control['precision_state'] is not None}
+        if used_dtypes and used_dtypes != {str(amp_dtype)}:
+            raise ValueError('Resume requires the same resolved AMP dtype on the selected GPU')
 
     # The split-file, or the method, is applied as the data are read (see data_split.DataSplit)
     split_arguments: dict[str, Any] = dict(encoder=encoder, exclude_seq_id=args.exclude_seq_id,
@@ -741,7 +762,11 @@ def prepare_training_run(args: argparse.Namespace, program_name: str, n_folds: i
                        cv_sets=cv_sets, batch_size=args.batch, batching=args.batching,
                        probabilistic=args.probabilistic_classification,
                        include_figs=args.include_figs, write_stats=not args.no_stats,
-                       verbose=args.verbose, silent=args.silent, context=context, context_table=context_table)
+                       verbose=args.verbose, silent=args.silent, context=context, context_table=context_table,
+                       split_state={'split_file': data_split.split_file, 'method': data_split.method,
+                                    'fractions': data_split.fractions, 'criterion': data_split.criterion,
+                                    'sets': data_split.assigned_sets,
+                                    'folds': data_split.assigned_folds or data_split.saved_folds or []})
 
 
 def print_run_header(title: str, run: TrainingRun, settings: dict[str, Any]) -> None:
@@ -829,6 +854,20 @@ def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_los
 
     run.save(network)
     written = list(other_files)
+    history = training.get('learning_rate_history')
+    if history and not training.get('continuous_training_log'):
+        path = run.output_prefix + '_training_history.tsv'
+        with open(path, 'w', newline='', encoding='utf-8') as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(history[0]), delimiter='\t')
+            writer.writeheader()
+            writer.writerows(history)
+        written.append(path)
+    if training.get('recovery_events'):
+        path = run.output_prefix + '_recovery_events.json'
+        with open(path, 'w', encoding='utf-8') as handle:
+            json.dump(training['recovery_events'], handle, indent=2, allow_nan=False)
+            handle.write('\n')
+        written.append(path)
     if run.saved_split_file is not None:
         written.append(run.saved_split_file)
     if run.context_table is not None:
@@ -840,7 +879,9 @@ def finish_training_run(run: TrainingRun, network: ParrotArchitecture, train_los
         figures.plot_training_loss(train_losses, val_losses, written[-1])
 
     predicting = time.perf_counter()
-    labeled = prediction.predict_labeled(network, run.test_set, run.task, run.device, batch_size=run.batch_size)
+    loss_options = {'equal_protein_weighting': True} if training.get('equal_protein_weighting') else {}
+    labeled = prediction.predict_labeled(network, run.test_set, run.task, run.device, batch_size=run.batch_size,
+                                         **loss_options)
     prediction_seconds = time.perf_counter() - predicting
     metrics, test_files = reporting.report_test_results(labeled, run.task, run.output_prefix,
                                                         probabilistic=run.probabilistic,

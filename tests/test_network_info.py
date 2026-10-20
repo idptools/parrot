@@ -141,6 +141,9 @@ def test_precision_describes_the_model_and_its_encoding():
     boosted = build_network('gbrt', 20, Task('sequence', 1), {})
     assert 'stored as float32' in network_info.describe_precision(boosted, onehot)
     assert network_info.describe_precision(network, esm).endswith('its embeddings stored as float16')
+    assert network_info.describe_precision(network, onehot, 'torch.bfloat16') == (
+        'CUDA AMP (torch.bfloat16); FP32 parameters, losses and validation')
+    assert network_info.describe_precision(network, esm, 'torch.float16').endswith('its embeddings stored as float16')
 
 
 def test_architecture_section_marks_settings_that_had_no_effect():

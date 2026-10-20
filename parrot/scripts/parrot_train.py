@@ -19,11 +19,13 @@ Licensed under the MIT license.
 """
 
 import argparse
+import os
 from typing import Any
 
 from parrot import train_network
 from parrot.architectures import build_network
-from parrot.scripts import arguments, common, training_parser
+from parrot.scripts import arguments, common, training_artifacts, training_parser
+from parrot.training_control import TrainingControlState
 
 PROGRAM_NAME = 'parrot-train'
 
@@ -54,7 +56,8 @@ def learning_options() -> argparse.ArgumentParser:
     group = options.add_argument_group('training')
     group.add_argument('-lr', '--learning-rate', default=train_network.LEARNING_RATE.default, type=float,
                        metavar='learning_rate',
-                       help=f'learning rate of the optimizer (default {train_network.LEARNING_RATE.default})')
+                       help=f'initial learning rate of Adam, fixed unless LR control is enabled '
+                            f'(default {train_network.LEARNING_RATE.default})')
     group.add_argument('--stop', default='iter', choices=train_network.STOP_CONDITIONS,
                        help="training stop condition: 'iter' trains for --epochs epochs (default); 'auto' trains "
                             "until --epochs epochs in a row have not lowered the validation loss by at least "
@@ -77,7 +80,11 @@ def run() -> None:
 
     # Check the training-specific arguments before any data is loaded
     arguments.check_fraction(args.learning_rate, 'Learning rate')
+    training_options = training_parser.training_options_from_args(args)
+    control_state = TrainingControlState() if 'training_options' in training_options else None
     hyperparameters = training_parser.hyperparameters_from_args(args)
+    output_prefix = os.path.splitext(os.path.abspath(common.network_path(args.output_network)))[0]
+    checkpoint_path, log_path = training_artifacts.artifact_paths(args, output_prefix)
     if args.stop == 'auto' and args.epochs > LONG_AUTO_STOP_EPOCHS and not args.silent:
         print(f"Warning: Stop condition is set to 'auto' and num_epochs > {LONG_AUTO_STOP_EPOCHS}. "
               'Network training may take a long time.\n')
@@ -93,19 +100,42 @@ def run() -> None:
     if network.trained_by_gradient_descent:
         settings.update(learning_rate=args.learning_rate, epochs=args.epochs, stop=args.stop, batch_size=args.batch,
                         batching=args.batching)
+        settings.update(training_parser.active_training_settings(training_options))
+    if run.task.regression_loss != 'auto':
+        settings['regression_loss'] = run.task.regression_loss
+        if run.task.regression_loss == 'huber':
+            settings['huber_delta'] = run.task.huber_delta
     common.print_run_header(f'Training {args.architecture}: {network.description}', run, settings)
     if not run.silent and network.trained_by_gradient_descent:
         print('Validation set loss per epoch:')
 
     timing = train_network.TrainingTiming()
+    call_options = dict(training_options)
+    if control_state is not None:
+        call_options['control_state'] = control_state
+    if checkpoint_path is not None or args.resume is not None or log_path is not None:
+        call_options.update(checkpoint_path=checkpoint_path, checkpoint_every=args.checkpoint_every or 1,
+                            resume_from=args.resume, training_log=log_path,
+                            checkpoint_metadata=training_artifacts.run_metadata(args, run))
     train_losses, val_losses = train_network.train(network, run.loader(run.train_set, shuffle=True),
                                                    run.loader(run.val_set), run.task, run.device,
                                                    learning_rate=args.learning_rate, n_epochs=args.epochs,
                                                    stop_condition=args.stop, on_improvement=run.save,
-                                                   verbose=args.verbose, silent=args.silent, timing=timing)
+                                                   verbose=args.verbose, silent=args.silent, timing=timing,
+                                                   **call_options)
 
     training = dict(learning_rate=args.learning_rate, epochs=args.epochs, stop=args.stop)
-    common.finish_training_run(run, network, train_losses, val_losses, training, timing=timing)
+    training.update(training_parser.active_training_settings(training_options))
+    if control_state is not None:
+        training.update(control_state.report())
+    if checkpoint_path is not None:
+        training['training_checkpoint'] = checkpoint_path
+    if log_path is not None:
+        training['continuous_training_log'] = log_path
+    if args.resume is not None:
+        training['resumed_from'] = os.path.abspath(args.resume)
+    files = [path for path in (checkpoint_path, log_path) if path is not None]
+    common.finish_training_run(run, network, train_losses, val_losses, training, timing=timing, other_files=files)
 
 
 if __name__ == '__main__':

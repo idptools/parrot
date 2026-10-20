@@ -24,6 +24,7 @@ https://github.com/idptools/parrot
 Licensed under the MIT license.
 """
 
+import math
 import numbers
 from dataclasses import dataclass
 from typing import Any
@@ -69,6 +70,12 @@ class Task:
         Sequence and residue regression only: True if every value comes with
         the standard deviation of its measurement error, which training takes
         into account (see parrot/uncertainties.py).
+    regression_loss : str, optional
+        'auto' (default: MAE for sequence, MSE for residue/matrix), 'mae',
+        'mse' or 'huber'. Explicit choices are incompatible with classification
+        and uncertainties. Saved with the task so evaluation uses the same loss.
+    huber_delta : float, optional
+        Positive finite Huber transition in target units (default 1).
 
     Raises
     ------
@@ -85,6 +92,8 @@ class Task:
     width: int | None = None
     symmetric: bool = False
     uncertainties: bool = False
+    regression_loss: str = 'auto'
+    huber_delta: float = 1.0
 
     def __post_init__(self) -> None:
         """Check the settings, raising ValueError as described above, and store num_classes and width as plain ints."""
@@ -111,6 +120,22 @@ class Task:
         if self.uncertainties and (self.is_classification or self.is_matrix):
             raise ValueError('Uncertainties apply to sequence and residue regression only, not to classification or '
                              'matrix data')
+        if self.regression_loss not in ('auto', 'mae', 'mse', 'huber'):
+            raise ValueError('Regression loss must be auto, mae, mse or huber')
+        if self.regression_loss != 'auto' and (self.is_classification or self.uncertainties):
+            raise ValueError('A regression loss cannot be chosen for classification or --uncertainties '
+                             '(which uses Gaussian negative log-likelihood)')
+        if isinstance(self.huber_delta, bool) or not math.isfinite(self.huber_delta) or self.huber_delta <= 0:
+            raise ValueError('Huber delta must be positive and finite')
+        if self.huber_delta != 1.0 and self.regression_loss != 'huber':
+            raise ValueError('Huber delta only applies to the huber regression loss')
+
+    @property
+    def loss_name(self) -> str:
+        """Effective regression loss, retaining the original datatype-dependent defaults."""
+        if self.regression_loss != 'auto':
+            return self.regression_loss
+        return 'mse' if self.per_residue or self.is_matrix else 'mae'
 
     @property
     def is_classification(self) -> bool:
@@ -148,6 +173,10 @@ class Task:
         # Only recorded when set, so networks trained without uncertainties are saved exactly as before
         if self.uncertainties:
             config['uncertainties'] = True
+        if self.regression_loss != 'auto':
+            config['regression_loss'] = self.regression_loss
+            if self.regression_loss == 'huber':
+                config['huber_delta'] = self.huber_delta
         return config
 
     @classmethod
@@ -155,4 +184,5 @@ class Task:
         """Rebuild a Task from the dictionary written by to_config()."""
         return cls(datatype=config['datatype'], num_classes=int(config['num_classes']), width=config.get('width'),
                    symmetric=bool(config.get('symmetric', False)),
-                   uncertainties=bool(config.get('uncertainties', False)))
+                   uncertainties=bool(config.get('uncertainties', False)),
+                   regression_loss=config.get('regression_loss', 'auto'), huber_delta=config.get('huber_delta', 1.0))

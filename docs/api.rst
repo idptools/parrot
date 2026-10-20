@@ -45,6 +45,74 @@ Networks can also be built, trained and saved in Python, with the same functions
 
 :func:`~parrot.prediction.predict_sequences` returns the network's raw output for each unique sequence (for classification, unnormalized logits), and :func:`~parrot.prediction.predict_labeled` runs a network over a labelled dataset such as ``test_set``. The architectures and their hyperparameters are described on the :doc:`usage/architectures` page, and :doc:`adding_architectures` explains how to add your own.
 
+Optional training controls
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The default call above uses a fixed learning rate, summed labelled losses and
+no gradient clipping or numerical recovery. Import
+:class:`~parrot.training_control.TrainingOptions` and
+:class:`~parrot.training_control.TrainingControlState` from
+``parrot.training_control`` to enable and inspect the optional policies:
+
+.. code-block:: python
+
+    from parrot.training_control import TrainingOptions, TrainingControlState
+
+    options = TrainingOptions(lr_schedule='plateau', lr_patience=3,
+                              lr_min=1e-6, recover_nonfinite=2,
+                              optimizer='adamw', weight_decay=0.01)
+    state = TrainingControlState()
+    train_losses, val_losses = parrot.train(
+        network, train_loader, val_loader, task, 'cpu', learning_rate=0.001,
+        n_epochs=20, check_finite_gradients=True,
+        training_options=options, control_state=state,
+        checkpoint_path='run_training.pt', training_log='run_training.tsv')
+    diagnostics = state.report()  # learning_rate_history and any recovery_events
+
+Here ``network`` and the loaders are built as in the preceding example; use a
+fresh network to compare a controlled run with a default run. Clipping is a
+separate argument to ``train``: ``gradient_clip_norm=...`` enables it at a
+positive, finite threshold and implies finite checks. See
+:doc:`usage/training_controls` for calibration, schedule timing and recovery
+limits. Recovery requires loaders with ``num_workers=0``.
+
+``TrainingOptions(equal_protein_weighting=True)`` averages labelled losses
+within each protein for residue or matrix tasks. When evaluating such a run
+outside ``train``, pass ``equal_protein_weighting=True`` to
+:func:`~parrot.train_network.evaluate_loss` and
+:func:`~parrot.prediction.predict_labeled` too, so the reported loss has the
+same meaning. Standard performance metrics still pool labelled values.
+Loss weighting is not inferred from the saved inference checkpoint.
+
+For cosine annealing, ``train`` resolves an omitted ``lr_anneal_epochs`` from
+``n_epochs`` minus warmup. Give an explicit horizon with
+``stop_condition='auto'``. When constructing
+:class:`~parrot.hyperparameter_search.TrialTrainer` directly, resolve options
+once against the full search horizon with ``options.resolved(n_epochs)`` before
+passing them to its shorter stages; the CLI does this automatically. Its state
+continues across promotions.
+
+``state.epoch_history`` records successful epochs when learning-rate control or
+recovery is active, and ``state.recovery_events`` records rollbacks. The Python
+API returns these diagnostics in memory. The explicit ``checkpoint_path`` and
+``training_log`` arguments in the example also write a resumable checkpoint and
+flushed epoch records. ``checkpoint_every`` defaults to 1. Resume with the same
+model, task, data and options, adding ``resume_from='run_training.pt'``; for a
+Python-created checkpoint, use this API rather than CLI ``--resume``. Checkpoints
+require PARROT ``SequenceDataset`` loaders with ``num_workers=0`` and supported
+samplers; their sampling policies must match the checkpoint (see
+:ref:`parrot-training-resume`). Custom sampler subclasses are rejected. Use
+``on_improvement`` to separately save the best inference network during training.
+See :ref:`parrot-training-resume` for validation and allowed duration changes.
+
+Choose a loss with ``Task('residues', 1, regression_loss='huber', huber_delta=0.5)``;
+the task is saved with the network, so evaluation uses the same loss. Loss choices
+are ``auto`` (the original datatype-dependent defaults), ``mae``, ``mse`` and
+``huber``. A selected loss is incompatible with classification or uncertainties.
+``TrainingOptions(amp='auto')`` enables CUDA AMP on a compatible GPU, with
+``amp='float16'`` or ``'bfloat16'`` to select explicitly. It is unsupported on
+CPU and MPS in PARROT and never silently falls back; see :ref:`parrot-amp`.
+
 The parrot package
 ------------------
 
@@ -146,6 +214,24 @@ train_network.py
 ----------------
 
 .. automodule:: parrot.train_network
+   :members:
+
+training_control.py
+-------------------
+
+.. automodule:: parrot.training_control
+   :members:
+
+training_precision.py
+---------------------
+
+.. automodule:: parrot.training_precision
+   :members:
+
+training_persistence.py
+-----------------------
+
+.. automodule:: parrot.training_persistence
    :members:
 
 uncertainties.py

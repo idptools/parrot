@@ -54,6 +54,23 @@ The flags for matrix data are:
 
 All other ``parrot-train`` flags work as usual, except ``--exclude-seq-id`` (see above), ``--probabilistic-classification``, which ``unet2d`` does not offer (``Predictor`` gives class probabilities; see "Predicting" below), and ``--uncertainties``, which it does not offer either (matrix data cannot have uncertainties yet). ``parrot-optimize`` takes the same flags and searches the 2D U-Net's hyperparameters (below), including with ``--cv-folds``.
 
+The shared :doc:`training_controls` also apply: learning-rate schedules and
+warmup, gradient clipping and finite checks, and bounded numerical recovery.
+By default, the loss sums labelled matrix cells. With
+``--equal-protein-weighting``, it averages the labelled cells within each
+protein before averaging proteins; for symmetric maps these are the diagonal
+and upper triangle only. This prevents matrices with more labelled cells from
+receiving more objective weight solely because of their size. Standard metrics
+still pool labelled cells. Choose the weighting for the intended prediction
+objective, and recalibrate the learning rate and clipping threshold if it changes.
+
+Matrix regression also supports ``--regression-loss mae|mse|huber`` (MSE by
+default), optional ``--huber-delta``, AdamW/weight decay, and guarded CUDA AMP.
+``--checkpoint``/``--resume`` preserve full training or search state, and
+``--training-log`` flushes records while training. Test reports include pooled
+cell errors, mean protein errors and per-protein/length tables, respecting
+missing cells and the symmetric-map convention. See :doc:`training_controls`.
+
 The unet2d architecture
 -----------------------
 

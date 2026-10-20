@@ -4,6 +4,12 @@
 
 Below are a handful of examples outlining how to apply PARROT to various machine learning tasks. Provided in the PARROT distribution on GitHub is a **/data** folder which contains several example datasets (If you installed via pip you will need to download these files from GitHub). Among these, there are datasets with different data types (sequence-mapped values and residue-mapped values) and for different machine learning task (classification and regression). Read the README within this folder for more details on how to format PARROT datasets and on the particulars of these datasets. This folder also contains an example list of sequences for ``parrot-predict``, and the other files that are used in these examples.
 
+Console excerpts below are abbreviated. Current runs also write per-protein
+and length-binned evaluation tables, and regression summaries include absolute
+errors and R2; see :doc:`parrot-train`. Optional checkpointing, continuous logs,
+losses, regularization and AMP are introduced in :doc:`training_controls` and
+:doc:`advanced_examples`.
+
 parrot-train
 ============
 
@@ -88,7 +94,7 @@ First PARROT splits the data, aiming for 70% of the sequences in the training se
 
 Turning to the actual training results, we can see that our validation set loss falls quickly between epochs 10 and 30 and then keeps falling more slowly, so here the lowest loss is at the last epoch, as the line after the losses says. Often the loss instead levels off and then starts to creep up again, as the network begins to overfit on the training data. Don't worry about this overfitting, since the final network that PARROT returns will be from the epoch that produced the lowest validation set loss. PARROT then applies that network to the test set and prints how well it does, and lists the files it wrote.
 
-If you look in the current directory, you should also see those four files: our trained network "seq_class_network.pt", a description of how it was trained, "seq_class_network_info.txt" (useful for writing up methods), a predictions file "seq_class_network_predictions.tsv", and a performance stats summary file "seq_class_network_performance_stats.txt". The network file can be used to make predictions on new sequences with ``parrot-predict`` but is not readable by eye. The predictions file is a bit more interesting to look at:
+If you look in the current directory, you should see six files: our trained network "seq_class_network.pt", a description of how it was trained, "seq_class_network_info.txt" (useful for writing up methods), a predictions file "seq_class_network_predictions.tsv", a performance stats summary file "seq_class_network_performance_stats.txt", and the tables "seq_class_network_per_protein_metrics.tsv" and "seq_class_network_length_metrics.tsv". The network file can be used to make predictions on new sequences with ``parrot-predict`` but is not readable by eye. The predictions file is a bit more interesting to look at:
 
 .. code-block:: bash
 
@@ -116,7 +122,7 @@ The performance stats file is an extension of these test set predictions:
     F1 Score : 0.934
     Accuracy : 0.933
 
-This file quantifies performance on the test set using a variety of different metrics, which vary between classification and regression tasks. For classification, as shown here, this file reports on the accuracy, F1 score and MCC of our predictions. You can always prevent this file from being output by providing the ``--no-stats`` flag. See "Machine Learning Resources" (or Google!) for more information on how to interpret these metrics.
+This file quantifies performance on the test set using a variety of different metrics, which vary between classification and regression tasks. For classification, as shown here, this file reports on the accuracy, F1 score and MCC of our predictions. The two evaluation tables show performance separately by protein and by sequence-length range. The ``--no-stats`` flag suppresses the stats file and both tables. See "Machine Learning Resources" (or Google!) for more information on how to interpret these metrics.
 
 ...............................................................................
 
@@ -167,12 +173,12 @@ In terms of command-line syntax, the only difference in the ``parrot-train`` com
 
 You might notice that this network seems to train a bit slower than the previous example. This is because our network has an additional layer. Increasing the ``-nl`` hyperparameter increases training time, but creates a more complex network that may be better at discerning patterns from data. 
 
-Like before, this command outputs a network file, a description of how it was trained ("_info.txt"), a prediction file, a performance stats file, a training results PNG and test set performance PNGs into the current directory. In this case, the performance images are a scatterplot that compares the true values of the test set sequences to what was predicted by the PARROT network, and a density plot of the same values ("seq_regress_network_seq_density.png"), which colours the plot by how many values fall in each small square, so it still shows where the values lie when there are too many to see as points. Both are labelled with Pearson's r.
+Like before, this command outputs a network file, a description of how it was trained ("_info.txt"), a prediction file, a performance stats file and the two evaluation tables. It also writes a training results PNG and test set performance PNGs into the current directory. In this case, the performance images are a scatterplot that compares the true values of the test set sequences to what was predicted by the PARROT network, and a density plot of the same values ("seq_regress_network_seq_density.png"), which colours the plot by how many values fall in each small square, so it still shows where the values lie when there are too many to see as points. Both are labelled with Pearson's r.
 
 .. image:: ../images/seq_regress_network_seq_scatterplot.png
   :width: 400
 
-The performance stats file provides the Pearson and Spearman correlations for this true vs predicted value scatterplot:
+The performance stats file provides the Pearson and Spearman correlations for this true vs predicted value scatterplot, alongside MAE, RMSE, signed mean error and R2. The correlation portion of this example is:
 
 .. code-block:: bash
 

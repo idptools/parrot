@@ -48,8 +48,9 @@ Licensed under the MIT license.
 
 import itertools
 import math
+import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import numpy as np
@@ -62,6 +63,8 @@ from parrot.devices import cpu_copy
 from parrot.search_space import SearchSpace
 from parrot.tasks import Task
 from parrot.tpe_sampler import TPESampler
+from parrot.training_control import LearningRateController, TrainingControlState, TrainingOptions, finite_tensors
+from parrot.training_precision import TrainingPrecision, resolve_amp
 
 # Successive halving: each stage keeps the best 1/REDUCTION_FACTOR of its configurations and trains them
 # REDUCTION_FACTOR times as long
@@ -191,6 +194,7 @@ class FoldProgress(train_network.TrainingHistory):
 
     network_state: dict[str, Any] | None = None
     optimizer_state: dict[str, Any] | None = None
+    training_control: TrainingControlState | None = None
 
 
 @dataclass
@@ -255,7 +259,9 @@ class TrialTrainer:
     """
 
     def __init__(self, space: SearchSpace, loaders: list[tuple[DataLoader, DataLoader]], input_size: int, task: Task,
-                 device: str | torch.device) -> None:
+                 device: str | torch.device, gradient_clip_norm: float | None = None,
+                 check_finite_gradients: bool = False, training_options: TrainingOptions | None = None,
+                 on_epoch: Callable[[Trial, int, dict[str, Any]], None] | None = None) -> None:
         """
         Parameters
         ----------
@@ -269,12 +275,35 @@ class TrialTrainer:
             The task being trained
         device : str or torch.device
             Device to train on
+        gradient_clip_norm, check_finite_gradients : optional
+            Opt-in clipping and finite checks, as in train_network.train().
+        training_options : TrainingOptions, optional
+            Fixed loss-weighting, LR and recovery policies for all trials and
+            folds. Resolve cosine options against the full search horizon
+            with options.resolved(max_epochs) before constructing the trainer.
+            Schedule state and each fold's recovery budget persist across
+            promotions; only the initial LR is searched.
         """
         self.space = space
         self.loaders = loaders
         self.input_size = input_size
         self.task = task
         self.device = device
+        self.on_epoch = on_epoch
+        self.on_recovery: Callable[[], None] | None = None
+        self.options = training_options or TrainingOptions()
+        self.options.validate_task(task)
+        resolve_amp(self.options.amp, self.device)
+        if self.options.active and not space.trained_by_gradient_descent:
+            raise ValueError('Training controls apply to neural networks trained by gradient descent')
+        if self.options.lr_schedule == 'cosine' and self.options.lr_anneal_epochs is None:
+            raise ValueError('Cosine search needs --lr-anneal-epochs resolved against the full search horizon')
+        train_network.validate_gradient_clip_norm(gradient_clip_norm)
+        self.gradient_options: dict[str, Any] = {}
+        if gradient_clip_norm is not None:
+            self.gradient_options['gradient_clip_norm'] = gradient_clip_norm
+        if check_finite_gradients:
+            self.gradient_options['check_finite_gradients'] = True
 
     def _build(self, trial: Trial) -> ParrotArchitecture:
         """A freshly initialised network for the trial's configuration, on the device
@@ -319,9 +348,9 @@ class TrialTrainer:
             assert trial.epochs == 0, f'Trial {trial.number} has no training state but {trial.epochs} epochs trained'
             trial.folds = [FoldProgress() for _ in self.loaders]
 
-        for progress, (train_loader, val_loader) in zip(trial.folds, self.loaders):
+        for fold_index, (progress, (train_loader, val_loader)) in enumerate(zip(trial.folds, self.loaders)):
             if self.space.trained_by_gradient_descent:
-                self._train_fold(trial, progress, train_loader, val_loader, epochs)
+                self._train_fold(trial, progress, train_loader, val_loader, epochs, fold_index)
             elif progress.network_state is None:
                 self._fit_fold(trial, progress, train_loader, val_loader)
 
@@ -331,7 +360,7 @@ class TrialTrainer:
         return float(np.mean(losses)) if all(math.isfinite(loss) for loss in losses) else math.inf
 
     def _train_fold(self, trial: Trial, progress: FoldProgress, train_loader: DataLoader, val_loader: DataLoader,
-                    epochs: int) -> None:
+                    epochs: int, fold_index: int = 0) -> None:
         """Continue training a trial on one fold from where it stopped, up to `epochs` epochs
 
         Parameters
@@ -347,20 +376,93 @@ class TrialTrainer:
         network = self._build(trial)
         if progress.network_state is not None:
             network.load_state_dict(progress.network_state)
-        optimizer = torch.optim.Adam(network.parameters(), lr=self.space.learning_rate(trial.values))
+        optimizer = self.options.build_optimizer(network, self.space.learning_rate(trial.values))
+        controller = LearningRateController(optimizer, self.options) if self.options.controls_lr else None
         if progress.optimizer_state is not None:
             optimizer.load_state_dict(progress.optimizer_state)
+        if self.options.active and progress.training_control is None:
+            progress.training_control = TrainingControlState()
+        precision = TrainingPrecision(self.options.amp, self.device) if self.options.amp != 'off' else None
+        if precision is not None and progress.training_control is not None \
+                and progress.training_control.precision_state is not None:
+            precision.load_state_dict(progress.training_control.precision_state)
+        if controller is not None and progress.training_control is not None \
+                and progress.training_control.scheduler_state is not None:
+            controller.load_state_dict(progress.training_control.scheduler_state)
         criterion = train_network.build_loss_criterion(self.task)
         # With uncertainties, a new network's first epoch is weighted by a model error fitted to its untrained
         # residuals, as train_network.train() does; after that, each epoch's validation refits it
         if self.task.uncertainties and progress.network_state is None:
-            train_network.refit_model_error(network, val_loader, self.task, self.device)
+            loss_options = {'equal_protein_weighting': True} if self.options.equal_protein_weighting else {}
+            train_network.refit_model_error(network, val_loader, self.task, self.device, **loss_options)
 
-        for _ in range(trial.epochs, epochs):
-            train_loss, _ = train_network.train_epoch(network, train_loader, self.task, criterion, optimizer,
-                                                      self.device)
-            val_loss = train_network.validation_loss(network, val_loader, self.task, self.device)
+        def checkpoint_recovery() -> None:
+            progress.network_state = cpu_copy(network.state_dict())
+            progress.optimizer_state = cpu_copy(optimizer.state_dict())
+            assert progress.training_control is not None
+            if controller is not None:
+                progress.training_control.scheduler_state = controller.state_dict()
+            if precision is not None:
+                progress.training_control.precision_state = precision.state_dict()
+            assert self.on_recovery is not None
+            self.on_recovery()
+
+        control_options: dict[str, Any] = {}
+        if precision is not None:
+            control_options['precision'] = precision
+        if self.on_recovery is not None:
+            control_options['on_recovery'] = checkpoint_recovery
+
+        for epoch in range(len(progress.train_losses), epochs):
+            started = time.perf_counter()
+            used_lr = optimizer.param_groups[0]['lr']
+            epoch_gradient_options = dict(self.gradient_options)
+            statistics = None
+            if self.on_epoch is not None and (self.gradient_options or self.options.recover_nonfinite or precision):
+                statistics = train_network.GradientStatistics()
+                epoch_gradient_options['gradient_statistics'] = statistics
+            try:
+                if self.options.active:
+                    assert progress.training_control is not None
+                    train_loss, _, val_loss, _ = train_network.controlled_epoch(
+                        network, train_loader, val_loader, self.task, criterion, optimizer, self.device,
+                        self.options, progress.training_control, controller, epoch, epoch_gradient_options,
+                        **control_options)
+                else:
+                    train_loss, _ = train_network.train_epoch(network, train_loader, self.task, criterion, optimizer,
+                                                              self.device, **epoch_gradient_options)
+                    val_loss = train_network.validation_loss(network, val_loader, self.task, self.device)
+            except train_network.NonFiniteTrainingError as error:
+                raise train_network.NonFiniteTrainingError(f'Trial {trial.number}, epoch {epoch + 1}: {error}',
+                                                            retryable=error.retryable) from error
+            if self.gradient_options and not math.isfinite(val_loss):
+                raise train_network.NonFiniteTrainingError(
+                    f'Trial {trial.number}, epoch {epoch + 1}: nonfinite validation loss')
+            if self.on_epoch is not None and (not math.isfinite(train_loss) or not math.isfinite(val_loss)):
+                raise train_network.NonFiniteTrainingError('Nonfinite loss during checkpointed/logged search')
             progress.record_epoch(train_loss, val_loss, network)
+            if self.on_epoch is not None:
+                if not finite_tensors(network.state_dict()) or not finite_tensors(optimizer.state_dict()):
+                    raise train_network.NonFiniteTrainingError('Nonfinite search model/optimizer state')
+                progress.network_state = cpu_copy(network.state_dict())
+                progress.optimizer_state = cpu_copy(optimizer.state_dict())
+                if controller is not None:
+                    assert progress.training_control is not None
+                    used_lr = progress.training_control.epoch_history[-1]['learning_rate']
+                row = {'trial': trial.number, 'fold': fold_index + 1, 'epoch': epoch + 1,
+                       'training_loss': train_loss, 'validation_loss': val_loss, 'learning_rate': used_lr,
+                       'recoveries': progress.training_control.recoveries_used if progress.training_control else 0,
+                       'seconds': time.perf_counter() - started,
+                       'amp_scale_retries': precision.scale_retries if precision is not None else 0,
+                       'amp_dtype': str(precision.dtype) if precision is not None else 'off',
+                       'loss_scale': precision.scaler.get_scale() if precision is not None and precision.scaler else 1.0}
+                if statistics is not None and statistics.norms:
+                    norms = np.asarray(statistics.norms)
+                    clip_norm = self.gradient_options.get('gradient_clip_norm')
+                    row.update(gradient_norm_median=float(np.median(norms)),
+                               gradient_norm_p95=float(np.percentile(norms, 95)), gradient_norm_max=float(np.max(norms)),
+                               clipped_fraction=float(np.mean(norms > clip_norm)) if clip_norm is not None else 0.0)
+                self.on_epoch(trial, fold_index, row)
 
         progress.network_state = cpu_copy(network.state_dict())
         progress.optimizer_state = cpu_copy(optimizer.state_dict())
@@ -490,6 +592,33 @@ class HyperparameterSearch:
         self._tried: set[tuple[Any, ...]] = set()
         # The first error that made a configuration fail, reported if every configuration fails
         self._first_failure: BaseException | None = None
+        self.active_trial: int | None = None
+        self.phase = 'halving'
+
+    def state_dict(self) -> dict[str, Any]:
+        """Portable search, TPE random state and per-fold model/optimizer progress."""
+        return {'trials': [asdict(trial) for trial in self.trials], 'rng': self.rng.bit_generator.state,
+                'initial': [point.tolist() for point in self._initial] if self._initial is not None else None,
+                'tried': list(self._tried), 'first_failure': str(self._first_failure) if self._first_failure else None,
+                'n_trials': self.n_trials, 'active_trial': self.active_trial, 'phase': self.phase}
+
+    def load_state_dict(self, state: dict[str, Any]) -> None:
+        """Restore a search against the same validated search space and training policy."""
+        self.trials = []
+        for saved in state['trials']:
+            values = dict(saved)
+            folds = []
+            for raw in values.pop('folds'):
+                fold = dict(raw)
+                if fold['training_control'] is not None:
+                    fold['training_control'] = TrainingControlState(**fold['training_control'])
+                folds.append(FoldProgress(**fold))
+            self.trials.append(Trial(**values, folds=folds))
+        self.rng.bit_generator.state = state['rng']
+        self._initial = [np.asarray(point) for point in state['initial']] if state['initial'] is not None else None
+        self._tried = {tuple(key) for key in state['tried']}
+        self._first_failure = RuntimeError(state['first_failure']) if state['first_failure'] is not None else None
+        self.n_trials, self.active_trial, self.phase = state['n_trials'], state['active_trial'], state['phase']
 
     def run(self) -> Trial:
         """Run the search
@@ -509,12 +638,17 @@ class HyperparameterSearch:
         if not self.silent:
             self.print_plan()
 
-        self._run_successive_halving()
+        if self.active_trial is not None:
+            self._train_stage(next(trial for trial in self.trials if trial.number == self.active_trial))
+        if self.phase == 'halving':
+            self._run_successive_halving()
+            self.phase = 'completion'
         self._train_best_to_completion()
 
         for trial in self.trials:
             if trial.status == WAITING:
                 trial.status = STOPPED
+        self.phase = 'finished'
         if self.on_progress is not None:
             self.on_progress(self)
 
@@ -631,9 +765,10 @@ class HyperparameterSearch:
         trial : Trial
         """
         stage = len(trial.stage_losses)
+        self.active_trial = trial.number
         try:
             loss = self.trainer.train_to(trial, self.stages[stage])
-        except (ValueError, torch.OutOfMemoryError) as error:
+        except (ValueError, torch.OutOfMemoryError, train_network.NonFiniteTrainingError) as error:
             loss = math.inf
             self._record_failure(trial, error)
 
@@ -645,6 +780,7 @@ class HyperparameterSearch:
             trial.folds = []
         if trial.status != FAILED:
             trial.status = COMPLETED if stage == len(self.stages) - 1 else WAITING
+        self.active_trial = None
 
         if not self.silent:
             self._print_stage(trial, stage, loss)

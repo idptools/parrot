@@ -55,7 +55,9 @@ def example_commands() -> list[tuple[str, list[str]]]:
             if not line.startswith('    parrot-'):
                 continue
             words = shlex.split(line)
-            if '-h' not in words:
+            # Resume examples depend on a checkpoint from the preceding command;
+            # their full parsing and execution are covered in test_training_resume_cli.
+            if '-h' not in words and '--resume' not in words:
                 commands.append((words[0], words[1:]))
     return commands
 

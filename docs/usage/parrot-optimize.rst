@@ -4,7 +4,7 @@
 
 ``parrot-optimize`` searches for good hyperparameters for a network architecture on your dataset, then trains and tests a network with the best ones, producing the same output as ``parrot-train``. It needs no extra packages.
 
-What is searched: the learning rate (for networks trained by gradient descent, between 0.00001 and 0.01 on a log scale; ``parrot-optimize`` has no ``--learning-rate``, so it is always searched), plus every hyperparameter the chosen architecture marks as searched, either over a range of numbers or over a set of choices (for ``brnn``: the hidden size, between 5 and 50, and the number of layers, between 1 and 5, but not the dropout; for ``cnn``: the number of channels and of blocks, the kernel width and the dropout; see the "Architectures" page). Any architecture hyperparameter given on the command line (e.g. ``parrot-optimize cnn ... --channels 32 --attention-pooling-off``) is fixed at that value and not searched; hyperparameters that are neither searched nor given keep their defaults. Hyperparameters that have no effect on your data are not searched either, and the output says so: the composition window (``--window-radius``) for sequence data, how pairs of residues are combined (``--pair-features``) for matrices with a fixed number of columns, and dipeptide features for encodings of more than 32 values per residue. A hyperparameter that the rest of a configuration switches off (the SVM's ``--relative-gamma`` with a linear kernel) is set to its default, so configurations that differ only in it are tried once.
+What is searched: the initial learning rate (for networks trained by gradient descent, between 0.00001 and 0.01 on a log scale; ``parrot-optimize`` has no ``--learning-rate``, so it is always searched), plus every hyperparameter the chosen architecture marks as searched, either over a range of numbers or over a set of choices (for ``brnn``: the hidden size, between 5 and 50, and the number of layers, between 1 and 5, but not the dropout; for ``cnn``: the number of channels and of blocks, the kernel width and the dropout; see the "Architectures" page). Any architecture hyperparameter given on the command line (e.g. ``parrot-optimize cnn ... --channels 32 --attention-pooling-off``) is fixed at that value and not searched; hyperparameters that are neither searched nor given keep their defaults. Hyperparameters that have no effect on your data are not searched either, and the output says so: the composition window (``--window-radius``) for sequence data, how pairs of residues are combined (``--pair-features``) for matrices with a fixed number of columns, and dipeptide features for encodings of more than 32 values per residue. A hyperparameter that the rest of a configuration switches off (the SVM's ``--relative-gamma`` with a linear kernel) is set to its default, so configurations that differ only in it are tried once.
 
 How it searches. Each configuration is scored by its lowest validation loss, exactly as ``parrot-train`` chooses its best epoch. Two ideas keep the search efficient:
 
@@ -67,13 +67,39 @@ As for ``parrot-train``, each architecture is a subcommand offering only the opt
 
 **Training flags, for networks trained epoch by epoch (every architecture except the simple models):**
 
-Unlike ``parrot-train``, ``parrot-optimize`` has no ``--learning-rate`` (it is searched) and no ``--stop`` (every configuration is trained for set numbers of epochs).
+Unlike ``parrot-train``, ``parrot-optimize`` has no ``--learning-rate`` (the initial rate is searched) and no ``--stop`` (every configuration is trained for set numbers of epochs).
 
 	*  ``--batch`` / ``-b`` : Training minibatch size (default is 32). Must be a positive integer, and for most datasets should be in the range of 8-256. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance, but are not explicitly required. PARROT warns if the batch size is above 512, or leaves fewer than 10 batches per epoch.
 	*  ``--batching`` : How training sequences are grouped into batches: ``length`` (default) or ``random``. ``length`` puts sequences of similar length in the same batch (still re-randomised every epoch), so far less time is spent on padding; for datasets whose lengths vary widely this makes training several-fold faster. ``random`` shuffles freely, as earlier versions of PARROT did. Padding is masked, so it affects a network's output only through float32 rounding, and this changes which sequences share a batch during training but nothing else.
 	*  ``--epochs`` / ``-e`` : Number of epochs a configuration is trained for if it reaches the final stage, and so the number of epochs the final network is trained for (default is 100). Choose it as you would for ``parrot-train``.
 	*  ``--min-epochs`` : Number of epochs every configuration is first trained for, the first stage (default: ``--epochs`` divided by the reduction factor squared, i.e. one ninth, rounded and at least 1). The stages run from here up to ``--epochs``: counting back from ``--epochs``, each stage is ``--reduction-factor`` times shorter than the next, with as many stages as fit (for example ``-e 30 --min-epochs 3`` gives 3, 10 and 30; ``-e 30 --min-epochs 5`` gives 5, 10 and 30; and ``-e 10 --min-epochs 4`` gives 4 and 10). Raise it if your networks need more epochs before their validation loss says anything about how they will end up. It must be between 1 and ``--epochs``; equal to ``--epochs``, there is a single stage and every configuration is trained in full.
 	*  ``--reduction-factor`` : At each stage the best 1/reduction-factor of the configurations continue, for reduction-factor times as many epochs (default 3; at least 2).
+
+The optional training controls are shared with ``parrot-train``:
+``--gradient-clip-norm``, ``--check-finite-gradients``,
+``--equal-protein-weighting`` (residue and matrix tasks), ``--lr-schedule``
+and its tuning flags, ``--lr-warmup-epochs``, ``--recover-nonfinite``,
+``--recovery-lr-factor``, ``--regression-loss``/``--huber-delta``,
+``--optimizer``/``--weight-decay`` and opt-in CUDA ``--amp``. Defaults preserve fixed-rate training with summed
+labelled losses and no clipping or recovery. The :doc:`parrot-train` reference
+lists all flags and defaults; :doc:`training_controls` explains their behavior.
+
+Controls are fixed throughout the search, while the initial learning rate is
+searched. Schedules use the full ``--epochs`` horizon and retain their state
+across promotions. Recovery budgets also persist across stages, separately
+for each fold; final cross-validated retraining has a fresh budget. Trials
+that fail the numerical checks and cannot recover are recorded as failed,
+and the search continues. Equal-protein weighting applies to validation
+scores as well as training and test loss.
+
+``--checkpoint [file]``, ``--checkpoint-every`` and ``--resume file`` also cover
+the entire search, including TPE state, partial folds, promotions and final
+cross-validated retraining. ``parrot-optimize --resume file`` restores the
+original command and actual data partitions. ``--training-log`` continuously
+records every successful trial/fold epoch in
+``<network>_search_training_history.tsv``; final CV retraining has its own
+``_training_history.tsv``. Both features are off by default. See
+:ref:`parrot-training-resume` and :ref:`parrot-training-diagnostics`.
 
 **Regression values with uncertainties (every architecture except knn and unet2d):**
 
@@ -91,7 +117,19 @@ Unlike ``parrot-train``, ``parrot-optimize`` has no ``--learning-rate`` (it is s
 
 ``parrot-optimize`` produces the same output as ``parrot-train`` (the network, its "_info.txt" description, which here also describes the search, test-set predictions, performance statistics and, with ``--include-figs``, figures) for the best configuration, plus:
 
-* ``<output>_optimal_hyperparams.txt``: the architecture and the hyperparameters of the final network, one "name: value" pair per line (including the learning rate).
+* ``<output>_optimal_hyperparams.txt``: the architecture and the hyperparameters of the final network, one "name: value" pair per line (including the initial learning rate).
 * ``<output>_hyperparameter_trials.tsv``: one row per configuration tried, written as the search goes: the trial number, how it was chosen (``default``, ``initial``, ``model`` or ``random``), whether it was ``completed`` (trained for the full number of epochs), ``stopped`` early or ``failed`` (e.g. a configuration that does not suit the data, or whose validation loss was never finite; the reason follows), the epochs it was trained for (0 for the simple models), its validation loss at the end of each stage (a single validation loss for the simple models), and its hyperparameters.
+
+When schedules, warmup or recovery are enabled, the successful-epoch
+``_training_history.tsv`` and, if needed, ``_recovery_events.json`` are also
+written for the winning network, or its final retraining after cross-validation.
+They are written on successful completion, rather than for every discarded
+trial. Active settings and a rate summary appear in ``_info.txt``; see
+:ref:`parrot-training-diagnostics` for file contents.
+
+The best network's test statistics include the same absolute-error and
+per-protein summaries as ``parrot-train``. ``_per_protein_metrics.tsv`` and
+``_length_metrics.tsv`` describe the held-out test set, rather than the search
+folds; ``--no-stats`` suppresses these tables and ``_performance_stats.txt``.
 
 Earlier versions of PARROT used Gaussian-process Bayesian optimization (GPyOpt) with 5-fold cross-validation for every configuration. That cost more than 300 full training runs with the default settings; the current search needs no extra packages and costs about 15-20.

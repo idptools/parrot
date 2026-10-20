@@ -10,10 +10,11 @@ available is an error rather than a silent fallback, because training on the
 CPU instead of a GPU can be an order of magnitude slower. On a machine with
 several NVIDIA GPUs, --gpu-id (Predictor's gpu_id) chooses the one to run on.
 
-PARROT always computes in full float32 precision, so a network gives the same
-results on every device up to float32 rounding (differences of up to ~1e-4
-between CUDA and the CPU, in the units of the predicted values); see
-full_float32_precision().
+PARROT defaults to full float32 precision, so a network gives the same results
+on every device up to float32 rounding (differences of up to ~1e-4 between CUDA
+and the CPU, in the units of the predicted values). Opt-in CUDA AMP changes the
+training forward pass only; evaluation and prediction stay FP32. See
+full_float32_precision() and training_precision.py.
 
 .............................................................................
 idptools-parrot was developed by the Holehouse lab
@@ -129,7 +130,9 @@ def full_float32_precision() -> Iterator[None]:
     train up to ~1.5x slower (measured on an RTX A4000).
 
     PARROT runs every training, evaluation, prediction and embedding step inside
-    this context. The previous settings are restored afterwards, so other code
+    this context. Opt-in AMP can nest autocast inside it for the training
+    forward pass; this context controls FP32 operations, not autocast dtypes.
+    The previous settings are restored afterwards, so other code
     running in the same process is unaffected. Has no effect on other devices.
 
     PyTorch 2.9 replaced the allow_tf32 flags with fp32_precision settings, and

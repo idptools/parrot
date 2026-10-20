@@ -388,14 +388,15 @@ def test_trials_are_written_as_a_table(tmp_path):
 # ..........................................................................................
 # Training configurations for real
 
-def test_training_resumes_exactly_where_it_stopped():
+@pytest.mark.parametrize('gradient_options', [{}, {'gradient_clip_norm': 0.1, 'check_finite_gradients': True}])
+def test_training_resumes_exactly_where_it_stopped(gradient_options):
     """Training to 2 epochs and then on to 4 gives exactly the same result as training to 4 in one go"""
     space = hs.SearchSpace('brnn')
     values = space.default_values()
     results = []
     for stops in ([2, 4], [4]):
         torch.manual_seed(0)
-        trainer = hs.TrialTrainer(space, make_loaders(), 20, TASK, 'cpu')
+        trainer = hs.TrialTrainer(space, make_loaders(), 20, TASK, 'cpu', **gradient_options)
         trial = hs.Trial(1, values, 'default')
         for epochs in stops:
             loss = trainer.train_to(trial, epochs)

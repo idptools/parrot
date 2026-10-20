@@ -74,11 +74,39 @@ Each architecture's hyperparameters, and advice on choosing one, are on the "Arc
 
 **Training flags, for networks trained epoch by epoch (every architecture except the simple models):**
 
-	*  ``--learning-rate`` / ``-lr`` : Learning rate of the network (default is 0.001). Must be a float between 0 and 1.
+	*  ``--learning-rate`` / ``-lr`` : Initial learning rate of Adam (default is 0.001); fixed unless a schedule, warmup or recovery is enabled (see :doc:`training_controls`). Must be a float between 0 and 1.
 	*  ``--batch`` / ``-b`` : Training minibatch size (default is 32). Must be a positive integer, and for most datasets should be in the range of 8-256. Powers of 2 (64, 128, 256, etc.) are optimized for slightly faster performance, but are not explicitly required. PARROT warns if the batch size is above 512, or leaves fewer than 10 batches per epoch. The test set is also predicted in batches of this size.
 	*  ``--batching`` : How training sequences are grouped into batches: ``length`` (default) or ``random``. ``length`` puts sequences of similar length in the same batch (still re-randomised every epoch), so far less time is spent on padding; for datasets whose lengths vary widely this makes training several-fold faster. ``random`` shuffles freely, as earlier versions of PARROT did. Padding is masked, so it affects a network's output only through float32 rounding, and this changes which sequences share a batch during training but nothing else.
 	*  ``--epochs`` / ``-e`` : Number of training epochs (default is 100). Has different behavior depending on what is specified by the ``--stop`` flag.
-	*  ``--stop`` : Stop condition to terminate training. Must be either 'auto' or 'iter' (default is 'iter'). If 'iter', then train for exactly ``-e`` epochs and stop. If 'auto', then train until ``-e`` epochs in a row have not lowered the validation loss by at least 0.5% (relative to the last epoch that did; with ``--uncertainties``, by about 0.005 per labelled value, the same improvement measured in likelihood), so training lasts at least ``-e`` + 1 epochs. If using 'auto', be careful not to indicate a large number of epochs, as this can take much longer than is necessary (PARROT warns if ``-e`` is above 10).
+	*  ``--stop`` : Stop condition to terminate training. Must be either 'auto' or 'iter' (default is 'iter'). If 'iter', then train for exactly ``-e`` epochs and stop. If 'auto', then train until ``-e`` epochs in a row have not lowered the validation loss by at least 0.5% (relative to the last epoch that did; with ``--uncertainties``, by about 0.005 per labelled value, or in the mean per-protein NLL with ``--equal-protein-weighting``; see :doc:`uncertainties`), so training lasts at least ``-e`` + 1 epochs. If using 'auto', be careful not to indicate a large number of epochs, as this can take much longer than is necessary (PARROT warns if ``-e`` is above 10).
+
+The following controls are off by default, except for the fixed learning-rate
+schedule. See :doc:`training_controls` for choosing settings, loss units and
+how the options interact.
+
+	*  ``--gradient-clip-norm`` : Positive, finite global L2 clipping threshold; also enables finite checks.
+	*  ``--check-finite-gradients`` : Check for nonfinite losses and gradient norms before an update, without clipping.
+	*  ``--equal-protein-weighting`` : Average labelled losses within each protein, then across proteins (residue and matrix tasks only). The default sums labelled losses.
+	*  ``--lr-schedule`` : ``fixed`` (default), ``cosine``, ``exponential`` or validation-driven ``plateau``.
+	*  ``--lr-anneal-epochs`` : Cosine decay duration after warmup (default: full run minus warmup, at least 1); required for cosine with ``--stop auto``.
+	*  ``--lr-min`` : Lower bound for schedules, warmup and recovery (default 0); must not exceed the initial rate.
+	*  ``--lr-gamma`` : Exponential decay factor per completed decay epoch (default 0.95).
+	*  ``--lr-factor`` : Plateau reduction factor (default 0.5).
+	*  ``--lr-patience`` : Tolerated epochs without sufficient improvement before plateau reduces the rate (default 5; reduction after the sixth).
+	*  ``--lr-threshold`` : Minimum absolute validation-loss improvement for plateau (default 0.0001).
+	*  ``--lr-cooldown`` : Cooldown epochs after a plateau reduction (default 0).
+	*  ``--lr-warmup-epochs`` : Linear warmup epochs before the chosen schedule (default 0).
+	*  ``--recover-nonfinite`` : Restore a clean epoch boundary, reduce the rate and replay the epoch on numerical failure. Off by default; the flag alone allows two recoveries, or give an integer budget.
+	*  ``--recovery-lr-factor`` : Rate multiplier for each recovery (default 0.5); requires recovery enabled.
+	*  ``--regression-loss`` : ``mae``, ``mse`` or ``huber`` for neural regression; defaults remain MAE for sequence and MSE for residue/matrix tasks. Incompatible with ``--uncertainties``.
+	*  ``--huber-delta`` : Positive finite Huber transition in target units (default 1); requires ``--regression-loss huber``.
+	*  ``--optimizer`` : ``adam`` (default) or ``adamw``.
+	*  ``--weight-decay`` : Finite nonnegative regularization coefficient (default 0 for both optimizers).
+	*  ``--amp`` : Opt-in CUDA mixed precision; ``auto`` (also the flag's value when given alone), ``float16`` or ``bfloat16``. Default ``off``. See :ref:`parrot-amp` for hardware checks and scaling behavior.
+	*  ``--checkpoint [file]`` : Opt in to resumable atomic disk checkpoints (default filename when enabled: ``<network>_training_checkpoint.pt``).
+	*  ``--checkpoint-every`` : Successful epochs between checkpoints (default 1); requires checkpointing or resume.
+	*  ``--resume file`` : Restore the saved arguments, split and training state. ``parrot-train --resume file`` is sufficient; see :ref:`parrot-training-resume` for allowed changes.
+	*  ``--training-log`` : Flush successful-epoch records to ``<network>_training_history.tsv`` during training, including fixed-rate runs. Off by default.
 
 Whichever stop condition is used, the validation loss is measured after every epoch, and the network from the epoch with the lowest validation loss is the one kept. The network file is rewritten every time the validation loss reaches a new low, so if training is interrupted, the best network so far has already been saved.
 
@@ -118,9 +146,31 @@ The network file records the base encoding and the exact mean and standard devia
 
 **Output:**
 
-After running ``parrot-train``, at least four files will be saved (three with ``--no-stats``), named after ``--output-network`` (e.g. ``network.pt``). The network itself can be used with ``parrot-predict``: as well as the network weights, this file records the architecture, its hyperparameters, the datatype, the number of classes and the encoding, so none of these need to be given again when making predictions. "_predictions.tsv" contains the true values and predicted values for all of the sequences in the test set, two lines per sequence: ``<ID>_TRUE <sequence> <true value(s)>`` and then ``<ID>_PRED <sequence> <predicted value(s)>`` (missing residue labels are written as ``nan``). "_performance_stats.txt" quantifies a variety of performance metrics on the test set, pooling every labelled residue for residue data: Pearson's and Spearman's correlation coefficients for regression; the Matthews correlation coefficient, the weighted F1 score and the accuracy for classification; and, with ``--probabilistic-classification``, also the areas under the ROC and precision-recall curves. With ``--uncertainties``, "_performance_stats.txt" also gives the reduced chi-squared, the fraction of test values within 1 and 2 total SDs of their prediction, the noise ceiling and the model error *s* (see the "Values with uncertainties" page). With ``--save-splits``, the split is also saved as "_split_file.txt".
+After running ``parrot-train``, the network, info file, test predictions, performance statistics and two evaluation tables will be saved (only the first three with ``--no-stats``), named after ``--output-network`` (e.g. ``network.pt``). The network itself can be used with ``parrot-predict``: as well as the network weights, this file records the architecture, its hyperparameters, the datatype, the number of classes and the encoding, so none of these need to be given again when making predictions. "_predictions.tsv" contains the true values and predicted values for all of the sequences in the test set, two lines per sequence: ``<ID>_TRUE <sequence> <true value(s)>`` and then ``<ID>_PRED <sequence> <predicted value(s)>`` (missing residue labels are written as ``nan``). "_performance_stats.txt" quantifies a variety of performance metrics on the test set, pooling every labelled residue for residue data: Pearson's and Spearman's correlation coefficients for regression; the Matthews correlation coefficient, the weighted F1 score and the accuracy for classification; and, with ``--probabilistic-classification``, also the areas under the ROC and precision-recall curves. With ``--uncertainties``, "_performance_stats.txt" also gives the reduced chi-squared, the fraction of test values within 1 and 2 total SDs of their prediction, the noise ceiling and the model error *s* (see the "Values with uncertainties" page). With ``--save-splits``, the split is also saved as "_split_file.txt".
 
 "_info.txt" describes how the network was trained, in enough detail to reproduce it or to describe it in the methods section of a paper: the exact command, the date and the versions of PARROT, Python and the main libraries, the device and the random seed; the datafile (with its SHA-256 checksum, so the exact data can be identified), the task, the number of sequences in each set and how they were split, the sequence lengths and the values or class balance; the encoding and its settings; the architecture, every hyperparameter, the number of parameters and the network's layers; the loss function, the optimizer and its settings, the batch size, the number of epochs and which epoch's network was kept; for ``parrot-optimize``, the hyperparameter search; the validation and test results; and how long training took (in total and per epoch), how many sequences per second the network trained on, and how many it predicts per second (measured on the test set, on the device used).
+
+Regression statistics also include MAE, RMSE, signed mean error (prediction minus
+measurement) and R2. Residue and matrix tasks additionally report mean protein
+MAE, RMSE and signed error, giving each protein's metric equal weight.
+``_per_protein_metrics.tsv`` records each test protein's metrics and labelled
+count; ``_length_metrics.tsv`` groups them by sequence length (0-49, 50-99,
+100-199, 200-399, 400-799 and 800+, omitting empty bins). Missing labels and
+symmetric matrix cells use the same masks as pooled metrics. Undefined metrics
+are NaN, including R2 for constant targets. ``--no-stats`` suppresses both
+tables as well as ``_performance_stats.txt``.
+
+With a learning-rate schedule, warmup or numerical recovery enabled,
+``<network>_training_history.tsv`` records each successful epoch's losses,
+learning rate and cumulative recovery count. If recoveries occurred,
+``<network>_recovery_events.json`` records their reasons and rate reductions.
+These files are written on successful completion, and active settings are
+recorded in ``_info.txt``. Clipping, finite checks or equal-protein weighting
+alone do not create a history file. ``--training-log`` instead writes a richer
+epoch history continuously and preserves it on failure. ``--checkpoint`` writes
+separate resumable state, including optimizer and random generators, and
+``--resume`` continues from it. See :ref:`parrot-training-diagnostics` and
+:ref:`parrot-training-resume`.
 
 Unless ``--silent`` is given, ``parrot-train`` also prints how the data were split, the validation loss as training goes (for the first epoch, every fifth and the last; every epoch with ``--verbose``), which epoch had the lowest validation loss (the network from that epoch is the one saved), the test-set loss and performance metrics, and every file it wrote.
 

@@ -8,6 +8,12 @@ This page walks-through a full example of using 10-fold cross-validation to vali
 
     mkdir cv_test
 
+Console excerpts below are abbreviated. Current runs additionally report
+absolute regression errors and R2 and write per-protein and length-binned
+evaluation tables (see :doc:`parrot-train`). The plots on this page use squared
+Pearson correlation; the reported ``R2`` metric is the coefficient of
+determination, which also penalizes biased or incorrectly scaled predictions.
+
 **parrot-cvsplit**
 
 First, let's generate the 10 different split-files using ``parrot-cvsplit``. Each of these split-files will specify a different 1/10th of the dataset to be the held-out test set. The remaining 9/10ths will be partitioned randomly into training and validation sets, 80:20.
@@ -19,6 +25,13 @@ First, let's generate the 10 different split-files using ``parrot-cvsplit``. Eac
 This should generate 10 files in the cv_test directory, named cv_example_splits_cv[0-9].txt (add ``--seed`` to make the same files every time).
 
 ``parrot-cvsplit`` keeps identical sequences in the same set, but, like ``--split random``, it can put similar sequences in different sets. The sequences of this example dataset were generated at random, so that does not matter here; for real proteins, where relatives are common, a network can score well on a test set by recognising relatives of its training sequences (see "parrot-cvsplit" and "parrot-preprocess").
+
+If using optional :doc:`training_controls`, keep the policy and loss weighting
+consistent across folds. Each separate ``parrot-train`` run has its own recovery
+budget. For ``parrot-optimize --cv-folds``, each fold has a separate budget that
+persists across search stages, and final retraining starts with a fresh budget.
+Choose schedules and thresholds using validation data, rather than the held-out
+test folds.
 
 **10-fold CV training**
 

@@ -64,7 +64,7 @@ The pros and cons of using a larger hidden vector size are similar to the number
 Dropout sets a random fraction of the values passing through the network to zero at each training step, so that the network cannot come to rely on any one of them, which makes over-fitting less likely. In the BRNN it is applied to the LSTM output (or its final hidden states) and between stacked LSTM layers. The default is 0 (no dropout), and it must be at least 0 and below 1. Dropout is only applied while training, never when predicting. ``parrot-optimize`` does not search the BRNN's dropout, so give it on the command line to use it.
 
 **Learning rate ('--learning-rate' / '-lr'):**
-In machine learning, learning rate is a proportionality constant between 0 and 1 that affects the extent to which the weights in the network are updated after every round of training. A learning rate of 1 would cause very large updates of the weights, and a learning rate of 0 would cause the weights to remain constant throughout training. Large learning rates also tend to cause the network to train more quickly. A typical learning rate for machine learning is either 0.001 or 0.0001 as these tend to produce steady and gradual learning, though the optimal learning rate for a task is dataset-dependent. If the learning rate is too large, the network weights will experience large fluctuations and may not find the optimal values. In contrast, if the learning rate is too low, the network weights can get stuck in local minima and fail to find the optimal values. In practice, many machine learning applications rely upon algorithms called optimizers (PARROT uses the Adam optimizer) that adapt the size of the update to each weight over the course of training in order to achieve optimal network performance. So for PARROT, the user-specified '--learning-rate' hyperparameter sets the overall scale of these updates (PARROT keeps it the same throughout training), and it can also be automatically selected by running parrot-optimize.
+In machine learning, learning rate is a positive proportionality constant that affects the extent to which the weights in the network are updated after every round of training. A learning rate of 1 would cause very large updates of the weights, and a learning rate of 0 would cause the weights to remain constant throughout training. Large learning rates also tend to cause the network to train more quickly. A typical learning rate for machine learning is either 0.001 or 0.0001 as these tend to produce steady and gradual learning, though the optimal learning rate for a task is dataset-dependent. If the learning rate is too large, the network weights will experience large fluctuations and may not find the optimal values. In contrast, if the learning rate is too low, the network weights can get stuck in local minima and fail to find the optimal values. In practice, many machine learning applications rely upon algorithms called optimizers (PARROT uses Adam by default, with optional AdamW) that adapt the size of the update to each weight over the course of training in order to achieve optimal network performance. So for PARROT, the user-specified ``--learning-rate`` sets the overall scale of these updates. It stays fixed by default. Optional cosine or exponential annealing changes that scale over epochs, and ``--lr-schedule plateau`` reduces it when validation loss stops improving. Linear warmup is also available. These schedules supplement Adam's adaptation of individual parameter updates. ``parrot-optimize`` searches the initial learning rate while keeping the chosen policy fixed; see :ref:`parrot-lr-schedules`.
 
 **Batch size ('--batch' / '-b'):**
 Although most depictions of machine learning show a network processing one piece of data at a time, this is not very computationally efficient nor is it the most effective way of training a network. Rather, data is often grouped together into "batches" that are run through the network simulataneously. It is faster for computers to process data in these larger groups, especially when the computer has GPUs available for training. Running data together in batches also leads to more "averaging out" of errors during training, which can make training occur more smoothly.
@@ -80,6 +80,44 @@ In machine learning, an epoch is a round of training. Each epoch the network wil
 - `Adam optimizer <https://machinelearningmastery.com/adam-optimization-algorithm-for-deep-learning/>`_
 - `Batch size <https://machinelearningmastery.com/how-to-control-the-speed-and-stability-of-training-neural-networks-with-gradient-descent-batch-size/>`_
 - `Using learning curves to determine number of epochs <https://machinelearningmastery.com/learning-curves-for-diagnosing-machine-learning-model-performance/>`_
+
+
+Should proteins of different lengths have equal weight?
+-------------------------------------------------------
+
+For residue prediction, a longer protein usually has more labelled residues.
+PARROT's default summed loss lets every labelled residue contribute a loss term,
+so a protein with twice as many labels contributes twice as many terms. That
+fits an objective of predicting individual residues well. Padding and missing
+labels do not contribute.
+
+If the intended objective is the average protein's mean error, use
+``--equal-protein-weighting``. It averages labelled losses within each protein,
+then across proteins, and also applies to labelled cells in matrix tasks. Equal
+objective weight does not mean equal gradients: proteins can still differ in
+error and in how they affect the network. Validation and test losses use the
+chosen weighting, while standard metrics still pool labelled values. See
+:ref:`parrot-loss-weighting` for the loss units and uncertainty behavior.
+
+What can I do if training produces NaN or infinite values?
+----------------------------------------------------------
+
+A learning rate that is too large can make updates unstable. Check the values
+and encoding scales, and try a lower rate. To locate numerical failure before
+an update, opt in to ``--check-finite-gradients --verbose``; this also reports
+the gradient-norm distribution, which helps choose a clipping threshold.
+``--gradient-clip-norm`` limits unusually large finite gradients, but cannot
+repair gradients that are already NaN or infinite. Its threshold depends on
+the model, loss, batch size and sequence lengths; see
+:ref:`parrot-gradient-safeguards`.
+
+For unattended training, ``--recover-nonfinite`` can restore a clean epoch
+boundary and replay the epoch at a lower learning rate, with a finite retry
+budget (two by default when enabled). Invalid inputs are not retried, and the
+run stops if the budget is exhausted. This recovery works within the running process; see
+:ref:`parrot-numerical-recovery`. To resume after a machine or process crash,
+opt in to ``--checkpoint`` and continue with ``--resume file``; see
+:ref:`parrot-training-resume`.
 
 
 What is 'encoding'?
@@ -139,7 +177,7 @@ Although larger datasets tend to yield more accurate ML networks, it also makes 
 
 1. **Train on a GPU**. PARROT trains on NVIDIA GPUs (CUDA) and on Apple-silicon Macs (MPS), and uses one automatically if available (see ``--device``). On an Apple-silicon Mac this makes the convolutional networks over 10-fold faster per batch than on the CPU, and the BRNN several-fold faster. On a GPU, small networks spend most of their time launching many small computations, so larger batches (``--batch``) can speed up training several-fold, although they also change how the network trains.
 
-   PARROT computes in full float32 precision on every device: on NVIDIA GPUs it turns off TF32, which PyTorch otherwise uses for convolutions and LSTMs on recent GPUs, while it trains and predicts. The same network therefore gives the same predictions on the CPU, an NVIDIA GPU and an Apple-silicon GPU, to about 1e-4 or better.
+   Opt-in ``--amp`` can reduce memory use and improve speed on supported CUDA GPUs; see :ref:`parrot-amp` for hardware requirements and numerical checks. Evaluation and prediction remain FP32. By default, PARROT computes in full float32 precision on every device: on NVIDIA GPUs it turns off TF32, which PyTorch otherwise uses for convolutions and LSTMs on recent GPUs, while it trains and predicts. The same network therefore gives the same predictions on the CPU, an NVIDIA GPU and an Apple-silicon GPU, to about 1e-4 or better.
 
 2. **Optimize hyperparameters on smaller, representative subset of the data**. Although ideally you would optimize hyperparameters on the entirety of the data, this is not feasible on sufficiently large dataset. Instead, you extract a subset of the data (still considering the points about dataset structure from the preceding section) on which you can tune the hyperparameters. Once the best hyperparameters are determined, you can train on the entire dataset.
 

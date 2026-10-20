@@ -92,6 +92,47 @@ values count for more than noisy ones:
 
     parrot-train brnn --input-file data.tsv --output-network network.pt --split kmer -d sequence --regression --uncertainties
 
+Inspect gradient norms at a stable learning rate before choosing an optional
+--gradient-clip-norm threshold (there is no universal threshold):
+
+    parrot-train brnn --input-file data.tsv --output-network gradient_pilot.pt --split kmer -d residues --regression -lr 0.001 -e 5 --check-finite-gradients --verbose
+
+Anneal the initial rate with cosine decay after five warmup epochs. The decay
+duration defaults to the full run minus warmup; --lr-anneal-epochs sets it
+explicitly and is required with --stop auto:
+
+    parrot-train brnn --input-file data.tsv --output-network cosine_network.pt --split kmer -d residues --regression -lr 0.001 -e 50 --lr-schedule cosine --lr-warmup-epochs 5 --lr-min 0.00001
+
+Reduce the rate when validation loss stalls, and allow at most two numerical
+recoveries over the whole run. Recovery restores a clean epoch boundary and
+replays the epoch at a lower rate; it cannot resume a crashed process:
+
+    parrot-train brnn --input-file data.tsv --output-network plateau_network.pt --split kmer -d residues --regression -lr 0.001 --lr-schedule plateau --lr-patience 3 --lr-min 0.000001 --stop auto -e 10 --recover-nonfinite 2
+
+Give each protein's mean labelled loss equal weight, instead of the default
+sum of residue losses (also supported for matrix tasks). Choose this for an
+average-protein objective; longer proteins otherwise contribute more labelled
+values. Equal objective weight does not force equal gradients. Retune the rate
+and any clipping threshold when the loss weighting changes:
+
+    parrot-train brnn --input-file data.tsv --output-network protein_weighted.pt --split kmer -d residues --regression --equal-protein-weighting
+
+Choose Huber loss, opt in to AdamW with weight decay, and retain a resumable
+checkpoint plus continuously flushed epoch records:
+
+    parrot-train brnn --input-file data.tsv --output-network resumable.pt --split kmer -d residues --regression --regression-loss huber --huber-delta 0.5 --optimizer adamw --weight-decay 0.01 --checkpoint --training-log
+
+Resume after an interruption (saved arguments and actual data partitions are
+restored; inputs and training policies must remain unchanged):
+
+    parrot-train --resume resumable_training_checkpoint.pt
+
+On a supported CUDA GPU, opt in to mixed precision. Auto prefers native BF16,
+else FP16; CPU/MPS are unsupported. Loss arithmetic and validation stay FP32,
+and FP16 gradient overflow has bounded same-batch retries without skipped batches:
+
+    parrot-train brnn --input-file data.tsv --output-network amp_network.pt --split kmer -d residues --regression --device cuda --amp --checkpoint --training-log
+
 How it works
 ------------
 1. The datafile (--input-file) has '<ID> <sequence> <value(s)>' on each line:
@@ -128,7 +169,14 @@ How it works
    the model error s, the error of the predictions beyond the values' own, is
    fitted on the validation set after every epoch (the simple models are
    refitted as it is re-estimated, and knn does not support --uncertainties),
-   and --stop auto counts the 0.5% as a gain in likelihood per labelled value.
+   and --stop auto counts the 0.5% as a gain in likelihood per labelled value
+   (about 0.005 in the mean per-protein NLL with --equal-protein-weighting).
+   The initial rate (-lr) stays fixed by default. --lr-schedule selects
+   fixed, cosine, exponential or validation-driven plateau decay; optional
+   --lr-warmup-epochs applies before any schedule. Early-stopping patience
+   does not reset on a rate change. Finite checks and clipping are opt in;
+   recovery also checks model and optimizer state. Invalid inputs are not
+   retried, and exhausted recovery budgets stop the run.
 5. The kept network is saved as --output-network (with '.pt' added if the
    name does not end with it); the file records its architecture,
    hyperparameters, task and encoding, so parrot-predict needs only the file.
@@ -140,6 +188,19 @@ How it works
    the exact command, software versions, the data (with a checksum of the
    datafile), the split, the encoding, the architecture and its number of
    parameters, the loss, optimizer, epochs and the epoch kept, and the results.
+   With schedules, warmup or recovery, <network>_training_history.tsv records
+   successful epochs, losses, rates used and cumulative recoveries. Any
+   recoveries also go to <network>_recovery_events.json. These files are
+   written on successful completion. Clipping, checks or protein weighting
+   alone do not create a history file. --training-log writes richer records
+   during training, including fixed-rate runs. --checkpoint separately saves
+   full resumable state (model, optimizer, best weights, LR/scaler, stopping,
+   recovery, randomness and actual split), every epoch by default; change the
+   interval with --checkpoint-every. .pt remains the best inference network.
+   Test metrics include MAE, RMSE, signed prediction error and R2, with mean
+   protein errors for residue/matrix tasks. _per_protein_metrics.tsv and
+   _length_metrics.tsv add counts and stratified results; --no-stats suppresses
+   these and _performance_stats.txt.
 
 See also
 --------
@@ -162,7 +223,7 @@ configuration it tried.
 
 Examples
 --------
-Search the BRNN's hidden size and number of layers, and the learning rate:
+Search the BRNN's hidden size and number of layers, and the initial learning rate:
 
     parrot-optimize brnn --input-file data.tsv --output-network network.pt --split kmer -d sequence --regression
 
@@ -175,6 +236,21 @@ For a small dataset, score each configuration by 5-fold cross-validation
 rather than on a single validation set (about 5 times slower):
 
     parrot-optimize composition --input-file data.tsv --output-network network.pt --split kmer -d sequence --regression --cv-folds 5
+
+Fix a cosine schedule and finite checks for all trials while searching the
+initial rate and architecture. Schedule state continues across stages, using
+the full --epochs horizon rather than restarting at each promotion:
+
+    parrot-optimize brnn --input-file data.tsv --output-network cosine_search.pt --split kmer -d residues --regression -e 30 --trials 20 --lr-schedule cosine --lr-warmup-epochs 3 --check-finite-gradients
+
+Keep full search checkpoints and continuously record every trial/fold epoch:
+
+    parrot-optimize brnn --input-file data.tsv --output-network resumable_search.pt --split kmer -d residues --regression --regression-loss huber --optimizer adamw --weight-decay 0.01 --checkpoint --training-log
+
+Resume an interrupted search, including a partial fold, promotion or final
+cross-validated retraining. Saved arguments and actual folds are restored:
+
+    parrot-optimize --resume resumable_search_training_checkpoint.pt
 
 See what an architecture searches, and over what values:
 
@@ -207,7 +283,18 @@ How it works
    configuration). <network>_optimal_hyperparams.txt gives its
    hyperparameters, <network>_hyperparameter_trials.tsv records every trial as
    it finishes, and <network>_info.txt describes how the network was trained,
-   including the search.
+   including the search. Schedules, warmup, gradient safeguards, residue or
+   matrix protein weighting and bounded recovery are shared with parrot-train.
+   These policies are fixed, not searched. Recovery budgets persist across
+   stages, separately for each fold and for final retraining. A trial that
+   cannot recover is marked failed and the search continues. Optional epoch
+   history and recovery files describe the winning or final retrained network,
+   rather than every trial, and are written on successful completion unless
+   --training-log enables continuous records. Then _search_training_history.tsv
+   records every successful trial/fold epoch, and final CV retraining has its
+   own _training_history.tsv. --checkpoint and --resume also preserve the TPE
+   random state, tried configurations, partial folds and promotion progress.
+   Loss, optimizer and AMP settings are fixed across all trials and retraining.
 
 The default 50 trials cost about as much as 15-20 parrot-train runs with the
 same --epochs, so a GPU helps.

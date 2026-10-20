@@ -30,6 +30,7 @@ from parrot.encode_sequence import encoder_from_config, get_encoder
 from parrot.sequence_encoder import SequenceEncoder
 from parrot.package_version import PARROT_VERSION
 from parrot.tasks import Task
+from parrot.training_persistence import atomic_save
 
 # Version of the saved-network format. Increase this if the format changes.
 CHECKPOINT_FORMAT_VERSION = 1
@@ -67,7 +68,7 @@ def save_network(path: str, network: ParrotArchitecture, encoder: SequenceEncode
         'encoding': encoder.to_config(),
         'state_dict': cpu_state_dict(network),
     }
-    torch.save(checkpoint, path)
+    atomic_save(checkpoint, path)
 
 
 def cpu_state_dict(network: torch.nn.Module) -> dict[str, Any]:

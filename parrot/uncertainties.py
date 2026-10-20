@@ -71,7 +71,7 @@ MODEL_ERROR_SIGNIFICANT_FIGURES = 4
 
 
 def gaussian_nll(predicted: torch.Tensor, values: torch.Tensor, sds: torch.Tensor,
-                 model_error: torch.Tensor) -> torch.Tensor:
+                 model_error: torch.Tensor, weights: torch.Tensor | None = None) -> torch.Tensor:
     """The negative log-likelihood of values given their predictions, summed (see the module docstring)
 
     Parameters
@@ -84,6 +84,8 @@ def gaussian_nll(predicted: torch.Tensor, values: torch.Tensor, sds: torch.Tenso
         The SD sigma_i of each value's measurement error (same shape)
     model_error : torch.Tensor
         The model error s (a scalar)
+    weights : torch.Tensor, optional
+        Positive per-value weights, used for equal-protein weighting.
 
     Returns
     -------
@@ -93,10 +95,11 @@ def gaussian_nll(predicted: torch.Tensor, values: torch.Tensor, sds: torch.Tenso
         with sigma^2 + s^2 taken to be at least MIN_VARIANCE
     """
     variance = torch.clamp(sds ** 2 + model_error ** 2, min=MIN_VARIANCE)
-    return 0.5 * torch.sum(LOG_2PI + torch.log(variance) + (values - predicted) ** 2 / variance)
+    terms = LOG_2PI + torch.log(variance) + (values - predicted) ** 2 / variance
+    return 0.5 * torch.sum(terms if weights is None else terms * weights)
 
 
-def fit_model_error(residuals: np.ndarray, sds: np.ndarray) -> float:
+def fit_model_error(residuals: np.ndarray, sds: np.ndarray, weights: np.ndarray | None = None) -> float:
     """The maximum-likelihood model error s, given residuals and the SDs of their values' measurement errors
 
     The log-likelihood of s (see the module docstring) is greatest where its
@@ -115,6 +118,9 @@ def fit_model_error(residuals: np.ndarray, sds: np.ndarray) -> float:
         Value minus prediction, for every labelled value (any shape)
     sds : numpy array
         The SD of each value's measurement error (same shape)
+    weights : numpy array, optional
+        Positive finite weights matching residuals. None gives every labelled
+        value equal weight; residue tasks can use 1 / labelled-protein-length.
 
     Returns
     -------
@@ -135,11 +141,16 @@ def fit_model_error(residuals: np.ndarray, sds: np.ndarray) -> float:
         raise ValueError('The model error needs at least one residual')
     if not (np.all(np.isfinite(squared_residuals)) and np.all(np.isfinite(variances)) and np.all(np.ravel(sds) >= 0)):
         raise ValueError('Residuals and SDs must be finite, and SDs not negative')
+    if weights is not None:
+        weights = np.ravel(np.asarray(weights, dtype=np.float64))
+        if weights.shape != squared_residuals.shape or not np.all(np.isfinite(weights)) or np.any(weights <= 0):
+            raise ValueError('Model-error weights must be positive, finite and match the residuals')
 
     def slope(model_variance: float) -> float:
         """The derivative of the log-likelihood with respect to s^2 (up to a factor of 1/2)."""
         total = variances + model_variance
-        return float(np.sum((squared_residuals - total) / total ** 2))
+        terms = (squared_residuals - total) / total ** 2
+        return float(np.sum(terms if weights is None else terms * weights))
 
     highest = float(squared_residuals.max())
     if highest == 0:

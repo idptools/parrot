@@ -15,6 +15,7 @@ Licensed under the MIT license.
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import torch
@@ -108,7 +109,7 @@ def unpad_outputs(outputs: torch.Tensor, lengths: torch.Tensor, task: Task) -> l
 
 @full_float32_precision()
 def predict_labeled(network: nn.Module, dataset: pid.SequenceDataset, task: Task, device: str | torch.device,
-                    batch_size: int = 32) -> LabeledPredictions:
+                    batch_size: int = 32, equal_protein_weighting: bool = False) -> LabeledPredictions:
     """Run a trained network over a labeled dataset (e.g. the test set)
 
     Parameters
@@ -124,6 +125,9 @@ def predict_labeled(network: nn.Module, dataset: pid.SequenceDataset, task: Task
     batch_size : int, optional
         Number of sequences evaluated at once (changes the results only by
         float32 rounding)
+    equal_protein_weighting : bool, optional
+        Average each protein's labelled losses before averaging proteins.
+        Prediction values and conventional performance metrics are unchanged.
 
     Returns
     -------
@@ -142,7 +146,8 @@ def predict_labeled(network: nn.Module, dataset: pid.SequenceDataset, task: Task
     network.eval()
     with torch.no_grad():
         for batch in loader:
-            loss, batch_outputs = compute_batch_loss(network, batch, task, criterion, device)
+            loss_options: dict[str, Any] = {'equal_protein_weighting': True} if equal_protein_weighting else {}
+            loss, batch_outputs = compute_batch_loss(network, batch, task, criterion, device, **loss_options)
             batch_losses.append(loss.detach())
             outputs_in_loader_order.extend(unpad_outputs(batch_outputs, batch.lengths, task))
 

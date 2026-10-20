@@ -38,7 +38,7 @@ Licensed under the MIT license.
 
 import argparse
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -93,6 +93,10 @@ class DataSplit:
     num_sequences: int = 0
     set_sizes: tuple[int, int, int] = (0, 0, 0)
     criterion: str = ''
+    saved_sets: list[list[int]] | None = None
+    saved_folds: list[list[list[int]]] | None = None
+    assigned_sets: list[list[int]] = field(default_factory=list)
+    assigned_folds: list[list[list[int]]] = field(default_factory=list)
 
     def __call__(self, data: list[pid.Sample]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Assign the parsed data to sets
@@ -115,7 +119,14 @@ class DataSplit:
             If MMseqs2 fails, or a similarity split cannot separate the sets (see split_by_method)
         """
         self.num_sequences = len(data)
-        if self.split_file is not None:
+        if self.saved_sets is not None:
+            sets = tuple(np.asarray(indices, dtype=int) for indices in self.saved_sets)
+            combined = np.concatenate(sets)
+            if len(sets) != 3 or len(set(combined)) != len(combined) \
+                    or np.any(combined < 0) or np.any(combined >= len(data)):
+                raise ValueError('Checkpoint contains an invalid data split')
+            context = 'in the resumed checkpoint'
+        elif self.split_file is not None:
             sets = pid.read_split_file(self.split_file, len(data))
             context = f'in the split-file {self.split_file}'
         else:
@@ -126,6 +137,7 @@ class DataSplit:
 
         training, validation, test = sets
         self.set_sizes = (len(training), len(validation), len(test))
+        self.assigned_sets = [indices.tolist() for indices in sets]
         if self.num_unassigned and not self.silent:
             print(f'Note: {self.num_unassigned:,} of {self.num_sequences:,} sequences are in no set '
                   f'({self.unassigned_reason}), so they are not used')
@@ -199,8 +211,14 @@ class DataSplit:
         RuntimeError
             If MMseqs2 fails
         """
+        if self.saved_folds is not None:
+            if len(self.saved_folds) != n_folds:
+                raise ValueError('Checkpoint cross-validation fold count changed')
+            return [(np.asarray(train, dtype=int), np.asarray(held, dtype=int)) for train, held in self.saved_folds]
         if self.method not in ('kmer', 'mmseqs'):
-            return pid.identical_sequence_folds(data, samples, n_folds)
+            folds = pid.identical_sequence_folds(data, samples, n_folds)
+            self.assigned_folds = [[train.tolist(), held.tolist()] for train, held in folds]
+            return folds
 
         def report(line: str) -> None:
             """Print one line of the fold assignment's report, indented (unless silent)."""
@@ -231,6 +249,7 @@ class DataSplit:
                                  '(leave out --cv-folds)')
             folds.append((np.array(sorted(item.index for item in training), dtype=int),
                           np.array(sorted(scored), dtype=int)))
+        self.assigned_folds = [[train.tolist(), held.tolist()] for train, held in folds]
         return folds
 
     def fold_description(self) -> str:
@@ -319,6 +338,12 @@ def data_split_from_args(args: argparse.Namespace) -> DataSplit:
     RuntimeError
         If --split mmseqs is asked for but MMseqs2 cannot be found
     """
+    resumed = getattr(args, '_resume_payload', None)
+    if resumed is not None:
+        state = resumed['metadata']['split_state']
+        return DataSplit(split_file=state['split_file'], method=state['method'], fractions=state['fractions'],
+                         silent=args.silent, criterion=state['criterion'], saved_sets=state['sets'],
+                         saved_folds=state['folds'] or None)
     value = args.split
     if os.path.isfile(value):
         if args.set_fractions is not None:

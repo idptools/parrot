@@ -50,6 +50,15 @@ and training minimises the negative log-likelihood of the values,
 
 in place of the usual loss (L1 for sequence regression, mean squared error for residue regression). In effect, each value is weighted by 1/(σ² + *s*\ ²): a miss of 2 on a value with SD 2 costs as much as a miss of 0.5 on a value with SD 0.5.
 
+For residue data, this is a sum over labelled residues by default. With
+``--equal-protein-weighting``, PARROT instead takes the mean NLL within each
+protein and then the mean across proteins. Model-error fitting uses the same
+weights: each labelled value has weight 1 divided by its protein's labelled
+residue count. This gives proteins equal objective weight while retaining the
+relative measurement-error weights within each protein. It changes the loss
+scale, so retune the learning rate and any clipping threshold. See
+:ref:`parrot-loss-weighting` for choosing the objective.
+
 The model error
 ---------------
 
@@ -79,15 +88,17 @@ The predictions themselves are single values, as without ``--uncertainties``; "_
 Training details
 ----------------
 
-* The validation loss is the same negative log-likelihood, so its values cannot be compared with those of a run without ``--uncertainties``, and it can be negative. ``--stop auto`` therefore asks for the validation loss to fall by about 0.005 per labelled value (rather than by 0.5%): the same 0.5% improvement, measured in likelihood.
+* The validation loss is the same negative log-likelihood, so its values cannot be compared with those of a run without ``--uncertainties``, and it can be negative. ``--stop auto`` therefore asks for the validation loss to fall by about 0.005 per labelled value (rather than by 0.5%): the same 0.5% improvement, measured in likelihood. With ``--equal-protein-weighting``, the threshold is instead about 0.005 in the reported mean per-protein NLL. Compare losses only between runs using the same weighting.
 * ``parrot-optimize`` scores configurations by the same validation loss, with *s* refitted for each configuration (and each cross-validation fold).
+* The optional learning-rate schedules, gradient safeguards and bounded recovery work with uncertainties too; see :doc:`training_controls`. Plateau scheduling uses an absolute validation-loss threshold (``--lr-threshold``), so a negative NLL is supported. Test-set correlations and uncertainty diagnostics still pool labelled values, including with equal-protein weighting.
+* ``--regression-loss`` cannot be combined with uncertainties: the training and selection objective remains Gaussian NLL. AdamW/weight decay, resumable disk checkpoints, continuous records and opt-in CUDA AMP are supported. AMP keeps NLL arithmetic and validation/model-error fitting in FP32. Absolute-error test metrics (MAE, RMSE, signed bias and R2), per-protein metrics and length bins describe predictions against the measured values in their original units.
 * ``parrot-preprocess --uncertainties --deduplicate merge`` combines the copies of a sequence (or of a residue) by their inverse-variance weighted mean, Σ(*y*/σ²)/Σ(1/σ²), with SD 1/√Σ(1/σ²): the standard way to combine independent estimates of one quantity. If a copy has an SD of 0, the merged value is the mean of the exact copies, with SD 0. Every labelled copy must have an SD that is a finite number of at least 0, or merging stops with a message naming the sequence.
 
 Limitations
 -----------
 
 * The SDs describe random error, which weighting can average away. A systematic error (a bias) that depends on the sequence is a different matter: a network flexible enough to learn the values can learn the bias too, as if it were real, with or without ``--uncertainties``. The checks of the error model cannot reveal it either, since the test values carry the same bias. (In a simulation where hydrophilic sequences read too high, a ``brnn`` trained with ``--uncertainties`` reproduced most of the bias in its predictions, while its reduced chi-squared was 0.94 and 68% and 97% of test values were within 1 and 2 SDs.)
-* The errors are taken to be Gaussian and independent. For residue data, if a whole sequence's values can be off together (e.g. one bad sample), its residues' errors are correlated, and the loss treats the sequence as more informative than it is. The weighting still helps, but is not exact.
+* The errors are taken to be Gaussian and independent. For residue data, if a whole sequence's values can be off together (e.g. one bad sample), its residues' errors are correlated, and the loss treats the sequence as more informative than it is. Equal-protein weighting changes each sequence's influence but does not model these correlations. The weighting still helps, but is not exact.
 * *s* is one number for every value. If the network is much better for some kinds of sequence than others, *s* averages over them.
 * *s* is estimated from the validation set, so when it is much smaller than most of the SDs, a few hundred validation values pin it down only roughly. (In a simulation where most SDs were above 0.1, a ``linear`` model whose predictions were within 0.013 of the true values got *s* = 0.037 from 300 validation values; fitted to all 2,000 values, *s* was 0.010.)
 * If how precisely a value is measured depends on the kind of sequence, the badly measured kinds count for little, so the network learns about them mostly from the others, and may need more epochs. (In a simulation where the SD doubled for every 0.4 that the mean hydropathy fell, a ``brnn`` trained with ``--uncertainties`` was no better than one trained without after 30 epochs, but had 13-36% lower error after 100, on hydrophilic and hydrophobic sequences alike.)

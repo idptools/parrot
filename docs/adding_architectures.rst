@@ -110,6 +110,14 @@ and from Python with ``parrot.build_network('my_architecture', input_size, task,
 
 (An architecture in a module of your own, outside PARROT, is registered when that module is imported, so it can be used from Python once you have imported it, including to load networks saved with it. The command-line tools only know the architectures PARROT itself imports.)
 
+Neural architectures also receive the shared :doc:`usage/training_controls`
+without implementing their own training loop: loss weighting, schedules,
+gradient safeguards and bounded recovery are handled outside ``forward``.
+Keep persistent tensor state in parameters or registered buffers so snapshots
+and saved networks can capture it. Recovery restores the standard Python,
+NumPy and PyTorch generators; custom random generators or state outside the
+model and optimizer need their own handling to reproduce a failed epoch.
+
 Testing a new architecture
 --------------------------
 

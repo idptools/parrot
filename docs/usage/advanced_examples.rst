@@ -91,6 +91,112 @@ Worth mentioning: 'auto' can stop in a local minimum well before the network is 
 
 You might also notice that in this example, the validation loss is listed for every single epoch instead of every 5, and every setting is listed before training starts. This is simply because the verbose ``-v`` flag was provided.
 
+**Learning-rate schedules and numerical safeguards:**
+
+The default learning rate stays fixed. To anneal it over a known number of
+epochs, choose cosine decay, optionally with a few warmup epochs:
+
+.. code-block:: bash
+
+    parrot-train brnn --input-file data/res_regress_dataset.tsv --output-network cosine_example.pt --split data/splitfile.txt -d residues --regression -lr 0.001 -e 50 --lr-schedule cosine --lr-warmup-epochs 5 --lr-min 0.00001 --seed 1
+
+Here warmup uses five epochs, then cosine decay has a 45-epoch duration. Rates
+are set at the start of each epoch: the first decay epoch uses 0.001, and the
+floor is reached after 45 completed decay epochs. With a longer run, the floor
+is held rather than starting another cycle. To choose the duration explicitly,
+give ``--lr-anneal-epochs``; this is required with ``--stop auto``.
+
+To adapt the rate when validation improvement stalls, use ``plateau``. It can
+be combined with automatic stopping and a bounded recovery budget:
+
+.. code-block:: bash
+
+    parrot-train brnn --input-file data/res_regress_dataset.tsv --output-network plateau_example.pt --split data/splitfile.txt -d residues --regression -lr 0.001 --lr-schedule plateau --lr-patience 3 --lr-factor 0.5 --lr-min 0.000001 --stop auto -e 10 --recover-nonfinite 2 --check-finite-gradients --include-figs --seed 1
+
+After more than three epochs without sufficient validation improvement, the
+plateau schedule halves the rate. Its ``--lr-threshold`` is an absolute loss
+change (default 0.0001); tune it for the scale of the chosen loss. Automatic
+stopping has its own improvement criterion and patience, here ten epochs, which
+does not reset on a rate change. Recovery permits at most two rollbacks across
+the whole run. Each restores the start of the failed epoch and replays it at a
+lower rate; invalid inputs and exhausted budgets stop the run. Recovery does
+not resume a process that has crashed.
+
+To choose a clipping threshold, first inspect a short run at a stable rate:
+
+.. code-block:: bash
+
+    parrot-train brnn --input-file data/res_regress_dataset.tsv --output-network gradient_pilot.pt --split data/splitfile.txt -d residues --regression -lr 0.001 -e 5 --check-finite-gradients --verbose --seed 1
+
+This reports the median, 95th percentile and maximum gradient norm before any
+clipping. In subsequent pilots, set ``--gradient-clip-norm`` to a positive
+finite threshold chosen from those observations, then compare clipping frequency
+and validation performance. Recalibrate it if the model, targets, batch size or
+loss weighting changes. Clipping implies finite checks; it cannot repair
+gradients already containing NaN or infinity.
+
+Schedules, warmup and recovery produce ``<network>_training_history.tsv`` on
+successful completion, with losses, the rate used and the cumulative recovery
+count for each successful epoch. Any recoveries are also recorded in
+``<network>_recovery_events.json``. The saved network is still from the epoch
+with the best validation loss. See :doc:`training_controls` for all defaults,
+schedule details and recovery limits.
+
+**Choosing residue or protein weighting:**
+
+The default residue loss sums labelled residues, so a protein with more labels
+contributes more loss terms. This fits an objective of predicting individual
+residues well. To give each protein's mean labelled error equal weight instead:
+
+.. code-block:: bash
+
+    parrot-train brnn --input-file data/res_regress_dataset.tsv --output-network protein_weighted_example.pt --split data/splitfile.txt -d residues --regression --equal-protein-weighting -lr 0.001 -e 50 --seed 1
+
+This changes training, validation and test loss, including which epoch is kept.
+It averages labelled losses within each protein before averaging proteins;
+missing labels and padding do not count. Equal objective weight does not force
+equal gradients. Standard metrics still pool labelled residues. The option
+also supports matrix tasks, but not sequence tasks; see
+:ref:`parrot-loss-weighting`. Retune the rate and clipping threshold for the new
+loss scale before comparing runs.
+
+**Choosing a loss, regularization and resumable records:**
+
+For a robust regression objective, choose Huber loss and its transition in the
+units of the targets. AdamW and weight decay are separate opt-in choices:
+
+.. code-block:: bash
+
+    parrot-train brnn --input-file data/res_regress_dataset.tsv --output-network resumable_example.pt --split data/splitfile.txt -d residues --regression -lr 0.001 -e 50 --regression-loss huber --huber-delta 0.5 --optimizer adamw --weight-decay 0.01 --checkpoint --training-log --seed 1
+
+The default losses remain MAE for sequence data and MSE for residue/matrix data;
+weight decay defaults to 0 for both Adam and AdamW. Huber is unavailable with
+``--uncertainties``, which uses Gaussian NLL. All loss choices use the same
+missing-label masks and optional protein weighting during training and evaluation.
+
+The command writes ``resumable_example_training_checkpoint.pt`` at the initial
+boundary and after each successful epoch, and flushes epoch losses, rates and
+diagnostics to ``resumable_example_training_history.tsv`` as they become
+available. To continue after a job interruption:
+
+.. code-block:: bash
+
+    parrot-train --resume resumable_example_training_checkpoint.pt
+
+The saved arguments and actual data split are restored. Inputs must remain
+unchanged; loss, batch size, optimizer and schedule changes are rejected. Fixed
+iteration runs with a fixed, exponential or plateau schedule can extend the
+total duration, for example by appending ``--epochs 100``. Cosine, automatic
+stopping and search budgets retain their original planned epochs. See
+:ref:`parrot-training-resume` for state coverage and compatibility checks.
+
+On a supported CUDA GPU, append ``--device cuda --amp`` to opt in to mixed
+precision. Auto selects native BF16 when available, otherwise FP16; explicit
+``--amp float16`` and ``--amp bfloat16`` are supported. Loss arithmetic and
+validation remain FP32. Unsupported devices fail, and FP16 overflow uses bounded
+same-batch scaling retries without silently discarding batches. Compare a
+matched-seed FP32 pilot on the target hardware; see :ref:`parrot-amp`.
+
 **Splitting data into train/validation/test sets:**
 
 ``--split``:
@@ -211,7 +317,7 @@ For residue data, the ROC and precision-recall curves and their areas pool every
 Hyperparameter tuning with ``parrot-optimize``:
 -----------------------------------------------
 
-``parrot-optimize`` trains a network like ``parrot-train``, but chooses the hyperparameters for you: the learning rate and the architecture's main hyperparameters (for the BRNN, the number of layers and the hidden size). It tries many configurations, drops poor ones after a few epochs (successive halving) and suggests new ones where good results have clustered (TPE); see the ``parrot-optimize`` page for details. The default 50 trials cost about as much as 15-20 ``parrot-train`` runs, so a GPU helps.
+``parrot-optimize`` trains a network like ``parrot-train``, but chooses the hyperparameters for you: the initial learning rate and the architecture's main hyperparameters (for the BRNN, the number of layers and the hidden size). It tries many configurations, drops poor ones after a few epochs (successive halving) and suggests new ones where good results have clustered (TPE); see the ``parrot-optimize`` page for details. The default 50 trials cost about as much as 15-20 ``parrot-train`` runs, so a GPU helps.
 
 Usage is almost identical to ``parrot-train``. For example, on the residue classification example dataset:
 
@@ -221,7 +327,34 @@ Usage is almost identical to ``parrot-train``. For example, on the residue class
 
 We do not specify the number of layers, the hidden size or the learning rate: these are searched. The most important choice is ``--epochs``, the number of epochs a configuration is trained for if it survives to the end (and so the final network's training): choose it as you would for ``parrot-train``, e.g. by looking at a training and validation loss curve. Here we use 20 trials to keep the example short; the default is 50.
 
-The search first describes what it will try, then reports each configuration's validation loss at the end of each stage it reaches (this output is from an NVIDIA GPU; it took about 40 seconds):
+The same opt-in training controls apply to every configuration and fold.
+For example, fix a cosine schedule and finite checks while searching the
+initial learning rate and the BRNN's architecture:
+
+.. code-block:: bash
+
+    parrot-optimize brnn --input-file data/res_class_dataset.tsv --output-network optimize_cosine_example.pt --split random -d residues --classification --num-classes 3 -e 30 --trials 20 --lr-schedule cosine --lr-warmup-epochs 3 --check-finite-gradients --seed 1
+
+The cosine horizon is the full 30-epoch budget minus warmup, even for the
+short first stage. Schedule state continues across promotions. Recovery, if
+enabled, has a budget across all stages of each fold, with a fresh budget for
+final retraining after cross-validation. Policies themselves are fixed rather
+than searched; see :doc:`training_controls`.
+
+The same loss, regularization, checkpoint and log options work throughout a
+search. For example:
+
+.. code-block:: bash
+
+    parrot-optimize brnn --input-file data/res_regress_dataset.tsv --output-network resumable_search.pt --split data/splitfile.txt -d residues --regression -e 30 --trials 20 --regression-loss huber --optimizer adamw --weight-decay 0.01 --checkpoint --training-log --seed 1
+
+Continue an interrupted search, including a partial fold or final CV retraining,
+with ``parrot-optimize --resume resumable_search_training_checkpoint.pt``.
+``resumable_search_search_training_history.tsv`` records every successful
+trial/fold epoch; final CV retraining has its own epoch log. The held-out test
+reports include absolute errors, per-protein metrics and sequence-length bins.
+
+For the original command without a schedule, the search first describes what it will try, then reports each configuration's validation loss at the end of each stage it reaches (this output is from an NVIDIA GPU; it took about 40 seconds):
 
 .. code-block:: bash
 

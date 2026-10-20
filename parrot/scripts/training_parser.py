@@ -50,6 +50,7 @@ Licensed under the MIT license.
 """
 
 import argparse
+import math
 import os
 import sys
 from collections.abc import Sequence
@@ -65,6 +66,8 @@ from parrot.scripts.common import (DEFAULT_MAX_MATRIX_LENGTH, add_device_argumen
                                    add_nardini_scrambles_argument)
 from parrot.scripts.data_split import SPLIT_METHODS
 from parrot.scripts.examples import add_examples_argument
+from parrot.training_control import LR_SCHEDULES, TrainingOptions
+from parrot.training_precision import AMP_MODES
 
 # What each datatype means, for the help of -d
 DATATYPE_DESCRIPTIONS = {
@@ -353,7 +356,123 @@ def shared_training_loop_options() -> argparse.ArgumentParser:
                        help="how training sequences are grouped into batches: 'length' (default) batches sequences "
                             "of similar length together, so little time is spent on padding; 'random' shuffles "
                             "freely (PARROT's original behaviour)")
+    group.add_argument('--gradient-clip-norm', type=float, default=None, metavar='max_norm',
+                       help='opt in to global L2 gradient clipping at this positive, finite norm; also stop on '
+                            'nonfinite losses or gradients (default: off)')
+    group.add_argument('--check-finite-gradients', action='store_true',
+                       help='opt in to stopping on nonfinite losses or gradient norms before an update; '
+                            'does not clip gradients (default: off)')
+    group.add_argument('--equal-protein-weighting', action='store_true',
+                       help='opt in to averaging labelled losses within each protein, then across proteins '
+                            '(residue and matrix tasks only; default: sum over labelled values)')
+    group.add_argument('--recover-nonfinite', type=int, nargs='?', const=2, default=0, metavar='max_recoveries',
+                       help='opt in to bounded in-process rollback and epoch replay after numerical failure; '
+                            'optional run-wide retry budget (default when enabled: 2; otherwise off)')
+    group.add_argument('--recovery-lr-factor', type=float, default=None, metavar='factor',
+                       help='multiply LR by this factor after each rollback (default 0.5; needs --recover-nonfinite)')
+    group.add_argument('--lr-schedule', choices=LR_SCHEDULES, default='fixed',
+                       help='fixed LR (default), cosine or exponential annealing, or validation-driven plateau decay')
+    group.add_argument('--lr-anneal-epochs', type=int, default=None, metavar='epochs',
+                       help='cosine decay duration after warmup, then hold at --lr-min (default: full run minus '
+                            'warmup; required with --stop auto)')
+    group.add_argument('--lr-min', type=float, default=None, metavar='learning_rate',
+                       help='LR lower bound for scheduling or recovery (default 0)')
+    group.add_argument('--lr-gamma', type=float, default=None, metavar='factor',
+                       help='exponential schedule: multiply LR by this factor each epoch (default 0.95)')
+    group.add_argument('--lr-factor', type=float, default=None, metavar='factor',
+                       help='plateau schedule: LR reduction factor (default 0.5)')
+    group.add_argument('--lr-patience', type=int, default=None, metavar='epochs',
+                       help='plateau schedule: tolerated epochs without improvement before reducing LR (default 5)')
+    group.add_argument('--lr-threshold', type=float, default=None, metavar='loss_change',
+                       help='plateau schedule: minimum absolute validation-loss improvement (default 0.0001)')
+    group.add_argument('--lr-cooldown', type=int, default=None, metavar='epochs',
+                       help='plateau schedule: cooldown epochs after a reduction (default 0)')
+    group.add_argument('--lr-warmup-epochs', type=int, default=0, metavar='epochs',
+                       help='opt in to linear LR warmup to the initial LR before the chosen schedule (default off)')
+    group.add_argument('--regression-loss', choices=('mae', 'mse', 'huber'), default=None,
+                       help='regression objective (default: MAE for sequence, MSE for residue/matrix); '
+                            'not compatible with --uncertainties')
+    group.add_argument('--huber-delta', type=float, default=None,
+                       help='positive finite Huber transition in target units (default 1; needs --regression-loss huber)')
+    group.add_argument('--optimizer', choices=('adam', 'adamw'), default='adam',
+                       help='Adam (default) or AdamW; weight decay is configured separately')
+    group.add_argument('--weight-decay', type=float, default=0.0,
+                       help='nonnegative optimizer weight decay (default 0, including AdamW)')
+    group.add_argument('--amp', choices=AMP_MODES, nargs='?', const='auto', default='off',
+                       help='opt in to CUDA mixed precision: auto prefers native BF16, else FP16; '
+                            'float16 and bfloat16 select explicitly (default off; CUDA capability >= 7.0)')
+    group.add_argument('--checkpoint', nargs='?', const='auto', default=None, metavar='file',
+                       help='opt in to atomic resumable disk checkpoints (default file: <network>_training_checkpoint.pt)')
+    group.add_argument('--checkpoint-every', type=int, default=None, metavar='epochs',
+                       help='checkpoint interval in successful epochs (default 1; needs --checkpoint or --resume)')
+    group.add_argument('--resume', default=None, metavar='file',
+                       help='resume a training checkpoint, restoring saved arguments, data split and training state')
+    group.add_argument('--training-log', action='store_true',
+                       help='opt in to a flushed epoch-by-epoch <network>_training_history.tsv during training')
     return options
+
+
+def gradient_options_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    """Validated, active gradient options only, shared by training, search and its final retraining."""
+    train_network.validate_gradient_clip_norm(args.gradient_clip_norm)
+    options: dict[str, Any] = {}
+    if args.gradient_clip_norm is not None:
+        options['gradient_clip_norm'] = args.gradient_clip_norm
+    if args.check_finite_gradients:
+        options['check_finite_gradients'] = True
+    return options
+
+
+def training_options_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    """Active policies only; reject tuning flags that would have no effect."""
+    result = gradient_options_from_args(args)
+    if args.checkpoint_every is not None and (args.checkpoint_every < 1
+                                               or (args.checkpoint is None and args.resume is None)):
+        raise ValueError('--checkpoint-every needs --checkpoint or --resume and a positive integer')
+    if args.regression_loss is not None and (not args.regression or args.uncertainties):
+        raise ValueError('--regression-loss applies to regression without --uncertainties only')
+    if args.huber_delta is not None and args.regression_loss != 'huber':
+        raise ValueError('--huber-delta requires --regression-loss huber')
+    if args.huber_delta is not None and (not math.isfinite(args.huber_delta) or args.huber_delta <= 0):
+        raise ValueError('--huber-delta must be positive and finite')
+    requirements = {'lr_anneal_epochs': args.lr_schedule == 'cosine',
+                    'lr_gamma': args.lr_schedule == 'exponential',
+                    'lr_factor': args.lr_schedule == 'plateau', 'lr_patience': args.lr_schedule == 'plateau',
+                    'lr_threshold': args.lr_schedule == 'plateau', 'lr_cooldown': args.lr_schedule == 'plateau',
+                    'recovery_lr_factor': args.recover_nonfinite > 0,
+                    'lr_min': args.lr_schedule != 'fixed' or args.lr_warmup_epochs > 0 or args.recover_nonfinite > 0}
+    for name, applies in requirements.items():
+        if getattr(args, name) is not None and not applies:
+            raise ValueError(f"--{name.replace('_', '-')} does not apply to the chosen training controls")
+
+    def supplied(name: str, default: Any) -> Any:
+        value = getattr(args, name)
+        return default if value is None else value
+
+    options = TrainingOptions(
+        equal_protein_weighting=args.equal_protein_weighting, recover_nonfinite=args.recover_nonfinite,
+        recovery_lr_factor=supplied('recovery_lr_factor', 0.5), lr_schedule=args.lr_schedule,
+        lr_anneal_epochs=args.lr_anneal_epochs, lr_min=supplied('lr_min', 0.0),
+        lr_gamma=supplied('lr_gamma', 0.95), lr_factor=supplied('lr_factor', 0.5),
+        lr_patience=supplied('lr_patience', 5), lr_threshold=supplied('lr_threshold', 1e-4),
+        lr_cooldown=supplied('lr_cooldown', 0), lr_warmup_epochs=args.lr_warmup_epochs,
+        optimizer=args.optimizer, weight_decay=args.weight_decay, amp=args.amp,
+    ).resolved(args.epochs, getattr(args, 'stop', 'iter'))
+    if options.equal_protein_weighting and args.datatype == 'sequence':
+        raise ValueError('Equal-protein weighting applies to residue or matrix tasks, not sequence tasks')
+    if options.controls_lr and hasattr(args, 'learning_rate') and options.lr_min > args.learning_rate:
+        raise ValueError('--lr-min must not exceed the initial learning rate')
+    if options.active:
+        result['training_options'] = options
+    return result
+
+
+def active_training_settings(options: dict[str, Any]) -> dict[str, Any]:
+    """Flatten active policies for a user-facing header or provenance, omitting inactive options."""
+    result = {name: value for name, value in options.items() if name != 'training_options'}
+    if 'training_options' in options:
+        result.update(options['training_options'].active_settings())
+    return result
 
 
 def hyperparameter_options(architecture: type[ParrotArchitecture], describe_search: bool) -> argparse.ArgumentParser:
@@ -566,10 +685,14 @@ def parse_arguments(parser: argparse.ArgumentParser, argv: Sequence[str] | None 
         The arguments; `architecture` is the subcommand used
     """
     arguments = list(sys.argv[1:] if argv is None else argv)
+    from parrot.scripts.training_artifacts import check_resume_arguments, expand_resume
+    arguments, resumed = expand_resume(parser, arguments)
     problem = first_argument_problem(arguments, parser.prog)
     if problem is not None:
         parser.error(problem)
-    return parser.parse_args(arguments)
+    parsed = parser.parse_args(arguments)
+    check_resume_arguments(parsed, resumed)
+    return parsed
 
 
 def first_argument_problem(arguments: Sequence[str], program_name: str) -> str | None:

@@ -119,7 +119,9 @@ def info_sections(run: 'TrainingRun', network: ParrotArchitecture, training: Map
     -------
     list of Section
     """
-    sections = [provenance_section(run, network),
+    precision_options = ({'amp': training.get('amp_dtype', training['amp'])}
+                         if training.get('amp', 'off') != 'off' else {})
+    sections = [provenance_section(run, network, **precision_options),
                 data_section(run),
                 encoding_section(run.encoder),
                 architecture_section(network),
@@ -134,7 +136,7 @@ def info_sections(run: 'TrainingRun', network: ParrotArchitecture, training: Map
     return sections
 
 
-def provenance_section(run: 'TrainingRun', network: ParrotArchitecture) -> Section:
+def provenance_section(run: 'TrainingRun', network: ParrotArchitecture, amp: str = 'off') -> Section:
     """Where the network came from: when, the exact command, the software versions, the device and the precision
 
     Parameters
@@ -142,6 +144,8 @@ def provenance_section(run: 'TrainingRun', network: ParrotArchitecture) -> Secti
     run : TrainingRun
     network : ParrotArchitecture
         The trained network
+    amp : str, optional
+        Active AMP dtype or policy; 'off' retains the default FP32 description.
 
     Returns
     -------
@@ -154,17 +158,19 @@ def provenance_section(run: 'TrainingRun', network: ParrotArchitecture) -> Secti
                ('Python version', platform.python_version())]
     entries += [(f'{package} version', version) for package, version in installed_versions(RECORDED_PACKAGES)]
     entries += [('device', devices.describe_device(run.device)),
-                ('precision', describe_precision(network, run.encoder)),
+                ('precision', describe_precision(network, run.encoder, amp)),
                 ('random seed', str(run.seed) if run.seed is not None else 'not set, so training again will '
                                                                            'not give exactly the same network')]
     return Section('Provenance', entries)
 
 
-def describe_precision(network: ParrotArchitecture, encoder: SequenceEncoder) -> str:
+def describe_precision(network: ParrotArchitecture, encoder: SequenceEncoder, amp: str = 'off') -> str:
     """The floating-point precision the network was trained in, and its encoding computed and stored in
 
-    Networks trained by gradient descent run in float32, with TF32 turned off on
-    NVIDIA GPUs (see devices.full_float32_precision). Models fitted in one step
+    Networks trained by gradient descent default to float32, with TF32 turned
+    off on NVIDIA GPUs (see devices.full_float32_precision). Opt-in AMP uses
+    reduced precision for the forward pass while retaining FP32 parameters,
+    losses and validation. Models fitted in one step
     compute their features in float32, and are then fitted and run by
     scikit-learn, mostly in float64 (see ClassicalModel.estimator_precision).
     Protein language models run in float32, and their embeddings are stored as
@@ -176,6 +182,8 @@ def describe_precision(network: ParrotArchitecture, encoder: SequenceEncoder) ->
         The trained network
     encoder : SequenceEncoder
         Its encoding
+    amp : str, optional
+        Active AMP dtype or policy, or 'off' (default).
 
     Returns
     -------
@@ -183,6 +191,8 @@ def describe_precision(network: ParrotArchitecture, encoder: SequenceEncoder) ->
     """
     if isinstance(network, ClassicalModel):
         description = f'features in float32, model {network.estimator_precision}'
+    elif amp != 'off':
+        description = f'CUDA AMP ({amp}); FP32 parameters, losses and validation'
     else:
         description = 'float32 (TF32 turned off on NVIDIA GPUs)'
     if isinstance(encoder, plm.PLMEncoder):
@@ -442,19 +452,54 @@ def training_section(network: ParrotArchitecture, run: 'TrainingRun', training: 
     best = best_epoch(val_losses)
     epochs = training['epochs']
     if run.task.uncertainties:
-        improvement = f'{train_network.AUTO_STOP_LOG_LIKELIHOOD_IMPROVEMENT:.4f} per labelled value'
+        unit = 'protein mean' if training.get('equal_protein_weighting') else 'labelled value'
+        improvement = f'{train_network.AUTO_STOP_LOG_LIKELIHOOD_IMPROVEMENT:.4f} per {unit}'
     else:
         improvement = f'{100 * train_network.AUTO_STOP_RELATIVE_IMPROVEMENT:g}%'
     stop = (f'after {epochs} epochs' if training['stop'] == 'iter' else
             f'once the validation loss had not improved by at least {improvement} for {epochs} epochs in a row '
             '(--stop auto)')
-    entries = [('loss', describe_loss(run.task)),
-               ('optimizer', describe_optimizer(training['learning_rate'])),
+    controlled_lr = 'lr_schedule' in training
+    entries = [('loss', describe_loss(run.task, equal_protein_weighting=bool(training.get('equal_protein_weighting')))),
+               ('optimizer', describe_optimizer(training['learning_rate'], constant=not controlled_lr,
+                                                 name=training.get('optimizer', 'adam'),
+                                                 weight_decay=training.get('weight_decay', 0.0))),
                ('batch size', f'{run.batch_size} sequences'),
                ('batching', 'sequences of similar length batched together, with new batches, in a new random '
                             'order, every epoch' if run.batching == 'length' else 'random batches every epoch'),
                ('stopping', f'training stopped {stop}'),
                ('epochs trained', str(len(val_losses)))]
+    if 'gradient_clip_norm' in training:
+        entries.append(('gradient clipping', f"global L2 norm at most {training['gradient_clip_norm']:g}"))
+    if training.get('amp', 'off') != 'off':
+        entries.append(('precision', f"CUDA AMP ({training['amp']}); FP32 parameters, losses and validation; "
+                                     'bounded same-batch FP16 scaling retries'))
+        if 'amp_dtype' in training:
+            entries.append(('AMP dtype used', training['amp_dtype']))
+            entries.append(('AMP scaling retries', str(training['amp_scale_retries'])))
+    for key, label in (('training_checkpoint', 'training checkpoint'), ('resumed_from', 'resumed from'),
+                        ('continuous_training_log', 'continuous epoch log')):
+        if training.get(key):
+            entries.append((label, str(training[key])))
+    if training.get('check_finite_gradients') or 'gradient_clip_norm' in training or training.get('recover_nonfinite') \
+            or training.get('amp', 'off') != 'off':
+        entries.append(('finite checks', ('stop on a nonfinite training loss or gradient norm before updating the '
+                                         'optimizer, or on a nonfinite validation loss')))
+    if controlled_lr:
+        entries.append(('LR schedule', training['lr_schedule']))
+        for name in ('lr_anneal_epochs', 'lr_min', 'lr_gamma', 'lr_factor', 'lr_patience', 'lr_threshold',
+                     'lr_cooldown', 'lr_warmup_epochs'):
+            if name in training:
+                entries.append((name.replace('_', ' '), str(training[name])))
+        if training.get('learning_rate_history'):
+            rates = [row['learning_rate'] for row in training['learning_rate_history']]
+            entries.append(('LR used', (f'first {rates[0]:g}, last {rates[-1]:g}, range {min(rates):g}-{max(rates):g}; '
+                                       'one row per completed epoch in _training_history.tsv')))
+    if training.get('recover_nonfinite'):
+        entries.append(('numerical recovery', (f"at most {training['recover_nonfinite']} rollbacks per training run, "
+                                               f"LR factor {training['recovery_lr_factor']:g}; restore model, Adam, "
+                                               'LR controller and random states, then replay the epoch')))
+        entries.append(('recoveries used', str(len(training.get('recovery_events', [])))))
     if best is not None:
         entries += [('epoch kept', f'{best + 1}, the epoch with the lowest validation loss (the network after each '
                                    'epoch is evaluated on the validation set)'),
@@ -491,29 +536,41 @@ def best_epoch(val_losses: Sequence[float]) -> int | None:
     return int(np.nanargmin(np.where(np.isfinite(losses), losses, np.nan)))
 
 
-def describe_loss(task: Task) -> str:
+def describe_loss(task: Task, equal_protein_weighting: bool = False) -> str:
     """The loss function training minimizes (see train_network.build_loss_criterion)."""
     if task.uncertainties:
+        if equal_protein_weighting:
+            return ('Gaussian negative log-likelihood with variance SD^2 + s^2, averaged over labelled values '
+                    'within each protein and then over proteins (equal-protein weighting); model-error fitting '
+                    'uses the same per-protein weights')
         where = 'over the sequences' if task.datatype == 'sequence' else 'over every labelled residue'
         return ('Gaussian negative log-likelihood of each value given its prediction, with variance SD^2 + s^2 (the '
                 "value's own SD and the model error s), so each value is weighted by 1 / (SD^2 + s^2); summed "
                 f'{where} of a batch, and reported as the average per sequence')
     if task.is_classification:
         loss = 'cross-entropy'
-    elif task.datatype == 'sequence':
+    elif task.loss_name == 'huber':
+        loss = f'Huber loss (delta {task.huber_delta:g})'
+    elif task.loss_name == 'mae':
         loss = 'L1 (absolute error)'
     else:
         loss = 'mean squared error'
     where = {'sequence': 'over the sequences', 'residues': 'over every labelled residue',
              'matrix': 'over every labelled cell'}[task.datatype]
+    if equal_protein_weighting:
+        return (f'{loss}, averaged over labelled values within each protein, then over proteins; '
+                'padding and missing labels excluded (equal-protein weighting)')
     return f'{loss}, summed {where} of a batch; losses are reported as the average per sequence'
 
 
-def describe_optimizer(learning_rate: float) -> str:
+def describe_optimizer(learning_rate: float, constant: bool = True, name: str = 'adam',
+                       weight_decay: float = 0.0) -> str:
     """The optimizer and its settings: Adam with PyTorch's defaults but for the learning rate."""
-    defaults = torch.optim.Adam([torch.zeros(1)], lr=learning_rate).defaults
+    cls = torch.optim.AdamW if name == 'adamw' else torch.optim.Adam
+    defaults = cls([torch.zeros(1)], lr=learning_rate, weight_decay=weight_decay).defaults
     beta1, beta2 = defaults['betas']
-    return (f'Adam, learning rate {learning_rate:g} (constant), betas ({beta1:g}, {beta2:g}), eps {defaults["eps"]:g}, '
+    rate = f'learning rate {learning_rate:g} (constant)' if constant else f'initial learning rate {learning_rate:g}'
+    return (f'{"AdamW" if name == "adamw" else "Adam"}, {rate}, betas ({beta1:g}, {beta2:g}), eps {defaults["eps"]:g}, '
             f'weight decay {defaults["weight_decay"]:g}')
 
 

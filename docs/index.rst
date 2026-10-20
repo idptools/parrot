@@ -9,6 +9,7 @@ Welcome to PARROT's documentation!
    usage/parrot-preprocess
    usage/parrot-train
    usage/architectures
+   usage/training_controls
    usage/matrix_data
    usage/uncertainties
    usage/plm_encodings

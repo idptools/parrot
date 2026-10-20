@@ -20,6 +20,7 @@ Licensed under the MIT license.
 """
 
 import argparse
+import os
 import time
 from collections import Counter
 from typing import Any
@@ -29,7 +30,8 @@ from torch.utils.data import DataLoader
 from parrot import hyperparameter_search, train_network
 from parrot.architectures import HyperParameterValue, ParrotArchitecture, build_network, get_architecture
 from parrot.reproducibility import random_generator
-from parrot.scripts import arguments, common, training_parser
+from parrot.scripts import arguments, common, training_artifacts, training_parser
+from parrot.training_control import TrainingControlState
 
 PROGRAM_NAME = 'parrot-optimize'
 
@@ -98,16 +100,30 @@ def run() -> None:
     args = training_parser.parse_arguments(build_parser())
     arguments.print_header(PROGRAM_NAME, args.silent)
     n_trials = check_search_arguments(args)
+    training_options = training_parser.training_options_from_args(args)
+    output_prefix = os.path.splitext(os.path.abspath(common.network_path(args.output_network)))[0]
+    checkpoint_path, log_path = training_artifacts.artifact_paths(args, output_prefix)
+    args._checkpoint_path = checkpoint_path
+    args._search_log = output_prefix + '_search_training_history.tsv' if log_path is not None else None
+    if args._search_log is not None and os.path.exists(args._search_log) and args.resume is None:
+        raise ValueError(f'Training log already exists: {args._search_log}; use --resume or choose a new output')
 
     # Any architecture hyperparameter given on the command line is fixed rather than searched
     fixed_hyperparameters = training_parser.given_hyperparameters(args)
 
     run = common.prepare_training_run(args, PROGRAM_NAME, n_folds=args.cv_folds)
+    persistent = checkpoint_path is not None or args.resume is not None or log_path is not None
+    args._checkpoint_metadata = training_artifacts.run_metadata(args, run) if persistent else None
     settings: dict[str, Any] = dict(architecture=args.architecture, **fixed_hyperparameters)
     if get_architecture(args.architecture).trained_by_gradient_descent:
         settings.update(batch_size=args.batch, batching=args.batching, epochs=args.epochs)
+        settings.update(training_parser.active_training_settings(training_options))
     settings.update(trials=n_trials, cv_folds=args.cv_folds or 'none (validation set)')
     description = get_architecture(args.architecture).description
+    if run.task.regression_loss != 'auto':
+        settings['regression_loss'] = run.task.regression_loss
+        if run.task.regression_loss == 'huber':
+            settings['huber_delta'] = run.task.huber_delta
     common.print_run_header(f'Searching hyperparameters for {args.architecture}: {description}', run, settings)
 
     space = hyperparameter_search.SearchSpace(args.architecture, fixed_hyperparameters, task=run.task,
@@ -115,28 +131,63 @@ def run() -> None:
     if space.unused and not run.silent:
         for name, reason in space.unused.items():
             print(f'Note: {name} is not searched ({reason})')
-    trainer = hyperparameter_search.TrialTrainer(space, search_loaders(run), len(run.encoder), run.task, run.device)
-    searching = time.perf_counter()
-    searcher, best_trial = run_search(args, run, space, trainer, n_trials)
-    search_seconds = time.perf_counter() - searching
-    best = searcher.best_values(best_trial)
+    trainer = hyperparameter_search.TrialTrainer(space, search_loaders(run), len(run.encoder), run.task, run.device,
+                                                 **training_options)
+    resumed = getattr(args, '_resume_payload', None)
+    final_resume = resumed is not None and resumed['kind'] == 'train'
+    if final_resume:
+        assert resumed is not None
+        result = resumed['metadata']['final_search']
+        best, search_description, search_seconds = result['best'], result['description'], result['seconds']
+    else:
+        searching = time.perf_counter()
+        searcher, best_trial = run_search(args, run, space, trainer, n_trials)
+        search_seconds = time.perf_counter() - searching
+        best = searcher.best_values(best_trial)
+        search_description = describe_search(args, searcher, best_trial)
     hyperparameters_file = run.output_prefix + '_optimal_hyperparams.txt'
     write_hyperparameters(hyperparameters_file, args.architecture, best)
 
     # The best trial's training happened in stages during the search, so it has no timings of its own
     timing = None
+    control_state = None
     if run.cv_sets is None:
         # The best trial already is a full training run on the training set, keeping its best epoch
         network, train_losses, val_losses = trainer.trained_network(best_trial)
+        control_state = best_trial.folds[0].training_control
     else:
         timing = train_network.TrainingTiming()
-        network, train_losses, val_losses = train_with_best_values(args, run, best, timing)
+        control_state = TrainingControlState() if 'training_options' in training_options else None
+        if persistent:
+            args._checkpoint_metadata['final_search'] = {'best': best, 'description': search_description,
+                                                          'seconds': search_seconds}
+            args._final_checkpoint_options = dict(checkpoint_path=checkpoint_path,
+                                                   checkpoint_every=args.checkpoint_every or 1,
+                                                   resume_from=args.resume if final_resume else None,
+                                                   training_log=log_path,
+                                                   checkpoint_metadata=args._checkpoint_metadata)
+        network, train_losses, val_losses = train_with_best_values(
+            args, run, best, timing, **({'control_state': control_state} if control_state is not None else {}))
 
     training = dict(learning_rate=best.get(train_network.LEARNING_RATE.name, train_network.LEARNING_RATE.default),
                     epochs=args.epochs, stop='iter')
+    training.update(training_parser.active_training_settings(training_options))
+    if control_state is not None:
+        training.update(control_state.report())
+    files = [hyperparameters_file, trials_file(run)]
+    if checkpoint_path is not None:
+        training['training_checkpoint'] = checkpoint_path
+        files.append(checkpoint_path)
+    if log_path is not None:
+        if run.cv_sets is not None:
+            training['continuous_training_log'] = log_path
+            files.append(log_path)
+        files.append(args._search_log)
+    if args.resume is not None:
+        training['resumed_from'] = os.path.abspath(args.resume)
     common.finish_training_run(run, network, train_losses, val_losses, training,
-                               search=describe_search(args, searcher, best_trial),
-                               other_files=[hyperparameters_file, trials_file(run)], timing=timing,
+                               search=search_description,
+                               other_files=files, timing=timing,
                                search_seconds=search_seconds)
 
 
@@ -182,6 +233,10 @@ def run_search(args: argparse.Namespace, run: common.TrainingRun, space: hyperpa
     searcher = hyperparameter_search.HyperparameterSearch(
         space, trainer, n_trials, args.epochs, min_epochs=args.min_epochs, reduction_factor=args.reduction_factor,
         rng=random_generator(), silent=run.silent, on_progress=lambda progress: progress.write_trials(trials_file(run)))
+    if getattr(args, '_checkpoint_metadata', None) is not None:
+        from parrot.scripts.search_artifacts import SearchArtifacts
+        SearchArtifacts(searcher, args._checkpoint_path, args.checkpoint_every or 1, args._search_log,
+                         args._checkpoint_metadata, getattr(args, '_resume_payload', None))
     return searcher, searcher.run()
 
 
@@ -239,7 +294,8 @@ def describe_search(args: argparse.Namespace, searcher: hyperparameter_search.Hy
 
 
 def train_with_best_values(args: argparse.Namespace, run: common.TrainingRun, best: dict[str, HyperParameterValue],
-                           timing: train_network.TrainingTiming | None = None
+                           timing: train_network.TrainingTiming | None = None,
+                           control_state: TrainingControlState | None = None
                            ) -> tuple[ParrotArchitecture, list[float], list[float]]:
     """Train the final network on the training set with the best hyperparameters (after a cross-validated search)
 
@@ -268,11 +324,16 @@ def train_with_best_values(args: argparse.Namespace, run: common.TrainingRun, be
     learning_rate = float(architecture_values.pop(train_network.LEARNING_RATE.name,
                                                   train_network.LEARNING_RATE.default))
     network = build_network(args.architecture, len(run.encoder), run.task, architecture_values).to(run.device)
+    call_options = training_parser.training_options_from_args(args)
+    call_options.update(getattr(args, '_final_checkpoint_options', {}))
+    if control_state is not None:
+        call_options['control_state'] = control_state
     train_losses, val_losses = train_network.train(network, run.loader(run.train_set, shuffle=True),
                                                    run.loader(run.val_set), run.task, run.device,
                                                    learning_rate=learning_rate, n_epochs=args.epochs,
                                                    stop_condition='iter', on_improvement=run.save,
-                                                   verbose=args.verbose, silent=args.silent, timing=timing)
+                                                   verbose=args.verbose, silent=args.silent, timing=timing,
+                                                   **call_options)
     return network, train_losses, val_losses
 
 

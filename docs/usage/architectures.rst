@@ -11,7 +11,14 @@ Matrix data (a matrix of values per sequence) has its own architecture, ``unet2d
 
 Every model works with every encoding (NARDINI features, which describe whole sequences, are for sequence data only), and the saved network records which model it is, so ``parrot-predict`` needs no extra flags.
 
-Each architecture has its own hyperparameters, set with the flags listed below (and shown, with their defaults, by ``parrot-train <architecture> -h``). Each subcommand offers only its own architecture's flags, so passing another architecture's is an error. In ``parrot-optimize``, hyperparameters marked as searched (over a range of numbers or a set of choices) are tuned automatically, along with the learning rate; any hyperparameter you set on the command line is fixed at that value instead, and the rest keep their defaults.
+Each architecture has its own hyperparameters, set with the flags listed below (and shown, with their defaults, by ``parrot-train <architecture> -h``). Each subcommand offers only its own architecture's flags, so passing another architecture's is an error. In ``parrot-optimize``, hyperparameters marked as searched (over a range of numbers or a set of choices) are tuned automatically, along with the initial learning rate; any hyperparameter you set on the command line is fixed at that value instead, and the rest keep their defaults.
+
+Neural networks, including ``unet2d``, share the optional
+:doc:`training_controls`: learning-rate schedules and warmup, gradient clipping,
+finite checks, bounded numerical recovery, and equal-protein weighting for
+residue and matrix tasks. These are training settings, separate from the
+architecture hyperparameters below. With a schedule or recovery enabled,
+``parrot-optimize`` searches the initial learning rate and holds the policy fixed.
 
 Which architecture should I use?
 ---------------------------------
