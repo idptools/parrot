@@ -70,6 +70,28 @@
 - Few-batches warning fires below 10 batches per epoch, as documented.
 - Fixed a crash testing residue-classification networks with NumPy ≥ 1.24.
 
+### Training controls
+
+- All opt-in, for networks trained by gradient descent (`parrot-train` and `parrot-optimize`); without them, training is as before (docs: "Training controls").
+- `--lr-schedule cosine|exponential|plateau` (default `fixed`), with `--lr-min`, `--lr-anneal-epochs` (cosine), `--lr-gamma` (exponential), and `--lr-factor`, `--lr-patience`, `--lr-threshold`, `--lr-cooldown` (plateau).
+- `--lr-warmup-epochs`: linear warmup to the initial learning rate.
+- `--gradient-clip-norm`: global L2 gradient clipping; also turns on finite checks.
+- `--check-finite-gradients`: stops on a NaN or infinite loss or gradient norm, before the update.
+- `--recover-nonfinite [N]`: on a numerical failure, back to the last good epoch, learning rate cut by `--recovery-lr-factor` (default 0.5), epoch replayed; up to N times (2 if no N given).
+- `--regression-loss mae|mse|huber` (`--huber-delta`, default 1); defaults unchanged (MAE for sequences, MSE for residues and matrices); not with `--uncertainties`.
+- `--optimizer adamw`; `--weight-decay` for either optimizer (default 0).
+- `--equal-protein-weighting` (residue and matrix tasks): labelled losses averaged within each protein, then across proteins, for training, validation and test loss; reported metrics still pool every labelled value.
+- `--amp [auto|float16|bfloat16]`: CUDA mixed precision in the training forward pass (`auto`: bfloat16 where supported, else float16); evaluation and prediction stay float32.
+- Active controls and a summary of the learning rates used recorded in `_info.txt`.
+
+### Checkpoints and resume
+
+- `--checkpoint [file]` (`parrot-train`, `parrot-optimize`): full training state saved every `--checkpoint-every` epochs (default 1), by default to `<network>_training_checkpoint.pt`.
+- `--resume file`: continues a checkpointed run with its saved arguments, data split, optimizer and random-number state; `parrot-train --resume file` alone is enough.
+- `parrot-optimize --resume`: the whole search, including TPE state, partly trained folds, promotions and final cross-validated retraining.
+- `--training-log`: each epoch's losses, learning rate and timings written as training runs, so kept if the run fails (`<network>_training_history.tsv`; `parrot-optimize` also writes `<network>_search_training_history.tsv` for every trial and fold).
+- Checkpoints and saved networks written atomically: a run killed while saving keeps the previous file intact.
+
 ### Hyperparameter search: `parrot-optimize`
 
 - Rewritten without GPy/GPyOpt.
@@ -88,6 +110,8 @@
 - No longer stops with "Every configuration failed" when the configuration it promoted fails at a later stage (e.g. out of GPU memory) while others trained fine; trains the best of those again instead.
 - Simple models: validation loss reported in `_info.txt`, and the search no longer called successive halving.
 - `gbrt` search: number of trees, shrinkage, number of leaves, minimum leaf size, L2 penalty, fraction of features considered per split.
+- Training controls fixed for every trial, fold and stage; only the initial learning rate searched. Schedules span the full `--epochs` and carry on when a configuration is promoted.
+- A trial that fails a numerical check and cannot recover recorded as failed in `_hyperparameter_trials.tsv`; the search continues.
 
 ### Data
 
@@ -135,6 +159,8 @@
 - Says so when `--class-balance` finds every label missing.
 - No longer crashes on an infinite class label.
 - Out-of-range class-balancing options refused before any data are split.
+- Report records the random seed (or that none was set), cluster sizes and the initial assignment to sets.
+- Report saved when a run fails, ending `FAILED` with the error; successful runs end `COMPLETED` (`PREPROCESSED` while `--encode` is still running).
 
 ### Splitting
 
@@ -152,6 +178,10 @@
 - MMseqs2 always reads the sequences as proteins.
 - Similar pairs counted once in the report.
 - Separation check no longer removes training records similar only to a validation record that is itself removed.
+- `parrot-preprocess --max-separation-rounds` (default 5): removal rounds the separation check may use.
+- Separation check: up to that many removal rounds, then a final check. Was five checks in all, so at most four removal rounds; `--split mmseqs` and `kmer` in `parrot-train` and `parrot-optimize` also get the extra round.
+- Separation report: for each check, the conflicts between each pair of sets, the identity, E-value and coverage ranges of the matches, and up to three example pairs by ID; for each round, the records and groups removed and how much of each set remains.
+- Separation failure: report gives the conflicts left and what another round would remove, and suggests rerunning with more rounds and a fixed `--seed`.
 - Split-files must have exactly three lines (blank lines after them aside); a fourth line or a blank first line is an error, rather than misread.
 - Split-file values that are not line numbers reported with the file and line.
 - Split-file values that only look like line numbers (such as `--2` or `1_0`) refused with the file and line, rather than crashing or being misread.
@@ -200,6 +230,11 @@
 - A test set with fewer than two labelled values, a constant prediction or a diverged network gives NaN correlations, rather than a crash after the network is saved.
 - Class probabilities that are not finite give NaN curve areas and no ROC or precision-recall figures, with a warning.
 - Two classes: the area under the ROC curve in the statistics is class 1's, the one the ROC figure shows (was the micro-average over both classes).
+- Regression statistics add MAE, RMSE, mean signed error (prediction minus measurement) and R² (coefficient of determination); residue and matrix tasks also the mean of each protein's MAE, RMSE and signed error.
+- `_per_protein_metrics.tsv`: each test sequence's metrics and number of labelled values.
+- `_length_metrics.tsv`: test metrics by sequence length (0-49, 50-99, 100-199, 200-399, 400-799, 800+).
+- `--no-stats` suppresses both tables as well as `_performance_stats.txt`.
+- With a learning-rate schedule, warmup or recovery: `_training_history.tsv` (losses and learning rate per epoch), and `_recovery_events.json` if any recoveries happened.
 
 ### Prediction: `parrot-predict` and `Predictor`
 
@@ -224,6 +259,7 @@
 - The `parrot` package exports only its public names.
 - Unused `decode()`, `rev_one_hot()` and `rev_biophysics()` removed.
 - `split_data()`, `split_data_cv()` and `vector_split()` check their fractions and number of folds before reading any data.
+- `train()` takes the training controls (`gradient_clip_norm`, `check_finite_gradients`, and the rest as `training_options=TrainingOptions(...)`), `control_state=TrainingControlState()` for the learning rates used and any recoveries, and `checkpoint_path`, `resume_from` and `training_log`.
 
 ### Other
 
