@@ -9,9 +9,10 @@ from typing import Any
 from parrot.training_persistence import load_training_checkpoint
 
 PATH_ARGUMENTS = ('input_file', 'output_network', 'matrix_file', 'embedding_context', 'embedding_context_map',
-                  'embedding_cache')
+                  'embedding_cache', 'capture_nonfinite')
 RESUME_OVERRIDES = {'output_network', 'verbose', 'silent', 'include_figs', 'no_stats', 'checkpoint',
-                    'checkpoint_every', 'training_log', 'resume', 'device', 'gpu_id', 'embedding_cache', 'epochs'}
+                    'checkpoint_every', 'training_log', 'resume', 'device', 'gpu_id', 'embedding_cache', 'epochs',
+                    'capture_nonfinite'}
 
 
 def normalized_arguments(args: argparse.Namespace) -> dict[str, Any]:
@@ -98,6 +99,18 @@ def file_checksum(path: str) -> str:
 
 
 def artifact_paths(args: argparse.Namespace, output_prefix: str) -> tuple[str | None, str | None]:
+    capture = getattr(args, 'capture_nonfinite', None)
+    if capture is not None:
+        capture = os.path.abspath(capture)
+        reserved_capture = [output_prefix + suffix for suffix in
+                            ('.pt', '_training_history.tsv', '_search_training_history.tsv')]
+        reserved_capture += [os.path.abspath(value) for value in
+                             (args.input_file, args.resume, args.checkpoint) if value and value != 'auto']
+        reserved_capture.append(output_prefix + '_training_checkpoint.pt')
+        if capture in reserved_capture:
+            raise ValueError('Failure capture must have a different path from training inputs and outputs')
+        if not Path(capture).parent.is_dir() or Path(capture).is_dir():
+            raise ValueError('Failure capture must name a file in an existing directory')
     if args.checkpoint_every is not None and args.checkpoint is None and args.resume is None:
         raise ValueError('--checkpoint-every requires --checkpoint or --resume')
     if args.checkpoint_every is not None and args.checkpoint_every < 1:

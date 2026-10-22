@@ -363,6 +363,10 @@ def shared_training_loop_options() -> argparse.ArgumentParser:
     group.add_argument('--check-finite-gradients', action='store_true',
                        help='opt in to stopping on nonfinite losses or gradient norms before an update; '
                             'does not clip gradients (default: off)')
+    group.add_argument('--capture-nonfinite', default=None, metavar='file',
+                       help='opt in to saving the first numerical failure with pre-batch model, optimizer, RNG '
+                            'and data for replay; enables finite/state checks and copies state each batch; '
+                            'never overwrites an existing capture (default: off)')
     group.add_argument('--equal-protein-weighting', action='store_true',
                        help='opt in to averaging labelled losses within each protein, then across proteins '
                             '(residue and matrix tasks only; default: sum over labelled values)')
@@ -421,6 +425,8 @@ def gradient_options_from_args(args: argparse.Namespace) -> dict[str, Any]:
         options['gradient_clip_norm'] = args.gradient_clip_norm
     if args.check_finite_gradients:
         options['check_finite_gradients'] = True
+    if args.capture_nonfinite is not None:
+        options['capture_nonfinite'] = args.capture_nonfinite
     return options
 
 

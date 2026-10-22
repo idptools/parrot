@@ -267,6 +267,17 @@ def split_uncertainties(tokens: list[str]) -> tuple[list[str], list[str]]:
     return values, sds
 
 
+def check_float32_range(values: Any, description: str) -> None:
+    """Reject finite values that overflow when training tensors become float32.
+
+    Missing labels remain NaN. Other validation decides where NaN/Inf are
+    allowed; this check specifically closes the finite-float64 cast gap.
+    """
+    array = np.asarray(values)
+    if np.any(np.isfinite(array) & (np.abs(array) > np.finfo(np.float32).max)):
+        raise ValueError(f'{description} must be representable as finite float32 values')
+
+
 def check_sds(sds: list[str], values: np.ndarray) -> np.ndarray:
     """Convert a line's SDs to numbers, checking every labelled value has a finite, non-negative SD
 
@@ -293,7 +304,9 @@ def check_sds(sds: list[str], values: np.ndarray) -> np.ndarray:
     if bad.any():
         first_bad = sds[int(np.argmax(bad))]
         raise ValueError(f"the SD of every value must be a finite number of at least 0, got '{first_bad}'")
-    return np.where(labelled, numbers, np.nan)
+    result = np.where(labelled, numbers, np.nan)
+    check_float32_range(result, 'SDs')
+    return result
 
 
 def parse_residue_values(values: list[str], sequence: str) -> np.ndarray:
@@ -324,6 +337,7 @@ def parse_residue_values(values: list[str], sequence: str) -> np.ndarray:
         raise ValueError('residue values must be finite numbers or nan (missing), not inf')
     if np.all(np.isnan(numbers)):
         raise ValueError('every residue label of this sequence is missing (nan)')
+    check_float32_range(numbers, 'Residue values')
     return numbers
 
 
@@ -351,6 +365,7 @@ def parse_sequence_value(values: list[str]) -> float:
     value = float(values[0])
     if not np.isfinite(value):
         raise ValueError('sequence values must be finite numbers (no nan or inf)')
+    check_float32_range(value, 'Sequence values')
     return value
 
 
@@ -618,7 +633,8 @@ def padded_batch_length(longest: int) -> int:
     return math.ceil(longest / step) * step
 
 
-def pad_sequence_vectors(seq_vectors: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
+def pad_sequence_vectors(seq_vectors: list[torch.Tensor], names: list[str] | None = None
+                         ) -> tuple[torch.Tensor, torch.Tensor]:
     """Zero-pad a list of encoded sequences to a common length
 
     Every PARROT architecture masks padding, so the amount of padding changes
@@ -646,12 +662,17 @@ def pad_sequence_vectors(seq_vectors: list[torch.Tensor]) -> tuple[torch.Tensor,
     # afterwards would be, but without building and converting a float64 copy)
     padded_seq_vectors = torch.zeros(len(seq_vectors), padded_length, seq_vectors[0].shape[-1])
     for i, vector in enumerate(seq_vectors):
-        padded_seq_vectors[i, :len(vector)] = torch.as_tensor(vector)
+        tensor = torch.as_tensor(vector)
+        name = repr(names[i]) if names is not None else str(i + 1)
+        if not bool(torch.isfinite(tensor).all()):
+            raise ValueError(f'Encoded sequence {name} must contain finite values')
+        check_float32_range(tensor, f'Encoded sequence {name}')
+        padded_seq_vectors[i, :len(vector)] = tensor
 
     return padded_seq_vectors, torch.tensor(lengths, dtype=torch.long)
 
 
-def pad_targets(targets: list[Any], task: Task, padded_length: int) -> torch.Tensor:
+def pad_targets(targets: list[Any], task: Task, padded_length: int, names: list[str] | None = None) -> torch.Tensor:
     """Stack the target values of a batch into a tensor
 
     Parameters
@@ -681,6 +702,10 @@ def pad_targets(targets: list[Any], task: Task, padded_length: int) -> torch.Ten
         Matrix data: see matrices.data.pad_matrix_targets.
     """
 
+    if not task.is_classification:
+        for i, target in enumerate(targets):
+            name = repr(names[i]) if names is not None else str(i + 1)
+            check_float32_range(target, f'Targets for sequence {name}')
     if task.is_matrix:
         return matrix_data.pad_matrix_targets(targets, task, padded_length)
 
@@ -747,8 +772,8 @@ def collate_batch(batch: list[tuple[str, torch.Tensor, Any]], task: Task) -> Bat
     """
 
     names = [item[0] for item in batch]
-    padded_seq_vectors, lengths = pad_sequence_vectors([item[1] for item in batch])
-    targets = pad_targets([item[2] for item in batch], task, padded_seq_vectors.shape[1])
+    padded_seq_vectors, lengths = pad_sequence_vectors([item[1] for item in batch], names=names)
+    targets = pad_targets([item[2] for item in batch], task, padded_seq_vectors.shape[1], names=names)
     return Batch(names, padded_seq_vectors, targets, lengths)
 
 

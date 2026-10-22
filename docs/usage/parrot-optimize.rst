@@ -78,6 +78,7 @@ Unlike ``parrot-train``, ``parrot-optimize`` has no ``--learning-rate`` (the ini
 
 The optional training controls are shared with ``parrot-train``:
 ``--gradient-clip-norm``, ``--check-finite-gradients``,
+``--capture-nonfinite FILE`` (the first failing batch across the search),
 ``--equal-protein-weighting`` (residue and matrix tasks), ``--lr-schedule``
 and its tuning flags, ``--lr-warmup-epochs``, ``--recover-nonfinite``,
 ``--recovery-lr-factor``, ``--regression-loss``/``--huber-delta``,
