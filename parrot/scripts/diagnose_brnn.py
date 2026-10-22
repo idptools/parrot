@@ -226,7 +226,7 @@ def replay_capture(args, path):
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir', type=Path, required=True, help='new directory for diagnostic artifacts')
-    parser.add_argument('--device', default='cuda', choices=['cuda', 'cpu'])
+    parser.add_argument('--device', default='cuda', choices=['cuda', 'cpu', 'cuda:0', 'cuda:1', 'cuda:2', 'cuda:3'])
     parser.add_argument('--modes', nargs='+', default=['off', 'bfloat16'], choices=['off', 'bfloat16', 'float16'])
     parser.add_argument('--input-file', help='per-residue regression TSV; otherwise use synthetic proteins')
     parser.add_argument('--split', help='existing three-line split file, or random (requires --input-file)')
