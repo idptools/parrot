@@ -137,6 +137,16 @@ Two optional safeguards check for NaN or infinite values:
   the finite checks: clipping cannot repair gradients that are already NaN
   or infinite.
 
+If the ordinary FP32 norm reduction overflows while every gradient entry is
+finite, PARROT recomputes the norm stably before checking or clipping. CPU and
+CUDA use FP64 norm accumulation; MPS uses rescaling because it cannot hold FP64
+tensors. This changes only the norm calculation: model parameters and gradients
+keep their original dtype. Actual NaN/Inf entries still stop the attempt.
+After a norm fallback, the resulting model and optimizer state are also checked:
+without clipping, finite but enormous gradients can overflow Adam's moments.
+Such an error is explicitly identified as occurring after the optimizer update;
+bounded recovery can restore the clean epoch boundary when enabled.
+
 With either option, ``parrot-train`` reports the median, 95th percentile and
 maximum pre-clipping gradient norm for epochs whose progress is printed
 (``--verbose`` prints every epoch). With clipping it also reports the fraction
@@ -151,9 +161,27 @@ candidate thresholds. Reconsider the threshold if you change those settings,
 especially ``--equal-protein-weighting``. The safeguards themselves do not
 change loss weighting.
 
-Training failures identify the epoch, batch, representative sequence IDs and
-length range. Without recovery enabled, the run stops without skipping the batch
-or retrying. Any earlier best network saved to disk is preserved.
+Training failures identify the epoch, batch, length range and precision before
+representative sequence IDs. Gradient failures include NaN/Inf counts, maximum
+finite gradient magnitude, the norm and affected parameter names. Search console
+summaries are shortened, while the trials table retains the complete failure
+message and search checkpoints retain structured gradient diagnostics. Without
+recovery enabled, the attempt stops without skipping the batch or retrying.
+Any earlier best network saved to disk is preserved.
+
+``--capture-nonfinite FILE`` additionally enables input/state checks and saves
+the first failed training batch with its **pre-batch** model, optimizer, random
+state and precision configuration. The parent directory must exist. It writes
+nothing on successful batches and never replaces an existing capture, including
+on recovery or later search trials. Use a new filename for another capture.
+This debugging option copies model and optimizer state to CPU before each batch
+until the first failure, adding time and memory costs. It does not enable
+clipping or recovery. See :doc:`numerical_debugging` for BRNN replay and matched
+FP32/BF16 pilots. Failure captures are separate from resumable checkpoints.
+
+Input values that would overflow when converted from float64 to float32 are
+rejected before use, with the data line or sequence identified. Missing-label
+markers remain supported.
 
 .. _parrot-numerical-recovery:
 

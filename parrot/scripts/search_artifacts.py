@@ -38,7 +38,9 @@ class SearchArtifacts:
                           'trials': searcher.n_trials, 'reduction_factor': searcher.reduction_factor,
                           'task': trainer.task.to_config(), 'input_size': trainer.input_size,
                           'device_type': torch.device(trainer.device).type, 'torch_version': str(torch.__version__),
-                          'training_options': asdict(trainer.options), 'gradient_options': trainer.gradient_options,
+                          'training_options': asdict(trainer.options),
+                          'gradient_options': {name: value for name, value in trainer.gradient_options.items()
+                                               if name != 'capture_nonfinite'},
                           'loaders': [loader_signature(loader) for loader in self.loaders],
                           'metadata': metadata['identity']}
         capture_random_state(self.loaders, trainer.device)

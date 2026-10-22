@@ -35,13 +35,15 @@ from parrot import process_input_data as pid
 from parrot.architectures import HyperParameter, ParrotArchitecture
 from parrot.architectures.layers import padding_mask
 from parrot.devices import cpu_copy, full_float32_precision
+from parrot.gradient_numerics import clip_with_norm, diagnostic_text, gradient_diagnostics, stable_total_norm
 from parrot.tasks import Task
 from parrot.training_control import (EpochSnapshot, LearningRateController, TrainingControlState, TrainingOptions,
                                      finite_tensors)
-from parrot.training_precision import BatchReplay, MAX_SCALE_RETRIES, TrainingPrecision
+from parrot.training_diagnostics import FailureCapture
 from parrot.training_persistence import (FORMAT_KEY, FORMAT_VERSION, EpochLog, atomic_save, capture_random_state,
                                          load_training_checkpoint, loader_signature, restore_random_state,
                                          validate_signature)
+from parrot.training_precision import MAX_SCALE_RETRIES, BatchReplay, TrainingPrecision
 from parrot.uncertainties import (MODEL_ERROR_SIGNIFICANT_FIGURES, fit_model_error, gaussian_nll, model_error_of,
                                   set_model_error)
 
@@ -458,9 +460,10 @@ def validation_loss(network: ParrotArchitecture, loader: DataLoader, task: Task,
 class NonFiniteTrainingError(RuntimeError):
     """Opt-in checks found a nonfinite loss or gradient; training must stop."""
 
-    def __init__(self, message: str, retryable: bool = True) -> None:
+    def __init__(self, message: str, retryable: bool = True, diagnostics: dict[str, Any] | None = None) -> None:
         super().__init__(message)
         self.retryable = retryable
+        self.diagnostics = diagnostics or {}
 
 
 def validate_gradient_clip_norm(gradient_clip_norm: float | None) -> None:
@@ -475,6 +478,7 @@ class GradientStatistics:
     """Pre-clipping global L2 norms for one epoch, collected only with opt-in gradient checks or clipping."""
 
     norms: list[float] = field(default_factory=list)
+    raw_norms: list[float] = field(default_factory=list)
 
     def describe(self, clip_norm: float | None) -> str:
         """A calibration summary in the units of the current, summed training loss."""
@@ -485,11 +489,15 @@ class GradientStatistics:
         if clip_norm is not None:
             clipped = sum(norm > clip_norm for norm in self.norms)
             summary += f'; clipped {clipped}/{len(self.norms)} batches at {clip_norm:g}'
+        fallbacks = sum(not math.isfinite(norm) for norm in self.raw_norms)
+        if fallbacks:
+            summary += f'; stable norm fallback on {fallbacks} batch' + ('es' if fallbacks != 1 else '')
         return summary
 
 
 def nonfinite_batch_error(what: str, batch: pid.Batch, batch_number: int, retryable: bool = True,
-                          after_update: bool = False) -> NonFiniteTrainingError:
+                          after_update: bool = False, diagnostics: dict[str, Any] | None = None,
+                          precision: str = 'float32') -> NonFiniteTrainingError:
     """Identify a failing batch without printing an unbounded list of sequence IDs."""
     names = ', '.join(repr(name[:80]) for name in batch.names[:5])
     if len(batch.names) > 5:
@@ -497,10 +505,11 @@ def nonfinite_batch_error(what: str, batch: pid.Batch, batch_number: int, retrya
     lengths = batch.lengths
     action = ('The failure occurred after the optimizer update.' if after_update else
               'The optimizer was not updated for this batch.')
+    details = f'; {diagnostic_text(diagnostics)}' if diagnostics else ''
     return NonFiniteTrainingError(
-        f'Nonfinite {what} in training batch {batch_number} (sequence IDs: {names}; '
-        f'lengths {int(lengths.min())}-{int(lengths.max())}). '
-        f'{action} The attempt stopped without skipping batches.', retryable=retryable)
+        f'Nonfinite {what} in training batch {batch_number} (lengths {int(lengths.min())}-{int(lengths.max())}; '
+        f'precision={precision}{details}; sequence IDs: {names}). '
+        f'{action} The attempt stopped without skipping batches.', retryable=retryable, diagnostics=diagnostics)
 
 
 @dataclass
@@ -647,7 +656,8 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
           check_finite_gradients: bool = False, training_options: TrainingOptions | None = None,
           control_state: TrainingControlState | None = None, checkpoint_path: str | None = None,
           checkpoint_every: int = 1, resume_from: str | None = None, training_log: str | None = None,
-          checkpoint_metadata: dict[str, Any] | None = None) -> tuple[list[float], list[float]]:
+          checkpoint_metadata: dict[str, Any] | None = None,
+          capture_nonfinite: str | None = None) -> tuple[list[float], list[float]]:
     """Train a network, keeping the weights that perform best on the validation set
 
     Every epoch the network is trained on the training set and then evaluated
@@ -728,6 +738,10 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
         reconciles rows with the checkpoint before continuing.
     checkpoint_metadata : dict, optional
         Caller provenance and identity to bind into checkpoint validation.
+    capture_nonfinite : str, optional
+        Save the first failed training batch and its pre-batch state. Implies
+        input/gradient/state checks, copies model/optimizer state each batch
+        until a failure, writes nothing on success, and never replaces a file.
 
     Returns
     -------
@@ -791,9 +805,11 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
         gradient_options['gradient_clip_norm'] = gradient_clip_norm
     if check_finite_gradients:
         gradient_options['check_finite_gradients'] = True
+    if capture_nonfinite is not None:
+        gradient_options['capture_nonfinite'] = capture_nonfinite
 
     if not network.trained_by_gradient_descent:
-        if options.active:
+        if options.active or capture_nonfinite is not None:
             raise ValueError('Training controls apply to neural networks trained by gradient descent')
         return fit_in_one_step(network, train_loader, val_loader, task, device, on_improvement, silent, timing)
 
@@ -886,7 +902,8 @@ def train(network: ParrotArchitecture, train_loader: DataLoader, val_loader: Dat
                 trained = time.perf_counter()
                 val_loss = validation_loss(network, val_loader, task, device)
         except NonFiniteTrainingError as error:
-            raise NonFiniteTrainingError(f'Epoch {epoch + 1}: {error}', retryable=error.retryable) from error
+            raise NonFiniteTrainingError(f'Epoch {epoch + 1}: {error}', retryable=error.retryable,
+                                         diagnostics=error.diagnostics) from error
         if gradient_options and not math.isfinite(val_loss):
             raise NonFiniteTrainingError(f'Epoch {epoch + 1}: nonfinite validation loss; training stopped. '
                                          'Any previously saved best network is preserved.')
@@ -969,6 +986,7 @@ def controlled_epoch(network: ParrotArchitecture, train_loader: DataLoader, val_
         statistics = epoch_options.get('gradient_statistics')
         if statistics is not None:
             statistics.norms.clear()
+            statistics.raw_norms.clear()
         try:
             train_loss, count = train_epoch(network, train_loader, task, criterion, optimizer, device, **epoch_options)
             trained = time.perf_counter()
@@ -990,13 +1008,14 @@ def controlled_epoch(network: ParrotArchitecture, train_loader: DataLoader, val_
                 snapshot.restore(network, optimizer, controller, precision=precision)
                 raise NonFiniteTrainingError(
                     f'Recovery budget exhausted ({state.recoveries_used}/{options.recover_nonfinite}); {error} '
-                    'Any previously saved best network is preserved.') from error
+                    'Any previously saved best network is preserved.', diagnostics=error.diagnostics) from error
             failed_lrs = controller.lrs
             snapshot.restore(network, optimizer, controller, precision=precision)
             try:
                 reduced = controller.reduce_after_rollback(failed_lrs)
             except ValueError as reduction_error:
-                raise NonFiniteTrainingError(f'{reduction_error}. Original failure: {error}') from reduction_error
+                raise NonFiniteTrainingError(f'{reduction_error}. Original failure: {error}',
+                                             diagnostics=error.diagnostics) from reduction_error
             state.recoveries_used += 1
             state.recovery_events.append({'epoch': epoch + 1, 'attempt': state.recoveries_used,
                                           'old_lr': failed_lrs[0], 'new_lr': reduced[0], 'reason': str(error)})
@@ -1055,7 +1074,8 @@ def train_epoch(network: nn.Module, loader: DataLoader, task: Task, criterion: n
                 optimizer: torch.optim.Optimizer, device: str | torch.device, gradient_clip_norm: float | None = None,
                 check_finite_gradients: bool = False,
                 gradient_statistics: GradientStatistics | None = None, equal_protein_weighting: bool = False,
-                check_optimizer_state: bool = False, precision: TrainingPrecision | None = None) -> tuple[float, int]:
+                check_optimizer_state: bool = False, precision: TrainingPrecision | None = None,
+                capture_nonfinite: str | None = None) -> tuple[float, int]:
     """Train a network for one epoch (one pass over the training data)
 
     Parameters
@@ -1086,6 +1106,9 @@ def train_epoch(network: nn.Module, loader: DataLoader, task: Task, criterion: n
     precision : TrainingPrecision, optional
         CUDA AMP policy. Enables input, loss, unscaled-gradient and
         post-update checks even without the separate gradient-check flag.
+    capture_nonfinite : str, optional
+        Save the first numerical failure with pre-batch data/model/optimizer/RNG
+        state. Enables finite/state checks; never replaces an existing capture.
 
     Returns
     -------
@@ -1096,55 +1119,70 @@ def train_epoch(network: nn.Module, loader: DataLoader, task: Task, criterion: n
     """
 
     validate_gradient_clip_norm(gradient_clip_norm)
-    check_optimizer_state = check_optimizer_state or precision is not None
+    check_optimizer_state = check_optimizer_state or precision is not None or capture_nonfinite is not None
+    precision_label = str(precision.dtype) if precision is not None else 'float32'
     check_gradients = check_finite_gradients or gradient_clip_norm is not None or check_optimizer_state
     network.train()
     batch_losses = []
     n_train_sequences = 0
+    failure_capture = FailureCapture(capture_nonfinite)
     for batch_number, batch in enumerate(loader, start=1):
-        if check_optimizer_state:
-            # Invalid data cannot be repaired by lowering the learning rate. Missing labels remain allowed.
-            invalid_targets = torch.isinf(batch.targets).any()
-            if task.uncertainties:
-                values, sds = batch.targets[..., 0], batch.targets[..., 1]
-                invalid_targets = invalid_targets | ((~torch.isnan(values)) &
-                                                       (~torch.isfinite(sds) | (sds < 0))).any()
-            if not task.per_residue and not task.is_matrix:
-                invalid_targets = invalid_targets | ~torch.isfinite(batch.targets).all()
-            if not torch.isfinite(batch.vectors).all() or bool(invalid_targets):
-                raise nonfinite_batch_error('input or target', batch, batch_number, retryable=False)
-        loss_options: dict[str, Any] = {'equal_protein_weighting': True} if equal_protein_weighting else {}
-        if precision is not None:
-            loss = train_amp_batch(network, batch, task, criterion, optimizer, device, precision, batch_number,
-                                    gradient_clip_norm, gradient_statistics, equal_protein_weighting)
+        with failure_capture.watch(network, optimizer, batch, task, device, batch_number, gradient_clip_norm,
+                                   equal_protein_weighting, precision, NonFiniteTrainingError):
+            if check_optimizer_state:
+                # Invalid data cannot be repaired by lowering the learning rate. Missing labels remain allowed.
+                invalid_targets = torch.isinf(batch.targets).any()
+                if task.uncertainties:
+                    values, sds = batch.targets[..., 0], batch.targets[..., 1]
+                    invalid_targets = invalid_targets | ((~torch.isnan(values)) &
+                                                           (~torch.isfinite(sds) | (sds < 0))).any()
+                if not task.per_residue and not task.is_matrix:
+                    invalid_targets = invalid_targets | ~torch.isfinite(batch.targets).all()
+                if not torch.isfinite(batch.vectors).all() or bool(invalid_targets):
+                    raise nonfinite_batch_error('input or target', batch, batch_number, retryable=False,
+                                                precision=precision_label)
+            loss_options: dict[str, Any] = {'equal_protein_weighting': True} if equal_protein_weighting else {}
+            if precision is not None:
+                loss = train_amp_batch(network, batch, task, criterion, optimizer, device, precision, batch_number,
+                                        gradient_clip_norm, gradient_statistics, equal_protein_weighting)
+                batch_losses.append(loss.detach())
+                n_train_sequences += len(batch.names)
+                if check_optimizer_state and (not finite_tensors(network.state_dict())
+                                               or not finite_tensors(optimizer.state_dict())):
+                    raise nonfinite_batch_error('model or optimizer state', batch, batch_number, after_update=True,
+                                                precision=precision_label)
+                continue
+            loss, _ = compute_batch_loss(network, batch, task, criterion, device, **loss_options)
+            if check_gradients and not torch.isfinite(loss):
+                raise nonfinite_batch_error('loss', batch, batch_number)
             batch_losses.append(loss.detach())
             n_train_sequences += len(batch.names)
-            if check_optimizer_state and (not finite_tensors(network.state_dict())
-                                           or not finite_tensors(optimizer.state_dict())):
-                raise nonfinite_batch_error('model or optimizer state', batch, batch_number, after_update=True)
-            continue
-        loss, _ = compute_batch_loss(network, batch, task, criterion, device, **loss_options)
-        if check_gradients and not torch.isfinite(loss):
-            raise nonfinite_batch_error('loss', batch, batch_number)
-        batch_losses.append(loss.detach())
-        n_train_sequences += len(batch.names)
 
-        optimizer.zero_grad()
-        backward_loss = loss / len(batch.names) if equal_protein_weighting else loss
-        backward_loss.backward()
-        if check_gradients:
-            parameters = [parameter for parameter in network.parameters() if parameter.grad is not None]
-            norm = nn.utils.get_total_norm([cast(torch.Tensor, parameter.grad) for parameter in parameters])
-            if not torch.isfinite(norm):
-                raise nonfinite_batch_error('gradient norm', batch, batch_number)
-            if gradient_statistics is not None:
-                gradient_statistics.norms.append(float(norm.detach()))
-            if gradient_clip_norm is not None:
-                nn.utils.clip_grads_with_norm_(parameters, gradient_clip_norm, norm)
-        optimizer.step()
-        if check_optimizer_state and (not finite_tensors(network.state_dict())
-                                       or not finite_tensors(optimizer.state_dict())):
-            raise nonfinite_batch_error('model or optimizer state', batch, batch_number, after_update=True)
+            optimizer.zero_grad()
+            backward_loss = loss / len(batch.names) if equal_protein_weighting else loss
+            backward_loss.backward()
+            norm_fallback = False
+            if check_gradients:
+                parameters = [parameter for parameter in network.parameters() if parameter.grad is not None]
+                raw_norms = gradient_statistics.raw_norms if gradient_statistics is not None else []
+                norm = stable_total_norm([cast(torch.Tensor, parameter.grad) for parameter in parameters],
+                                         raw_norms)
+                norm_fallback = not math.isfinite(raw_norms[-1])
+                if not torch.isfinite(norm):
+                    raise nonfinite_batch_error('gradient norm', batch, batch_number,
+                                                diagnostics=gradient_diagnostics(network, norm))
+                if gradient_statistics is not None:
+                    gradient_statistics.norms.append(float(norm.detach()))
+                if gradient_clip_norm is not None:
+                    clip_with_norm(parameters, gradient_clip_norm, norm)
+            optimizer.step()
+            # A stable norm does not make huge unclipped gradients safe for
+            # Adam's squared-gradient moments. Check the resulting state on
+            # this rare path even when only gradient checks were requested.
+            if (check_optimizer_state or norm_fallback) and (not finite_tensors(network.state_dict())
+                                                             or not finite_tensors(optimizer.state_dict())):
+                raise nonfinite_batch_error('model or optimizer state', batch, batch_number, after_update=True,
+                                            diagnostics=gradient_diagnostics(network, norm) if norm_fallback else None)
 
     return sum_batch_losses(batch_losses) / n_train_sequences, n_train_sequences
 
@@ -1167,7 +1205,7 @@ def train_amp_batch(network: nn.Module, batch: pid.Batch, task: Task, criterion:
         loss, _ = compute_batch_loss(network, batch, task, criterion, device,
                                      equal_protein_weighting=equal_protein_weighting, precision=precision)
         if not torch.isfinite(loss):
-            raise nonfinite_batch_error('AMP forward loss', batch, batch_number)
+            raise nonfinite_batch_error('AMP forward loss', batch, batch_number, precision=str(precision.dtype))
         backward_loss = loss / len(batch.names) if equal_protein_weighting else loss
         if scaler is None:
             backward_loss.backward()
@@ -1176,7 +1214,8 @@ def train_amp_batch(network: nn.Module, batch: pid.Batch, task: Task, criterion:
             scaler.unscale_(optimizer)
         parameters = [parameter for parameter in network.parameters() if parameter.grad is not None]
         gradients = [cast(torch.Tensor, parameter.grad) for parameter in parameters]
-        norm = nn.utils.get_total_norm(gradients)
+        raw_norms: list[float] | None = [] if statistics is not None else None
+        norm = stable_total_norm(gradients, raw_norms)
         if not torch.isfinite(norm):
             # A finite norm already establishes finite gradients. Only inspect
             # entries on failure, distinguishing scaling overflow from overflow
@@ -1186,12 +1225,17 @@ def train_amp_batch(network: nn.Module, batch: pid.Batch, task: Task, criterion:
                     assert replay is not None
                     replay.restore(network)
                     continue
-                raise nonfinite_batch_error('AMP gradient (loss-scaling retry budget exhausted)', batch, batch_number)
-            raise nonfinite_batch_error('AMP gradient norm', batch, batch_number)
+                raise nonfinite_batch_error('AMP gradient (loss-scaling retry budget exhausted)', batch, batch_number,
+                                            diagnostics=gradient_diagnostics(network, norm), precision=str(precision.dtype))
+            raise nonfinite_batch_error('AMP gradient norm', batch, batch_number,
+                                        diagnostics=gradient_diagnostics(network, norm), precision=str(precision.dtype))
         if statistics is not None:
+            # Only committed FP16 attempts belong in the epoch statistics.
+            assert raw_norms is not None
+            statistics.raw_norms.extend(raw_norms)
             statistics.norms.append(float(norm.detach()))
         if clip_norm is not None:
-            nn.utils.clip_grads_with_norm_(parameters, clip_norm, norm)
+            clip_with_norm(parameters, clip_norm, norm)
         if scaler is None:
             optimizer.step()
         else:

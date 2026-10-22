@@ -86,6 +86,7 @@ how the options interact.
 
 	*  ``--gradient-clip-norm`` : Positive, finite global L2 clipping threshold; also enables finite checks.
 	*  ``--check-finite-gradients`` : Check for nonfinite losses and gradient norms before an update, without clipping.
+	*  ``--capture-nonfinite FILE`` : Save the first numerical failure with pre-batch data/model/optimizer/RNG state for replay. Implies finite/state checks; copies state each batch until a failure, and never replaces an existing capture. Off by default; see :doc:`numerical_debugging`.
 	*  ``--equal-protein-weighting`` : Average labelled losses within each protein, then across proteins (residue and matrix tasks only). The default sums labelled losses.
 	*  ``--lr-schedule`` : ``fixed`` (default), ``cosine``, ``exponential`` or validation-driven ``plateau``.
 	*  ``--lr-anneal-epochs`` : Cosine decay duration after warmup (default: full run minus warmup, at least 1); required for cosine with ``--stop auto``.

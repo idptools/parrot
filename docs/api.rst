@@ -76,6 +76,12 @@ positive, finite threshold and implies finite checks. See
 :doc:`usage/training_controls` for calibration, schedule timing and recovery
 limits. Recovery requires loaders with ``num_workers=0``.
 
+``capture_nonfinite='failure.pt'`` is an independent debugging argument to
+``train`` or ``TrialTrainer``. It enables finite/state checks and saves the first
+numerical failure's pre-batch data, model, optimizer and random state. It copies
+state each batch until a failure, writes nothing on success, and does not replace
+an existing capture. See :doc:`usage/numerical_debugging` for replay.
+
 ``TrainingOptions(equal_protein_weighting=True)`` averages labelled losses
 within each protein for residue or matrix tasks. When evaluating such a run
 outside ``train``, pass ``equal_protein_weighting=True`` to
