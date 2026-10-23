@@ -67,7 +67,7 @@ from parrot.scripts.common import (DEFAULT_MAX_MATRIX_LENGTH, add_device_argumen
 from parrot.scripts.data_split import SPLIT_METHODS
 from parrot.scripts.examples import add_examples_argument
 from parrot.training_control import LR_SCHEDULES, TrainingOptions
-from parrot.training_precision import AMP_MODES
+from parrot.training_precision import AMP_MODES, validate_amp_architecture
 
 # What each datatype means, for the help of -d
 DATATYPE_DESCRIPTIONS = {
@@ -363,10 +363,6 @@ def shared_training_loop_options() -> argparse.ArgumentParser:
     group.add_argument('--check-finite-gradients', action='store_true',
                        help='opt in to stopping on nonfinite losses or gradient norms before an update; '
                             'does not clip gradients (default: off)')
-    group.add_argument('--capture-nonfinite', default=None, metavar='file',
-                       help='opt in to saving the first numerical failure with pre-batch model, optimizer, RNG '
-                            'and data for replay; enables finite/state checks and copies state each batch; '
-                            'never overwrites an existing capture (default: off)')
     group.add_argument('--equal-protein-weighting', action='store_true',
                        help='opt in to averaging labelled losses within each protein, then across proteins '
                             '(residue and matrix tasks only; default: sum over labelled values)')
@@ -405,7 +401,8 @@ def shared_training_loop_options() -> argparse.ArgumentParser:
                        help='nonnegative optimizer weight decay (default 0, including AdamW)')
     group.add_argument('--amp', choices=AMP_MODES, nargs='?', const='auto', default='off',
                        help='opt in to CUDA mixed precision: auto prefers native BF16, else FP16; '
-                            'float16 and bfloat16 select explicitly (default off; CUDA capability >= 7.0)')
+                            'float16 and bfloat16 select explicitly (default off; CUDA capability >= 7.0); '
+                            'BRNN training supports off only')
     group.add_argument('--checkpoint', nargs='?', const='auto', default=None, metavar='file',
                        help='opt in to atomic resumable disk checkpoints (default file: <network>_training_checkpoint.pt)')
     group.add_argument('--checkpoint-every', type=int, default=None, metavar='epochs',
@@ -425,13 +422,12 @@ def gradient_options_from_args(args: argparse.Namespace) -> dict[str, Any]:
         options['gradient_clip_norm'] = args.gradient_clip_norm
     if args.check_finite_gradients:
         options['check_finite_gradients'] = True
-    if args.capture_nonfinite is not None:
-        options['capture_nonfinite'] = args.capture_nonfinite
     return options
 
 
 def training_options_from_args(args: argparse.Namespace) -> dict[str, Any]:
     """Active policies only; reject tuning flags that would have no effect."""
+    validate_amp_architecture(args.architecture, args.amp)
     result = gradient_options_from_args(args)
     if args.checkpoint_every is not None and (args.checkpoint_every < 1
                                                or (args.checkpoint is None and args.resume is None)):
@@ -698,6 +694,7 @@ def parse_arguments(parser: argparse.ArgumentParser, argv: Sequence[str] | None 
     if problem is not None:
         parser.error(problem)
     parsed = parser.parse_args(arguments)
+    validate_amp_architecture(parsed.architecture, parsed.amp)
     check_resume_arguments(parsed, resumed)
     return parsed
 

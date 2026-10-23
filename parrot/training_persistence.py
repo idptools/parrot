@@ -30,8 +30,8 @@ FORMAT_KEY = 'parrot_training_format'
 FORMAT_VERSION = 1
 
 
-def atomic_save(value: dict[str, Any], path: str, *, overwrite: bool = True) -> None:
-    """Flush then atomically save; overwrite=False creates a new file exclusively."""
+def atomic_save(value: dict[str, Any], path: str) -> None:
+    """Replace a checkpoint only after its new contents have been flushed to disk."""
     target = Path(path).absolute()
     temporary = None
     try:
@@ -40,13 +40,7 @@ def atomic_save(value: dict[str, Any], path: str, *, overwrite: bool = True) -> 
             torch.save(value, handle)
             handle.flush()
             os.fsync(handle.fileno())
-        if overwrite:
-            os.replace(temporary, target)
-        else:
-            # Atomic creation without clobbering a first failure from another
-            # process that reached the same explicitly requested capture path.
-            os.link(temporary, target)
-            Path(temporary).unlink()
+        os.replace(temporary, target)
         temporary = None
     finally:
         if temporary is not None:

@@ -19,6 +19,14 @@ AMP_MODES = ('off', 'auto', 'float16', 'bfloat16')
 MAX_SCALE_RETRIES = 8
 
 
+def validate_amp_architecture(architecture: str, mode: str) -> None:
+    """Reject unsupported BRNN AMP before data, model state or CUDA are touched."""
+    if architecture == 'brnn' and mode != 'off':
+        raise ValueError('AMP is currently unsupported for BRNN training because of numerical failures in the '
+                         'CUDA LSTM autocast pathway. Use --amp off (TrainingOptions(amp="off") in Python). '
+                         'Start a new FP32 run; BRNN AMP checkpoints cannot be resumed.')
+
+
 def resolve_amp(mode: str, device: str | torch.device) -> torch.dtype | None:
     """Validate an explicitly requested CUDA mode on the selected GPU.
 
@@ -53,6 +61,10 @@ class TrainingPrecision:
 
     def autocast(self) -> Any:
         return nullcontext() if self.dtype is None else torch.autocast('cuda', dtype=self.dtype)
+
+    def validate_architecture(self, architecture: str) -> None:
+        """Apply the same restriction to callers using the low-level runtime API."""
+        validate_amp_architecture(architecture, 'off' if self.dtype is None else 'auto')
 
     def state_dict(self) -> dict[str, Any]:
         return {'dtype': str(self.dtype), 'scaler': self.scaler.state_dict() if self.scaler is not None else None,

@@ -78,13 +78,17 @@ Unlike ``parrot-train``, ``parrot-optimize`` has no ``--learning-rate`` (the ini
 
 The optional training controls are shared with ``parrot-train``:
 ``--gradient-clip-norm``, ``--check-finite-gradients``,
-``--capture-nonfinite FILE`` (the first failing batch across the search),
 ``--equal-protein-weighting`` (residue and matrix tasks), ``--lr-schedule``
 and its tuning flags, ``--lr-warmup-epochs``, ``--recover-nonfinite``,
 ``--recovery-lr-factor``, ``--regression-loss``/``--huber-delta``,
 ``--optimizer``/``--weight-decay`` and opt-in CUDA ``--amp``. Defaults preserve fixed-rate training with summed
 labelled losses and no clipping or recovery. The :doc:`parrot-train` reference
 lists all flags and defaults; :doc:`training_controls` explains their behavior.
+
+BRNN searches accept ``--amp off`` only (the default). Any enabled AMP mode is
+rejected before data loading, including when resuming a BRNN AMP checkpoint.
+Start a new FP32 search in that case; see :ref:`parrot-amp`. Other neural
+architectures retain opt-in CUDA AMP.
 
 Controls are fixed throughout the search, while the initial learning rate is
 searched. Schedules use the full ``--epochs`` horizon and retain their state

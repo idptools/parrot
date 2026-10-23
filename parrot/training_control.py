@@ -80,7 +80,8 @@ class TrainingOptions:
     amp : str, optional
         'off' (default), 'auto', 'float16' or 'bfloat16'. CUDA only, with hardware
         checks. Auto prefers native BF16. FP16 uses bounded same-batch scaling
-        retries; model parameters and loss arithmetic remain FP32.
+        retries; model parameters and loss arithmetic remain FP32. BRNN
+        training supports 'off' only, including checkpoint resume.
     """
 
     equal_protein_weighting: bool = False

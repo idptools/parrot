@@ -16,6 +16,7 @@ from parrot.training_persistence import (
     restore_random_state,
     validate_signature,
 )
+from parrot.training_precision import validate_amp_architecture
 
 
 class SearchArtifacts:
@@ -23,6 +24,10 @@ class SearchArtifacts:
 
     def __init__(self, searcher: HyperparameterSearch, path: str | None, every: int, log_path: str | None,
                  metadata: dict[str, Any], resumed: dict[str, Any] | None) -> None:
+        if resumed is not None:
+            saved_signature = resumed['signature']
+            validate_amp_architecture(saved_signature.get('architecture', ''),
+                                      saved_signature.get('training_options', {}).get('amp', 'off'))
         self.searcher, self.path, self.every, self.metadata = searcher, path, every, metadata
         trainer = searcher.trainer
         self.loaders = tuple(loader for pair in trainer.loaders for loader in pair)
@@ -38,9 +43,7 @@ class SearchArtifacts:
                           'trials': searcher.n_trials, 'reduction_factor': searcher.reduction_factor,
                           'task': trainer.task.to_config(), 'input_size': trainer.input_size,
                           'device_type': torch.device(trainer.device).type, 'torch_version': str(torch.__version__),
-                          'training_options': asdict(trainer.options),
-                          'gradient_options': {name: value for name, value in trainer.gradient_options.items()
-                                               if name != 'capture_nonfinite'},
+                          'training_options': asdict(trainer.options), 'gradient_options': trainer.gradient_options,
                           'loaders': [loader_signature(loader) for loader in self.loaders],
                           'metadata': metadata['identity']}
         capture_random_state(self.loaders, trainer.device)

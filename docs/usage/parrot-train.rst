@@ -87,7 +87,6 @@ how the options interact.
 
 	*  ``--gradient-clip-norm`` : Positive, finite global L2 clipping threshold; also enables finite checks.
 	*  ``--check-finite-gradients`` : Check for nonfinite losses and gradient norms before an update, without clipping.
-	*  ``--capture-nonfinite FILE`` : Save the first numerical failure with pre-batch data/model/optimizer/RNG state for replay. Implies finite/state checks; copies state each batch until a failure, and never replaces an existing capture. Off by default; see :doc:`numerical_debugging`.
 	*  ``--equal-protein-weighting`` : Average labelled losses within each protein, then across proteins (residue and matrix tasks only). The default sums labelled losses.
 	*  ``--lr-schedule`` : ``fixed`` (default), ``cosine``, ``exponential`` or validation-driven ``plateau``.
 	*  ``--lr-anneal-epochs`` : Cosine decay duration after warmup (default: full run minus warmup, at least 1); required for cosine with ``--stop auto``.
@@ -104,7 +103,7 @@ how the options interact.
 	*  ``--huber-delta`` : Positive finite Huber transition in target units (default 1); requires ``--regression-loss huber``.
 	*  ``--optimizer`` : ``adam`` (default) or ``adamw``.
 	*  ``--weight-decay`` : Finite nonnegative regularization coefficient (default 0 for both optimizers).
-	*  ``--amp`` : Opt-in CUDA mixed precision; ``auto`` (also the flag's value when given alone), ``float16`` or ``bfloat16``. Default ``off``. See :ref:`parrot-amp` for hardware checks and scaling behavior.
+	*  ``--amp`` : Opt-in CUDA mixed precision; ``auto`` (also the flag's value when given alone), ``float16`` or ``bfloat16``. Default ``off``. BRNN training accepts ``off`` only. See :ref:`parrot-amp` for architecture restrictions, hardware checks and scaling behavior.
 	*  ``--checkpoint [file]`` : Opt in to resumable atomic disk checkpoints (default filename when enabled: ``<network>_training_checkpoint.pt``).
 	*  ``--checkpoint-every`` : Successful epochs between checkpoints (default 1); requires checkpointing or resume.
 	*  ``--resume file`` : Restore the saved arguments, split and training state. ``parrot-train --resume file`` is sufficient; see :ref:`parrot-training-resume` for allowed changes.

@@ -76,12 +76,6 @@ positive, finite threshold and implies finite checks. See
 :doc:`usage/training_controls` for calibration, schedule timing and recovery
 limits. Recovery requires loaders with ``num_workers=0``.
 
-``capture_nonfinite='failure.pt'`` is an independent debugging argument to
-``train`` or ``TrialTrainer``. It enables finite/state checks and saves the first
-numerical failure's pre-batch data, model, optimizer and random state. It copies
-state each batch until a failure, writes nothing on success, and does not replace
-an existing capture. See :doc:`usage/numerical_debugging` for replay.
-
 ``TrainingOptions(equal_protein_weighting=True)`` averages labelled losses
 within each protein for residue or matrix tasks. When evaluating such a run
 outside ``train``, pass ``equal_protein_weighting=True`` to
@@ -117,7 +111,11 @@ are ``auto`` (the original datatype-dependent defaults), ``mae``, ``mse`` and
 ``huber``. A selected loss is incompatible with classification or uncertainties.
 ``TrainingOptions(amp='auto')`` enables CUDA AMP on a compatible GPU, with
 ``amp='float16'`` or ``'bfloat16'`` to select explicitly. It is unsupported on
-CPU and MPS in PARROT and never silently falls back; see :ref:`parrot-amp`.
+CPU and MPS in PARROT and never silently falls back. BRNN training requires
+``amp='off'``: ``train``, ``TrialTrainer`` and the lower-level training functions
+reject enabled AMP for BRNNs. Saved BRNN AMP configurations cannot resume;
+start a new FP32 run. Other neural architectures retain CUDA AMP support.
+See :ref:`parrot-amp`.
 
 The parrot package
 ------------------

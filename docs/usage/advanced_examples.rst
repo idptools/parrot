@@ -190,8 +190,15 @@ total duration, for example by appending ``--epochs 100``. Cosine, automatic
 stopping and search budgets retain their original planned epochs. See
 :ref:`parrot-training-resume` for state coverage and compatibility checks.
 
-On a supported CUDA GPU, append ``--device cuda --amp`` to opt in to mixed
-precision. Auto selects native BF16 when available, otherwise FP16; explicit
+BRNN training, including the examples above, requires FP32: omit ``--amp`` or
+use ``--amp off``. All enabled AMP modes and saved BRNN AMP runs are rejected.
+For other neural architectures, a supported CUDA GPU can use mixed precision:
+
+.. code-block:: bash
+
+    parrot-train cnn --input-file data/res_regress_dataset.tsv --output-network amp_example.pt --split data/splitfile.txt -d residues --regression --device cuda --amp --checkpoint --training-log
+
+Auto selects native BF16 when available, otherwise FP16; explicit
 ``--amp float16`` and ``--amp bfloat16`` are supported. Loss arithmetic and
 validation remain FP32. Unsupported devices fail, and FP16 overflow uses bounded
 same-batch scaling retries without silently discarding batches. Compare a
