@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Any
 
 from parrot.training_persistence import load_training_checkpoint
+from parrot.training_precision import validate_amp_architecture
 
 PATH_ARGUMENTS = ('input_file', 'output_network', 'matrix_file', 'embedding_context', 'embedding_context_map',
-                  'embedding_cache', 'capture_nonfinite')
+                  'embedding_cache')
 RESUME_OVERRIDES = {'output_network', 'verbose', 'silent', 'include_figs', 'no_stats', 'checkpoint',
-                    'checkpoint_every', 'training_log', 'resume', 'device', 'gpu_id', 'embedding_cache', 'epochs',
-                    'capture_nonfinite'}
+                    'checkpoint_every', 'training_log', 'resume', 'device', 'gpu_id', 'embedding_cache', 'epochs'}
 
 
 def normalized_arguments(args: argparse.Namespace) -> dict[str, Any]:
@@ -38,12 +38,16 @@ def expand_resume(parser: argparse.ArgumentParser, tokens: list[str]) -> tuple[l
     if path is None:
         return tokens, None
     saved = load_training_checkpoint(path)
+    saved_signature = saved['signature']
+    validate_amp_architecture(saved_signature.get('architecture', ''),
+                              saved_signature.get('training_options', {}).get('amp', 'off'))
     metadata = saved.get('metadata')
     if not isinstance(metadata, dict) or metadata.get('program') != parser.prog:
         raise ValueError('This checkpoint does not contain arguments for ' + parser.prog)
     values = metadata['command_args']
     commands = next(action for action in parser._actions if isinstance(action, argparse._SubParsersAction))
     architecture = values['architecture']
+    validate_amp_architecture(architecture, values.get('amp', 'off'))
     if architecture not in commands.choices:
         raise ValueError(f'Checkpoint architecture {architecture!r} is unavailable')
     command = commands.choices[architecture]
@@ -99,18 +103,6 @@ def file_checksum(path: str) -> str:
 
 
 def artifact_paths(args: argparse.Namespace, output_prefix: str) -> tuple[str | None, str | None]:
-    capture = getattr(args, 'capture_nonfinite', None)
-    if capture is not None:
-        capture = os.path.abspath(capture)
-        reserved_capture = [output_prefix + suffix for suffix in
-                            ('.pt', '_training_history.tsv', '_search_training_history.tsv')]
-        reserved_capture += [os.path.abspath(value) for value in
-                             (args.input_file, args.resume, args.checkpoint) if value and value != 'auto']
-        reserved_capture.append(output_prefix + '_training_checkpoint.pt')
-        if capture in reserved_capture:
-            raise ValueError('Failure capture must have a different path from training inputs and outputs')
-        if not Path(capture).parent.is_dir() or Path(capture).is_dir():
-            raise ValueError('Failure capture must name a file in an existing directory')
     if args.checkpoint_every is not None and args.checkpoint is None and args.resume is None:
         raise ValueError('--checkpoint-every requires --checkpoint or --resume')
     if args.checkpoint_every is not None and args.checkpoint_every < 1:

@@ -48,9 +48,11 @@ def read_tsv(path):
         return list(csv.DictReader(handle, delimiter='\t'))
 
 
-def training_parts(task=None):
+def training_parts(task=None, architecture='brnn'):
     task = task or Task('residues', 1)
-    network = build_network('brnn', 20, task, {'hidden_size': 4, 'num_layers': 2, 'dropout': 0.3})
+    values = {'hidden_size': 4, 'num_layers': 2, 'dropout': 0.3} if architecture == 'brnn' else \
+        {'channels': 4, 'num_blocks': 1, 'dropout': 0.3}
+    network = build_network(architecture, 20, task, values)
     dataset = pid.SequenceDataset(samples())
     return (network, pid.make_dataloader(dataset, task, 2, shuffle=True),
             pid.make_dataloader(dataset, task, 2), task)
@@ -447,7 +449,7 @@ def test_autocast_forward_keeps_loss_and_parameter_gradients_in_fp32(uncertainti
 
 @pytest.mark.real_devices
 @pytest.mark.parametrize('amp', ['float16', 'bfloat16'])
-@pytest.mark.parametrize('architecture', ['brnn', 'cnn', 'transformer', 'unet', 'composition', 'unet2d'])
+@pytest.mark.parametrize('architecture', ['cnn', 'transformer', 'unet', 'composition', 'unet2d'])
 def test_cuda_amp_training_keeps_fp32_state_and_finite_updates(architecture, amp):
     if not torch.cuda.is_available() or torch.cuda.get_device_capability() < (7, 0):
         pytest.skip('A CUDA GPU supporting PARROT AMP is required')
@@ -474,12 +476,12 @@ def test_cuda_amp_checkpoint_resume_restores_scaler_dropout_and_adamw(tmp_path, 
         pytest.skip('Native BF16 support required')
     options = TrainingOptions(amp=amp, optimizer='adamw', weight_decay=0.01, lr_schedule='exponential')
     set_random_seed(419)
-    network, train, val, task = training_parts()
+    network, train, val, task = training_parts(architecture='cnn')
     network.cuda()
     expected = tn.train(network, train, val, task, 'cuda', 0.001, 3, silent=True, training_options=options)
     expected_weights = copy.deepcopy(network.state_dict())
     set_random_seed(419)
-    interrupted, train, val, task = training_parts()
+    interrupted, train, val, task = training_parts(architecture='cnn')
     interrupted.cuda()
     path = str(tmp_path / 'amp.pt')
     real_save = tn.atomic_save

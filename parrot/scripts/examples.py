@@ -127,11 +127,13 @@ restored; inputs and training policies must remain unchanged):
 
     parrot-train --resume resumable_training_checkpoint.pt
 
-On a supported CUDA GPU, opt in to mixed precision. Auto prefers native BF16,
+For neural architectures other than BRNN, a supported CUDA GPU can use mixed
+precision. BRNN training accepts --amp off only, including resume; saved BRNN
+AMP runs require a new FP32 run. Auto prefers native BF16,
 else FP16; CPU/MPS are unsupported. Loss arithmetic and validation stay FP32,
 and FP16 gradient overflow has bounded same-batch retries without skipped batches:
 
-    parrot-train brnn --input-file data.tsv --output-network amp_network.pt --split kmer -d residues --regression --device cuda --amp --checkpoint --training-log
+    parrot-train cnn --input-file data.tsv --output-network amp_network.pt --split kmer -d residues --regression --device cuda --amp --checkpoint --training-log
 
 How it works
 ------------
@@ -295,6 +297,7 @@ How it works
    own _training_history.tsv. --checkpoint and --resume also preserve the TPE
    random state, tried configurations, partial folds and promotion progress.
    Loss, optimizer and AMP settings are fixed across all trials and retraining.
+   BRNN searches accept --amp off only; old BRNN AMP checkpoints cannot resume.
 
 The default 50 trials cost about as much as 15-20 parrot-train runs with the
 same --epochs, so a GPU helps.

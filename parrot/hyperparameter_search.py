@@ -64,7 +64,7 @@ from parrot.search_space import SearchSpace
 from parrot.tasks import Task
 from parrot.tpe_sampler import TPESampler
 from parrot.training_control import LearningRateController, TrainingControlState, TrainingOptions, finite_tensors
-from parrot.training_precision import TrainingPrecision, resolve_amp
+from parrot.training_precision import TrainingPrecision, resolve_amp, validate_amp_architecture
 
 # Successive halving: each stage keeps the best 1/REDUCTION_FACTOR of its configurations and trains them
 # REDUCTION_FACTOR times as long
@@ -218,8 +218,6 @@ class Trial:
         WAITING, STOPPED, COMPLETED or FAILED (see the constants at the top of this module)
     failure_reason : str
         Why training failed (empty unless the status is FAILED)
-    failure_details : dict
-        Complete structured gradient diagnostics, retained in search checkpoints
     folds : list of FoldProgress
         Training progress on each fold (dropped when the trial fails, or is
         stopped because it can never be promoted)
@@ -233,7 +231,6 @@ class Trial:
     status: str = WAITING
     failure_reason: str = ''
     folds: list[FoldProgress] = field(default_factory=list)
-    failure_details: dict[str, Any] = field(default_factory=dict)
 
     @property
     def status_text(self) -> str:
@@ -264,8 +261,7 @@ class TrialTrainer:
     def __init__(self, space: SearchSpace, loaders: list[tuple[DataLoader, DataLoader]], input_size: int, task: Task,
                  device: str | torch.device, gradient_clip_norm: float | None = None,
                  check_finite_gradients: bool = False, training_options: TrainingOptions | None = None,
-                 on_epoch: Callable[[Trial, int, dict[str, Any]], None] | None = None,
-                 capture_nonfinite: str | None = None) -> None:
+                 on_epoch: Callable[[Trial, int, dict[str, Any]], None] | None = None) -> None:
         """
         Parameters
         ----------
@@ -281,8 +277,6 @@ class TrialTrainer:
             Device to train on
         gradient_clip_norm, check_finite_gradients : optional
             Opt-in clipping and finite checks, as in train_network.train().
-        capture_nonfinite : str, optional
-            Capture the first numerical failure's pre-batch state, as in train().
         training_options : TrainingOptions, optional
             Fixed loss-weighting, LR and recovery policies for all trials and
             folds. Resolve cosine options against the full search horizon
@@ -298,6 +292,7 @@ class TrialTrainer:
         self.on_epoch = on_epoch
         self.on_recovery: Callable[[], None] | None = None
         self.options = training_options or TrainingOptions()
+        validate_amp_architecture(space.architecture, self.options.amp)
         self.options.validate_task(task)
         resolve_amp(self.options.amp, self.device)
         if self.options.active and not space.trained_by_gradient_descent:
@@ -310,10 +305,6 @@ class TrialTrainer:
             self.gradient_options['gradient_clip_norm'] = gradient_clip_norm
         if check_finite_gradients:
             self.gradient_options['check_finite_gradients'] = True
-        if capture_nonfinite is not None:
-            if not space.trained_by_gradient_descent:
-                raise ValueError('Failure capture applies to neural networks trained by gradient descent')
-            self.gradient_options['capture_nonfinite'] = capture_nonfinite
 
     def _build(self, trial: Trial) -> ParrotArchitecture:
         """A freshly initialised network for the trial's configuration, on the device
@@ -444,8 +435,7 @@ class TrialTrainer:
                     val_loss = train_network.validation_loss(network, val_loader, self.task, self.device)
             except train_network.NonFiniteTrainingError as error:
                 raise train_network.NonFiniteTrainingError(f'Trial {trial.number}, epoch {epoch + 1}: {error}',
-                                                            retryable=error.retryable,
-                                                            diagnostics=error.diagnostics) from error
+                                                            retryable=error.retryable) from error
             if self.gradient_options and not math.isfinite(val_loss):
                 raise train_network.NonFiniteTrainingError(
                     f'Trial {trial.number}, epoch {epoch + 1}: nonfinite validation loss')
@@ -808,10 +798,7 @@ class HyperparameterSearch:
             Why training failed
         """
         trial.status = FAILED
-        # Keep the complete evidence in checkpoints and the trials table. Only
-        # the console summary is shortened; long IDs must not erase lengths.
-        trial.failure_reason = str(error) if str(error) else repr(error)
-        trial.failure_details = getattr(error, 'diagnostics', {})
+        trial.failure_reason = str(error).splitlines()[0][:MAX_FAILURE_MESSAGE_LENGTH] if str(error) else repr(error)
         trial.folds = []
         if self._first_failure is None:
             self._first_failure = error
@@ -1031,8 +1018,7 @@ class HyperparameterSearch:
             Its score at that stage
         """
         stage_text = f'epochs {self.stages[stage]:4d}' if self.space.trained_by_gradient_descent else 'fitted'
-        outcome = trial.status_text.replace('\n', ' ')[:MAX_FAILURE_MESSAGE_LENGTH] \
-            if trial.status == FAILED else f'val loss {loss:.4g}'
+        outcome = trial.status_text if trial.status == FAILED else f'val loss {loss:.4g}'
         print(f'  trial {trial.number:3d} ({trial.origin:7s})  {stage_text}  {outcome:16s}  '
               f'{format_hyperparameters(trial.values)}', flush=True)
 
@@ -1057,6 +1043,5 @@ class HyperparameterSearch:
             for trial in self.trials:
                 scores = [format_value(trial.stage_losses[stage]) if stage < len(trial.stage_losses) else ''
                           for stage in range(len(score_columns))]
-                handle.write('\t'.join([str(trial.number), trial.origin,
-                                       trial.status_text.replace('\t', ' ').replace('\n', ' '), str(trial.epochs),
+                handle.write('\t'.join([str(trial.number), trial.origin, trial.status_text, str(trial.epochs),
                                         *scores, *(format_value(trial.values[name]) for name in names)]) + '\n')

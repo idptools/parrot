@@ -56,6 +56,10 @@ Order-independent baseline. For sequence data, the encoded residues are averaged
 brnn
 ----
 
+BRNN training uses FP32. All enabled ``--amp`` modes are rejected, including
+when resuming a BRNN AMP checkpoint; omit the flag or use ``--amp off``.
+See :ref:`parrot-amp` for the restriction and supported alternatives.
+
 Bidirectional LSTM followed by a fully connected layer. For sequence data the LSTM output at every residue is combined by attention pooling (or, with ``--attention-pooling-off``, the final hidden states of the forward and reverse directions are used); for residue data the LSTM output at each residue.
 
 	*  ``--hidden-size`` / ``-hs`` : size of the LSTM hidden vectors (default 10; searched over 5-50).

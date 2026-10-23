@@ -137,15 +137,18 @@ Two optional safeguards check for NaN or infinite values:
   the finite checks: clipping cannot repair gradients that are already NaN
   or infinite.
 
-If the ordinary FP32 norm reduction overflows while every gradient entry is
-finite, PARROT recomputes the norm stably before checking or clipping. CPU and
-CUDA use FP64 norm accumulation; MPS uses rescaling because it cannot hold FP64
-tensors. This changes only the norm calculation: model parameters and gradients
-keep their original dtype. Actual NaN/Inf entries still stop the attempt.
-After a norm fallback, the resulting model and optimizer state are also checked:
-without clipping, finite but enormous gradients can overflow Adam's moments.
-Such an error is explicitly identified as occurring after the optimizer update;
-bounded recovery can restore the clean epoch boundary when enabled.
+If the ordinary norm reduction overflows while all gradient entries are finite,
+PARROT recomputes the norm stably before checking or clipping. CPU and CUDA use
+FP64 norm accumulation; MPS uses rescaling because it cannot hold FP64 tensors.
+Model parameters and gradients keep their original dtype. Actual NaN/Inf
+entries still stop the attempt. After a norm fallback, model and optimizer state
+are also checked: enormous unclipped gradients can overflow Adam's moments.
+That failure is identified as occurring after the update, and the optional
+bounded recovery can restore the clean epoch boundary.
+
+Inputs that overflow when converted to FP32 are rejected before use, including
+target values, uncertainties and encoded sequence vectors. Errors identify the
+data line or sequence; supported missing-label markers remain allowed.
 
 With either option, ``parrot-train`` reports the median, 95th percentile and
 maximum pre-clipping gradient norm for epochs whose progress is printed
@@ -161,27 +164,9 @@ candidate thresholds. Reconsider the threshold if you change those settings,
 especially ``--equal-protein-weighting``. The safeguards themselves do not
 change loss weighting.
 
-Training failures identify the epoch, batch, length range and precision before
-representative sequence IDs. Gradient failures include NaN/Inf counts, maximum
-finite gradient magnitude, the norm and affected parameter names. Search console
-summaries are shortened, while the trials table retains the complete failure
-message and search checkpoints retain structured gradient diagnostics. Without
-recovery enabled, the attempt stops without skipping the batch or retrying.
-Any earlier best network saved to disk is preserved.
-
-``--capture-nonfinite FILE`` additionally enables input/state checks and saves
-the first failed training batch with its **pre-batch** model, optimizer, random
-state and precision configuration. The parent directory must exist. It writes
-nothing on successful batches and never replaces an existing capture, including
-on recovery or later search trials. Use a new filename for another capture.
-This debugging option copies model and optimizer state to CPU before each batch
-until the first failure, adding time and memory costs. It does not enable
-clipping or recovery. See :doc:`numerical_debugging` for BRNN replay and matched
-FP32/BF16 pilots. Failure captures are separate from resumable checkpoints.
-
-Input values that would overflow when converted from float64 to float32 are
-rejected before use, with the data line or sequence identified. Missing-label
-markers remain supported.
+Training failures identify the epoch, batch, representative sequence IDs and
+length range. Without recovery enabled, the run stops without skipping the batch
+or retrying. Any earlier best network saved to disk is preserved.
 
 .. _parrot-numerical-recovery:
 
@@ -284,6 +269,19 @@ per-fold states in addition to model weights; searches can have large files.
 
 Opt-in CUDA mixed precision
 ---------------------------
+
+**BRNN training supports FP32 only.** Both commands reject ``--amp``,
+``--amp auto``, ``--amp float16`` and ``--amp bfloat16`` for ``brnn`` before
+loading data. Omit the flag or use ``--amp off``. The same restriction applies
+to the Python training and search APIs, and to resumed runs. Existing BRNN AMP
+checkpoints cannot resume, including with ``--amp off``; start a new FP32 run.
+Ordinary FP32 BRNN checkpoints continue to resume normally.
+
+This restriction follows numerical failures in the CUDA LSTM autocast pathway:
+affected PyTorch versions can use FP16 internally even when BF16 is requested,
+overflowing gradients that would be finite in FP32. Clipping and recovery do
+not bypass the restriction. AMP remains available for the other neural
+architectures under the device requirements below.
 
 ``--amp`` enables automatic mixed precision (AMP). ``--amp auto`` chooses native
 BF16 when the selected GPU supports it, otherwise FP16. ``--amp bfloat16`` and
